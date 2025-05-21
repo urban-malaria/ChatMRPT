@@ -1,0 +1,210 @@
+
+    <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AI Generated Malaria Risk Report</title>
+    <style>
+        body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; margin: 20px; padding: 15px; background-color: #f4f7f6; color: #333; line-height: 1.6; }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
+        h1 { font-size: 2em; border-bottom-width: 2px; border-color: #3498db; }
+        h2 { font-size: 1.6em; margin-top: 1.5em; }
+        h3 { font-size: 1.3em; margin-top: 1.2em; color: #2980b9; }
+        .section { margin-bottom: 35px; padding: 20px; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .viz-container { text-align: center; margin: 25px auto; padding: 15px; background-color: #fdfdfd; border: 1px solid #eee; border-radius: 5px; }
+        .viz-container img, .viz-container iframe { max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        iframe { min-height: 550px; width: 100%; display: block; }
+        p { margin-bottom: 0.8em; }
+        ul, ol { padding-left: 25px; margin-bottom: 0.8em; }
+        li { margin-bottom: 0.4em; }
+        .report-header p { text-align: center; font-style: italic; color: #7f8c8d; margin-bottom: 2em; }
+        table { width:100%; border-collapse: collapse; margin: 1em 0; }
+        th, td { padding: 10px; text-align:left; border: 1px solid #ddd; }
+        th { background-color: #e9ecef; color: #495057; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f8f9fa; }
+    </style></head><body>
+    <div class="report-header">
+        <h1>AI Generated Malaria Risk Analysis Report</h1>
+        <p><em>Generated on: May 12, 2025 at 12:11</em></p>
+    </div>
+    <div class='section'><h2>Data Overview & Initial Insights</h2><p><strong>Data Overview & Initial Insights</strong></p>
+
+<p>The current analysis encompasses a dataset derived from 275 wards, each characterized by a range of 35 initial variables. These variables provide a comprehensive foundation for assessing malaria risk across different regions. The dataset is robust, with no missing values in key identifiers, ensuring a reliable basis for subsequent analysis and interpretation.</p>
+
+<p><strong>Key Variables and Descriptive Statistics:</strong></p>
+<ul>
+    <li><strong>X.1:</strong> This variable serves as a unique identifier for wards, ranging from 1.00 to 275.00, with a mean value of 138.00.</li>
+    <li><strong>X:</strong> Another identifier with a slightly broader range from 1.00 to 289.00 and a mean of 142.49.</li>
+    <li><strong>country_na, country_co, state_name, state_code, lga_name:</strong> These non-numeric variables provide categorical data essential for geographic and administrative segmentation.</li>
+</ul>
+
+<p>These descriptive statistics highlight the dataset's comprehensive coverage, which is critical for understanding malaria risk patterns across different regions. The absence of missing values in these key identifiers ensures data integrity and reliability for further analysis.</p>
+
+<p>To provide a visual context for these variables, we have included a composite map visualization that delineates the spatial distribution of key variables across the wards. This map is instrumental in identifying geographic patterns and potential hotspots for malaria risk.</p>
+
+<div class="viz-container">
+    <p><strong>Composite Map (ID VIZ2)</strong></p>
+    <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/composite_map_page1.html" title="Composite Map"></iframe>
+</div>
+
+<p>The <em>Composite Map</em> provides a visual representation of the spatial distribution of key variables, offering initial insights into potential environmental and demographic factors influencing malaria risk. This map is a valuable tool for identifying areas that may require targeted interventions or further investigation.</p>
+
+<p>In summary, the dataset's breadth and the initial insights derived from the composite map lay the groundwork for a detailed exploration of malaria risk factors, enabling targeted and effective public health strategies.</p></div><div class='section'><h2>Data Quality: Missing Value Assessment and Handling</h2><section id="data-quality-missing-value-assessment">
+    <h2>Data Quality: Missing Value Assessment and Handling</h2>
+    <p>In the context of malaria risk analysis, ensuring the integrity and completeness of data is crucial for accurate modeling and interpretation. Below is a summary of the variables with missing entries and the methods employed to address these gaps:</p>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Variable</th>
+                <th>Number of Missing Entries</th>
+                <th>Imputation Method Used</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>housing_quality</td>
+                <td>17</td>
+                <td>Spatial Neighbor Mean</td>
+            </tr>
+            <tr>
+                <td>pfpr</td>
+                <td>1</td>
+                <td>Spatial Neighbor Mean</td>
+            </tr>
+            <tr>
+                <td>NDWI</td>
+                <td>1</td>
+                <td>Spatial Neighbor Mean</td>
+            </tr>
+            <tr>
+                <td>NDMI</td>
+                <td>2</td>
+                <td>Spatial Neighbor Mean</td>
+            </tr>
+            <tr>
+                <td>u5_tpr_rdt</td>
+                <td>1</td>
+                <td>Spatial Neighbor Mean</td>
+            </tr>
+            <tr>
+                <td>building_height</td>
+                <td>3</td>
+                <td>Spatial Neighbor Mean</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>The imputation methods applied are as follows:</p>
+    <ul>
+        <li><strong>Spatial Neighbor Mean:</strong> Missing values were imputed using the average value of adjacent wards based on geographical proximity. This method helps maintain spatial coherence in the data, which is particularly vital in spatial epidemiology.</li>
+        <li><strong>Mean Imputation:</strong> Although not used in this instance, this method replaces missing numeric values with the average from the entire dataset column.</li>
+        <li><strong>Mode Imputation:</strong> This technique, not applied here, involves replacing missing categorical values with the most frequent value in the dataset.</li>
+        <li><strong>Forward/Backward Fill:</strong> A fallback option for mode imputation, used when a clear mode isn't available.</li>
+    </ul>
+
+    <p>It is crucial to acknowledge that imputation introduces assumptions into the dataset. The selected methods aim to preserve the data's integrity while minimizing bias, thereby enhancing the reliability of subsequent analyses.</p>
+
+    <div class="viz-container">
+        <p><strong>Composite Map Page1 (ID VIZ2)</strong></p>
+        <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/composite_map_page1.html" title="Composite Map Page1"></iframe>
+    </div>
+    
+    <p>The visualization above (ID VIZ2) provides a comprehensive spatial overview, which can be instrumental in understanding the geographical distribution and potential impact of the imputed data on malaria risk assessment.</p>
+</section></div><div class='section'><h2>Variable Relationship Analysis and Data Normalization</h2><p><strong>Variable Relationship Analysis and Data Normalization</strong></p>
+
+<p>In the analysis of malaria risk factors, understanding the relationship between various environmental and socio-economic variables is crucial. This section highlights the direct and inverse relationships between these variables and malaria risk, as well as the importance of data normalization in visualizing these relationships effectively.</p>
+
+<p>Our analysis identified several key variables that exhibit a direct relationship with malaria risk. These include:</p>
+
+<ul>
+    <li><strong>Environmental Factors:</strong> Variables such as <em>mean_EVI</em>, <em>mean_NDVI</em>, <em>mean_rainfall</em>, <em>RH_mean</em>, <em>temp_mean</em>, <em>mean_soil_wetness</em>, <em>NDWI</em>, and <em>NDMI</em> all show that increases in these factors are associated with increased malaria risk.</li>
+    <li><strong>Socio-economic and Demographic Factors:</strong> Variables such as <em>population</em>, <em>pfpr</em>, <em>settlement_type</em>, <em>u5_tpr_rdt</em>, <em>totalArea</em>, and <em>building_height</em> also exhibit a direct relationship with malaria risk.</li>
+</ul>
+
+<p>Conversely, certain variables demonstrate an inverse relationship with malaria risk, indicating that as these variables increase, the risk of malaria decreases. These include:</p>
+
+<ul>
+    <li><em>distance_to_water</em></li>
+    <li><em>housing_quality</em></li>
+    <li><em>elevation</em></li>
+    <li><em>urbanArea</em></li>
+    <li><em>urbanPercentage</em></li>
+</ul>
+
+<p>To effectively visualize and interpret these relationships, data normalization is employed. Normalization adjusts the scale of the data, allowing for meaningful comparisons across different variables and facilitating the creation of composite maps that illustrate the combined risk contributions of multiple factors.</p>
+
+<div class="viz-container">
+    <p><strong>Vulnerability Map (ID VIZ33)</strong></p>
+    <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/vulnerability_map.html" title="Vulnerability Map"></iframe>
+</div>
+
+<p>The <strong>Vulnerability Map</strong> provides a normalized visualization of malaria risk across different regions, integrating multiple variables to highlight areas of high vulnerability. By examining this map, stakeholders can identify priority areas for intervention and resource allocation.</p>
+
+<p>In conclusion, the relationships identified between these variables and malaria risk underscore the multifaceted nature of malaria epidemiology. Normalized data visualizations, such as the Vulnerability Map, are essential tools for translating complex data into actionable insights, ultimately guiding effective malaria control strategies.</p></div><div class='section'><h2>Composite Malaria Risk Score Calculation</h2><p><strong>Composite Malaria Risk Score Calculation</strong></p>
+
+<p>The calculation of composite malaria risk scores is a critical component in understanding and mitigating the spread of malaria across different regions. These scores are derived by integrating multiple normalized variables, each contributing to the overall risk profile. The primary variables considered in this analysis include:</p>
+
+<ul>
+    <li><strong>Mean Rainfall:</strong> Precipitation levels can influence mosquito breeding sites and thus affect malaria transmission.</li>
+    <li><strong>Temperature Mean:</strong> Temperature impacts mosquito lifecycle and parasite development rates.</li>
+    <li><strong>Mean NDVI (Normalized Difference Vegetation Index):</strong> Vegetation indices can serve as proxies for environmental conditions conducive to mosquito habitats.</li>
+    <li><strong>Housing Quality:</strong> The structural integrity and materials of housing can influence exposure to mosquitoes.</li>
+    <li><strong>Distance to Water:</strong> Proximity to water bodies often correlates with mosquito breeding sites.</li>
+</ul>
+
+<p>To assess malaria risk comprehensively, 26 different models were generated, each representing various combinations of these variables. These models allow for a nuanced understanding of how different factors interact to influence malaria risk. The resulting composite scores provide a consolidated view of malaria risk across different wards, offering valuable insights for targeted interventions and resource allocation.</p>
+
+<div class="viz-container">
+    <p><strong>Composite Map Page1 (ID VIZ2)</strong></p>
+    <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/composite_map_page1.html" title="Composite Map Page1"></iframe>
+</div>
+
+<p>The <em>Composite Map Page1</em> visualization effectively illustrates the distribution of composite malaria risk scores across various regions. By examining this map, stakeholders can identify high-risk areas and prioritize them for malaria control measures. This visual representation underscores the importance of a multi-faceted approach in malaria risk assessment, enabling a more strategic and informed response to malaria outbreaks.</p></div><div class='section'><h2>Ward Vulnerability Ranking and Prioritization</h2><p><strong>Ward Vulnerability Ranking and Prioritization</strong></p>
+
+<p>In assessing malaria risk across the region, a comprehensive analysis was conducted to rank all 275 wards based on their median composite risk scores. This ranking process is critical in identifying areas that require immediate intervention and resource allocation. The analysis revealed that the top five most vulnerable wards are <strong>Kuluho</strong>, <strong>Malale</strong>, <strong>Tungajika/Auna South</strong>, <strong>Wambai</strong>, and <strong>Nassarawa</strong>. These wards are prioritized for targeted malaria control measures to mitigate the risk and impact of the disease.</p>
+
+<p>The vulnerability ranking is visually represented in the following box plot, which provides a clear depiction of the distribution of risk scores across all wards. The plot highlights the wards with the highest vulnerability, facilitating a data-driven approach to prioritization.</p>
+
+<div class="viz-container">
+    <p><strong>Vulnerability Plot (ID VIZ34)</strong></p>
+    <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/vulnerability_plot.html" title="Vulnerability Plot"></iframe>
+</div>
+
+<p>Additionally, the overall vulnerability map offers a spatial perspective on the distribution of malaria risk across the region. This map is instrumental in visualizing geographic patterns and identifying clusters of high vulnerability, which are crucial for strategic planning and implementation of control measures.</p>
+
+<div class="viz-container">
+    <p><strong>Vulnerability Map (ID VIZ33)</strong></p>
+    <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/vulnerability_map.html" title="Vulnerability Map"></iframe>
+</div>
+
+<p>By understanding and visualizing these rankings and spatial distributions, stakeholders can effectively prioritize interventions, ensuring that resources are directed towards the areas with the greatest need. This targeted approach is essential for reducing malaria incidence and enhancing public health outcomes in the most vulnerable communities.</p></div><div class='section'><h2>Urban Extent Analysis for Resource Allocation</h2><p><strong>Urban Extent Analysis for Resource Allocation</strong></p>
+
+<p>The urban extent analysis provides critical insights into the categorization of wards based on urbanicity, which is pivotal for effective resource allocation in malaria control efforts. This analysis categorizes wards into predominantly urban and less urban areas based on varying urbanicity thresholds. The thresholds analyzed include 30%, 50%, 75%, and 100% urbanicity, with consistent results across all thresholds: 23 wards were classified as predominantly urban, while 252 were classified as less urban.</p>
+
+<p>The classification of wards based on urbanicity is instrumental in guiding resource allocation strategies. For instance, predominantly urban areas may require different malaria intervention strategies compared to less urban areas. Understanding these distinctions helps in optimizing the distribution of resources such as bed nets, insecticides, and healthcare services to areas where they are most needed.</p>
+
+<p>To aid in this decision-making process, urban extent maps have been generated for each threshold level. These maps serve as a visual tool to pinpoint areas that require targeted interventions. By identifying the urban and less urban areas, stakeholders can prioritize interventions like bed net distribution, ensuring that resources are allocated efficiently and effectively.</p>
+
+<div class="viz-container">
+  <p><strong>Composite Map Page1 (ID VIZ2)</strong></p>
+  <iframe src="/serve_viz_file/4a1508c6-c8ed-4691-8420-25da5fd58cc5/composite_map_page1.html" title="Composite Map Page1"></iframe>
+</div>
+
+<p>The embedded visualization above, <em>Composite Map Page1</em>, illustrates the urban extent across various thresholds, providing a comprehensive view of urban and less urban wards. This map is a crucial tool for stakeholders to visually assess and strategize the allocation of malaria control resources effectively.</p></div><div class='section'><h2>Overall Conclusion & Strategic Recommendations</h2><h2>Malaria Risk Analysis Conclusion and Recommendations</h2>
+
+<h3>Overall Conclusion</h3>
+<p>The comprehensive malaria risk analysis highlights significant disparities in malaria vulnerability across the 275 wards analyzed. Key factors influencing these disparities include environmental variables such as mean rainfall, temperature, and proximity to water sources, as well as socio-economic factors like housing quality. The analysis identifies Kuluho, Malale, Tungajika/Auna South, Wambai, and Nassarawa as the most vulnerable wards, necessitating prioritized intervention. Urbanicity analysis reveals that the majority of wards are less urbanized, which should guide resource allocation and intervention strategies.</p>
+
+<h3>Strategic Recommendations</h3>
+
+<ol>
+  <li>
+    <strong>Targeted Bed Net Distribution:</strong>
+    <p>Focus bed net distribution efforts on the top five most vulnerable wards: Kuluho, Malale, Tungajika/Auna South, Wambai, and Nassarawa. Ensure that distribution is prioritized in rural areas where housing quality is poor and proximity to water bodies increases malaria risk. These efforts should be complemented by community education on proper bed net usage and maintenance.</p>
+  </li>
+  <li>
+    <strong>Environmental Management and Larval Source Control:</strong>
+    <p>Implement targeted environmental management interventions in wards with high mean rainfall and proximity to water sources. This includes draining stagnant water, promoting proper waste disposal, and introducing larvicides in standing water bodies. Collaborate with local authorities to ensure sustainable practices are adopted.</p>
+  </li>
+  <li>
+    <strong>Urban vs. Rural Intervention Strategies:</strong>
+    <p>Develop differentiated intervention strategies based on urbanicity. In predominantly urban wards, focus on improving housing infrastructure and sanitation. In less urbanized areas, enhance community-based health education programs to improve awareness and prevention practices. Allocate resources proportionately, ensuring that less urbanized areas, which constitute the majority, receive adequate support.</p>
+  </li>
+</ol></div></body></html>

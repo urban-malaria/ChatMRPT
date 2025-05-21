@@ -1,0 +1,11 @@
+WardName,population,tpr,urbanPercentage,avg_rainfall,ndvi_score,dist_to_clinic,avg_house_score
+Ward Alpha,12500,15.5,10.5,85.2,0.65,1200,0.4
+Ward Beta,28000,28.2,65.8,110.5,0.75,550,0.7
+Ward Gamma,9500,12.1,5.2,78.9,0.55,2500,0.2
+Ward Delta,42000,35.9,88.1,105.1,0.80,300,0.8
+Ward Epsilon,15000,18.3,25.0,92.5,0.68,1500,0.5
+Ward Zeta,31000,31.5,52.5,115.8,0.77,900,0.6
+Ward Eta,7200,9.8,2.9,75.3,0.48,3100,0.1
+Ward Theta,22000,25.1,45.3,99.9,0.72,1100,0.6
+Ward Iota,19500,22.6,33.9,97.2,0.70,1700,0.5
+Ward Kappa,48000,39.2,93.4,108.6,0.82,450,0.9

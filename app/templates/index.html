@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRPT AI Assistant</title>
+
+    <!-- Google Fonts - Roboto -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title-container">
+            <button id="sidebar-toggle" class="sidebar-toggle-btn" aria-label="Toggle Sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="app-logo-container">
+                <i class="fas fa-mosquito"></i>
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <span class="app-title-text">ChatMRPT</span>
+        </div>
+        <div class="app-controls">
+            <select id="language-selector" class="form-select language-selector">
+                <option value="en" selected>English</option>
+                <option value="ha">Hausa</option>
+                <option value="yo">Yoruba</option>
+                <option value="ig">Igbo</option>
+                <option value="fr">French</option>
+                <option value="ar">Arabic</option>
+            </select>
+            <div id="session-status-indicator" class="session-status-indicator">
+                <span id="status-dot" class="status-dot ready"></span>
+                <span id="status-text">Ready</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <div id="app-sidebar" class="app-sidebar">
+        <div class="sidebar-header">
+            <h3>Settings</h3>
+            <button id="close-sidebar" class="close-sidebar-btn" aria-label="Close Sidebar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h4>Display Settings</h4>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="dark-mode-toggle">
+                    <label class="form-check-label" for="dark-mode-toggle">Dark Mode</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="compact-view-toggle">
+                    <label class="form-check-label" for="compact-view-toggle">Compact View</label>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h4>About MRPT</h4>
+                <p>The Malaria Risk Prioritization Tool helps authorities identify high-risk areas for targeted interventions, optimizing resource allocation for malaria prevention.</p>
+                <p><strong>Version:</strong> 2.0</p>
+            </div>
+            
+            <div class="sidebar-section">
+                <h4>Legal Information</h4>
+                <div class="legal-content">
+                    <h5>Data Privacy Notice</h5>
+                    <p>This tool collects usage data to improve functionality and user experience. The data collected includes:</p>
+                    <ul>
+                        <li>Uploaded data file structures (not content)</li>
+                        <li>Interaction patterns and analysis requests</li>
+                        <li>Feature usage statistics</li>
+                        <li>Error reports</li>
+                    </ul>
+                    <p>No personal information is collected beyond session identification. All data is anonymized and used solely for improving the tool's functionality.</p>
+                    
+                    <h5>Terms of Use</h5>
+                    <p>By using this tool, you agree that:</p>
+                    <ul>
+                        <li>You will not upload sensitive personal health information</li>
+                        <li>You have appropriate permissions to analyze any data you upload</li>
+                        <li>The tool provides decision support only; final resource allocation decisions remain your responsibility</li>
+                    </ul>
+                    
+                    <h5>Attribution</h5>
+                    <p>When using results from this tool in publications or reports, please cite as:<br>
+                    <em>"Malaria Reprioritization Tool (MRPT), [Version], [Year]"</em></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main class="main-content-area">
+        <div class="chat-container">
+            <div id="chat-messages" class="chat-messages-container">
+                <!-- Messages will be added here by JavaScript -->
+            </div>
+            <div class="chat-input-container">
+                <textarea id="message-input" class="chat-input" placeholder="Chat with MRPT Assistant..." rows="1"></textarea>
+                <div class="chat-actions">
+                    <button id="upload-button" class="chat-btn" title="Upload Files">
+                        <i class="fas fa-upload"></i>
+                    </button>
+                    <button id="download-report-btn" class="chat-btn" title="Generate Report">
+                        <i class="fas fa-file-alt"></i>
+                    </button>
+                    <button id="send-message" class="chat-btn send-btn" title="Send Message">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookie-banner" class="cookie-banner">
+        <div class="cookie-content">
+            <p><strong>This tool uses cookies and collects usage data</strong> to improve functionality and user experience. See details in the sidebar under "Legal Information".</p>
+            <button id="accept-cookies" class="btn btn-primary">Accept</button>
+        </div>
+    </div>
+
+    <!-- File Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadModalLabel"><i class="fas fa-cloud-upload-alt me-2"></i>Upload Your Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">Please provide both your CSV/Excel data and the corresponding Shapefile (ZIP).</p>
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <div class="file-upload-option">
+                                <h5><i class="fas fa-file-csv me-2 text-success"></i>CSV / Excel Data</h5>
+                                <p>Ward-level data (e.g., environmental factors, demographics).</p>
+                                <div class="input-group">
+                                    <input type="file" class="form-control" id="csv-upload" accept=".csv,.xlsx,.xls">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="file-upload-option">
+                                <h5><i class="fas fa-map-marked-alt me-2 text-info"></i>Shapefile (ZIP)</h5>
+                                <p>Geographical boundaries of wards (must be a .zip archive).</p>
+                                <div class="input-group">
+                                    <input type="file" class="form-control" id="shapefile-upload" accept=".zip">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button class="btn btn-primary mt-2 w-100" type="button" id="upload-files-btn">
+                            <i class="fas fa-upload me-2"></i>Upload Files
+                        </button>
+                        <div id="files-upload-status" class="upload-status mt-2"></div>
+                    </div>
+                    <hr class="my-4">
+                    <div class="text-center">
+                        <p class="mb-2">Alternatively, explore the tool's capabilities with our sample dataset:</p>
+                        <button type="button" class="btn btn-info" id="use-sample-data-btn-modal">
+                            <i class="fas fa-database me-2"></i>Load Sample Data
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Generation Modal -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reportModalLabel"><i class="fas fa-file-invoice me-2"></i>Generate Analysis Report</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label for="report-format" class="form-label">Select Report Format:</label>
+                        <select class="form-select" id="report-format">
+                            <option value="pdf" selected>PDF Document</option>
+                            <option value="html">HTML Web Page</option>
+                            <option value="markdown">Markdown (.md)</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-light report-info" role="alert">
+                        <h6 class="alert-heading">Report Contents:</h6>
+                        <ul class="mb-0 small">
+                            <li>Data Overview & Methodology Summary</li>
+                            <li>Missing Value Handling Details</li>
+                            <li>Variable Relationship Analysis</li>
+                            <li>Composite Score Calculation Insights</li>
+                            <li>Ward Vulnerability Rankings & Prioritization</li>
+                            <li>Urban Extent Analysis Findings</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="generate-report-btn"><i class="fas fa-cogs me-2"></i>Generate Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visualization Modal -->
+    <div class="modal fade" id="visualizationModal" tabindex="-1" aria-labelledby="visualizationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="visualizationModalLabel">Visualization</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="visualizationModalBody" style="height: 80vh; overflow-y: auto; display: flex; justify-content: center; align-items: center;">
+                    <!-- iframe or image will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

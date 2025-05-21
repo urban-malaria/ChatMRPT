@@ -1,0 +1,300 @@
+
+       <!DOCTYPE html>
+       <html>
+       <head>
+           <meta charset="UTF-8">
+           <title>Decision Tree Visualization</title>
+           <style>
+               body {
+                   font-family: 'Arial', sans-serif;
+                   background-color: #ffffff;
+                   margin: 0;
+                   padding: 0;
+                   display: flex;
+                   justify-content: center;
+               }
+               .decision-tree-container {
+                   width: 100%;
+                   max-width: 900px;
+                   padding: 20px;
+               }
+               .tree-row {
+                   display: flex;
+                   justify-content: center;
+                   margin-bottom: 20px;
+                   position: relative;
+               }
+               .node {
+                   background-color: #f5f5f5;
+                   border-radius: 8px;
+                   padding: 15px;
+                   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                   text-align: center;
+                   margin: 0 10px;
+                   width: 100%;
+                   max-width: 250px;
+               }
+               .node-title {
+                   font-weight: bold;
+                   margin-bottom: 8px;
+                   font-size: 16px;
+               }
+               .list-container {
+                   max-height: 150px;
+                   overflow-y: auto;
+                   text-align: left;
+                   margin-top: 10px;
+               }
+               .list-container ul, .list-container ol {
+                   padding-left: 20px;
+                   margin: 5px 0;
+               }
+               .list-container li {
+                   margin-bottom: 6px;
+                   font-size: 13px;
+               }
+               .navy {
+                   background-color: #1B2631;
+                   color: white;
+               }
+               .orange {
+                   background-color: #E67E22;
+                   color: white;
+               }
+               .teal {
+                   background-color: #16A596;
+                   color: white;
+               }
+               .gray {
+                   background-color: #7F8C8D;
+                   color: white;
+               }
+               .green {
+                   background-color: #27AE60;
+                   color: white;
+               }
+               .blue {
+                   background-color: #2980B9;
+                   color: white;
+               }
+               .purple {
+                   background-color: #8E44AD;
+                   color: white;
+               }
+               .arrow {
+                   position: absolute;
+                   width: 0;
+                   height: 0;
+                   border-left: 10px solid transparent;
+                   border-right: 10px solid transparent;
+                   border-top: 10px solid #666;
+                   left: 50%;
+                   bottom: -15px;
+                   transform: translateX(-50%);
+               }
+               .arrow-label {
+                   position: absolute;
+                   background-color: white;
+                   padding: 2px 8px;
+                   border-radius: 10px;
+                   font-size: 12px;
+                   font-weight: bold;
+               }
+               .arrow-container {
+                   position: relative;
+                   height: 30px;
+                   width: 100%;
+               }
+               .vertical-line {
+                   position: absolute;
+                   width: 2px;
+                   background-color: #666;
+                   left: 50%;
+                   transform: translateX(-50%);
+                   top: 0;
+                   bottom: 0;
+               }
+               .branch-container {
+                   display: flex;
+                   justify-content: space-around;
+                   width: 100%;
+                   position: relative;
+               }
+               .branch-line {
+                   position: absolute;
+                   top: 0;
+                   height: 2px;
+                   background-color: #666;
+               }
+               .branch-label {
+                   position: absolute;
+                   top: -10px;
+                   background-color: white;
+                   padding: 0 5px;
+                   font-size: 12px;
+               }
+           </style>
+       </head>
+       <body>
+           <div class="decision-tree-container">
+               <h1 style="text-align: center; margin-bottom: 30px;">Malaria Risk Analysis Workflow</h1>
+               
+               <!-- Row 1: Start Node -->
+               <div class="tree-row">
+                   <div class="node navy">
+                       <div class="node-title">Malaria Risk Assessment</div>
+                       <div>Variable Selection</div>
+                   </div>
+               </div>
+               
+               <!-- Arrow between Row 1 and 2 -->
+               <div class="arrow-container">
+                   <div class="vertical-line"></div>
+               </div>
+               
+               <!-- Row 2: Variables List -->
+               <div class="tree-row">
+                   <div class="node navy">
+                       <div class="node-title">Variables</div>
+                       <div class="list-container">
+                           <ul>
+                                       <li>population (Population)</li>
+                                <li>mean_EVI (Mean Enhanced Vegetation Index)</li>
+                                <li>mean_NDVI (Mean Normalized Difference Vegetation Index)</li>
+                                <li>mean_rainfall (Mean Rainfall)</li>
+                                <li>distance_to_water (Distance to Water Bodies)</li>
+                                <li>RH_mean (Mean Relative Humidity)</li>
+                                <li>temp_mean (Mean Temperature)</li>
+                                <li>housing_quality (Housing Quality)</li>
+                                <li>pfpr (Plasmodium Falciparum Parasite Rate)</li>
+                                <li>avgRAD (Average Radiation)</li>
+                                <li>...and 11 more</li>
+
+                           </ul>
+                       </div>
+                   </div>
+               </div>
+               
+               <!-- Arrow between Row 2 and 3 -->
+               <div class="arrow-container">
+                   <div class="vertical-line"></div>
+               </div>
+               
+               <!-- Row 3: Evaluation Diamond -->
+               <div class="tree-row">
+                   <div class="node orange">
+                       <div class="node-title">Variable Evaluation</div>
+                       <div>Assessment of variable relationships with malaria risk</div>
+                   </div>
+               </div>
+               
+               <!-- Branch Lines for Include/Exclude -->
+               <div class="branch-container" style="height: 50px;">
+                   <div class="branch-line" style="left: 25%; width: 25%;"></div>
+                   <div class="branch-label" style="left: 32%;">Include</div>
+                   
+                   <div class="branch-line" style="left: 50%; width: 25%;"></div>
+                   <div class="branch-label" style="left: 62%;">Exclude</div>
+               </div>
+               
+               <!-- Row 4: Included and Excluded Variables -->
+               <div class="tree-row">
+                   <div class="node teal" style="flex: 1;">
+                       <div class="node-title">Included Variables</div>
+                       <div class="list-container">
+                           <ul>
+                                       <li>u5_tpr_rdt (Test Positivity Rate)</li>
+                                <li>pfpr (Plasmodium Falciparum Parasite Rate)</li>
+                                <li>mean_rainfall (Mean Rainfall)</li>
+                                <li>distance_to_water (Distance to Water Bodies)</li>
+                                <li>elevation (Elevation)</li>
+
+                           </ul>
+                       </div>
+                   </div>
+                   
+                   <div class="node gray" style="flex: 1;">
+                       <div class="node-title">Excluded Variables</div>
+                       <div class="list-container">
+                           <ul>
+                                       <li>mean_NDVI (Mean Normalized Difference Vegetation Index)</li>
+                                <li>avgRAD (Average Radiation)</li>
+                                <li>urbanPercentage (Urban Percentage)</li>
+                                <li>housing_quality (Housing Quality)</li>
+                                <li>population (Population)</li>
+                                <li>settlement_type (Settlement Type)</li>
+                                <li>RH_mean (Mean Relative Humidity)</li>
+                                <li>flood (Flood Risk)</li>
+                                <li>urbanArea (Urban Area)</li>
+                                <li>NDMI (Ndmi)</li>
+                                <li>...and 6 more</li>
+
+                           </ul>
+                       </div>
+                   </div>
+               </div>
+               
+               <!-- Arrow from Included Variables to Normalization -->
+               <div class="arrow-container">
+                   <div class="vertical-line" style="left: 25%;"></div>
+               </div>
+               
+               <!-- Row 5: Normalization and Calculation -->
+               <div class="tree-row">
+                   <div class="node green" style="margin-left: 0;">
+                       <div class="node-title">Data Normalization &<br>Composite Score Calculation</div>
+                       <div>Converting variables to common scale and calculating risk scores</div>
+                   </div>
+               </div>
+               
+               <!-- Arrow between Row 5 and 6 -->
+               <div class="arrow-container">
+                   <div class="vertical-line"></div>
+               </div>
+               
+               <!-- Row 6: Risk Maps -->
+               <div class="tree-row">
+                   <div class="node blue">
+                       <div class="node-title">Generated Risk Maps<br>for All Combinations</div>
+                       <div>Maps showing risk scores for different variable combinations</div>
+                   </div>
+               </div>
+               
+               <!-- Arrow between Row 6 and 7 -->
+               <div class="arrow-container">
+                   <div class="vertical-line"></div>
+               </div>
+               
+               <!-- Row 7: Vulnerability Analysis -->
+               <div class="tree-row">
+                   <div class="node purple">
+                       <div class="node-title">Vulnerability Analysis</div>
+                       <div>Box and whisker plot of ward vulnerability rankings</div>
+                   </div>
+               </div>
+               
+               <!-- Arrow between Row 7 and 8 -->
+               <div class="arrow-container">
+                   <div class="vertical-line"></div>
+               </div>
+               
+               <!-- Row 8: Priority Wards -->
+               <div class="tree-row">
+                   <div class="node purple">
+                       <div class="node-title">Top 5 Wards<br>for Reprioritization</div>
+                       <div class="list-container">
+                           <ol>
+                                       <li>Kanwuri</li>
+                                <li>Wambai</li>
+                                <li>Ishau</li>
+                                <li>Ekowugi</li>
+                                <li>Gbara</li>
+
+                           </ol>
+                       </div>
+                   </div>
+               </div>
+           </div>
+       </body>
+       </html>
+       
