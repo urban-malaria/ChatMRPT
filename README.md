@@ -350,9 +350,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 - **📚 Architecture Guide**: [ARCHITECTURE.md](./ARCHITECTURE.md)
 - **📈 Refactoring Details**: [REFACTORING_PROGRESS.md](./REFACTORING_PROGRESS.md)
-- **🐛 Issues**: [GitHub Issues](https://github.com/your-org/ChatMRPT/issues)
-- **📧 Email**: support@chatmrpt.org
-- **🌐 Website**: [chatmrpt.org](https://chatmrpt.org)
+
 
 ---
 
