@@ -1,0 +1,25 @@
+<div class="section-card">
+    <h2><i class="bi bi-lightning me-2"></i>Analysis Events</h2>
+    
+    {% if events %}
+        <div class="list-group">
+            {% for event in events %}
+            <div class="list-group-item">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">{{ event.event_type }}</h5>
+                    <small>{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S') if event.timestamp else 'N/A' }}</small>
+                </div>
+                <p class="mb-1">{{ event.description }}</p>
+                {% if event.metadata %}
+                <small><pre class="small">{{ event.metadata | tojson(indent=2) }}</pre></small>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-lightning text-muted" style="font-size: 2rem;"></i>
+            <p>No analysis events found for this session.</p>
+        </div>
+    {% endif %}
+</div> 

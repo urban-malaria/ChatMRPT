@@ -1,0 +1,25 @@
+<div class="section-card">
+    <h2><i class="bi bi-exclamation-triangle me-2"></i>Errors</h2>
+    
+    {% if errors %}
+        <div class="list-group">
+            {% for error in errors %}
+            <div class="list-group-item list-group-item-danger">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">{{ error.error_type }}</h5>
+                    <small>{{ error.timestamp.strftime('%Y-%m-%d %H:%M:%S') if error.timestamp else 'N/A' }}</small>
+                </div>
+                <p class="mb-1">{{ error.message }}</p>
+                {% if error.stack_trace %}
+                <div class="error-trace">{{ error.stack_trace }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+            <p>No errors found for this session.</p>
+        </div>
+    {% endif %}
+</div> 

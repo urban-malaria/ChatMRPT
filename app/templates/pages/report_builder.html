@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Builder - MRPT AI Assistant</title>
+    
+    <!-- Google Fonts - Roboto -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Custom CSS - Modern Minimalist Theme -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-minimalist-theme.css') }}">
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <style>
+        body {
+            background-color: #f9f9fb;
+        }
+        .report-header {
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1.5rem 0;
+        }
+        .config-card, .preview-card {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 2rem;
+        }
+        .section-item {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        .section-item.required {
+            border-left: 4px solid var(--color-info);
+        }
+        .preview-area {
+            min-height: 400px;
+            background-color: #fafbfc;
+            border-radius: 8px;
+            padding: 2rem;
+        }
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 0.3rem solid #f3f3f3;
+            border-top: 0.3rem solid var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-vh-100">
+        <!-- Header -->
+        <div class="report-header">
+            <div class="container-xl">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <a href="/" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Analysis
+                        </a>
+                    </div>
+                    <div class="col text-center">
+                        <h1 class="h2 mb-1">
+                            <i class="fas fa-file-alt text-primary me-2"></i>
+                            Report Builder
+                        </h1>
+                        <p class="text-muted mb-0">Create customized malaria risk analysis reports</p>
+                    </div>
+                    <div class="col-auto">
+                        <!-- Spacer for centering -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container-xl py-4">
+            <div class="row">
+                <!-- Configuration Panel -->
+                <div class="col-lg-4">
+                    <!-- Report Configuration -->
+                    <div class="config-card">
+                        <div class="card-body">
+                            <h3 class="h5 mb-3">
+                                <i class="fas fa-cog text-primary me-2"></i>
+                                Report Configuration
+                            </h3>
+                            
+                            <div class="mb-3">
+                                <label for="report-type" class="form-label">Report Type</label>
+                                <select id="report-type" class="form-select">
+                                    <option value="dashboard">Interactive Dashboard</option>
+                                    <option value="executive">Executive Summary</option>
+                                    <option value="technical">Technical Report</option>
+                                    <option value="presentation">Presentation Format</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="report-format" class="form-label">Output Format</label>
+                                <select id="report-format" class="form-select">
+                                    <option value="html">Interactive HTML</option>
+                                    <option value="pdf">PDF Document</option>
+                                    <option value="markdown">Markdown</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Detail Level</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="detail-level" id="detail-basic" value="basic">
+                                    <label class="form-check-label" for="detail-basic">
+                                        Basic (Key findings only)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="detail-level" id="detail-standard" value="standard" checked>
+                                    <label class="form-check-label" for="detail-standard">
+                                        Standard (Balanced detail)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="detail-level" id="detail-technical" value="technical">
+                                    <label class="form-check-label" for="detail-technical">
+                                        Technical (Full details)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section Selection -->
+                    <div class="config-card">
+                        <div class="card-body">
+                            <h3 class="h5 mb-3">
+                                <i class="fas fa-list text-success me-2"></i>
+                                Report Sections
+                            </h3>
+                            
+                            <div id="sections-container">
+                                {% for section_id, section_info in sections.items() %}
+                                <div class="section-item {% if section_info.required %}required{% endif %}">
+                                    <div class="form-check">
+                                        <input class="form-check-input section-checkbox" type="checkbox" 
+                                               id="section-{{ section_id }}" value="{{ section_id }}"
+                                               {% if section_info.required %}checked disabled{% endif %}>
+                                        <label class="form-check-label fw-medium" for="section-{{ section_id }}">
+                                            {{ section_info.title }}
+                                            {% if section_info.required %}
+                                            <span class="badge bg-info ms-2">Required</span>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">{{ section_info.description }}</small>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="config-card">
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <button id="preview-btn" onclick="generatePreview()" 
+                                        class="btn btn-outline-primary">
+                                    <i class="fas fa-eye me-2"></i>Generate Preview
+                                </button>
+                                
+                                <button id="generate-btn" onclick="generateReport()" 
+                                        class="btn btn-success">
+                                    <i class="fas fa-file-download me-2"></i>Generate Report
+                                </button>
+                                
+                                <button onclick="generateDashboard()" 
+                                        class="btn btn-purple">
+                                    <i class="fas fa-chart-bar me-2"></i>Create Interactive Dashboard
+                                </button>
+                            </div>
+                            
+                            <div id="generation-status" class="mt-3 text-center">
+                                <!-- Status messages will appear here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Panel -->
+                <div class="col-lg-8">
+                    <div class="preview-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h3 class="h5 mb-0">
+                                <i class="fas fa-eye text-purple me-2"></i>
+                                Report Preview
+                            </h3>
+                            <div>
+                                <button onclick="refreshPreview()" class="btn btn-sm btn-outline-secondary me-2">
+                                    <i class="fas fa-refresh"></i>
+                                </button>
+                                <button onclick="toggleFullscreen()" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <div id="preview-container" class="preview-area">
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-file-alt fa-3x mb-3"></i>
+                                    <h4>No preview available</h4>
+                                    <p>Click "Generate Preview" to see how your report will look</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" 
+         style="background-color: rgba(0,0,0,0.5); z-index: 9999;">
+        <div class="d-flex justify-content-center align-items-center h-100">
+            <div class="bg-white rounded p-4 text-center">
+                <div class="loading-spinner mx-auto mb-3"></div>
+                <h5>Generating Report</h5>
+                <p class="text-muted mb-0">Please wait while we create your report...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Report builder functionality
+        function getSelectedSections() {
+            const checkboxes = document.querySelectorAll('.section-checkbox:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function getReportConfig() {
+            return {
+                type: document.getElementById('report-type').value,
+                format: document.getElementById('report-format').value,
+                detail_level: document.querySelector('input[name="detail-level"]:checked').value,
+                sections: getSelectedSections()
+            };
+        }
+
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('d-none');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('d-none');
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('generation-status');
+            statusDiv.innerHTML = `<div class="alert alert-${type} alert-sm">${message}</div>`;
+        }
+
+        function generatePreview() {
+            const config = getReportConfig();
+            showLoading();
+            updateStatus('Generating preview...', 'info');
+            
+            // Simulate API call
+            setTimeout(() => {
+                hideLoading();
+                updateStatus('Preview generated successfully!', 'success');
+                document.getElementById('preview-container').innerHTML = `
+                    <div class="border rounded p-3 bg-light">
+                        <h4>Report Preview</h4>
+                        <p><strong>Type:</strong> ${config.type}</p>
+                        <p><strong>Format:</strong> ${config.format}</p>
+                        <p><strong>Detail Level:</strong> ${config.detail_level}</p>
+                        <p><strong>Sections:</strong> ${config.sections.length} selected</p>
+                        <div class="mt-3">
+                            <div class="placeholder-glow">
+                                <span class="placeholder col-12 mb-2"></span>
+                                <span class="placeholder col-8 mb-2"></span>
+                                <span class="placeholder col-10 mb-2"></span>
+                                <span class="placeholder col-6"></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }, 2000);
+        }
+
+        function generateReport() {
+            const config = getReportConfig();
+            showLoading();
+            updateStatus('Generating full report...', 'info');
+            
+            // Simulate API call
+            setTimeout(() => {
+                hideLoading();
+                updateStatus('Report generated and ready for download!', 'success');
+            }, 3000);
+        }
+
+        function generateDashboard() {
+            const config = getReportConfig();
+            showLoading();
+            updateStatus('Creating interactive dashboard...', 'info');
+            
+            // Simulate API call
+            setTimeout(() => {
+                hideLoading();
+                updateStatus('Interactive dashboard created!', 'success');
+            }, 3500);
+        }
+
+        function refreshPreview() {
+            updateStatus('Refreshing preview...', 'info');
+            generatePreview();
+        }
+
+        function toggleFullscreen() {
+            const container = document.getElementById('preview-container');
+            if (container.requestFullscreen) {
+                container.requestFullscreen();
+            }
+        }
+    </script>
+</body>
+</html> 

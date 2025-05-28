@@ -1,0 +1,48 @@
+<ul class="nav nav-tabs" id="sessionTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="true">
+            <i class="bi bi-info-circle me-1"></i> Overview
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="conversation-tab" data-bs-toggle="tab" data-bs-target="#conversation" type="button" role="tab" aria-controls="conversation" aria-selected="false">
+            <i class="bi bi-chat-dots me-1"></i> Conversation
+            <span class="badge-count">{{ messages|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity" type="button" role="tab" aria-controls="activity" aria-selected="false">
+            <i class="bi bi-activity me-1"></i> Activity Log
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="uploads-tab" data-bs-toggle="tab" data-bs-target="#uploads" type="button" role="tab" aria-controls="uploads" aria-selected="false">
+            <i class="bi bi-file-earmark-arrow-up me-1"></i> Uploads
+            <span class="badge-count">{{ uploads|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="visualizations-tab" data-bs-toggle="tab" data-bs-target="#visualizations" type="button" role="tab" aria-controls="visualizations" aria-selected="false">
+            <i class="bi bi-bar-chart me-1"></i> Visualizations
+            <span class="badge-count">{{ visualizations|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab" aria-controls="events" aria-selected="false">
+           <i class="bi bi-lightning me-1"></i> Analysis Events
+           <span class="badge-count">{{ events|length }}</span>
+       </button>
+   </li>
+   <li class="nav-item" role="presentation">
+       <button class="nav-link" id="errors-tab" data-bs-toggle="tab" data-bs-target="#errors" type="button" role="tab" aria-controls="errors" aria-selected="false">
+           <i class="bi bi-exclamation-triangle me-1"></i> Errors
+           <span class="badge-count">{{ errors|length }}</span>
+       </button>
+   </li>
+   <li class="nav-item" role="presentation">
+       <button class="nav-link" id="llm-tab" data-bs-toggle="tab" data-bs-target="#llm" type="button" role="tab" aria-controls="llm" aria-selected="false">
+           <i class="bi bi-cpu me-1"></i> LLM Interactions
+           <span class="badge-count">{{ llm_interactions|length }}</span>
+       </button>
+   </li>
+</ul> 

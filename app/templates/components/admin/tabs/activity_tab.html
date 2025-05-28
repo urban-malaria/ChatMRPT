@@ -1,0 +1,22 @@
+<div class="section-card">
+    <h2><i class="bi bi-activity me-2"></i>Activity Timeline</h2>
+    
+    <div class="activity-timeline">
+        {% for activity in activities %}
+        <div class="activity-item">
+            <div class="activity-icon {{ activity.type }}-icon"></div>
+            <div class="activity-content">
+                <span class="activity-time">{{ activity.timestamp.strftime('%Y-%m-%d %H:%M:%S') if activity.timestamp else 'N/A' }}</span>
+                <h5>{{ activity.title }}</h5>
+                <p>{{ activity.description }}</p>
+                {% if activity.metadata %}
+                <pre class="small">{{ activity.metadata | tojson(indent=2) }}</pre>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-activity text-muted" style="font-size: 2rem;"></i>
+            <p>No activity recorded for this session.</p>
+        </div>
+ 

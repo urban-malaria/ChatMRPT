@@ -1,0 +1,42 @@
+<div class="dashboard-stats">
+    <div class="stat-card sessions-card">
+        <h3>Total Sessions</h3>
+        <div class="value">{{ sessions|length }}</div>
+    </div>
+    <div class="stat-card active-card">
+        <h3>Active Today</h3>
+        <div class="value">
+            {% set today_count = 0 %}
+            {% for session in sessions %}
+                {% if session.last_activity and request.args.get('date', today_date) and session.last_activity.startswith(request.args.get('date', today_date)) %}
+                    {% set today_count = today_count + 1 %}
+                {% endif %}
+            {% endfor %}
+            {{ today_count }}
+        </div>
+    </div>
+    <div class="stat-card messages-card">
+        <h3>Total Messages</h3>
+        <div class="value">
+            {% set total_messages = 0 %}
+            {% for session in sessions %}
+                {% set total_messages = total_messages + session.message_count %}
+            {% endfor %}
+            {{ total_messages }}
+        </div>
+    </div>
+    <div class="stat-card errors-card">
+        <h3>Average Errors</h3>
+        <div class="value">
+            {% set total_errors = 0 %}
+            {% for session in sessions %}
+                {% set total_errors = total_errors + session.error_count %}
+            {% endfor %}
+            {% if sessions|length > 0 %}
+                {{ (total_errors / sessions|length)|round(2) }}
+            {% else %}
+                0
+            {% endif %}
+        </div>
+    </div>
+</div> 

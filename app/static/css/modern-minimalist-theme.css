@@ -1,0 +1,1206 @@
+/* ==========================================================================
+   ChatMRPT - ChatGPT Style Design with Light/Dark Mode
+   Clean, minimal, and professional
+   ========================================================================== */
+
+/* ==========================================================================
+   CSS Variables - Light/Dark Mode Support
+   ========================================================================== */
+:root {
+    /* Light Mode (Default) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f7f8;
+    --bg-tertiary: #ececf1;
+    --text-primary: #374151;
+    --text-secondary: #6b7280;
+    --text-tertiary: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-medium: #d1d5db;
+    --accent-primary: #10a37f;
+    --accent-hover: #0d8c6c;
+    --shadow-light: rgba(0, 0, 0, 0.05);
+    --shadow-medium: rgba(0, 0, 0, 0.1);
+    
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.25rem;
+    --font-size-2xl: 1.5rem;
+    --font-size-3xl: 1.875rem;
+    
+    /* Spacing */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-12: 3rem;
+    
+    /* Transitions */
+    --transition: 0.2s ease;
+    --transition-slow: 0.4s ease;
+}
+
+/* Dark Mode Variables */
+[data-theme="dark"] {
+    --bg-primary: #212121;
+    --bg-secondary: #2f2f2f;
+    --bg-tertiary: #404040;
+    --text-primary: #ececec;
+    --text-secondary: #d1d5db;
+    --text-tertiary: #9ca3af;
+    --border-light: #404040;
+    --border-medium: #525252;
+    --accent-primary: #19c37d;
+    --accent-hover: #15a06b;
+    --shadow-light: rgba(0, 0, 0, 0.2);
+    --shadow-medium: rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================================================
+   Global Reset & Base Styles
+   ========================================================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    transition: background-color var(--transition), color var(--transition);
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   Main Chat Interface - ChatGPT Style with Centered Initial State
+   ========================================================================== */
+.main-chat-interface {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+}
+
+.chat-container.full-screen {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    position: relative;
+}
+
+/* ==========================================================================
+   Chat Header - Minimal ChatGPT Style
+   ========================================================================== */
+.chat-header {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-light);
+    padding: var(--space-4) var(--space-6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 60px;
+    flex-shrink: 0;
+    z-index: 100;
+}
+
+.chat-controls-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 0 auto;
+}
+
+.chat-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.chat-controls-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 0 auto;
+    min-width: 60px; /* Match left side to keep brand centered */
+}
+
+.chat-brand .brand-text {
+    text-align: center;
+}
+
+.chat-brand .brand-text h1 {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -0.025em;
+}
+
+.chat-brand .brand-text span {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.control-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: var(--space-2);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    font-size: var(--font-size-sm);
+}
+
+.control-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-medium);
+}
+
+/* ==========================================================================
+   ChatGPT-Style Initial Centered Layout
+   ========================================================================== */
+.chat-container.initial-state {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-container.initial-state .chat-messages-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-8);
+    text-align: center;
+}
+
+.chat-container.initial-state .chat-input-container {
+    border-top: none !important;
+    padding: var(--space-6) !important;
+    max-width: 640px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    gap: var(--space-3) !important;
+    justify-content: center !important;
+    position: static !important;
+    background: transparent !important;
+}
+
+/* Welcome message styling in initial state */
+.chat-container.initial-state .simple-welcome {
+    max-width: 640px;
+    width: 100%;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+}
+
+.chat-container.initial-state .simple-welcome h2 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-6);
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+}
+
+.chat-container.initial-state .simple-welcome p {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Ensure the message element itself is centered */
+.chat-container.initial-state .message {
+    width: 100%;
+    max-width: 640px;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+}
+
+/* Hide cookie banner on initial state */
+.chat-container.initial-state ~ .cookie-banner,
+#cookie-consent-banner {
+    display: none !important;
+}
+
+/* Ensure messages are properly centered initially */
+.chat-container.initial-state .message {
+    width: 100%;
+    max-width: 600px;
+    text-align: center;
+}
+
+.chat-container.initial-state .simple-welcome h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
+}
+
+.chat-container.initial-state .simple-welcome p {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* ==========================================================================
+   Chat Messages Area - ChatGPT Style
+   ========================================================================== */
+.chat-messages-container {
+    flex: 1;
+    padding: 0;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    scroll-behavior: smooth;
+    transition: all var(--transition-slow);
+}
+
+/* Normal chat state */
+.chat-container:not(.initial-state) .chat-messages-container {
+    height: calc(100vh - 200px);
+    padding: var(--space-4) 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+/* Simple Welcome Message - For Normal State */
+.simple-welcome {
+    text-align: center;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-6);
+}
+
+/* Normal state welcome message (overridden in initial state) */
+.simple-welcome h2 {
+    font-size: var(--font-size-3xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+}
+
+.simple-welcome p {
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ==========================================================================
+   Message Styles - TRUE ChatGPT Style (Properly Aligned)
+   ========================================================================== */
+.message {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto var(--space-6) auto;
+    padding: 0 var(--space-6);
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* User message - RIGHT aligned like ChatGPT */
+.user-message {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto var(--space-6) auto;
+    padding: 0 var(--space-6);
+    display: flex;
+    justify-content: flex-end; /* Align to right within the centered container */
+}
+
+.user-message .message-content {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: var(--space-4) var(--space-5);
+    border-radius: 18px;
+    border: 1px solid var(--border-light);
+    font-size: var(--font-size-base);
+    line-height: 1.5;
+    max-width: 85%;
+    text-align: left;
+    width: fit-content;
+}
+
+/* Assistant message - LEFT aligned like ChatGPT */
+.assistant-message {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto var(--space-6) auto;
+    padding: 0 var(--space-6);
+    display: flex;
+    justify-content: flex-start; /* Align to left within the centered container */
+}
+
+.assistant-message .message-content {
+    background: transparent;
+    color: var(--text-primary);
+    padding: var(--space-4) 0;
+    border: none;
+    font-size: var(--font-size-base);
+    line-height: 1.6;
+    text-align: left;
+    max-width: 85%;
+    width: 100%;
+}
+
+.system-message {
+    max-width: 480px;
+    margin: var(--space-8) auto;
+    padding: 0 var(--space-6);
+    display: flex;
+    justify-content: center;
+}
+
+.system-message .message-content {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    padding: var(--space-3) var(--space-4);
+    border-radius: 12px;
+    font-size: var(--font-size-sm);
+    border: 1px solid var(--border-light);
+    text-align: center;
+    width: 100%;
+}
+
+/* ==========================================================================
+   Chat Input Area - ChatGPT Style with Tools
+   ========================================================================== */
+.chat-input-container {
+    padding: var(--space-6);
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    transition: all var(--transition-slow);
+}
+
+/* Input Tools (Upload, Report buttons) */
+.input-tools {
+    display: flex;
+    gap: var(--space-2);
+    margin-right: var(--space-2);
+}
+
+.tool-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: var(--space-3);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    font-size: var(--font-size-base);
+}
+
+.tool-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-medium);
+}
+
+.tool-btn:active {
+    transform: scale(0.95);
+}
+
+/* Chat Input */
+.chat-input {
+    flex: 1;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: 12px;
+    padding: var(--space-3) var(--space-4);
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    resize: none;
+    transition: all var(--transition);
+    min-height: 44px;
+    max-height: 120px;
+    line-height: 1.5;
+}
+
+.chat-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
+}
+
+.chat-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.chat-actions {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.chat-btn.send-btn {
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 8px;
+    padding: var(--space-3);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+}
+
+.chat-btn.send-btn:hover {
+    background: var(--accent-hover);
+}
+
+.chat-btn.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.chat-btn.send-btn:active {
+    transform: scale(0.95);
+}
+
+/* ==========================================================================
+   Layout Transition Animation
+   ========================================================================== */
+.chat-container {
+    transition: all var(--transition-slow);
+}
+
+.chat-container.transitioning {
+    transform: translateY(-20px);
+    opacity: 0.9;
+}
+
+/* ==========================================================================
+   Enhanced Sidebar - Minimal Style with Toggle Switch
+   ========================================================================== */
+.app-sidebar {
+    position: fixed;
+    top: 0;
+    left: -320px;
+    width: 320px;
+    height: 100vh;
+    background: var(--bg-primary);
+    border-right: 1px solid var(--border-light);
+    z-index: 2000;
+    transition: left var(--transition);
+    overflow-y: auto;
+    box-shadow: 2px 0 12px var(--shadow-medium);
+}
+
+.app-sidebar.show {
+    left: 0;
+}
+
+.sidebar-header {
+    padding: var(--space-6);
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-secondary);
+}
+
+.sidebar-brand h3 {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.close-sidebar-btn {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    background: none;
+    border: none;
+    padding: var(--space-2);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.close-sidebar-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.sidebar-content {
+    padding: var(--space-6);
+}
+
+.sidebar-section {
+    margin-bottom: var(--space-8);
+}
+
+.sidebar-section h4 {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
+}
+
+/* Modern Toggle Switch */
+.setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) 0;
+}
+
+.setting-item span {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+}
+
+.toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--border-medium);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.toggle-label::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: var(--bg-primary);
+    border-radius: 50%;
+    transition: all var(--transition);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-input:checked + .toggle-label {
+    background: var(--accent-primary);
+}
+
+.toggle-input:checked + .toggle-label::before {
+    transform: translateX(20px);
+}
+
+/* Theme Toggle Animation */
+.theme-toggle-icon {
+    transition: transform var(--transition);
+}
+
+[data-theme="dark"] .theme-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* ==========================================================================
+   Typing Indicator
+   ========================================================================== */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+    margin: 0 auto;
+    max-width: 640px;
+    padding-left: var(--space-6);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.typing-indicator span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    animation: typingDot 1.5s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingDot {
+    0%, 60%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    30% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+@media (max-width: 768px) {
+    .chat-header {
+        padding: var(--space-3) var(--space-4);
+        min-height: 56px;
+    }
+    
+    .chat-controls-left, .chat-controls-right {
+        min-width: 40px;
+    }
+    
+    .chat-brand .brand-text h1 {
+        font-size: var(--font-size-lg);
+    }
+    
+    .chat-brand .brand-text span {
+        display: none;
+    }
+    
+    .control-btn, .tool-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+    }
+    
+    .chat-btn.send-btn {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .chat-input-container {
+        padding: var(--space-4);
+    }
+    
+    .message {
+        padding: 0 var(--space-4);
+        max-width: calc(100vw - 2rem);
+    }
+    
+    .user-message, .assistant-message {
+        max-width: calc(100vw - 2rem);
+        padding: 0 var(--space-4);
+    }
+    
+    .user-message {
+        justify-content: flex-end;
+    }
+    
+    .assistant-message {
+        justify-content: flex-start;
+    }
+    
+    .user-message .message-content {
+        max-width: 90%;
+    }
+    
+    .assistant-message .message-content {
+        max-width: 90%;
+    }
+    
+    .simple-welcome {
+        padding: var(--space-6) var(--space-4);
+    }
+    
+    .simple-welcome h2 {
+        font-size: var(--font-size-2xl);
+    }
+    
+    .app-sidebar {
+        width: 100vw;
+        left: -100vw;
+    }
+    
+    .input-tools {
+        gap: var(--space-1);
+        margin-right: var(--space-1);
+    }
+    
+    /* Mobile initial state adjustments */
+    .chat-container.initial-state .chat-messages-container {
+        padding: var(--space-6) var(--space-4);
+    }
+    
+    .chat-container.initial-state .simple-welcome h2 {
+        font-size: 2rem;
+    }
+    
+    .chat-container.initial-state .simple-welcome p {
+        font-size: 1.1rem;
+    }
+    
+    .chat-container.initial-state .chat-input-container {
+        padding: var(--space-4) !important;
+        max-width: 100% !important;
+    }
+    
+    /* Visualization responsive styles */
+    .visualization-message {
+        max-width: calc(100vw - 2rem);
+        padding: 0 var(--space-4);
+    }
+    
+    .visualization-controls {
+        flex-wrap: wrap;
+        gap: var(--space-1);
+    }
+    
+    .pagination-controls {
+        margin-right: var(--space-2);
+    }
+    
+    .pagination-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.75rem;
+    }
+    
+    .page-indicator {
+        font-size: 0.75rem;
+        min-width: 30px;
+    }
+    
+    .viz-btn {
+        padding: var(--space-1) var(--space-2);
+        font-size: 0.75rem;
+    }
+}
+
+/* Form Controls */
+.form-select, .form-control {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: 8px;
+    padding: var(--space-3);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    transition: all var(--transition);
+    width: 100%;
+}
+
+.form-select:focus, .form-control:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
+}
+
+/* ==========================================================================
+   File Upload Modal Styles
+   ========================================================================== */
+.file-upload-option {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: var(--space-5);
+    margin-bottom: var(--space-4);
+    transition: all var(--transition);
+    height: 100%;
+}
+
+.file-upload-option:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-medium);
+}
+
+.file-upload-option h5 {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+    display: flex;
+    align-items: center;
+}
+
+.file-upload-option p {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-3);
+    line-height: 1.5;
+}
+
+.file-upload-option .input-group {
+    display: flex;
+    width: 100%;
+}
+
+.file-upload-option .form-control {
+    flex: 1;
+    min-width: 0;
+    border-radius: 8px;
+    padding: var(--space-3);
+    font-size: var(--font-size-sm);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    color: var(--text-primary);
+}
+
+.file-upload-option .form-control:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
+}
+
+/* File input specific styling */
+.file-upload-option input[type="file"] {
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--border-medium);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.file-upload-option input[type="file"]:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-secondary);
+}
+
+.file-upload-option input[type="file"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
+}
+
+/* File input pseudo-elements for custom styling */
+.file-upload-option input[type="file"]::file-selector-button {
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: var(--space-2) var(--space-3);
+    margin-right: var(--space-3);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.file-upload-option input[type="file"]::file-selector-button:hover {
+    background: var(--accent-hover);
+}
+
+/* Upload status styling */
+.upload-status {
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.upload-status.success {
+    background: rgba(16, 163, 127, 0.1);
+    color: var(--accent-primary);
+    border: 1px solid rgba(16, 163, 127, 0.2);
+}
+
+.upload-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.upload-status.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.upload-status.pending {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+/* ==========================================================================
+   Visualization Styles - Clean and Modern
+   ========================================================================== */
+.visualization-message {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto var(--space-6) auto;
+    padding: 0 var(--space-6);
+}
+
+.visualization-message .message-content {
+    padding: 0;
+    background: transparent;
+    border: none;
+    width: 100%;
+    max-width: 100%;
+}
+
+.visualization-container {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px var(--shadow-light);
+    margin: var(--space-4) 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.visualization-header {
+    background: var(--bg-secondary);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.visualization-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.visualization-controls {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.viz-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    padding: var(--space-2) var(--space-3);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-size: var(--font-size-sm);
+}
+
+.viz-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.viz-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-right: var(--space-3);
+}
+
+.pagination-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-1);
+}
+
+.page-indicator {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    font-weight: 500;
+    min-width: 40px;
+    text-align: center;
+}
+
+.visualization-content {
+    position: relative;
+    background: var(--bg-primary);
+}
+
+.visualization-iframe {
+    width: 100%;
+    border: none;
+    display: block;
+    background: var(--bg-primary);
+    max-width: 100%;
+}
+
+.visualization-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+/* ==========================================================================
+   Simple Explanation Styles - Clean paragraphs instead of complex sections
+   ========================================================================== */
+.assistant-message .message-content h1,
+.assistant-message .message-content h2,
+.assistant-message .message-content h3,
+.assistant-message .message-content h4,
+.assistant-message .message-content h5,
+.assistant-message .message-content h6 {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: var(--space-4) 0 var(--space-2) 0;
+    line-height: 1.4;
+}
+
+.assistant-message .message-content h1:first-child,
+.assistant-message .message-content h2:first-child,
+.assistant-message .message-content h3:first-child,
+.assistant-message .message-content h4:first-child,
+.assistant-message .message-content h5:first-child,
+.assistant-message .message-content h6:first-child {
+    margin-top: 0;
+}
+
+.assistant-message .message-content p {
+    margin: var(--space-3) 0;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.assistant-message .message-content ul,
+.assistant-message .message-content ol {
+    margin: var(--space-3) 0;
+    padding-left: var(--space-5);
+}
+
+.assistant-message .message-content li {
+    margin: var(--space-1) 0;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.assistant-message .message-content strong {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.assistant-message .message-content code {
+    background: var(--bg-tertiary);
+    padding: var(--space-1) var(--space-2);
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9em;
+}
+
+.assistant-message .message-content pre {
+    background: var(--bg-tertiary);
+    padding: var(--space-3);
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: var(--space-3) 0;
+}
+
+/* Enhanced explanation styles for better readability */
+.explanation-summary,
+.explanation-detail-toggle,
+.explanation-interactive {
+    margin: var(--space-3) 0;
+}
+
+.explanation-detail-content {
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--accent-primary);
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-2) 0;
+    border-radius: 0 6px 6px 0;
+    display: none;
+}
+
+.explanation-detail-content.show {
+    display: block;
+}
+
+.toggle-explanation-detail {
+    background: none;
+    border: none;
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    padding: var(--space-1) var(--space-2);
+    border-radius: 4px;
+    transition: all var(--transition);
+}
+
+.toggle-explanation-detail:hover {
+    background: var(--bg-tertiary);
+} 

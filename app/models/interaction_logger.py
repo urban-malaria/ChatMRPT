@@ -8,7 +8,8 @@ import sqlite3
 import uuid
 import traceback
 from typing import Dict, List, Any, Optional, Union
-from app.utilities import convert_to_json_serializable
+from app.core.utils import convert_to_json_serializable
+import numpy as np
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,28 @@ class InteractionLogger:
        else:
            self.db_path = db_path
            
-       # Ensure the database exists and has the correct schema
+       # Initialize database
        self._init_database()
-   
+
+   def _convert_to_json_serializable(self, obj):
+       """
+       Convert objects to JSON serializable types, handling NumPy types.
+       """
+       if isinstance(obj, dict):
+           return {k: self._convert_to_json_serializable(v) for k, v in obj.items()}
+       elif isinstance(obj, list):
+           return [self._convert_to_json_serializable(item) for item in obj]
+       elif isinstance(obj, (np.integer, np.int64, np.int32)):
+           return int(obj)
+       elif isinstance(obj, (np.floating, np.float64, np.float32)):
+           return float(obj)
+       elif isinstance(obj, np.bool_):
+           return bool(obj)
+       elif isinstance(obj, np.ndarray):
+           return self._convert_to_json_serializable(obj.tolist())
+       else:
+           return obj
+
    def _init_database(self):
        """Initialize the database with required tables if they don't exist"""
        try:
@@ -427,6 +447,8 @@ class InteractionLogger:
            metadata_json = None
            if metadata:
                if isinstance(metadata, dict):
+                   # Convert numpy types to JSON serializable types
+                   metadata = self._convert_to_json_serializable(metadata)
                    metadata_json = json.dumps(metadata)
                else:
                    metadata_json = str(metadata)
@@ -1742,7 +1764,7 @@ class InteractionLogger:
                                ranking[field] = json.loads(ranking[field])
                            except:
                                pass
-                   
+               
                    session_data['analysis_details']['ward_rankings'].append(ranking)
                
                # Get visualization metadata

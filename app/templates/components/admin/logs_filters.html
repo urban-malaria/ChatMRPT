@@ -1,0 +1,61 @@
+<div class="filters-card">
+    <h4><i class="bi bi-funnel me-2"></i>Filters & Options</h4>
+    <form method="get" action="{{ url_for('main.admin_logs') }}" class="row g-3">
+        <input type="hidden" name="key" value="{{ request.args.get('key') }}">
+        
+        <div class="col-md-3">
+            <label for="date" class="form-label">Session Date:</label>
+            <input type="date" id="date" name="date" value="{{ request.args.get('date', '') }}" class="form-control">
+        </div>
+        
+        <div class="col-md-3">
+            <label for="language" class="form-label">Language:</label>
+            <select name="language" id="language" class="form-select">
+                <option value="">All Languages</option>
+                <option value="en" {% if request.args.get('language') == 'en' %}selected{% endif %}>English</option>
+                <option value="fr" {% if request.args.get('language') == 'fr' %}selected{% endif %}>French</option>
+                <option value="ha" {% if request.args.get('language') == 'ha' %}selected{% endif %}>Hausa</option>
+                <option value="yo" {% if request.args.get('language') == 'yo' %}selected{% endif %}>Yoruba</option>
+                <option value="ig" {% if request.args.get('language') == 'ig' %}selected{% endif %}>Igbo</option>
+                <option value="ar" {% if request.args.get('language') == 'ar' %}selected{% endif %}>Arabic</option>
+            </select>
+        </div>
+        
+        <div class="col-md-2">
+            <label for="errors" class="form-label">Errors:</label>
+            <select name="errors" id="errors" class="form-select">
+                <option value="">All Sessions</option>
+                <option value="yes" {% if request.args.get('errors') == 'yes' %}selected{% endif %}>With Errors</option>
+                <option value="no" {% if request.args.get('errors') == 'no' %}selected{% endif %}>No Errors</option>
+            </select>
+        </div>
+        
+        <div class="col-md-2">
+            <label for="sort" class="form-label">Sort By:</label>
+            <select name="sort" id="sort" class="form-select">
+                <option value="recent" {% if request.args.get('sort', 'recent') == 'recent' %}selected{% endif %}>Most Recent</option>
+                <option value="messages" {% if request.args.get('sort') == 'messages' %}selected{% endif %}>Message Count</option>
+                <option value="errors" {% if request.args.get('sort') == 'errors' %}selected{% endif %}>Error Count</option>
+            </select>
+        </div>
+        
+        <div class="col-md-2">
+            <label for="limit" class="form-label">Limit:</label>
+            <select name="limit" id="limit" class="form-select">
+                <option value="100" {% if request.args.get('limit', '100') == '100' %}selected{% endif %}>100</option>
+                <option value="250" {% if request.args.get('limit') == '250' %}selected{% endif %}>250</option>
+                <option value="500" {% if request.args.get('limit') == '500' %}selected{% endif %}>500</option>
+                <option value="1000" {% if request.args.get('limit') == '1000' %}selected{% endif %}>1000</option>
+            </select>
+        </div>
+        
+        <div class="col-12 mt-3">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-funnel-fill me-1"></i>Apply Filters
+            </button>
+            <a href="{{ url_for('main.admin_logs', key=request.args.get('key')) }}" class="btn btn-outline-secondary ms-2">
+                <i class="bi bi-arrow-clockwise me-1"></i>Clear Filters
+            </a>
+        </div>
+    </form>
+</div> 

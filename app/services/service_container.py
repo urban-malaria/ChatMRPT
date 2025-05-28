@@ -7,9 +7,9 @@ allowing for cleaner dependency management.
 import logging
 from flask import current_app
 
-from .analysis_service import AnalysisService
+from .analysis.engine import AnalysisService
 from .message_service import MessageService
-from .visualization_service import VisualizationService
+from .visualization.chart_service import VisualizationService
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class ServiceContainer:
         else:
             # Try to initialize LLM Manager
             try:
-                from ..ai_utils import get_llm_manager
+                from ..core.llm_manager import get_llm_manager
                 self._llm_manager = get_llm_manager()
                 logger.info("Initialized new LLM Manager")
             except Exception as e:

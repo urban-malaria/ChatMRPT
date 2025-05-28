@@ -1,0 +1,24 @@
+<div class="section-card">
+    <h2><i class="bi bi-bar-chart me-2"></i>Visualizations</h2>
+    
+    {% if visualizations %}
+        <div class="row">
+            {% for viz in visualizations %}
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ viz.title }}</h5>
+                        <p class="card-text">{{ viz.description }}</p>
+                        <small class="text-muted">{{ viz.timestamp.strftime('%Y-%m-%d %H:%M:%S') if viz.timestamp else 'N/A' }}</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-bar-chart text-muted" style="font-size: 2rem;"></i>
+            <p>No visualizations found for this session.</p>
+        </div>
+    {% endif %}
+</div> 

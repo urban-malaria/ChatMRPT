@@ -5,6 +5,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 *.so
 .Python
 env/
@@ -40,4 +41,24 @@ Thumbs.db
 
 # Virtual Environment
 venv/
-ENV/ 
+ENV/
+
+# Temporary test files
+test_*_debug.py
+debug_*.py
+
+# Test reports directory
+test_reports/
+
+# Keep structured test files
+!test_data_package.py
+!test_interaction_package.py
+!test_refactoring.py
+!test_analysis_comparison.py
+!test_scoring_performance.py
+!test_message_response.py
+!test_intent_extraction.py
+
+# Documentation files that shouldn't be in repo
+PAGINATION_AND_REPORT_FIXES.md
+CRITICAL_UI_FIX.css 
