@@ -36,8 +36,8 @@ def init_routes(app):
             mimetype='application/xml'
         )
     
-    @app.route('/health')
-    def health_check():
+    @app.route('/system-health')
+    def system_health():
         """Simple health check endpoint for monitoring."""
         return jsonify({
             'status': 'ok',
