@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
 
 # File upload configurations
-ALLOWED_EXTENSIONS_CSV = {'csv', 'txt'}
+ALLOWED_EXTENSIONS_CSV = {'csv', 'txt', 'xlsx', 'xls'}  # Added Excel file extensions
 ALLOWED_EXTENSIONS_SHP = {'zip'}  # Shapefiles are uploaded as ZIP files
 
 
@@ -183,7 +183,7 @@ def upload_both_files():
     elif csv_file:
         results['csv_result'] = {
             'status': 'error',
-            'message': 'Invalid CSV file type. Please upload a .csv file.'
+            'message': 'Invalid CSV file type. Please upload a .csv, .xlsx, or .xls file.'
         }
     
     # Process shapefile if provided
@@ -1607,4 +1607,41 @@ def debug_visualization():
         return jsonify({
             'status': 'error',
             'message': f'Error in visualization debug: {str(e)}'
+        }), 500
+
+
+@main_bp.route('/debug/llm_service', methods=['GET'])
+@validate_session
+@handle_errors
+def debug_llm_service():
+    """
+    Debug endpoint to check if the LLM service is functioning properly.
+    This helps diagnose API connection issues.
+    """
+    try:
+        # Get services from the container
+        message_service = current_app.services.message_service
+        
+        # Check if we have API keys
+        openai_api_key = current_app.config.get('OPENAI_API_KEY')
+        model_name = current_app.config.get('OPENAI_MODEL_NAME', 'gpt-4o')
+        
+        # Check connection
+        connection_status = message_service.check_connection() if hasattr(message_service, 'check_connection') else "Method not available"
+        
+        # Return debug info
+        return jsonify({
+            'status': 'success',
+            'llm_service_available': message_service is not None,
+            'api_key_configured': bool(openai_api_key),
+            'model_name': model_name,
+            'connection_status': connection_status,
+            'session_permanent': current_app.config.get('SESSION_PERMANENT', False),
+            'session_lifetime': str(current_app.config.get('PERMANENT_SESSION_LIFETIME', 'Not set'))
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error checking LLM service: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f'Error checking LLM service: {str(e)}'
         }), 500 

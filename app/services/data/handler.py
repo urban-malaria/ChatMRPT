@@ -7,6 +7,7 @@ and processing operations.
 
 import logging
 import os
+import pandas as pd
 from typing import Dict, Any, List, Optional
 from ...models.data_handler import DataHandler
 
@@ -52,25 +53,46 @@ class DataService:
     
     def load_csv_file(self, session_id: str, file_path: str) -> Dict[str, Any]:
         """
-        Load a CSV file for a session.
+        Load a CSV or Excel file for a session.
         
         Args:
             session_id: User session ID
-            file_path: Path to CSV file
+            file_path: Path to CSV/Excel file
             
         Returns:
             Result dictionary with status and metadata
         """
         try:
             handler = self.get_handler(session_id)
-            result = handler.load_csv(file_path)
+            
+            # Check file extension
+            file_ext = os.path.splitext(file_path)[1].lower()
+            
+            # Load data based on file type
+            if file_ext in ['.xlsx', '.xls']:
+                # Read Excel file
+                df = pd.read_excel(file_path)
+            else:
+                # Read CSV file
+                df = pd.read_csv(file_path)
+            
+            # Convert to dictionary format
+            data = df.to_dict('records')
+            
+            result = {
+                'status': 'success',
+                'rows': len(data),
+                'columns': len(df.columns),
+                'data': data[:5],  # Return first 5 rows for preview
+                'columns_list': df.columns.tolist()
+            }
             
             # Log the operation
-            if self.interaction_logger and result.get('status') == 'success':
+            if self.interaction_logger:
                 metadata = {
-                    'rows': result.get('rows', 0),
-                    'columns': result.get('columns', 0),
-                    'missing_values': result.get('missing_values', 0)
+                    'rows': result['rows'],
+                    'columns': result['columns'],
+                    'missing_values': df.isnull().sum().sum()
                 }
                 self.interaction_logger.log_file_upload(
                     session_id, 'csv', os.path.basename(file_path),
@@ -80,10 +102,10 @@ class DataService:
             return result
             
         except Exception as e:
-            logger.error(f"Error loading CSV file: {str(e)}", exc_info=True)
+            logger.error(f"Error loading file: {str(e)}", exc_info=True)
             return {
                 'status': 'error',
-                'message': f'Error loading CSV file: {str(e)}'
+                'message': f'Error loading file: {str(e)}'
             }
     
     def load_shapefile(self, session_id: str, file_path: str) -> Dict[str, Any]:

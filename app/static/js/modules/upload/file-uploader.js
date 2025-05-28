@@ -148,7 +148,7 @@ export class FileUploader {
 
         // Validate file types
         if (csvFile && !this.isValidCsvFile(csvFile)) {
-            this.setUploadStatus('Invalid CSV/Excel file format', 'error');
+            this.setUploadStatus('Invalid file format. Please upload a CSV or Excel file', 'error');
             return;
         }
 
@@ -158,32 +158,31 @@ export class FileUploader {
         }
 
         try {
-            this.setUploadStatus('Uploading files...', 'pending');
-            this.disableUploadButton(true);
-
+            this.setUploadStatus('Uploading files...', 'info');
+            
             const response = await apiClient.uploadFiles(csvFile, shapeFile);
             
-            // Debug logging - UPDATED 2025-05-22 22:05
-            console.log('=== UPLOAD DEBUG START ===');
-            console.log('Full upload response:', JSON.stringify(response, null, 2));
-            console.log('Response status:', response.status);
-            console.log('Response status type:', typeof response.status);
-            console.log('Status comparison (success):', response.status === 'success');
-            console.log('Status comparison (warning):', response.status === 'warning');
-            console.log('=== UPLOAD DEBUG END ===');
-
-            if (response.status === 'success' || response.status === 'warning') {
-                console.log('✅ Calling handleUploadSuccess');
+            // Check if we have data even if status is error
+            if (response.csv_result && response.csv_result.data && response.csv_result.data.length > 0) {
+                response.csv_result.status = 'success';
+            }
+            
+            if (response.status === 'success' || 
+                (response.csv_result && response.csv_result.status === 'success') ||
+                (response.shapefile_result && response.shapefile_result.status === 'success')) {
                 this.handleUploadSuccess(response, csvFile, shapeFile);
             } else {
-                console.log('❌ Going to error handler with message:', response.message);
-                this.handleUploadError(response.message || 'Upload failed');
+                let errorMessage = 'One or more file uploads failed';
+                if (response.csv_result && response.csv_result.message) {
+                    errorMessage = response.csv_result.message;
+                } else if (response.shapefile_result && response.shapefile_result.message) {
+                    errorMessage = response.shapefile_result.message;
+                }
+                this.handleUploadError(errorMessage);
             }
         } catch (error) {
-            console.log('💥 Caught exception:', error);
-            this.handleUploadError(error.message || 'Upload failed');
-        } finally {
-            this.disableUploadButton(false);
+            console.error('Upload error:', error);
+            this.handleUploadError(error.message || 'Failed to upload files');
         }
     }
 
