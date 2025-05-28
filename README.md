@@ -351,6 +351,26 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - **📚 Architecture Guide**: [ARCHITECTURE.md](./ARCHITECTURE.md)
 - **📈 Refactoring Details**: [REFACTORING_PROGRESS.md](./REFACTORING_PROGRESS.md)
 
+## 🚀 **Deployment Options**
+
+### **Deploying to Render**
+
+ChatMRPT includes a `render.yaml` file for easy deployment to [Render](https://render.com):
+
+1. Fork or clone this repository to your GitHub account
+2. Sign up for a Render account and connect your GitHub
+3. Click "New" and select "Blueprint" from the Render dashboard
+4. Select your repository with ChatMRPT
+5. Render will automatically detect the `render.yaml` configuration
+6. Enter your OpenAI API key when prompted
+7. Click "Apply" to start the deployment
+
+The deployment will create:
+- A web service running the ChatMRPT application
+- A PostgreSQL database for storing chat history and analysis data
+- Persistent disk storage for uploaded files
+
+Once deployed, your application will be available at `https://chatmrpt.onrender.com` or your custom domain.
 
 ---
 

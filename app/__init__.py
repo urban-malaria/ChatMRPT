@@ -93,6 +93,14 @@ def create_app(config_name=None):
     # --- Initialize Extensions ---
     Session(app)
     
+    # --- Initialize Database ---
+    from .utils.database import init_db
+    try:
+        init_db()
+        app.logger.info("Database initialized successfully")
+    except Exception as e:
+        app.logger.error(f"Error initializing database: {e}")
+    
     # --- Initialize Modern Service Container ---
     from .services.container import init_services
     init_services(app)
@@ -104,7 +112,7 @@ def create_app(config_name=None):
     app.register_blueprint(admin_bp)
     
     # Log startup information
-    app.logger.info("ChatMRPT v2.0 - Modern Architecture Initialized")
+    app.logger.info("ChatMRPT v3.0 - Modern Architecture Initialized")
     app.logger.info("Configuration: %s", config_class.__name__)
     services_status = 'Available' if hasattr(app, 'services') else 'Not Available'
     app.logger.info("Services: %s", services_status)
