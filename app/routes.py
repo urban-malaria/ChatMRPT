@@ -45,6 +45,11 @@ def init_routes(app):
             'version': getattr(app, 'version', 'unknown')
         })
     
+    @app.route('/ping')
+    def ping():
+        """Simple health check endpoint for simple monitoring."""
+        return jsonify({'status': 'ok'})
+    
     @app.route('/static/<path:filename>')
     def custom_static(filename):
         """

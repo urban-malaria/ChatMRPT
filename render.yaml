@@ -21,7 +21,7 @@ services:
       sizeGB: 1
     plan: free
     autoDeploy: true
-    healthCheckPath: /
+    healthCheckPath: /ping
     domains:
       - chatmrpt.onrender.com
     # Include system packages for geospatial libraries
