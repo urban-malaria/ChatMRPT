@@ -46,6 +46,9 @@ ENV/
 # Temporary test files
 test_*_debug.py
 debug_*.py
+# But allow test files in the tests directory
+!tests/test_*_debug.py
+!tests/debug_*.py
 
 # Test reports directory
 test_reports/
