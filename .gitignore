@@ -64,4 +64,9 @@ test_reports/
 
 # Documentation files that shouldn't be in repo
 PAGINATION_AND_REPORT_FIXES.md
-CRITICAL_UI_FIX.css 
+CRITICAL_UI_FIX.css
+
+# Ignore all markdown files except README and ARCHITECTURE
+*.md
+!README.md
+!ARCHITECTURE.md 
