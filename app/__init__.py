@@ -111,6 +111,10 @@ def create_app(config_name=None):
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
     
+    # --- Initialize Additional Routes ---
+    from .routes import init_routes
+    init_routes(app)
+    
     # Log startup information
     app.logger.info("ChatMRPT v3.0 - Modern Architecture Initialized")
     app.logger.info("Configuration: %s", config_class.__name__)
