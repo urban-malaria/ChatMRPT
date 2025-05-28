@@ -24,6 +24,13 @@ services:
     healthCheckPath: /
     domains:
       - chatmrpt.onrender.com
+    # Include system packages for geospatial libraries
+    buildFilter:
+      paths:
+        - requirements.txt
+        - app/**
+        - run.py
+        - apt-packages
 
 databases:
   - name: chatmrpt-db
