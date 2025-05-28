@@ -468,17 +468,22 @@ def run_analysis():
         # Get session ID
         session_id = session.get('session_id', 'default')
         
+        # Debug logging
+        current_app.logger.info(f"[DEBUG] run_analysis: session_id={session_id}")
+        data_service = current_app.services.data_service
+        data_handler = data_service.get_handler(session_id)
+        current_app.logger.info(f"[DEBUG] run_analysis: data_handler exists: {data_handler is not None}")
+        if data_handler:
+            has_df = hasattr(data_handler, 'df') and data_handler.df is not None
+            current_app.logger.info(f"[DEBUG] run_analysis: data_handler.df exists: {has_df}")
+        
         # Get custom parameters from the request
         data = request.json or {}
         selected_variables = data.get('selected_variables', None)
         use_llm_selection = data.get('use_llm_selection', True)
         
         # Get services from the container
-        data_service = current_app.services.data_service
         analysis_service = current_app.services.analysis_service
-        
-        # Get data handler via data service
-        data_handler = data_service.get_handler(session_id)
         
         if not data_handler:
             raise ValidationError('Data handler not initialized. Please upload data files first.')
