@@ -4,6 +4,7 @@ Production configuration with enhanced security and performance settings.
 
 import os
 from .base import BaseConfig
+from flask import request
 
 
 class ProductionConfig(BaseConfig):
@@ -59,7 +60,7 @@ class ProductionConfig(BaseConfig):
         # Production-specific error handlers
         @app.errorhandler(404)
         def not_found_error(error):
-            app.logger.warning(f"404 Not Found: {app.request.url}")
+            app.logger.warning(f"404 Not Found: {request.url}")
             return {"error": "Resource not found"}, 404
 
         @app.errorhandler(500)
@@ -69,7 +70,7 @@ class ProductionConfig(BaseConfig):
         
         @app.errorhandler(403)
         def forbidden_error(error):
-            app.logger.warning(f"403 Forbidden: {app.request.url}")
+            app.logger.warning(f"403 Forbidden: {request.url}")
             return {"error": "Access forbidden"}, 403
         
         # Security middleware
