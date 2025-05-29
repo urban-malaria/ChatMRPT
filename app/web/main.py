@@ -1649,4 +1649,109 @@ def debug_llm_service():
         return jsonify({
             'status': 'error',
             'message': f'Error checking LLM service: {str(e)}'
-        }), 500 
+        }), 500
+
+
+@main_bp.route('/reload_session_data', methods=['POST'])
+@validate_session
+@handle_errors
+@log_execution_time
+def reload_session_data():
+    """Force reload of session data from files on disk for recovery."""
+    try:
+        # Get session ID and paths
+        session_id = session.get('session_id', 'default')
+        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
+        
+        # Log the reload attempt
+        current_app.logger.info(f"Attempting to reload data for session: {session_id}")
+        
+        # Get data service
+        data_service = current_app.services.data_service
+        if not data_service:
+            raise DataProcessingError("Data service is not available")
+        
+        # Check if we have file information in the session
+        csv_filename = session.get('csv_filename')
+        shapefile_filename = session.get('shapefile_filename')
+        
+        if not csv_filename or not shapefile_filename:
+            return jsonify({
+                'status': 'error',
+                'message': 'No file information available in session. Please upload files again.'
+            })
+        
+        # Build full paths
+        csv_path = os.path.join(session_folder, csv_filename)
+        shapefile_path = os.path.join(session_folder, shapefile_filename)
+        
+        # Check if files exist
+        csv_exists = os.path.exists(csv_path)
+        shapefile_exists = os.path.exists(shapefile_path)
+        
+        if not csv_exists or not shapefile_exists:
+            missing = []
+            if not csv_exists:
+                missing.append(f"CSV file ({csv_filename})")
+            if not shapefile_exists:
+                missing.append(f"Shapefile ({shapefile_filename})")
+                
+            return jsonify({
+                'status': 'error',
+                'message': f"Files not found on server: {', '.join(missing)}. Please upload again."
+            })
+        
+        # Force reload by clearing handler and loading files again
+        data_service.cleanup_session(session_id)
+        
+        # Reload CSV
+        csv_result = data_service.load_csv_file(session_id, csv_path)
+        if csv_result['status'] != 'success':
+            return jsonify({
+                'status': 'error',
+                'message': f"Failed to reload CSV: {csv_result.get('message', 'Unknown error')}"
+            })
+        
+        # Reload shapefile
+        shp_result = data_service.load_shapefile(session_id, shapefile_path)
+        if shp_result['status'] not in ['success', 'warning']:
+            return jsonify({
+                'status': 'error',
+                'message': f"Failed to reload Shapefile: {shp_result.get('message', 'Unknown error')}"
+            })
+        
+        # Update session data
+        session['csv_loaded'] = True
+        session['shapefile_loaded'] = True
+        
+        # Verify data was loaded correctly
+        handler = data_service.get_handler(session_id)
+        has_csv_data = (hasattr(handler, 'df') and handler.df is not None) or \
+                      (hasattr(handler, 'csv_data') and handler.csv_data is not None)
+        has_shapefile_data = (hasattr(handler, 'gdf') and handler.gdf is not None) or \
+                            (hasattr(handler, 'shapefile_data') and handler.shapefile_data is not None)
+        
+        if not has_csv_data or not has_shapefile_data:
+            return jsonify({
+                'status': 'error',
+                'message': 'Data reload partially successful but data still not fully available for analysis.'
+            })
+        
+        # Log success
+        current_app.logger.info(f"Successfully reloaded data for session {session_id}")
+        
+        # Get summary of reloaded data
+        data_summary = data_service.get_data_summary(session_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f"Successfully reloaded data: {csv_filename} ({data_summary.get('csv_rows', 0)} rows) and {shapefile_filename} ({data_summary.get('shapefile_features', 0)} features)",
+            'data_summary': data_summary
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error reloading session data: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f"Error reloading data: {str(e)}"
+        }) 

@@ -184,6 +184,41 @@ class LLMManager:
             max_tokens=1000
         )
     
+    def generate_simple_response(self, prompt: str) -> str:
+        """
+        Generate a minimal response for testing connectivity.
+        
+        Args:
+            prompt: Simple prompt for testing
+            
+        Returns:
+            str: Response from the LLM or error message
+        """
+        try:
+            if not self.client:
+                if not self.api_key:
+                    return "Error: No API key available"
+                try:
+                    self.client = openai.OpenAI(api_key=self.api_key)
+                except Exception as e:
+                    return f"Error initializing OpenAI client: {str(e)}"
+            
+            # Simple single message call
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a testing assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.5,
+                max_tokens=20,
+            )
+            
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error in simple response test: {str(e)}", exc_info=True)
+            return f"Error: {str(e)}"
+    
     def explain_visualization(self, session_id: str, viz_type: str, context: Optional[Any] = None, question: Optional[str] = None) -> str:
         """
         Generate an explanation for a visualization
@@ -251,6 +286,7 @@ Sections:
         - query_analysis_details: User wants details about the completed analysis
         - generate_report: User wants to generate a report
         - greet: User is greeting the system
+        - general_knowledge_question: User is asking a general knowledge question unrelated to malaria analysis
         - clarification_needed: User's request is unclear
         
         Return a simple JSON with:
@@ -293,6 +329,11 @@ Sections:
                 return {"intent": "generate_report", "entities": {}}
             elif any(word in message_lower for word in ['hello', 'hi', 'hey']):
                 return {"intent": "greet", "entities": {}}
+            # Check for general knowledge question patterns
+            elif any(word in message_lower for word in ['what is', 'who is', 'where is', 'when did', 'how many', 'tell me about']):
+                return {"intent": "general_knowledge_question", "entities": {"question": message}}
+            elif message_lower.endswith('?'):
+                return {"intent": "general_knowledge_question", "entities": {"question": message}}
             else:
                 return {"intent": "clarification_needed", "entities": {}}
             

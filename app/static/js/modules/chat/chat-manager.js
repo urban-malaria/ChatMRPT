@@ -229,6 +229,38 @@ export class ChatManager {
             case 'ward_explanation':
                 this.addWardExplanation(action.ward, action.explanation);
                 break;
+            case 'error':
+                console.log(`Unknown action type: error`, action);
+                
+                // Check for specific error messages related to data loading issues
+                if (action.response && typeof action.response === 'string') {
+                    const lowerResponse = action.response.toLowerCase();
+                    if (lowerResponse.includes('no csv data loaded') || 
+                        lowerResponse.includes('not properly loaded') || 
+                        lowerResponse.includes('data handler not initialized')) {
+                        
+                        console.warn('⚠️ Data loading error detected. Attempting recovery...');
+                        
+                        // Show recovery message to user
+                        const recoveryMessage = `<div class="alert alert-warning">
+                            <p><strong>Data loading issue detected.</strong></p>
+                            <p>It appears your data files were uploaded but not properly loaded for analysis.</p>
+                            <p>
+                                <button class="btn btn-primary btn-sm recovery-action" data-action="reload-data">
+                                    Attempt Recovery
+                                </button>
+                            </p>
+                        </div>`;
+                        
+                        this.appendMessage('system', recoveryMessage);
+                        
+                        // Add event listener for recovery button
+                        document.querySelector('.recovery-action[data-action="reload-data"]').addEventListener('click', () => {
+                            this.attemptDataRecovery();
+                        });
+                    }
+                }
+                break;
             default:
                 console.log('Unknown action type:', actionType, response);
         }
@@ -1671,6 +1703,47 @@ export class ChatManager {
             console.error('💥 Error testing analysis message:', error);
             return null;
         }
+    }
+
+    /**
+     * Attempt to recover from data loading errors by forcing a reload of the session data
+     */
+    async attemptDataRecovery() {
+        console.log('🔄 Attempting data recovery...');
+        this.appendMessage('system', `<div class="alert alert-info">Attempting to reload your data... Please wait.</div>`);
+        
+        // Call a backend endpoint to force reload session data
+        fetch('/reload_session_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                this.appendMessage('system', `<div class="alert alert-success">
+                    <p><strong>Recovery successful!</strong></p>
+                    <p>${data.message}</p>
+                    <p>You can now try running the analysis again.</p>
+                    <button class="btn btn-primary btn-sm" onclick="document.getElementById('message-input').value='Run the analysis'; document.getElementById('send-message').click();">
+                        Run Analysis Now
+                    </button>
+                </div>`);
+            } else {
+                this.appendMessage('system', `<div class="alert alert-danger">
+                    <p><strong>Recovery failed.</strong></p>
+                    <p>${data.message || 'Please try uploading your files again.'}</p>
+                </div>`);
+            }
+        })
+        .catch(error => {
+            console.error('Error during recovery attempt:', error);
+            this.appendMessage('system', `<div class="alert alert-danger">
+                <p><strong>Recovery failed.</strong></p>
+                <p>An error occurred while attempting recovery. Please try uploading your files again.</p>
+            </div>`);
+        });
     }
 }
 

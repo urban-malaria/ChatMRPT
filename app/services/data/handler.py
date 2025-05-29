@@ -103,6 +103,14 @@ class DataService:
                 'columns_list': df.columns.tolist()
             }
             
+            # Set data in handler
+            if handler:
+                if hasattr(handler, 'df'):
+                    handler.df = df  # New style handler
+                if hasattr(handler, 'csv_data'):
+                    handler.csv_data = df  # Old style handler
+                logger.info(f"CSV data set in handler for session {session_id}")
+            
             # Log the operation
             if self.interaction_logger:
                 metadata = {
@@ -138,6 +146,14 @@ class DataService:
         try:
             handler = self.get_handler(session_id)
             result = handler.load_shapefile(file_path)
+            
+            # Ensure data is set in handler
+            if result.get('status') in ['success', 'warning'] and 'data' in result:
+                if hasattr(handler, 'gdf'):
+                    handler.gdf = result['data']  # New style handler
+                if hasattr(handler, 'shapefile_data'):
+                    handler.shapefile_data = result['data']  # Old style handler
+                logger.info(f"Shapefile data set in handler for session {session_id}")
             
             # Log the operation
             if self.interaction_logger and result.get('status') in ['success', 'warning']:

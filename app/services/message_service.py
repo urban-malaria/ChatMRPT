@@ -33,6 +33,27 @@ class MessageService:
         from ..data.validation import DataValidator
         self.validation_service = DataValidator(interaction_logger)
     
+    def check_connection(self):
+        """
+        Test connection to the LLM service.
+        
+        Returns:
+            str: Status message indicating connection health
+        """
+        if not self.llm_manager:
+            return "LLM Manager not initialized"
+        
+        try:
+            # Try a simple prompt to test connection
+            response = self.llm_manager.generate_simple_response("test connection")
+            if response:
+                return "Connected successfully"
+            else:
+                return "Connected but received empty response"
+        except Exception as e:
+            logger.error(f"LLM connection error: {str(e)}", exc_info=True)
+            return f"Connection error: {str(e)}"
+    
     def process_message(self, user_message, session_id, session_state, data_handler=None, pending_action=None, pending_variables=None):
         """
         Process a user message and generate an appropriate response.
@@ -82,7 +103,10 @@ class MessageService:
         logger.info(f"Processing intent '{intent}' for session {session_id}")
         logger.info(f"NLU result: {nlu_result}")
         
-        if intent == 'run_standard_analysis':
+        # Always handle general knowledge questions regardless of data state
+        if intent == 'general_knowledge_question':
+            return self._handle_general_knowledge_question(user_message, nlu_result, session_id)
+        elif intent == 'run_standard_analysis':
             return self._handle_run_standard_analysis(nlu_result, session_state, data_handler, session_id)
         elif intent == 'run_custom_analysis':
             return self._handle_custom_analysis(nlu_result, session_state, data_handler, session_id)
@@ -415,11 +439,48 @@ Make it conversational and include actual clickable suggestions like "Try saying
     
     def _handle_run_standard_analysis(self, entities, session_state, data_handler, session_id):
         """Handle request to run standard analysis"""
-        # Check if data is loaded
+        # Check if data is loaded according to session state
         if not all([session_state.get('csv_loaded', False), session_state.get('shapefile_loaded', False)]):
             return {
                 "status": "error", 
                 "response": "Please upload both data files first.", 
+                "action": "error"
+            }
+        
+        # Verify that data_handler has actual data loaded (not just session flags)
+        if not data_handler:
+            logger.error(f"Data handler is None for session {session_id} despite session flags indicating data is loaded")
+            return {
+                "status": "error",
+                "response": "Data handler not initialized properly. Please try refreshing and re-uploading your files.",
+                "action": "error"
+            }
+        
+        # Check if CSV data is actually available in the handler
+        has_csv_data = (hasattr(data_handler, 'df') and data_handler.df is not None) or \
+                      (hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None)
+        
+        # Check if shapefile data is actually available in the handler
+        has_shapefile_data = (hasattr(data_handler, 'gdf') and data_handler.gdf is not None) or \
+                            (hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None)
+        
+        # Log detailed diagnostics about data state
+        logger.info(f"Data state for session {session_id}: session.csv_loaded={session_state.get('csv_loaded', False)}, " +
+                   f"session.shapefile_loaded={session_state.get('shapefile_loaded', False)}, " +
+                   f"has_csv_data={has_csv_data}, has_shapefile_data={has_shapefile_data}")
+        
+        # If the data isn't actually loaded in the handler despite session flags, provide error
+        if not has_csv_data or not has_shapefile_data:
+            logger.error(f"Data inconsistency detected in session {session_id}: Session flags indicate data is loaded but handler doesn't have data")
+            missing_data = []
+            if not has_csv_data:
+                missing_data.append("CSV data")
+            if not has_shapefile_data:
+                missing_data.append("Shapefile data")
+            
+            return {
+                "status": "error",
+                "response": f"Error running analysis: {', '.join(missing_data)} not properly loaded. Please re-upload your files.",
                 "action": "error"
             }
         
@@ -1088,6 +1149,15 @@ Context: {context}"""
         """
         logger.info(f"Handling unrecognized intent for message: '{user_message}' with session state: {session_state}")
         
+        # Check if this might be a general knowledge question first
+        message_lower = user_message.lower()
+        if (message_lower.endswith('?') or 
+            any(phrase in message_lower for phrase in ['what is', 'who is', 'where is', 'when did', 'how many', 'tell me about', 'why is', 'why are'])):
+            logger.info(f"Reclassifying as potential general knowledge question: '{user_message}'")
+            # Create a synthetic result for a general knowledge question
+            general_knowledge_result = {"intent": "general_knowledge_question", "entities": {"question": user_message}}
+            return self._handle_general_knowledge_question(user_message, general_knowledge_result, session_id)
+        
         # Use LLM to generate intelligent, context-aware responses
         if self.llm_manager:
             try:
@@ -1109,10 +1179,10 @@ Context: {context}"""
 
 The user hasn't uploaded data yet. Generate a helpful response that:
 1. Acknowledges their question/request
-2. Explains they need to upload data first (CSV and shapefile)
+2. Explains they need to upload data first (CSV and shapefile) if their question is analysis-related
 3. Guides them on what they can do next
 4. Be encouraging and conversational
-5. If their question seems related to analysis, mention what they'll be able to do once data is uploaded
+5. If their question seems to be a general knowledge question unrelated to malaria analysis, just answer it directly
 
 Context: {context}"""
                 
@@ -1127,10 +1197,11 @@ The user has data loaded but hasn't run analysis yet. Their dataset has variable
 
 Generate a helpful response that:
 1. Acknowledges their question/request
-2. Explains they need to run analysis first if their request requires it
+2. If their question is analysis-related, explains they need to run analysis first
 3. Suggests specific actions they can take (like "Run the analysis" or "Run analysis with [specific variables]")
 4. If they're asking about specific variables, help them understand what's available
-5. Be conversational and specific about their data
+5. If their question seems to be a general knowledge question unrelated to malaria analysis, just answer it directly
+6. Be conversational and specific about their data
 
 Context: {context}"""
                 
@@ -1139,11 +1210,12 @@ Context: {context}"""
                     prompt = f"""User asked: "{user_message}"
 
 The user has completed analysis and can now access all features. Generate a helpful response that:
-1. Acknowledges their question/request 
-2. Suggests specific actions they can take
-3. Offers to show visualizations, generate reports, or explain results
+1. Acknowledges their question/request
+2. If relevant to analysis, suggests specific actions they can take
+3. If relevant to results, offers to show visualizations, generate reports, or explain results
 4. Be specific about what's possible with their completed analysis
-5. If unclear, ask clarifying questions to better help them
+5. If their question seems to be a general knowledge question unrelated to malaria analysis, just answer it directly
+6. If unclear, ask clarifying questions to better help them
 
 Context: {context}"""
                 
@@ -1151,7 +1223,7 @@ Context: {context}"""
                 ai_response = self.llm_manager.generate_response(
                     prompt=prompt,
                     context=context,
-                    system_message="You are a helpful malaria risk analysis assistant. Be conversational, specific, and always try to guide users toward productive next steps.",
+                    system_message="You are a helpful malaria risk analysis assistant. Be conversational, specific, and always try to guide users toward productive next steps. If they're asking a general knowledge question, answer it directly regardless of their data analysis state.",
                     session_id=session_id
                 )
                 
@@ -1169,7 +1241,7 @@ Context: {context}"""
         if not data_handler:
             return {
                 "status": "success",
-                "response": """<p>I'd be happy to help! To get started with malaria vulnerability analysis, please:</p>
+                "response": f"""<p>I understand you're asking about "{user_message}". To get started with malaria vulnerability analysis, please:</p>
 <ol>
 <li><strong>Upload your CSV data file</strong> (with demographic, environmental, or health variables)</li>
 <li><strong>Upload your shapefile</strong> (geographic boundaries for your study area)</li>
@@ -1322,4 +1394,56 @@ Context: {context}"""
         # Ultimate fallback
         logger.warning(f"Could not detect visualization type from '{viz_type_raw}', defaulting to composite_map")
         return 'composite_map'
+
+    def _handle_general_knowledge_question(self, user_message, nlu_result, session_id):
+        """
+        Handle general knowledge questions that are not directly related to malaria analysis.
+        This method allows users to ask arbitrary questions and get reasonable responses.
+        
+        Args:
+            user_message: Original user message
+            nlu_result: Intent classification result
+            session_id: User session ID
+            
+        Returns:
+            Response dictionary
+        """
+        logger.info(f"Handling general knowledge question: '{user_message}'")
+        
+        try:
+            # Create a specialized system message for general knowledge questions
+            system_message = """You are a helpful assistant answering general knowledge questions.
+            
+1. Provide accurate and factual information in a concise format.
+2. If the question is about malaria or health topics, provide scientifically valid information.
+3. Avoid speculation and clearly indicate when information is uncertain.
+4. For sensitive topics, provide balanced and objective information.
+5. Keep answers concise but complete.
+6. Format your response in an engaging, easy-to-read style."""
+            
+            # Generate response
+            response = self.llm_manager.generate_response(
+                prompt=user_message,
+                context=None,  # No context needed for general questions
+                system_message=system_message,
+                temperature=0.7,
+                session_id=session_id
+            )
+            
+            # Convert markdown to HTML
+            from ..core.llm_manager import convert_markdown_to_html
+            response_html = convert_markdown_to_html(response)
+            
+            # Log the interaction
+            if self.interaction_logger:
+                self.interaction_logger.log_message(session_id, 'assistant', response_html)
+            
+            return {"status": "success", "response": response_html}
+            
+        except Exception as e:
+            logger.error(f"Error generating response for general knowledge question: {str(e)}")
+            return {
+                "status": "error",
+                "response": f"<p>I'm sorry, I encountered an error while trying to answer your question: {str(e)}</p>"
+            }
  
