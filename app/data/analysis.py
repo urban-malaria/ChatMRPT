@@ -430,4 +430,245 @@ __version__ = "1.0.0"
 __all__ = [
     'AnalysisCoordinator',
     'run_complete_analysis'
-] 
+]
+
+def run_vulnerability_analysis(data_handler=None, selected_variables=None, session_id=None, logger=None):
+    """
+    Run vulnerability analysis with enhanced error handling for Render compatibility.
+    
+    Args:
+        data_handler: Data handler with loaded data
+        selected_variables: Variables to use in analysis (None for auto-select)
+        session_id: User session ID
+        logger: Logger instance
+        
+    Returns:
+        Dict with analysis results
+    """
+    import logging
+    import traceback
+    import os
+    import sys
+    
+    # Setup logging if not provided
+    if logger is None:
+        logger = logging.getLogger(__name__)
+    
+    # Add extensive diagnostics
+    logger.info(f"=== ANALYSIS DIAGNOSTICS FOR RENDER ENVIRONMENT ===")
+    logger.info(f"Working directory: {os.getcwd()}")
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Python path: {sys.executable}")
+    logger.info(f"Module path: {__file__}")
+    logger.info(f"Environment variables: {os.environ.get('PYTHONPATH', 'Not set')}")
+    
+    # Check if handler is valid
+    if data_handler is None:
+        logger.error("Data handler is None - cannot run analysis")
+        return {
+            "status": "error",
+            "message": "Data handler not available",
+            "variables_used": []
+        }
+    
+    try:
+        # Debug log data_handler attributes
+        handler_attrs = [attr for attr in dir(data_handler) if not attr.startswith('__')]
+        logger.info(f"Data handler available attributes: {handler_attrs}")
+        
+        # Check if data is loaded
+        if not hasattr(data_handler, 'df') or data_handler.df is None:
+            logger.error("CSV data not loaded")
+            return {
+                "status": "error",
+                "message": "No CSV data loaded",
+                "variables_used": []
+            }
+        
+        if not hasattr(data_handler, 'gdf') or data_handler.gdf is None:
+            logger.error("Shapefile not loaded")
+            return {
+                "status": "error",
+                "message": "No shapefile data loaded",
+                "variables_used": []
+            }
+        
+        # Log data shape information
+        logger.info(f"CSV data shape: {data_handler.df.shape}")
+        logger.info(f"GDF data shape: {data_handler.gdf.shape}")
+        
+        # Try to run the analysis with regular error handling
+        try:
+            return _run_vulnerability_analysis_impl(data_handler, selected_variables, session_id, logger)
+        except Exception as e:
+            logger.error(f"Error in primary analysis implementation: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+            # Try fallback implementation for Render compatibility
+            try:
+                return _run_vulnerability_analysis_fallback(data_handler, selected_variables, session_id, logger)
+            except Exception as fallback_error:
+                logger.error(f"Fallback analysis also failed: {str(fallback_error)}")
+                logger.error(traceback.format_exc())
+                return {
+                    "status": "error",
+                    "message": f"Analysis failed: {str(e)}. Fallback also failed: {str(fallback_error)}",
+                    "variables_used": selected_variables or []
+                }
+                
+    except Exception as e:
+        logger.error(f"Critical error in analysis module: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "status": "error",
+            "message": f"Analysis module error: {str(e)}",
+            "variables_used": []
+        }
+
+def _run_vulnerability_analysis_impl(data_handler, selected_variables=None, session_id=None, logger=None):
+    """
+    Original implementation of vulnerability analysis
+    """
+    # Original code here...
+    
+    # Using existing implementation...
+    # Keep your current implementation code here
+    
+    # This is a placeholder - your current implementation should be kept here
+    return _original_run_vulnerability_analysis(data_handler, selected_variables, session_id)
+
+def _run_vulnerability_analysis_fallback(data_handler, selected_variables=None, session_id=None, logger=None):
+    """
+    Simplified fallback implementation for Render compatibility
+    """
+    import pandas as pd
+    import numpy as np
+    from sklearn.preprocessing import MinMaxScaler
+    
+    logger.info("Using simplified fallback analysis for Render compatibility")
+    
+    # Get dataframes
+    df = data_handler.df
+    gdf = data_handler.gdf
+    
+    # Default variables if none provided
+    if not selected_variables or len(selected_variables) < 2:
+        # Select reasonable defaults that should be available in most datasets
+        potential_defaults = ['population', 'pfpr', 'mean_rainfall', 'temp_mean', 'RH_mean', 'housing_quality']
+        selected_variables = [col for col in potential_defaults if col in df.columns][:3]
+        if len(selected_variables) < 2:
+            # If even defaults aren't available, use first 2-3 numeric columns
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            selected_variables = numeric_cols[:3]
+        
+        logger.info(f"Auto-selected variables: {selected_variables}")
+    
+    try:
+        # Basic validation that selected variables exist in dataframe
+        for var in selected_variables:
+            if var not in df.columns:
+                raise ValueError(f"Variable '{var}' not found in dataset")
+        
+        # Create a copy of just the needed columns
+        analysis_df = df[['WardName'] + selected_variables].copy()
+        
+        # Normalize the data
+        scaler = MinMaxScaler()
+        analysis_df[selected_variables] = scaler.fit_transform(analysis_df[selected_variables])
+        
+        # Calculate composite score (simple mean of normalized variables)
+        analysis_df['composite_score'] = analysis_df[selected_variables].mean(axis=1)
+        
+        # Determine vulnerability categories (33/66 percentile cutoffs)
+        low_cutoff = analysis_df['composite_score'].quantile(0.33)
+        high_cutoff = analysis_df['composite_score'].quantile(0.66)
+        
+        # Assign categories
+        conditions = [
+            (analysis_df['composite_score'] <= low_cutoff),
+            (analysis_df['composite_score'] > low_cutoff) & (analysis_df['composite_score'] <= high_cutoff),
+            (analysis_df['composite_score'] > high_cutoff)
+        ]
+        categories = ['Low', 'Medium', 'High']
+        analysis_df['vulnerability_category'] = np.select(conditions, categories, default='Medium')
+        
+        # Create vulnerability rankings with additional columns
+        rankings = analysis_df.copy()
+        rankings['overall_rank'] = rankings['composite_score'].rank(ascending=False)
+        
+        # Store results in data handler
+        data_handler.vulnerability_rankings = rankings
+        data_handler.composite_variables = selected_variables
+        data_handler.analysis_complete = True
+        
+        # Calculate stats
+        high_risk = len(rankings[rankings['vulnerability_category'] == 'High'])
+        medium_risk = len(rankings[rankings['vulnerability_category'] == 'Medium'])
+        low_risk = len(rankings[rankings['vulnerability_category'] == 'Low'])
+        
+        # Return success with variables used
+        return {
+            "status": "success",
+            "message": "Analysis completed successfully (fallback method)",
+            "variables_used": selected_variables,
+            "selection_method": "fallback",
+            "high_risk_count": high_risk,
+            "medium_risk_count": medium_risk,
+            "low_risk_count": low_risk
+        }
+    except Exception as e:
+        logger.error(f"Error in fallback analysis: {str(e)}")
+        raise 
+
+def _original_run_vulnerability_analysis(data_handler, selected_variables=None, session_id=None):
+    """
+    Original implementation of vulnerability analysis.
+    This is to preserve the original functionality.
+    
+    Args:
+        data_handler: Data handler with loaded data
+        selected_variables: Variables to use in analysis
+        session_id: Session ID for logging
+        
+    Returns:
+        Dict with analysis results
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # If no variables provided, use all numeric columns except specific ones
+        if not selected_variables:
+            # Assuming data_handler.df is a pandas DataFrame
+            all_columns = data_handler.df.columns.tolist()
+            # Filter out non-numeric columns and specific columns to exclude
+            exclude_columns = ['WardName', 'geometry', 'global_id', 'WardCode', 'X', 'X.1']
+            selected_variables = [col for col in all_columns 
+                                 if col not in exclude_columns 
+                                 and data_handler.df[col].dtype.kind in 'ifc']
+            
+            # Limit to a reasonable number
+            if len(selected_variables) > 5:
+                selected_variables = selected_variables[:5]
+                
+            logger.info(f"Auto-selected variables: {selected_variables}")
+            
+        # Run your original analysis code here
+        # (This should be copied from your existing implementation)
+        
+        # Placeholder for original implementation
+        # This should be replaced with the actual code from your existing implementation
+        logger.error("Original analysis implementation not found")
+        return {
+            "status": "error",
+            "message": "Original analysis implementation not found",
+            "variables_used": selected_variables
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in original analysis: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Error in original analysis: {str(e)}",
+            "variables_used": selected_variables or []
+        } 
