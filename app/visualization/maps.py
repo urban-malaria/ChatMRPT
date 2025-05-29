@@ -10,13 +10,11 @@ from typing import Dict, List, Optional, Any, Union
 import uuid
 import geopandas as gpd
 from flask import current_app
-import plotly.express as px
 
 # Import from other visualization modules
 from .core import get_full_variable_name, get_variable_by_name, is_id_column
 from .export import ensure_wgs84_crs, prepare_geodataframe_for_json, create_plotly_html
-from .themes import get_map_styling, get_color_scheme, get_risk_labels, apply_theme_to_figure, get_chart_styling, get_vulnerability_colors
-from .utils import get_map_center, calculate_zoom_level, format_hover_text
+from .themes import get_map_styling, get_color_scheme, get_risk_labels, apply_theme_to_figure, get_chart_styling
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -106,7 +104,7 @@ def create_variable_map(data_handler, variable_name=None):
                     geojson=geojson,
                     locations=gdf_original.index,
                     z=gdf_original[actual_variable],
-                    colorscale=get_color_scheme('variable_map'),
+                    colorscale='Blues',
                     marker_opacity=0.8,
                     marker_line_width=0.5,
                     marker_line_color='black',
@@ -131,7 +129,7 @@ def create_variable_map(data_handler, variable_name=None):
                     geojson=geojson,
                     locations=gdf_cleaned.index,
                     z=gdf_cleaned[actual_variable],
-                    colorscale=get_color_scheme('variable_map'),
+                    colorscale='Blues',
                     marker_opacity=0.8,
                     marker_line_width=0.5,
                     marker_line_color='black',
@@ -148,15 +146,20 @@ def create_variable_map(data_handler, variable_name=None):
             )
             
             # Get proper map centering
-            center_lat, center_lon = get_map_center(gdf_original)
+            center_lat = gdf_original.geometry.centroid.y.mean()
+            center_lon = gdf_original.geometry.centroid.x.mean()
             
             # Calculate appropriate zoom level based on the bounding box
             bounds = gdf_original.geometry.total_bounds  # minx, miny, maxx, maxy
-            zoom_level = calculate_zoom_level(bounds)
+            span_x = max(0.01, bounds[2] - bounds[0])  # Ensure minimum span to avoid zoom errors
+            span_y = max(0.01, bounds[3] - bounds[1])
+            
+            # Calculate zoom level - ensure it's reasonable
+            zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
             
             # Update mapbox settings for both subplots
             fig.update_mapboxes(
-                style=get_map_styling()['mapbox_style'],
+                style="carto-positron",
                 center={"lat": center_lat, "lon": center_lon},
                 zoom=zoom_level
             )
@@ -179,11 +182,16 @@ def create_variable_map(data_handler, variable_name=None):
             geojson = json.loads(gdf_prepared.to_json())
             
             # Get proper map centering
-            center_lat, center_lon = get_map_center(gdf)
+            center_lat = gdf.geometry.centroid.y.mean()
+            center_lon = gdf.geometry.centroid.x.mean()
             
             # Calculate appropriate zoom level based on the bounding box
             bounds = gdf.geometry.total_bounds  # minx, miny, maxx, maxy
-            zoom_level = calculate_zoom_level(bounds)
+            span_x = max(0.01, bounds[2] - bounds[0])  # Ensure minimum span to avoid zoom errors
+            span_y = max(0.01, bounds[3] - bounds[1])
+            
+            # Calculate zoom level - ensure it's reasonable
+            zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
             
             # Add choropleth
             fig.add_trace(
@@ -191,7 +199,7 @@ def create_variable_map(data_handler, variable_name=None):
                     geojson=geojson,
                     locations=gdf.index,
                     z=gdf[actual_variable],
-                    colorscale=get_color_scheme('variable_map'),
+                    colorscale='Blues',
                     marker_opacity=0.8,
                     marker_line_width=0.5,
                     marker_line_color='black',
@@ -209,7 +217,7 @@ def create_variable_map(data_handler, variable_name=None):
             # Update mapbox settings
             fig.update_layout(
                 mapbox=dict(
-                    style=get_map_styling()['mapbox_style'],
+                    style="carto-positron",
                     center={"lat": center_lat, "lon": center_lon},
                     zoom=zoom_level
                 )
@@ -418,11 +426,16 @@ def create_normalized_map(data_handler, variable_name=None):
         geojson = json.loads(gdf_prepared.to_json())
         
         # Get proper map centering
-        center_lat, center_lon = get_map_center(gdf)
+        center_lat = gdf.geometry.centroid.y.mean()
+        center_lon = gdf.geometry.centroid.x.mean()
         
         # Calculate appropriate zoom level based on the bounding box
         bounds = gdf.geometry.total_bounds  # minx, miny, maxx, maxy
-        zoom_level = calculate_zoom_level(bounds)
+        span_x = max(0.01, bounds[2] - bounds[0])  # Ensure minimum span to avoid zoom errors
+        span_y = max(0.01, bounds[3] - bounds[1])
+        
+        # Calculate zoom level - ensure it's reasonable
+        zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
         
         # Create choropleth map with Plotly
         fig = go.Figure()
@@ -431,12 +444,12 @@ def create_normalized_map(data_handler, variable_name=None):
             geojson=geojson,
             locations=gdf.index,
             z=gdf[norm_col],
-            colorscale=get_color_scheme('normalized_map'),
+            colorscale='YlOrRd',
             marker_opacity=0.8,
             marker_line_width=0.5,
-            marker_line_color=get_map_styling()['marker_line_color'],
-            hovertemplate='%{hovertext}<extra></extra>',
-            hovertext=gdf['WardName'],
+            marker_line_color='black',
+            hovertemplate='<b>%{customdata}</b><br>Normalized Value: %{z:.3f}<extra></extra>',
+            customdata=gdf['WardName'],
             zmin=0,
             zmax=1,
             colorbar=dict(
@@ -444,8 +457,8 @@ def create_normalized_map(data_handler, variable_name=None):
                     text='Risk Contribution' if relationship == 'direct' else 'Risk Contribution (Inverted)',
                     font=dict(size=12)
                 ),
-                tickvals=get_risk_labels()['tickvals'],
-                ticktext=get_risk_labels()['ticktext']
+                tickvals=[0, 0.25, 0.5, 0.75, 1],
+                ticktext=['Very Low', 'Low', 'Medium', 'High', 'Very High']
             )
         ))
         
@@ -458,15 +471,13 @@ def create_normalized_map(data_handler, variable_name=None):
                 'font': {'size': 20}
             },
             mapbox=dict(
-                style=get_map_styling()['mapbox_style'],
+                style="carto-positron",
                 center={"lat": center_lat, "lon": center_lon},
                 zoom=zoom_level
             ),
             margin=dict(l=20, r=20, t=80, b=20),
             autosize=True
         )
-        
-        fig = apply_theme_to_figure(fig, 'normalized_map')
         
         # Create HTML file
         html_path = create_plotly_html(fig, "normalized_map_{}.html".format(actual_variable))
@@ -606,11 +617,16 @@ def create_composite_map(data_handler, model_index=None):
         geojson = json.loads(gdf_prepared.to_json())
         
         # Get proper map centering
-        center_lat, center_lon = get_map_center(gdf)
+        center_lat = gdf.geometry.centroid.y.mean()
+        center_lon = gdf.geometry.centroid.x.mean()
         
         # Calculate appropriate zoom level based on the bounding box
         bounds = gdf.geometry.total_bounds  # minx, miny, maxx, maxy
-        zoom_level = calculate_zoom_level(bounds)
+        span_x = max(0.01, bounds[2] - bounds[0])  # Ensure minimum span to avoid zoom errors
+        span_y = max(0.01, bounds[3] - bounds[1])
+        
+        # Calculate zoom level - ensure it's reasonable
+        zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
         
         # Determine grid layout for subplots
         if len(page_models) == 1:
@@ -676,7 +692,7 @@ def create_composite_map(data_handler, model_index=None):
                     geojson=geojson,
                     locations=gdf.index,
                     z=gdf[model],
-                    colorscale=get_color_scheme('composite_map'),
+                    colorscale=colorscale,  # Use theme colorscale
                     marker_line_color=map_styling['marker_line_color'],
                     marker_line_width=map_styling['marker_line_width'],
                     showscale=(idx == 0),  # Only show scale for first plot
@@ -685,8 +701,8 @@ def create_composite_map(data_handler, model_index=None):
                             text="Risk Score",
                             font=dict(size=12)
                         ),
-                        tickvals=risk_labels['tickvals'],
-                        ticktext=risk_labels['ticktext']
+                        tickvals=risk_labels['tickvals'],  # Five tick values from theme
+                        ticktext=risk_labels['ticktext']   # Five labels from theme
                     ) if idx == 0 else None,
                     hovertemplate='<b>%{customdata}</b><br>Risk Score: %{z:.3f}<extra></extra>',
                     customdata=gdf['WardName'],
@@ -825,21 +841,40 @@ def create_composite_map(data_handler, model_index=None):
 
 def create_vulnerability_map(data_handler):
     """
-    Create vulnerability ranking map using the standardized ranking system.
-    
-    Args:
-        data_handler: DataHandler instance
-        
-    Returns:
-        dict: Status and visualization information
+    Create vulnerability ranking map with continuous color scale
     """
     try:
+        # Import box_plot_function locally to avoid circular imports
+        from .charts import box_plot_function
+        
         # Check if vulnerability rankings are available
         if not hasattr(data_handler, 'vulnerability_rankings') or data_handler.vulnerability_rankings is None:
-            return {
-                'status': 'error',
-                'message': 'Vulnerability rankings not available. Run vulnerability analysis first.'
-            }
+            # Check if box plot function has been run
+            if hasattr(data_handler, 'boxwhisker_plot') and data_handler.boxwhisker_plot:
+                # Extract ward rankings from box plot data
+                data_handler.vulnerability_rankings = data_handler.boxwhisker_plot['ward_rankings']
+            else:
+                # Try to load from file
+                rankings_file = os.path.join(data_handler.session_folder, 'vulnerability_rankings.csv')
+                if os.path.exists(rankings_file):
+                    data_handler.vulnerability_rankings = pd.read_csv(rankings_file)
+                else:
+                    # If not available, try to run the box plot function to generate rankings
+                    if data_handler.composite_scores is not None and 'scores' in data_handler.composite_scores:
+                        box_plot_result = box_plot_function(data_handler.composite_scores['scores'])
+                        if isinstance(box_plot_result, dict) and 'ward_rankings' in box_plot_result:
+                            data_handler.vulnerability_rankings = box_plot_result['ward_rankings']
+                            data_handler.boxwhisker_plot = box_plot_result
+                        else:
+                            return {
+                                'status': 'error',
+                                'message': 'Could not generate vulnerability rankings'
+                            }
+                    else:
+                        return {
+                            'status': 'error',
+                            'message': 'Vulnerability rankings not available. Run vulnerability analysis first.'
+                        }
         
         if data_handler.shapefile_data is None:
             return {
@@ -850,83 +885,170 @@ def create_vulnerability_map(data_handler):
         # Get a copy of the shapefile with standardized CRS
         shapefile_data = ensure_wgs84_crs(data_handler.shapefile_data)
         
-        # Merge vulnerability rankings with shapefile data
+        # Ensure vulnerability_rankings has the right data types
+        # Convert columns that should be numeric
+        for col in ['overall_rank', 'value']:
+            if col in data_handler.vulnerability_rankings.columns:
+                data_handler.vulnerability_rankings[col] = pd.to_numeric(data_handler.vulnerability_rankings[col], errors='coerce')
+        
+        # Merge shapefile with vulnerability rankings
         gdf = shapefile_data.merge(
             data_handler.vulnerability_rankings,
             on='WardName',
             how='left'
         )
         
-        # Create hover text with vulnerability information
+        # Handle any NaN values in overall_rank (wards not in the rankings)
+        if 'overall_rank' in gdf.columns:
+            gdf['overall_rank'] = gdf['overall_rank'].fillna(-1).astype(int)
+        
+        # Prepare color values: use overall_rank for continuous coloring
+        z_values = gdf['overall_rank'].copy()
+        # Set unranked (-1) to NaN so they appear gray
+        z_values = z_values.where(z_values != -1, np.nan)
+        
+        # Choose continuous colorscale
+        colorscale = 'Plasma_r'  # Reverse plasma: high rank = dark
+        
+        # Compute colorbar ticks
+        if z_values.notna().sum() > 0:
+            min_rank = int(z_values.min())
+            max_rank = int(z_values.max())
+            median_rank = int(z_values.median())
+            tickvals = [min_rank, median_rank, max_rank]
+            ticktext = [f"High ({min_rank})", f"Median ({median_rank})", f"Low ({max_rank})"]
+        else:
+            tickvals = []
+            ticktext = []
+        
+        # Create hover text
         hover_text = []
-        for _, row in gdf.iterrows():
-            if 'overall_rank' in gdf.columns and not pd.isna(row['overall_rank']):
-                hover_text.append(format_hover_text(row, [
-                    'WardName',
-                    'overall_rank',
-                    'vulnerability_category',
-                    'median_score'
-                ], formats={'median_score': '{:.3f}'}))
-            else:
-                hover_text.append(format_hover_text(row, [
-                    'WardName'
-                ]) + '<br>Status: Not ranked<br>Reason: No data available')
+        for i, row in gdf.iterrows():
+            ward_name = row['WardName']
+            rank = row['overall_rank'] if row['overall_rank'] != -1 else "Not ranked"
+            category = row['vulnerability_category'] if 'vulnerability_category' in row and pd.notna(row['vulnerability_category']) else "Unknown"
+            hover_text.append(f"{ward_name}<br>Rank: {rank}<br>Category: {category}")
         
-        # Create the map
-        fig = px.choropleth_mapbox(
-            gdf,
-            geojson=gdf.geometry,
-            locations=gdf.index,
-            color='vulnerability_category',
-            color_discrete_map={**get_vulnerability_colors(), 'Unknown': 'gray'},
-            hover_name='WardName',
-            hover_data={
-                'overall_rank': True,
-                'median_score': ':.3f',
-                'vulnerability_category': True
-            },
-            mapbox_style=get_map_styling()['mapbox_style'],
-            zoom=calculate_zoom_level(gdf.geometry.total_bounds),
-            center={"lat": get_map_center(gdf)[0], "lon": get_map_center(gdf)[1]},
-            opacity=0.7
-        )
-        fig = apply_theme_to_figure(fig, 'vulnerability_map')
+        # Convert geometry to geojson with proper serialization
+        gdf_prepared = prepare_geodataframe_for_json(gdf)
+        geojson = json.loads(gdf_prepared.to_json())
         
-        # Update layout
-        fig.update_layout(
-            title="Ward Vulnerability Map",
-            margin={"r":0,"t":30,"l":0,"b":0},
-            showlegend=True,
-            legend=dict(
-                title="Vulnerability Level",
-                yanchor="top",
-                y=0.99,
-                xanchor="left",
-                x=0.01
+        # Get proper map centering
+        center_lat = gdf.geometry.centroid.y.mean()
+        center_lon = gdf.geometry.centroid.x.mean()
+        
+        # Calculate appropriate zoom level based on the bounding box
+        bounds = gdf.geometry.total_bounds  # minx, miny, maxx, maxy
+        span_x = max(0.01, bounds[2] - bounds[0])  # Ensure minimum span to avoid zoom errors
+        span_y = max(0.01, bounds[3] - bounds[1])
+        
+        # Calculate zoom level - ensure it's reasonable
+        zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
+        
+        # Add the choropleth layer
+        try:
+            fig = go.Figure()
+            fig.add_trace(go.Choroplethmapbox(
+                geojson=geojson,
+                locations=gdf.index,
+                z=z_values,
+                colorscale=colorscale,
+                marker_opacity=0.8,
+                marker_line_width=0.5,
+                marker_line_color='black',
+                hovertemplate='%{hovertext}<extra></extra>',
+                hovertext=hover_text,
+                colorbar=dict(
+                    title=dict(
+                        text="Vulnerability Rank",
+                        font=dict(size=12)
+                    ),
+                    tickmode='array',
+                    tickvals=tickvals,
+                    ticktext=ticktext
+                ),
+                zmin=min_rank if z_values.notna().sum() > 0 else 0,
+                zmax=max_rank if z_values.notna().sum() > 0 else 1,
+                showscale=True,
+                autocolorscale=False,
+                zauto=False
+            ))
+        except Exception as e:
+            logger.error("Error adding choropleth layer: {}".format(str(e)))
+            return {
+                'status': 'error',
+                'message': 'Error creating vulnerability map: {}'.format(str(e))
+            }
+        
+        # Update layout with error handling
+        try:
+            fig.update_layout(
+                title={
+                    'text': "Ward Vulnerability Map",
+                    'x': 0.5,
+                    'xanchor': 'center',
+                    'font': {'size': 20}
+                },
+                mapbox=dict(
+                    style="carto-positron",
+                    center={"lat": center_lat, "lon": center_lon},
+                    zoom=zoom_level
+                ),
+                margin=dict(l=20, r=20, t=80, b=20),
+                autosize=True
             )
-        )
+        except Exception as e:
+            logger.error("Error updating layout: {}".format(str(e)))
+            return {
+                'status': 'error',
+                'message': 'Error updating map layout: {}'.format(str(e))
+            }
         
-        # Create HTML file
-        html_path = create_plotly_html(fig, "vulnerability_map.html")
+        # Create HTML file with error handling
+        try:
+            html_path = create_plotly_html(fig, "vulnerability_map.html")
+        except Exception as e:
+            logger.error("Error creating HTML file: {}".format(str(e)))
+            return {
+                'status': 'error',
+                'message': 'Error saving vulnerability map: {}'.format(str(e))
+            }
         
         # Get category counts for data summary
-        category_counts = gdf['vulnerability_category'].value_counts().to_dict()
+        category_counts = {}
+        if 'vulnerability_category' in gdf.columns:
+            category_counts = gdf['vulnerability_category'].value_counts().to_dict()
+        
+        # Prepare statistics for data summary
+        statistics = {}
+        if 'value' in gdf.columns:
+            values = gdf['value'].dropna().values
+            if len(values) > 0:
+                statistics = {
+                    'min_score': float(np.min(values)),
+                    'max_score': float(np.max(values)),
+                    'mean_score': float(np.mean(values)),
+                    'median_score': float(np.median(values))
+                }
         
         # Create rich context for LLM
         data_summary = {
             'ward_count': len(gdf),
-            'ranked_wards': len(gdf[~pd.isna(gdf['overall_rank'])]),
+            'ranked_ward_count': gdf['overall_rank'].notna().sum() if 'overall_rank' in gdf.columns else 0,
             'category_counts': category_counts,
-            'top_vulnerable_wards': gdf.sort_values('overall_rank')['WardName'].head(5).tolist()
+            'statistics': statistics,
+            'top_vulnerable_wards': gdf.sort_values('overall_rank')['WardName'].head(5).tolist() 
+                                  if 'overall_rank' in gdf.columns else []
         }
         
         visual_elements = {
             'map_type': 'choropleth',
-            'color_scale': 'Category-based',
-            'color_meaning': 'Red = High vulnerability, Orange = Medium, Yellow = Low, Gray = Unranked',
-            'has_legend': True
+            'color_scale': 'Category-based coloring' if 'vulnerability_category' in gdf.columns else 'Plasma_r',
+            'color_meaning': 'Darker colors = higher vulnerability',
+            'scale_divisions': 'High, Medium, Low vulnerability'
         }
         
+        # Return success with paths and metadata
         return {
             'status': 'success',
             'message': 'Successfully created vulnerability map',
@@ -937,9 +1059,12 @@ def create_vulnerability_map(data_handler):
         }
         
     except Exception as e:
+        logger.error("Error creating vulnerability map: {}".format(str(e)), exc_info=True)
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             'status': 'error',
-            'message': f'Error creating vulnerability map: {str(e)}'
+            'message': 'Error creating vulnerability map: {}'.format(str(e))
         }
 
 
@@ -1089,7 +1214,8 @@ def create_urban_extent_map(data_handler, threshold=30):
         geojson = json.loads(gdf_prepared.to_json())
         
         # Calculate map center and zoom level
-        center_lat, center_lon = get_map_center(merged_data)
+        center_lat = float(merged_data.geometry.centroid.y.mean())
+        center_lon = float(merged_data.geometry.centroid.x.mean())
         if pd.isna(center_lat) or pd.isna(center_lon): 
             center_lat, center_lon = 0.0, 0.0
         
@@ -1127,7 +1253,7 @@ def create_urban_extent_map(data_handler, threshold=30):
                 # Use vulnerability ranks for coloring
                 overall_ranks_above = wards_above_threshold['overall_rank'].fillna(0).astype(float)
                 color_values = overall_ranks_above.tolist()
-                colorscale = get_color_scheme('vulnerability_map')
+                colorscale = 'Plasma_r'  # Reverse plasma (dark colors = high vulnerability)
                 
                 # Create color bar ticks
                 min_r, max_r = overall_ranks_above.min(), overall_ranks_above.max()
@@ -1148,7 +1274,7 @@ def create_urban_extent_map(data_handler, threshold=30):
             else:
                 # Use urban percentage for coloring if no vulnerability data
                 color_values = wards_above_threshold[urban_percent_col].tolist()
-                colorscale = get_color_scheme('variable_map')
+                colorscale = 'YlOrRd'  # Yellow-Orange-Red
                 
                 # Create color bar ticks for urban percentage
                 min_val = min(color_values) if color_values else 0
@@ -1234,7 +1360,7 @@ def create_urban_extent_map(data_handler, threshold=30):
                 'font': {'size': 18}
             },
             mapbox=dict(
-                style=get_map_styling()['mapbox_style'], 
+                style="carto-positron", 
                 center={"lat": center_lat, "lon": center_lon}, 
                 zoom=zoom_level
             ),
@@ -1249,8 +1375,6 @@ def create_urban_extent_map(data_handler, threshold=30):
                 bgcolor='rgba(255,255,255,0.7)'
             )
         )
-        
-        fig = apply_theme_to_figure(fig, 'urban_extent_map')
         
         # Generate a unique filename with random number to avoid caching issues
         threshold_str_for_filename = str(current_threshold_value).replace('.', '_')
@@ -1297,7 +1421,7 @@ def create_urban_extent_map(data_handler, threshold=30):
         
         visual_elements = {
             'map_type': 'choropleth',
-            'urban_color_scale': get_color_scheme('vulnerability_map') if vuln_rankings is not None else get_color_scheme('variable_map'),
+            'urban_color_scale': 'Plasma_r' if vuln_rankings is not None else 'YlOrRd',
             'color_meaning': 'Urban areas colored by vulnerability rank (darker = higher vulnerability)' 
                             if vuln_rankings is not None else 'Urban areas colored by urban percentage',
             'non_urban_appearance': 'Grayed out',

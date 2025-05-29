@@ -92,6 +92,16 @@ class DataService:
                 # Read CSV file
                 df = pd.read_csv(file_path)
             
+            # Handle duplicate WardNames in CSV by appending WardCode (if available)
+            if 'WardName' in df.columns and 'WardCode' in df.columns:
+                duplicates = df['WardName'].duplicated(keep=False)
+                if duplicates.any():
+                    print(f"[DEBUG] Found {duplicates.sum()} duplicate WardNames in CSV, appending WardCode")
+                    df.loc[duplicates, 'WardName'] = (
+                        df.loc[duplicates, 'WardName'].astype(str) +
+                        ' (' + df.loc[duplicates, 'WardCode'].astype(str) + ')'
+                    )
+            
             # Convert to dictionary format
             data = df.to_dict('records')
             
@@ -122,6 +132,9 @@ class DataService:
                     session_id, 'csv', os.path.basename(file_path),
                     os.path.getsize(file_path), metadata
                 )
+            
+            # Print CSV ward names for debugging
+            print(f"[DEBUG] CSV WardNames: {set(df['WardName'].dropna().unique())}")
             
             return result
             
@@ -166,6 +179,16 @@ class DataService:
                     session_id, 'shapefile', os.path.basename(file_path),
                     os.path.getsize(file_path), metadata
                 )
+            
+            # Print Shapefile ward names for debugging
+            print(f"[DEBUG] Shapefile WardNames: {set(result['data']['WardName'].dropna().unique())}")
+            
+            # Print set differences for debugging
+            if hasattr(handler, 'df') and handler.df is not None:
+                csv_wards = set(handler.df['WardName'].dropna().unique())
+                shp_wards = set(result['data']['WardName'].dropna().unique())
+                print(f"[DEBUG] Wards in CSV but not in Shapefile: {csv_wards - shp_wards}")
+                print(f"[DEBUG] Wards in Shapefile but not in CSV: {shp_wards - csv_wards}")
             
             return result
             
