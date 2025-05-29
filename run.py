@@ -7,11 +7,23 @@ modern configuration and service architecture.
 """
 
 import os
+import sys
 from app import create_app
 from flask import redirect, url_for
 
 # Get configuration name from environment
 config_name = os.environ.get('FLASK_ENV', 'development')
+
+# Check for OpenAI API key
+openai_api_key = os.environ.get('OPENAI_API_KEY')
+if not openai_api_key:
+    print("⚠️ WARNING: OPENAI_API_KEY environment variable not set.")
+    print("    The application may not function correctly without an API key.")
+    print("    You can set it by running: export OPENAI_API_KEY=your_key_here")
+    
+    # For Windows users
+    if sys.platform.startswith('win'):
+        print("    On Windows, use: set OPENAI_API_KEY=your_key_here")
 
 # Create application with specified configuration
 app = create_app(config_name)
@@ -31,6 +43,7 @@ if __name__ == '__main__':
     print(f"📊 Environment: {config_name}")
     print(f"🌐 URL: http://{host}:{port}")
     print(f"🔧 Debug Mode: {debug_mode}")
+    print(f"🔑 API Key: {'Configured ✓' if openai_api_key else 'Not configured ✗'}")
     
     app.run(
         host=host,

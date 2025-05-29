@@ -4,6 +4,7 @@ Base configuration class with common settings.
 
 import os
 from pathlib import Path
+from datetime import timedelta
 
 
 class BaseConfig:
@@ -19,7 +20,8 @@ class BaseConfig:
     
     # Session Configuration
     SESSION_TYPE = 'filesystem'
-    SESSION_PERMANENT = False
+    SESSION_PERMANENT = True  # Make sessions persist
+    PERMANENT_SESSION_LIFETIME = timedelta(days=1)  # Set session timeout to 1 day
     SESSION_USE_SIGNER = True
     
     # Path Configuration
