@@ -931,34 +931,45 @@ def create_vulnerability_map(data_handler):
         hover_text = []
         for i, row in gdf.iterrows():
             ward_name = row['WardName']
-            rank = row['overall_rank'] if 'overall_rank' in gdf.columns and row['overall_rank'] != -1 else "Not ranked"
-            category = row['vulnerability_category'] if 'vulnerability_category' in gdf.columns else "Unknown"
-            hover_text.append("{}<br>Rank: {}<br>Category: {}".format(ward_name, rank, category))
+            if 'overall_rank' in gdf.columns and row['overall_rank'] != -1:
+                rank = int(row['overall_rank'])
+                total_wards = len(gdf[gdf['overall_rank'] != -1])
+                category = row.get('vulnerability_category', "Unknown")
+                score = row.get('composite_score', 0)
+                hover_text.append(
+                    f"{ward_name}<br>"
+                    f"Rank: {rank} of {total_wards}<br>"
+                    f"Category: {category}<br>"
+                    f"Score: {score:.3f}"
+                )
+            else:
+                hover_text.append(
+                    f"{ward_name}<br>"
+                    f"Status: Not ranked<br>"
+                    f"Reason: No data available"
+                )
         
         # Get categorical colors for vulnerability categories
         color_values = []
         if 'vulnerability_category' in gdf.columns:
-            # Map categories to numeric values for colorscale
-            category_map = {'High': 1, 'Medium': 2, 'Low': 3, None: 0}
-            color_values = [category_map.get(cat, 0) for cat in gdf['vulnerability_category']]
-            # Use a colorscale that visually distinguishes categories
-            colorscale = [
-                [0, 'rgba(200,200,200,0.5)'],  # Not ranked
-                [0.25, '#d7191c'],  # High vulnerability (red)
-                [0.5, '#fdae61'],   # Medium vulnerability (orange)
-                [0.75, '#ffffbf']   # Low vulnerability (yellow)
-            ]
-            z_values = color_values
-            tick_vals = [0.5, 1.5, 2.5]
-            tick_text = ['High', 'Medium', 'Low']
+            # NEW APPROACH: Create a continuous colorscale based on rank instead of categories
+            # Use the overall_rank directly as z_values for continuous coloring
+            z_values = gdf['overall_rank'] 
+            # Reverse the colorscale so higher vulnerability (lower rank) has darker colors
+            colorscale = 'Plasma_r'  
+            # Create tick values based on actual data range
+            max_rank = gdf['overall_rank'].max() if 'overall_rank' in gdf.columns and gdf['overall_rank'].max() > 0 else 100
+            tick_vals = [1, max_rank / 3, 2 * max_rank / 3, max_rank]
+            tick_text = ['Highest Vulnerability', 'High', 'Medium', 'Low']
+            # Store the vulnerability categories in hover data instead
         else:
             # Fallback to using overall_rank
             z_values = gdf['overall_rank'] if 'overall_rank' in gdf.columns else None
             colorscale = 'Plasma_r'  # Reverse plasma so high vulnerability (low rank) is dark
             # Determine tick values based on actual data
             max_rank = gdf['overall_rank'].max() if 'overall_rank' in gdf.columns else 100
-            tick_vals = [1, max_rank / 2, max_rank]
-            tick_text = ['High', 'Medium', 'Low']
+            tick_vals = [1, max_rank / 3, 2 * max_rank / 3, max_rank]
+            tick_text = ['Highest Vulnerability', 'High', 'Medium', 'Low']
         
         # Add the choropleth layer with error handling
         try:
@@ -974,7 +985,7 @@ def create_vulnerability_map(data_handler):
                 hovertext=hover_text,
                 colorbar=dict(
                     title=dict(
-                        text="Vulnerability",
+                        text="Vulnerability Ranking",
                         font=dict(size=12)
                     ),
                     tickmode='array',
@@ -993,17 +1004,29 @@ def create_vulnerability_map(data_handler):
         try:
             fig.update_layout(
                 title={
-                    'text': "Ward Vulnerability Map",
+                    'text': "Ward Vulnerability Ranking Map",
                     'x': 0.5,
                     'xanchor': 'center',
                     'font': {'size': 20}
                 },
+                # Add a subtitle to explain the continuous coloring
+                annotations=[
+                    dict(
+                        text="Darker colors represent higher vulnerability (lower rank numbers)",
+                        x=0.5,
+                        y=1.02,
+                        xref="paper",
+                        yref="paper",
+                        showarrow=False,
+                        font=dict(size=14)
+                    )
+                ],
                 mapbox=dict(
                     style="carto-positron",
                     center={"lat": center_lat, "lon": center_lon},
                     zoom=zoom_level
                 ),
-                margin=dict(l=20, r=20, t=80, b=20),
+                margin=dict(l=20, r=20, t=100, b=20),  # Increased top margin for subtitle
                 autosize=True
             )
         except Exception as e:

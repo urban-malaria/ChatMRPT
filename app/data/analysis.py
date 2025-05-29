@@ -572,39 +572,44 @@ def _run_vulnerability_analysis_fallback(data_handler, selected_variables=None, 
         # Create a copy of just the needed columns
         analysis_df = df[['WardName'] + selected_variables].copy()
         
-        # Normalize the data
+        # Normalize the data - matching R implementation
         scaler = MinMaxScaler()
         analysis_df[selected_variables] = scaler.fit_transform(analysis_df[selected_variables])
         
         # Calculate composite score (simple mean of normalized variables)
         analysis_df['composite_score'] = analysis_df[selected_variables].mean(axis=1)
         
-        # Determine vulnerability categories (33/66 percentile cutoffs)
-        low_cutoff = analysis_df['composite_score'].quantile(0.33)
-        high_cutoff = analysis_df['composite_score'].quantile(0.66)
+        # Sort by composite score (descending) to assign ranks
+        # This matches the R implementation which ranks higher scores as more vulnerable
+        analysis_df = analysis_df.sort_values('composite_score', ascending=False)
+        analysis_df['overall_rank'] = range(1, len(analysis_df) + 1)
         
-        # Assign categories
-        conditions = [
-            (analysis_df['composite_score'] <= low_cutoff),
-            (analysis_df['composite_score'] > low_cutoff) & (analysis_df['composite_score'] <= high_cutoff),
-            (analysis_df['composite_score'] > high_cutoff)
-        ]
-        categories = ['Low', 'Medium', 'High']
-        analysis_df['vulnerability_category'] = np.select(conditions, categories, default='Medium')
+        # R Implementation uses rank thresholds not percentiles
+        # Calculate category thresholds based on rank ranges
+        n_wards = len(analysis_df)
+        n_categories = 3  # High, Medium, Low
         
-        # Create vulnerability rankings with additional columns
-        rankings = analysis_df.copy()
-        rankings['overall_rank'] = rankings['composite_score'].rank(ascending=False)
+        # Calculate rank-based category boundaries
+        category_bins = np.linspace(0, n_wards, n_categories + 1).astype(int)
+        category_labels = ['High', 'Medium', 'Low']
+        
+        # Assign categories based on rank (just like in R's box_plot_function)
+        analysis_df['vulnerability_category'] = pd.cut(
+            analysis_df['overall_rank'],
+            bins=category_bins,
+            labels=category_labels,
+            include_lowest=True
+        )
         
         # Store results in data handler
-        data_handler.vulnerability_rankings = rankings
+        data_handler.vulnerability_rankings = analysis_df
         data_handler.composite_variables = selected_variables
         data_handler.analysis_complete = True
         
         # Calculate stats
-        high_risk = len(rankings[rankings['vulnerability_category'] == 'High'])
-        medium_risk = len(rankings[rankings['vulnerability_category'] == 'Medium'])
-        low_risk = len(rankings[rankings['vulnerability_category'] == 'Low'])
+        high_risk = len(analysis_df[analysis_df['vulnerability_category'] == 'High'])
+        medium_risk = len(analysis_df[analysis_df['vulnerability_category'] == 'Medium'])
+        low_risk = len(analysis_df[analysis_df['vulnerability_category'] == 'Low'])
         
         # Return success with variables used
         return {
