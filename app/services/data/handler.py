@@ -37,6 +37,7 @@ class DataService:
     def get_handler(self, session_id: str) -> Optional[DataHandler]:
         """
         Get or create a data handler for a session.
+        If the handler exists but has no df, reload from the CSV/Excel file on disk.
         
         Args:
             session_id: User session ID
@@ -48,8 +49,23 @@ class DataService:
             session_folder = os.path.join(self.upload_folder, session_id)
             os.makedirs(session_folder, exist_ok=True)
             self._handlers[session_id] = DataHandler(session_folder)
-            
-        return self._handlers[session_id]
+        handler = self._handlers[session_id]
+        # Reload CSV/Excel if missing
+        if (not hasattr(handler, 'df') or handler.df is None):
+            # Try to find the CSV/Excel file in the session folder
+            for ext in ['csv', 'xlsx', 'xls']:
+                files = [f for f in os.listdir(handler.session_folder) if f.lower().endswith(ext)]
+                if files:
+                    file_path = os.path.join(handler.session_folder, files[0])
+                    try:
+                        if ext == 'csv':
+                            handler.df = pd.read_csv(file_path)
+                        else:
+                            handler.df = pd.read_excel(file_path)
+                        break
+                    except Exception as e:
+                        logger.error(f"Error reloading {ext} file for session {session_id}: {e}")
+        return handler
     
     def load_csv_file(self, session_id: str, file_path: str) -> Dict[str, Any]:
         """
