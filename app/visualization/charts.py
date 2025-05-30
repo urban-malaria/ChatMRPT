@@ -7,10 +7,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from flask import session, current_app
+import time
 
 # Import from other visualization modules
 from .core import get_full_variable_name, is_id_column
-from .export import create_plotly_html
+from .export import create_plotly_html, cleanup_old_visualizations
 from .themes import get_chart_styling, get_vulnerability_colors, apply_theme_to_figure
 
 # Set up logging
@@ -246,8 +247,14 @@ def create_vulnerability_plot(data_handler):
             # Get the first plot
             plot_fig = box_plot_result['plots'][0]
             
-            # Save as HTML
-            html_path = create_plotly_html(plot_fig, "vulnerability_plot.html")
+            # Generate vulnerability plot with unique filename
+            timestamp = int(time.time())
+            html_path = create_plotly_html(plot_fig, "vulnerability_plot_{}.html".format(timestamp))
+            
+            # Clean up old visualization files to prevent disk space issues
+            session_id_val = session.get('session_id', None)
+            if session_id_val:
+                cleanup_old_visualizations(session_id_val, max_files=15)
             
             result = {
                 'status': 'success',

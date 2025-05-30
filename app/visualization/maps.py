@@ -10,10 +10,11 @@ from typing import Dict, List, Optional, Any, Union
 import uuid
 import geopandas as gpd
 from flask import current_app
+import time
 
 # Import from other visualization modules
 from .core import get_full_variable_name, get_variable_by_name, is_id_column
-from .export import ensure_wgs84_crs, prepare_geodataframe_for_json, create_plotly_html
+from .export import ensure_wgs84_crs, prepare_geodataframe_for_json, create_plotly_html, cleanup_old_visualizations
 from .themes import get_map_styling, get_color_scheme, get_risk_labels, apply_theme_to_figure, get_chart_styling
 
 # Set up logging
@@ -479,8 +480,14 @@ def create_normalized_map(data_handler, variable_name=None):
             autosize=True
         )
         
-        # Create HTML file
-        html_path = create_plotly_html(fig, "normalized_map_{}.html".format(actual_variable))
+        # Generate normalized map with unique filename
+        timestamp = int(time.time())
+        html_path = create_plotly_html(fig, "normalized_map_{}_{}.html".format(actual_variable, timestamp))
+        
+        # Clean up old visualization files to prevent disk space issues
+        session_id = getattr(data_handler, 'session_id', None)
+        if session_id:
+            cleanup_old_visualizations(session_id, max_files=15)
         
         # Prepare data summary for LLM context
         norm_values = gdf[norm_col].dropna().values
@@ -765,12 +772,16 @@ def create_composite_map(data_handler, model_index=None):
         # Apply theme to figure for consistent styling
         fig = apply_theme_to_figure(fig, 'composite_map')
         
-        # Generate unique filename
+        # Generate unique filename with timestamp to prevent caching issues
         session_id = getattr(data_handler, 'session_id', str(uuid.uuid4()))
-        filename = "composite_map_page{}.html".format(page)
+        timestamp = int(time.time())
+        filename = "composite_map_page{}_{}.html".format(page, timestamp)
         
         # Save the figure to HTML
         html_path = create_plotly_html(fig, filename)
+        
+        # Clean up old visualization files to prevent disk space issues
+        cleanup_old_visualizations(session_id, max_files=15)
         
         # Get all variables used across all models
         all_variables = set()
@@ -1006,7 +1017,13 @@ def create_vulnerability_map(data_handler):
         
         # Create HTML file with error handling
         try:
-            html_path = create_plotly_html(fig, "vulnerability_map.html")
+            timestamp = int(time.time())
+            html_path = create_plotly_html(fig, "vulnerability_map_{}.html".format(timestamp))
+            
+            # Clean up old visualization files to prevent disk space issues  
+            session_id = getattr(data_handler, 'session_id', None)
+            if session_id:
+                cleanup_old_visualizations(session_id, max_files=15)
         except Exception as e:
             logger.error("Error creating HTML file: {}".format(str(e)))
             return {
@@ -1376,12 +1393,17 @@ def create_urban_extent_map(data_handler, threshold=30):
             )
         )
         
-        # Generate a unique filename with random number to avoid caching issues
+        # Generate a unique filename with timestamp to prevent caching issues
+        session_id = getattr(data_handler, 'session_id', str(uuid.uuid4()))
+        timestamp = int(time.time())
         threshold_str_for_filename = str(current_threshold_value).replace('.', '_')
-        filename = "urban_extent_vuln_{}_{}.html".format(threshold_str_for_filename, np.random.randint(10000))
+        filename = "urban_extent_vuln_{}_{}.html".format(threshold_str_for_filename, timestamp)
         
         # Save the HTML file
         html_path = create_plotly_html(fig, filename)
+        
+        # Clean up old visualization files to prevent disk space issues
+        cleanup_old_visualizations(session_id, max_files=15)
         
         # Create rich context for LLM explanation
         data_summary = {

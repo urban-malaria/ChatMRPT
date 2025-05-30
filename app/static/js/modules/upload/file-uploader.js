@@ -272,6 +272,11 @@ export class FileUploader {
             if (response.message) {
                 window.chatManager.addAssistantMessage(response.message);
             }
+            
+            // Add analysis prompt with Start Analysis button if available
+            if (response.analysis_prompt) {
+                window.chatManager.addAssistantMessage(response.analysis_prompt);
+            }
         }
 
         // Close modal after delay

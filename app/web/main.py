@@ -1303,13 +1303,35 @@ def load_sample_data():
         result = data_service.load_sample_data(session_id)
         
         if result['status'] == 'success':
-            # Update session state
+            # Update session state with complete information
             session['csv_loaded'] = True
             session['shapefile_loaded'] = True
             session['csv_filename'] = result.get('csv_filename', 'sample_data.csv')
             session['shapefile_filename'] = result.get('shapefile_filename', 'sample_boundary.zip')
             session['available_variables'] = result.get('variables', [])
             session['ward_count'] = result.get('ward_count', 0)
+            session['csv_rows'] = result.get('rows', 10)  # Sample data has 10 wards
+            session['csv_columns'] = len(result.get('variables', [])) + 1  # +1 for WardName
+            session['shapefile_features'] = result.get('features', 10)  # 10 ward features
+            session['data_loaded'] = True  # Important flag for analysis availability
+            
+            # Create analysis prompt (same as regular upload)
+            analysis_prompt = f"""
+            <p><strong>Excellent! Sample data loaded successfully!</strong></p>
+            <p>Your sample data includes:</p>
+            <ul>
+                <li>📊 CSV data: {result.get('rows', 10)} rows with {len(result.get('variables', [])) + 1} columns</li>
+                <li>🗺️ Shapefile data: {result.get('features', 10)} features</li>
+                <li>🧪 Variables: {', '.join(result.get('variables', [])[:5])}{'...' if len(result.get('variables', [])) > 5 else ''}</li>
+            </ul>
+            <div class="analysis-ready-prompt">
+                <p><strong>🚀 Everything is ready for analysis!</strong></p>
+                <p>Type "Run the analysis" to begin processing your data.</p>
+                <button class="btn btn-primary mt-2" onclick="document.getElementById('message-input').value='Run the analysis'; document.getElementById('send-message').click();">
+                    Start Analysis
+                </button>
+            </div>
+            """
             
             return jsonify({
                 'status': 'success',
@@ -1317,7 +1339,8 @@ def load_sample_data():
                 'csv_loaded': True,
                 'shapefile_loaded': True,
                 'variables_count': len(result.get('variables', [])),
-                'ward_count': result.get('ward_count', 0)
+                'ward_count': result.get('ward_count', 0),
+                'analysis_prompt': analysis_prompt  # This is the key missing piece!
             })
         else:
             return jsonify({
