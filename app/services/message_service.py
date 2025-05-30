@@ -7,6 +7,10 @@ import re
 from functools import lru_cache
 from datetime import datetime
 
+# Import advanced intent recognition system
+from .advanced_intent_recognition import AdvancedIntentRecognizer, IntentCategory
+from ..core import SessionState
+
 logger = logging.getLogger(__name__)
 
 class MessageService:
@@ -28,6 +32,12 @@ class MessageService:
         self.llm_manager = llm_manager
         self.interaction_logger = interaction_logger
         self.analysis_service = analysis_service
+        
+        # Initialize advanced intent recognition system
+        self.advanced_intent_recognizer = AdvancedIntentRecognizer(
+            llm_manager=llm_manager,
+            use_embeddings=False  # Start with rules-based for reliability
+        )
         
         # Import validation service
         from ..data.validation import DataValidator
@@ -91,7 +101,52 @@ class MessageService:
                 data_handler, 
                 pending_variables
             )
-        
+
+        # **PHASE 3: ADVANCED INTENT RECOGNITION INTEGRATION**
+        # Try advanced intent recognition first for better understanding
+        try:
+            current_state = self._convert_session_state(session_state, data_handler)
+            intent_result = self.advanced_intent_recognizer.recognize_intent(user_message, current_state)
+            
+            logger.info(f"Advanced intent recognition: {intent_result.intent} "
+                       f"(confidence: {intent_result.confidence:.2f}, "
+                       f"category: {intent_result.category.value})")
+            
+            # Handle based on intent category
+            if intent_result.category == IntentCategory.META_TOOL:
+                return self._handle_meta_tool_question(intent_result, user_message, session_state, session_id)
+            
+            elif intent_result.category == IntentCategory.CONVERSATION:
+                return self._handle_conversation_intent(intent_result, user_message, session_id)
+            
+            elif intent_result.category == IntentCategory.HELP_REQUEST:
+                return self._handle_help_request(intent_result, user_message, session_state, session_id)
+            
+            # Handle general knowledge questions specifically (regardless of confidence)
+            elif intent_result.intent == 'general_knowledge':
+                return self._handle_general_knowledge_advanced(intent_result, user_message, session_id)
+            
+            # For ACTION_REQUEST, DATA_INQUIRY, and ANALYSIS_INQUIRY, check if advanced recognition
+            # has high confidence. If so, use it; otherwise fall back to existing NLU
+            elif intent_result.confidence > 0.7:
+                # High confidence - handle with advanced system
+                if intent_result.category == IntentCategory.ACTION_REQUEST:
+                    return self._handle_action_request_advanced(intent_result, user_message, session_state, data_handler, session_id)
+                elif intent_result.category == IntentCategory.DATA_INQUIRY:
+                    return self._handle_data_inquiry_advanced(intent_result, user_message, session_state, data_handler, session_id)
+                elif intent_result.category == IntentCategory.ANALYSIS_INQUIRY:
+                    return self._handle_analysis_inquiry_advanced(intent_result, user_message, session_state, data_handler, session_id)
+                else:
+                    # Handle as general knowledge question
+                    return self._handle_general_knowledge_advanced(intent_result, user_message, session_id)
+            
+            # Low confidence - fall back to existing NLU
+            logger.info(f"Low confidence ({intent_result.confidence:.2f}), falling back to existing NLU")
+            
+        except Exception as e:
+            logger.error(f"Advanced intent recognition failed: {e}, falling back to existing NLU")
+
+        # **EXISTING NLU FALLBACK** (unchanged for backward compatibility)
         # Process message with NLU
         nlu_result = self._process_user_intent(user_message, session_state, session_id)
         if not nlu_result:
@@ -1446,4 +1501,322 @@ Context: {context}"""
                 "status": "error",
                 "response": f"<p>I'm sorry, I encountered an error while trying to answer your question: {str(e)}</p>"
             }
+
+    # ========================================================================
+    # PHASE 3: ADVANCED INTENT RECOGNITION INTEGRATION METHODS
+    # ========================================================================
+    
+    def _convert_session_state(self, session_state_dict, data_handler):
+        """Convert session state dict to SessionState object for advanced intent recognition"""
+        from ..core import DataState, AnalysisState, WorkflowStage
+        
+        # Determine data state
+        csv_loaded = session_state_dict.get('csv_loaded', False) or (data_handler and hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None)
+        shapefile_loaded = session_state_dict.get('shapefile_loaded', False) or (data_handler and hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None)
+        
+        if csv_loaded and shapefile_loaded:
+            data_state = DataState.BOTH_LOADED
+            workflow_stage = WorkflowStage.DATA_READY
+        elif csv_loaded:
+            data_state = DataState.CSV_ONLY
+            workflow_stage = WorkflowStage.DATA_UPLOAD
+        elif shapefile_loaded:
+            data_state = DataState.SHAPEFILE_ONLY
+            workflow_stage = WorkflowStage.DATA_UPLOAD
+        else:
+            data_state = DataState.NO_DATA
+            workflow_stage = WorkflowStage.INITIAL
+        
+        # Determine analysis state
+        analysis_complete = session_state_dict.get('analysis_complete', False)
+        if analysis_complete:
+            analysis_state = AnalysisState.COMPLETE
+            workflow_stage = WorkflowStage.ANALYSIS_COMPLETE
+        else:
+            analysis_state = AnalysisState.NOT_STARTED
+        
+        return SessionState(
+            session_id=session_state_dict.get('session_id', 'unknown'),
+            workflow_stage=workflow_stage,
+            data_state=data_state,
+            analysis_state=analysis_state
+        )
+    
+    def _handle_meta_tool_question(self, intent_result, user_message, session_state, session_id):
+        """Handle meta-tool questions (what can you do, how to start, etc.)"""
+        intent = intent_result.intent
+        
+        if intent == 'tool_capabilities':
+            response = """<div class="capability-overview">
+            <h3>🧠 ChatMRPT Capabilities</h3>
+            <p>I'm your intelligent assistant for <strong>malaria risk analysis</strong>. Here's what I can help you with:</p>
+            
+            <div class="capability-section">
+                <h4>📊 Data Analysis</h4>
+                <ul>
+                    <li>Process CSV files with demographic, environmental, and health variables</li>
+                    <li>Handle shapefiles for geographic boundary analysis</li>
+                    <li>Run comprehensive vulnerability assessments</li>
+                    <li>Generate risk rankings and classifications</li>
+                </ul>
+            </div>
+            
+            <div class="capability-section">
+                <h4>🗺️ Visualizations</h4>
+                <ul>
+                    <li>Create interactive vulnerability maps</li>
+                    <li>Generate distribution charts and plots</li>
+                    <li>Produce comprehensive analysis reports</li>
+                </ul>
+            </div>
+            
+            <div class="capability-section">
+                <h4>💬 Smart Assistance</h4>
+                <ul>
+                    <li>Answer questions about malaria and public health</li>
+                    <li>Explain analysis methodologies and results</li>
+                    <li>Guide you through the analysis workflow</li>
+                    <li>Provide contextual help and suggestions</li>
+                </ul>
+            </div>
+            
+            <p><strong>Ready to get started?</strong> Upload your CSV data and shapefile, then say "run the analysis"!</p>
+            </div>"""
+            
+        elif intent == 'workflow_help':
+            if not session_state.get('csv_loaded') and not session_state.get('shapefile_loaded'):
+                response = """<div class="workflow-guide">
+                <h3>🚀 Getting Started with ChatMRPT</h3>
+                <p>Let me walk you through the process:</p>
+                
+                <div class="step">
+                    <h4>Step 1: Upload Your Data Files</h4>
+                    <ul>
+                        <li><strong>CSV File:</strong> Your malaria risk variables (demographics, environment, health indicators)</li>
+                        <li><strong>Shapefile:</strong> Geographic boundaries for your study area (wards, districts, etc.)</li>
+                    </ul>
+                </div>
+                
+                <div class="step">
+                    <h4>Step 2: Run Analysis</h4>
+                    <p>Once your files are uploaded, simply say <em>"run the analysis"</em> and I'll:</p>
+                    <ul>
+                        <li>Automatically select the best variables</li>
+                        <li>Calculate vulnerability scores</li>
+                        <li>Rank areas by risk level</li>
+                    </ul>
+                </div>
+                
+                <div class="step">
+                    <h4>Step 3: Explore Results</h4>
+                    <ul>
+                        <li>View interactive maps and visualizations</li>
+                        <li>Generate comprehensive reports</li>
+                        <li>Ask questions about specific findings</li>
+                    </ul>
+                </div>
+                
+                <p><strong>Need help with data format?</strong> Just ask "What files do I need?" for detailed requirements.</p>
+                </div>"""
+            else:
+                response = f"""<p><strong>Great! You're already making progress.</strong></p>
+                <p>Current status:</p>
+                <ul>
+                    <li>CSV data: {'✅ Loaded' if session_state.get('csv_loaded') else '❌ Not loaded'}</li>
+                    <li>Shapefile: {'✅ Loaded' if session_state.get('shapefile_loaded') else '❌ Not loaded'}</li>
+                    <li>Analysis: {'✅ Complete' if session_state.get('analysis_complete') else '❌ Not started'}</li>
+                </ul>
+                <p><strong>Next step:</strong> {
+                    'You can now ask me anything or explore your results!' if session_state.get('analysis_complete')
+                    else 'Say "run the analysis" to start your malaria risk assessment!'
+                }</p>"""
+        
+        elif intent == 'file_requirements':
+            response = """<div class="file-requirements">
+            <h3>📋 Data File Requirements</h3>
+            
+            <div class="file-type">
+                <h4>🗃️ CSV File Requirements</h4>
+                <ul>
+                    <li><strong>Format:</strong> Standard CSV with headers in the first row</li>
+                    <li><strong>Structure:</strong> Each row should represent a geographic area (ward, district, etc.)</li>
+                    <li><strong>Required columns:</strong>
+                        <ul>
+                            <li>Area identifier (name, code, or ID)</li>
+                            <li>At least 3-5 risk variables (demographics, environmental, health)</li>
+                        </ul>
+                    </li>
+                    <li><strong>Examples of good variables:</strong>
+                        <ul>
+                            <li>Population density, poverty rates, education levels</li>
+                            <li>Rainfall, temperature, elevation, water access</li>
+                            <li>Health facility density, previous malaria cases</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="file-type">
+                <h4>🗺️ Shapefile Requirements</h4>
+                <ul>
+                    <li><strong>Format:</strong> Standard ESRI Shapefile (.shp, .shx, .dbf files)</li>
+                    <li><strong>Geometry:</strong> Polygon features representing geographic boundaries</li>
+                    <li><strong>Attributes:</strong> Must include area identifiers that match your CSV</li>
+                    <li><strong>Coordinate system:</strong> Any standard projection (WGS84 preferred)</li>
+                </ul>
+            </div>
+            
+            <p><strong>💡 Tip:</strong> Make sure the area names/IDs in your CSV match those in your shapefile attributes!</p>
+            </div>"""
+        
+        else:
+            response = f"<p>I understand you're asking about <strong>{user_message}</strong>. Let me help you with that!</p><p>You can ask me about my capabilities, how to get started, or what files you need. I'm here to guide you through the malaria risk analysis process.</p>"
+        
+        return {"status": "success", "response": response, "action": "tool_explanation"}
+    
+    def _handle_conversation_intent(self, intent_result, user_message, session_id):
+        """Handle conversation intents (greetings, thanks, etc.)"""
+        intent = intent_result.intent
+        
+        if intent == 'greeting':
+            response = """<div class="greeting-response">
+            <h3>👋 Hello! Welcome to ChatMRPT</h3>
+            <p>I'm your intelligent assistant for <strong>malaria risk analysis</strong>. I can help you:</p>
+            <ul>
+                <li>🔍 Analyze your data to identify high-risk areas</li>
+                <li>🗺️ Create interactive vulnerability maps</li>
+                <li>📊 Generate comprehensive risk reports</li>
+                <li>💡 Answer questions about malaria and public health</li>
+            </ul>
+            <p><strong>Ready to get started?</strong> Upload your CSV data and shapefile, or ask me "What can you do?" to learn more!</p>
+            </div>"""
+        elif intent == 'thanks':
+            response = "<p>You're very welcome! 😊 I'm here whenever you need help with your malaria risk analysis. Feel free to ask me anything else!</p>"
+        else:
+            response = "<p>I'm here to help with your malaria risk analysis! What would you like to know or do next?</p>"
+        
+        return {"status": "success", "response": response, "action": "conversation"}
+    
+    def _handle_help_request(self, intent_result, user_message, session_state, session_id):
+        """Handle general help requests"""
+        response = """<div class="help-overview">
+        <h3>🆘 How Can I Help You?</h3>
+        <p>I'm here to assist with your malaria risk analysis. Here are some things you can ask me:</p>
+        
+        <div class="help-section">
+            <h4>🚀 Getting Started</h4>
+            <ul>
+                <li><em>"What can you do?"</em> - Learn about my capabilities</li>
+                <li><em>"How do I start?"</em> - Step-by-step workflow guide</li>
+                <li><em>"What files do I need?"</em> - Data format requirements</li>
+            </ul>
+        </div>
+        
+        <div class="help-section">
+            <h4>📊 Data & Analysis</h4>
+            <ul>
+                <li><em>"Run the analysis"</em> - Start malaria risk assessment</li>
+                <li><em>"Show me my data"</em> - View uploaded variables</li>
+                <li><em>"Explain the methodology"</em> - Learn how analysis works</li>
+            </ul>
+        </div>
+        
+        <div class="help-section">
+            <h4>🗺️ Results & Visualization</h4>
+            <ul>
+                <li><em>"Create a map"</em> - Generate vulnerability maps</li>
+                <li><em>"Show me rankings"</em> - View risk level rankings</li>
+                <li><em>"Generate a report"</em> - Create comprehensive analysis report</li>
+            </ul>
+        </div>
+        
+        <div class="help-section">
+            <h4>💡 General Knowledge</h4>
+            <ul>
+                <li>Ask me anything about malaria, public health, epidemiology</li>
+                <li>Questions about specific regions, interventions, or research</li>
+                <li>Historical information, current trends, prevention strategies</li>
+            </ul>
+        </div>
+        
+        <p><strong>Just type your question naturally</strong> - I'll understand what you need!</p>
+        </div>"""
+        
+        return {"status": "success", "response": response, "action": "help_provided"}
+    
+    def _handle_general_knowledge_advanced(self, intent_result, user_message, session_id):
+        """Handle general knowledge questions using the advanced system"""
+        try:
+            # Create a focused prompt for general knowledge questions
+            prompt = f"""The user asked: "{user_message}"
+
+This appears to be a general knowledge question. Please provide a comprehensive, informative response that:
+
+1. **Directly answers their question** with accurate information
+2. **Provides relevant context** and background
+3. **Includes specific details** where appropriate (dates, statistics, examples)
+4. **Is educational and engaging** 
+5. **Relates to public health/malaria if relevant** but don't force the connection
+
+The user is using a malaria analysis tool, but they're asking a general knowledge question that deserves a thoughtful, informative response regardless of their analysis status.
+
+Please provide a thorough answer as if you were an knowledgeable assistant helping with research or education."""
+
+            # Generate response using LLM
+            ai_response = self.llm_manager.generate_response(
+                prompt=prompt,
+                system_message="You are a knowledgeable assistant who provides comprehensive, accurate, and educational responses to general knowledge questions. Focus on being informative and helpful.",
+                session_id=session_id
+            )
+            
+            # Convert to HTML
+            from ..core.llm_manager import convert_markdown_to_html
+            response_html = convert_markdown_to_html(ai_response)
+            
+            # Log the interaction
+            if self.interaction_logger:
+                self.interaction_logger.log_message(session_id, 'assistant', response_html)
+            
+            return {"status": "success", "response": response_html, "action": "general_knowledge_response"}
+            
+        except Exception as e:
+            logger.error(f"Error generating advanced general knowledge response: {e}")
+            return {
+                "status": "error",
+                "response": f"<p>I'm sorry, I encountered an error while trying to answer your question: {str(e)}</p>"
+            }
+    
+    def _handle_action_request_advanced(self, intent_result, user_message, session_state, data_handler, session_id):
+        """Handle action requests using advanced intent recognition"""
+        intent = intent_result.intent
+        
+        # Map advanced intents to existing handlers
+        if intent == 'start_analysis':
+            # Create synthetic NLU result for existing handler
+            nlu_result = {'intent': 'run_standard_analysis', 'entities': {}}
+            return self._handle_run_standard_analysis(nlu_result, session_state, data_handler, session_id)
+        elif intent == 'create_map':
+            nlu_result = {'intent': 'request_visualization', 'entities': {'viz_type': 'map'}}
+            return self._handle_show_visualization(nlu_result, session_state, data_handler, session_id)
+        elif intent == 'view_rankings':
+            nlu_result = {'intent': 'explain_results', 'entities': {'focus': 'rankings'}}
+            return self._handle_explain_results(nlu_result, session_state, data_handler, session_id)
+        elif intent == 'generate_report':
+            nlu_result = {'intent': 'generate_report', 'entities': {}}
+            return self._handle_generate_report(nlu_result, session_state, data_handler, session_id)
+        else:
+            # Fall back to existing NLU
+            return self._handle_unrecognized_intent(user_message, {'intent': intent, 'entities': {}}, session_state, data_handler, session_id)
+    
+    def _handle_data_inquiry_advanced(self, intent_result, user_message, session_state, data_handler, session_id):
+        """Handle data inquiry using advanced intent recognition"""
+        # Use existing data inquiry handler
+        nlu_result = {'intent': 'data_inquiry', 'entities': {}}
+        return self._handle_data_inquiry(nlu_result, session_state, data_handler, session_id)
+    
+    def _handle_analysis_inquiry_advanced(self, intent_result, user_message, session_state, data_handler, session_id):
+        """Handle analysis inquiry using advanced intent recognition"""
+        # Use existing explain results handler  
+        nlu_result = {'intent': 'explain_results', 'entities': {}}
+        return self._handle_explain_results(nlu_result, session_state, data_handler, session_id)
  
