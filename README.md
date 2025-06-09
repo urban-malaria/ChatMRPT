@@ -188,13 +188,6 @@ Please use the GitHub Issues tab to report bugs or request features. Include:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
-
-- Nigerian Ministry of Health for malaria surveillance data standards
-- WHO malaria elimination framework
-- Open source GIS and data analysis communities
-- Flask and Python ecosystem contributors
-
 ## 📞 Support
 
 For support and questions:
