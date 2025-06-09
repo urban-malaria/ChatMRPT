@@ -69,4 +69,26 @@ CRITICAL_UI_FIX.css
 # Ignore all markdown files except README and ARCHITECTURE
 *.md
 !README.md
-!ARCHITECTURE.md 
+!ARCHITECTURE.md
+
+# Exclude PDFs, test files, Word/Excel documents, and py-sidebot-main folder
+*.pdf
+*.PDF
+test_*.py
+debug_*.py
+diagnose_*.py
+check_*.py
+extract_*.py
+manual_*.py
+analyze_*.py
+investigate_*.py
+*.docx
+*.xlsx
+*.xls
+py-sidebot-main/
+
+# Keep essential test files
+!tests/test_*.py
+
+# Exclude other temporary files
+~$* 
