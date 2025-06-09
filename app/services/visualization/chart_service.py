@@ -50,6 +50,11 @@ class VisualizationService:
             params = {}
         
         try:
+            # **CRITICAL FIX: Ensure data_handler has session_id for visualization functions**
+            if session_id and hasattr(data_handler, '__dict__'):
+                data_handler.session_id = session_id
+                logger.info(f"Set session_id {session_id} on data_handler for visualization")
+            
             # Log operation
             if self.interaction_logger and session_id:
                 self.interaction_logger.log_visualization_metadata(
@@ -61,7 +66,7 @@ class VisualizationService:
                 )
             
             # Import visualization module
-            import app.models.visualization as viz
+            import app.visualization as viz
             
             # Generate unique filename for visualization
             reports_folder = current_app.config.get('REPORTS_FOLDER')
@@ -72,16 +77,18 @@ class VisualizationService:
             
             # Call appropriate visualization function based on type
             if viz_type == 'composite_map':
-                # Use the viz module's create_composite_map function
+                # **FIXED: Pass session_id to create_composite_map**
                 model_index = params.get('model_index')
                 result = viz.create_composite_map(
                     data_handler=data_handler,
-                    model_index=model_index
+                    model_index=model_index,
+                    session_id=session_id  # CRITICAL: Pass session_id
                 )
                 
                 # The function already creates and returns the HTML file path
-                if result.get('status') == 'success' and 'image_path' in result:
-                    result['file_path'] = result['image_path']
+                if result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
                 
             elif viz_type == 'variable_map':
                 variable = params.get('variable')
@@ -99,9 +106,9 @@ class VisualizationService:
                     fig = result.pop('figure')  # Remove figure from result dict
                     html_path = viz.create_plotly_html(fig, viz_filename)
                     result['file_path'] = html_path
-                elif result.get('status') == 'success' and 'image_path' in result:
-                    # Some functions may return image_path directly
-                    result['file_path'] = result['image_path']
+                elif result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
                 
             elif viz_type == 'vulnerability_map':
                 # Use the viz module's create_vulnerability_map function
@@ -112,11 +119,12 @@ class VisualizationService:
                     fig = result.pop('figure')  # Remove figure from result dict
                     html_path = viz.create_plotly_html(fig, viz_filename)
                     result['file_path'] = html_path
-                elif result.get('status') == 'success' and 'image_path' in result:
-                    result['file_path'] = result['image_path']
+                elif result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
                 
             elif viz_type == 'vulnerability_plot':
-                # Use the viz module's create_vulnerability_plot function
+                # **FIXED: Data handler now has session_id set above**
                 result = viz.create_vulnerability_plot(data_handler=data_handler)
                 
                 # If successful, save the figure to HTML or use provided path
@@ -124,11 +132,15 @@ class VisualizationService:
                     fig = result.pop('figure')  # Remove figure from result dict
                     html_path = viz.create_plotly_html(fig, viz_filename)
                     result['file_path'] = html_path
-                elif result.get('status') == 'success' and 'image_path' in result:
-                    result['file_path'] = result['image_path']
+                elif result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
                 
             elif viz_type == 'urban_extent_map':
-                threshold = params.get('threshold', 30)
+                threshold = params.get('threshold')  # No default - threshold must be provided
+                if threshold is None:
+                    return {"status": "error", "message": "Threshold parameter is required for urban extent maps"}
+                    
                 # Use the viz module's create_urban_extent_map function
                 result = viz.create_urban_extent_map(
                     data_handler=data_handler,
@@ -140,8 +152,9 @@ class VisualizationService:
                     fig = result.pop('figure')  # Remove figure from result dict
                     html_path = viz.create_plotly_html(fig, viz_filename)
                     result['file_path'] = html_path
-                elif result.get('status') == 'success' and 'image_path' in result:
-                    result['file_path'] = result['image_path']
+                elif result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
                 
             elif viz_type == 'decision_tree':
                 # Use the viz module's create_decision_tree_plot function
@@ -152,30 +165,36 @@ class VisualizationService:
                     fig = result.pop('figure')  # Remove figure from result dict
                     html_path = viz.create_plotly_html(fig, viz_filename)
                     result['file_path'] = html_path
-                elif result.get('status') == 'success' and 'image_path' in result:
-                    result['file_path'] = result['image_path']
+                elif result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
                 
             # Handle box plot and other plot types
             elif viz_type == 'boxplot' or viz_type == 'vulnerability_boxplot':
                 # Box plot visualization may need wards_per_page
                 wards_per_page = params.get('wards_per_page', 20)
                 
-                # Use box_plot_function or similar
-                if hasattr(data_handler, 'composite_scores') and data_handler.composite_scores:
-                    result = viz.box_plot_function(
-                        data_handler.composite_scores['scores'],
-                        wards_per_page=wards_per_page
-                    )
-                    
-                    # If successful and has plots, save first plot to HTML
-                    if result.get('status') == 'success' and 'plots' in result and result['plots']:
-                        fig = result['plots'][0]
-                        html_path = viz.create_plotly_html(fig, viz_filename)
-                        result['file_path'] = html_path
-                    elif result.get('status') == 'success' and 'image_path' in result:
-                        result['file_path'] = result['image_path']
-                else:
-                    return {"status": "error", "message": "Composite scores not available for boxplot"}
+                # **NO FALLBACK: Must have composite scores or break**
+                if not (hasattr(data_handler, 'composite_scores') and data_handler.composite_scores):
+                    raise ValueError(f"Box plot requires composite_scores but data_handler instance missing them. data_handler={data_handler}, has_composite_scores={hasattr(data_handler, 'composite_scores')}, composite_scores_is_none={getattr(data_handler, 'composite_scores', None) is None}")
+                
+                result = viz.box_plot_function(
+                    data_handler.composite_scores['scores'],
+                    wards_per_page=wards_per_page
+                )
+                
+                # **CRITICAL: Store box plot data for navigation (restored original behavior)**
+                if result.get('status') == 'success':
+                    data_handler.boxwhisker_plot = result
+                
+                # If successful and has plots, save first plot to HTML
+                if result.get('status') == 'success' and 'plots' in result and result['plots']:
+                    fig = result['plots'][0]
+                    html_path = viz.create_plotly_html(fig, viz_filename)
+                    result['file_path'] = html_path
+                elif result.get('status') == 'success' and ('image_path' in result or 'html_path' in result):
+                    # Handle both image_path and html_path keys
+                    result['file_path'] = result.get('image_path') or result.get('html_path')
             else:
                 return {"status": "error", "message": f"Unsupported visualization type: {viz_type}"}
             
@@ -197,6 +216,7 @@ class VisualizationService:
                 "metadata": result.get('metadata', {}),
                 "file_path": result.get('file_path', ''),
                 "image_path": result.get('image_path', result.get('file_path', '')),
+                "html_path": result.get('html_path', result.get('file_path', '')),
                 "current_page": result.get('current_page', 1),
                 "total_pages": result.get('total_pages', 1),
                 "data_summary": result.get('data_summary', {}),
@@ -477,7 +497,8 @@ class VisualizationService:
             # This follows the original implementation in ChatMRPT-main
             result = viz.create_composite_map(
                 data_handler=data_handler,
-                model_index=page  # In the original implementation, model_index is used as the page number
+                model_index=page,  # In the original implementation, model_index is used as the page number
+                session_id=session_id  # FIXED: Pass session_id to maintain session handling
             )
             
             if result['status'] == 'success':
@@ -531,58 +552,103 @@ class VisualizationService:
                 }
             
             # Get total pages from the boxwhisker_plot data
-            total_pages = data_handler.boxwhisker_plot.get('total_pages', 1)
+            if 'total_pages' not in data_handler.boxwhisker_plot:
+                raise ValueError("Missing 'total_pages' key in boxwhisker_plot data. Data structure is incomplete.")
+            
+            total_pages = data_handler.boxwhisker_plot['total_pages']
             
             # Validate and normalize page number
             page = max(1, min(int(page), total_pages))
             
-            # Get the pre-generated plot for this page directly from the plot list
-            if 'plots' in data_handler.boxwhisker_plot and len(data_handler.boxwhisker_plot['plots']) >= page:
-                plot_fig = data_handler.boxwhisker_plot['plots'][page - 1]
+            # **FIXED: Use plots list from original Plotly implementation**
+            if 'plots' in data_handler.boxwhisker_plot:
+                # Use pre-generated Plotly plots
+                plots_list = data_handler.boxwhisker_plot['plots']
+                
+                # Get the plot for this page (0-based index)
+                plot_index = page - 1
+                if plot_index < len(plots_list):
+                    plot_fig = plots_list[plot_index]
+                else:
+                    return {
+                        'status': 'error',
+                        'message': f'Plot for page {page} not available'
+                    }
             else:
                 return {
                     'status': 'error',
-                    'message': f'Invalid page number: {page}. Valid range is 1-{total_pages}'
+                    'message': f'Box plot data structure not compatible. Cannot navigate to page {page}.'
                 }
             
-            # Get reports folder from config
-            reports_folder = current_app.config.get('REPORTS_FOLDER')
-            if not reports_folder:
-                reports_folder = os.path.join(current_app.instance_path, 'sessions', session_id, 'reports')
-                os.makedirs(reports_folder, exist_ok=True)
+            # Save plot as HTML using built-in Plotly functionality
             
-            # Save as HTML with unique filename
-            viz_filename = f"vulnerability_plot_page{page}_{session_id}.html"
+            # Ensure session_id is set on data_handler for create_plotly_html
+            if not hasattr(data_handler, 'session_id') or not data_handler.session_id:
+                data_handler.session_id = session_id
             
-            # Import visualization module for the HTML generation function
-            import app.visualization as viz
-            html_path = viz.create_plotly_html(plot_fig, viz_filename)
+            # Create unique filename for this page
+            import time
+            timestamp = int(time.time())
+            filename = f"vulnerability_plot_page{page}_{timestamp}.html"
             
-            # Gather information about the wards on this page
-            wards_info = data_handler.boxwhisker_plot.get('page_data', {}).get(str(page), [])
+            # Save using Plotly HTML export
+            import os
+            visualizations_dir = os.path.join('static', 'visualizations')
+            os.makedirs(visualizations_dir, exist_ok=True)
+            file_path = os.path.join(visualizations_dir, filename)
+            
+            # Save the plot as HTML
+            plot_fig.write_html(file_path)
+            web_path = f'/static/visualizations/{filename}'
+            
+            if not os.path.exists(file_path):
+                return {
+                    'status': 'error',
+                    'message': 'Failed to save plot HTML'
+                }
             
             # Prepare result with essential data
             result = {
                 'status': 'success',
                 'message': f'Successfully navigated to box plot page {page}',
-                'image_path': html_path,
-                'file_path': html_path,
+                'image_path': web_path,
+                'file_path': web_path,
+                'html_path': web_path,  # Preserve html_path key for consistency
                 'current_page': int(page),
                 'total_pages': int(total_pages),
-                'viz_type': 'vulnerability_plot'
+                'viz_type': 'vulnerability_plot',
+                'data_summary': {
+                    'ward_count': len(data_handler.boxwhisker_plot['ward_rankings']) if 'ward_rankings' in data_handler.boxwhisker_plot else 0,
+                    'total_pages': total_pages,
+                    'high_vulnerability_count': len(data_handler.boxwhisker_plot['ward_rankings'][data_handler.boxwhisker_plot['ward_rankings']['vulnerability_category'] == 'High']) if 'ward_rankings' in data_handler.boxwhisker_plot else 0,
+                    'medium_vulnerability_count': len(data_handler.boxwhisker_plot['ward_rankings'][data_handler.boxwhisker_plot['ward_rankings']['vulnerability_category'] == 'Medium']) if 'ward_rankings' in data_handler.boxwhisker_plot else 0,
+                    'low_vulnerability_count': len(data_handler.boxwhisker_plot['ward_rankings'][data_handler.boxwhisker_plot['ward_rankings']['vulnerability_category'] == 'Low']) if 'ward_rankings' in data_handler.boxwhisker_plot else 0
+                },
+                'visual_elements': {
+                    'plot_type': 'Box and whisker plot',
+                    'color_scheme': 'By vulnerability category',
+                    'axis_meanings': {
+                        'x': 'Risk Score (0-1 scale)',
+                        'y': 'Ward Names (ordered by vulnerability rank)'
+                    }
+                }
             }
             
-            # Add AI explanation
-            explanation = self.explain_boxplot_navigation(
-                data_handler=data_handler,
-                page_data={
-                    'current_page': page,
-                    'total_pages': total_pages,
-                    'wards_info': wards_info
-                },
-                session_id=session_id
-            )
-            result['ai_response'] = explanation
+            # Add AI explanation if available
+            try:
+                explanation = self.explain_boxplot_navigation(
+                    data_handler=data_handler,
+                    page_data={
+                        'current_page': page,
+                        'total_pages': total_pages,
+                        'page_data': data_handler.boxwhisker_plot['page_data'][str(page)] if 'page_data' in data_handler.boxwhisker_plot and str(page) in data_handler.boxwhisker_plot['page_data'] else []
+                    },
+                    session_id=session_id
+                )
+                result['ai_response'] = explanation
+            except Exception as e:
+                logger.warning(f"Could not generate AI explanation: {str(e)}")
+                # Continue without AI explanation
             
             logger.info(f"Session {session_id}: Successfully navigated to boxplot page {page}/{total_pages}")
             return result

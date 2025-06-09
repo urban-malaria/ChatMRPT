@@ -390,10 +390,14 @@ class DataValidator:
             'checks_performed': [],
             'issues_found': [],
             'severe_issues': [],
-            'recommendations': []
+            'recommendations': [],
+            'quality_scores': {}  # Enhanced: Add quality scoring
         }
         
         try:
+            # Enhanced: Calculate comprehensive quality scores
+            quality_results['quality_scores'] = self.calculate_enhanced_quality_scores(csv_data)
+            
             # Check 1: Missing values
             missing_columns = self.check_missing_values(csv_data)
             quality_results['checks_performed'].append('missing_values')
@@ -439,7 +443,13 @@ class DataValidator:
                         'count': len(mismatches)
                     })
             
-            # Check 4: Data types and numeric ranges
+            # Enhanced: Check 4 - Data consistency
+            consistency_results = self.check_data_consistency(csv_data)
+            quality_results['checks_performed'].append('data_consistency')
+            if consistency_results['issues']:
+                quality_results['issues_found'].extend(consistency_results['issues'])
+            
+            # Check 5: Data types and numeric ranges
             numeric_columns = csv_data.select_dtypes(include=['number']).columns
             quality_results['checks_performed'].append('data_types')
             
@@ -462,7 +472,13 @@ class DataValidator:
                                 'outlier_ratio': len(outliers) / len(csv_data)
                             })
             
-            # Check 5: Available variables for analysis
+            # Enhanced: Check 6 - Data validity ranges
+            validity_results = self.validate_data_ranges(csv_data)
+            quality_results['checks_performed'].append('data_validity')
+            if validity_results['issues']:
+                quality_results['issues_found'].extend(validity_results['issues'])
+            
+            # Check 7: Available variables for analysis
             available_vars = self.get_available_variables(csv_data)
             quality_results['checks_performed'].append('available_variables')
             quality_results['available_variables'] = available_vars
@@ -474,11 +490,12 @@ class DataValidator:
                     'recommendation': 'Need at least 2 numeric variables for analysis'
                 })
             
-            # Generate overall recommendations
-            if not quality_results['severe_issues']:
-                quality_results['recommendations'].append('Data quality looks good for analysis')
-            else:
-                quality_results['recommendations'].append('Address severe issues before proceeding with analysis')
+            # Enhanced: Generate intelligent recommendations based on quality scores
+            quality_results['recommendations'] = self.generate_enhanced_recommendations(
+                quality_results['quality_scores'], 
+                quality_results['severe_issues'],
+                quality_results['issues_found']
+            )
             
             return quality_results
             
@@ -489,6 +506,268 @@ class DataValidator:
                 'message': f'Error during quality checks: {str(e)}',
                 'checks_performed': quality_results['checks_performed']
             }
+    
+    def calculate_enhanced_quality_scores(self, data: pd.DataFrame) -> Dict[str, float]:
+        """
+        Calculate comprehensive data quality scores
+        
+        Args:
+            data: DataFrame to assess
+            
+        Returns:
+            Dictionary with quality scores (0-1 scale, higher is better)
+        """
+        scores = {}
+        
+        try:
+            # 1. Completeness Score (percentage of non-missing values)
+            scores['completeness'] = self.calculate_completeness_score(data)
+            
+            # 2. Consistency Score (data format and type consistency)
+            scores['consistency'] = self.calculate_consistency_score(data)
+            
+            # 3. Accuracy Score (estimated based on outliers and range validity)
+            scores['accuracy'] = self.estimate_accuracy_score(data)
+            
+            # 4. Validity Score (values within expected ranges)
+            scores['validity'] = self.calculate_validity_score(data)
+            
+            # 5. Overall Quality Score (weighted average)
+            weights = {'completeness': 0.3, 'consistency': 0.2, 'accuracy': 0.3, 'validity': 0.2}
+            scores['overall'] = sum(scores[metric] * weight for metric, weight in weights.items())
+            
+            # Add interpretation
+            scores['interpretation'] = self.interpret_quality_score(scores['overall'])
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating quality scores: {str(e)}")
+            scores = {'completeness': 0.0, 'consistency': 0.0, 'accuracy': 0.0, 'validity': 0.0, 'overall': 0.0}
+        
+        return scores
+
+    def calculate_completeness_score(self, data: pd.DataFrame) -> float:
+        """Calculate data completeness score (0-1, higher is better)"""
+        if data.empty:
+            return 0.0
+        
+        # Calculate overall completeness across all columns
+        total_cells = data.shape[0] * data.shape[1]
+        missing_cells = data.isna().sum().sum()
+        
+        return 1.0 - (missing_cells / total_cells)
+
+    def calculate_consistency_score(self, data: pd.DataFrame) -> float:
+        """Calculate data consistency score (0-1, higher is better)"""
+        if data.empty:
+            return 0.0
+        
+        consistency_factors = []
+        
+        # Check numeric columns for consistency
+        numeric_cols = data.select_dtypes(include=['number']).columns
+        for col in numeric_cols:
+            if col.lower() != 'wardname':
+                # Check for consistent data types (no mixed types that got coerced)
+                non_null_data = data[col].dropna()
+                if len(non_null_data) > 0:
+                    # Check if all values are reasonable numbers (not infinity, not extreme)
+                    reasonable_values = non_null_data[
+                        (non_null_data != float('inf')) & 
+                        (non_null_data != float('-inf')) & 
+                        (abs(non_null_data) < 1e10)
+                    ]
+                    consistency_factors.append(len(reasonable_values) / len(non_null_data))
+        
+        return sum(consistency_factors) / len(consistency_factors) if consistency_factors else 1.0
+
+    def estimate_accuracy_score(self, data: pd.DataFrame) -> float:
+        """Estimate data accuracy based on outlier detection and distribution analysis"""
+        if data.empty:
+            return 0.0
+        
+        accuracy_factors = []
+        numeric_cols = data.select_dtypes(include=['number']).columns
+        
+        for col in numeric_cols:
+            if col.lower() != 'wardname':
+                non_null_data = data[col].dropna()
+                if len(non_null_data) > 3:  # Need minimum data for statistics
+                    # Calculate outlier ratio (lower outlier ratio = higher accuracy)
+                    q1, q3 = non_null_data.quantile([0.25, 0.75])
+                    iqr = q3 - q1
+                    if iqr > 0:
+                        outlier_bounds = (q1 - 1.5 * iqr, q3 + 1.5 * iqr)
+                        outliers = non_null_data[
+                            (non_null_data < outlier_bounds[0]) | 
+                            (non_null_data > outlier_bounds[1])
+                        ]
+                        outlier_ratio = len(outliers) / len(non_null_data)
+                        accuracy_factors.append(1.0 - min(outlier_ratio, 1.0))
+                    else:
+                        accuracy_factors.append(1.0)  # All values same = perfect accuracy
+        
+        return sum(accuracy_factors) / len(accuracy_factors) if accuracy_factors else 1.0
+
+    def calculate_validity_score(self, data: pd.DataFrame) -> float:
+        """Calculate validity score based on expected value ranges"""
+        if data.empty:
+            return 0.0
+        
+        validity_factors = []
+        
+        # Define expected ranges for common variables
+        expected_ranges = {
+            'temperature': (-50, 60),  # Celsius
+            'temp': (-50, 60),
+            'rainfall': (0, 5000),     # mm per year
+            'precipitation': (0, 5000),
+            'elevation': (-500, 9000), # meters
+            'population': (0, float('inf')),
+            'ndvi': (-1, 1),
+            'evi': (-1, 1),
+            'humidity': (0, 100),      # percentage
+        }
+        
+        for col in data.columns:
+            if col.lower() != 'wardname' and pd.api.types.is_numeric_dtype(data[col]):
+                non_null_data = data[col].dropna()
+                if len(non_null_data) > 0:
+                    col_lower = col.lower()
+                    
+                    # Check against expected ranges
+                    for var_name, (min_val, max_val) in expected_ranges.items():
+                        if var_name in col_lower:
+                            valid_values = non_null_data[
+                                (non_null_data >= min_val) & 
+                                (non_null_data <= max_val)
+                            ]
+                            validity_ratio = len(valid_values) / len(non_null_data)
+                            validity_factors.append(validity_ratio)
+                            break
+                    else:
+                        # For unknown variables, check for basic reasonableness
+                        # (no negative values for likely positive variables)
+                        if any(keyword in col_lower for keyword in ['count', 'population', 'distance', 'area']):
+                            valid_values = non_null_data[non_null_data >= 0]
+                            validity_ratio = len(valid_values) / len(non_null_data)
+                            validity_factors.append(validity_ratio)
+                        else:
+                            validity_factors.append(1.0)  # Assume valid if unknown
+        
+        return sum(validity_factors) / len(validity_factors) if validity_factors else 1.0
+
+    def interpret_quality_score(self, overall_score: float) -> str:
+        """Interpret overall quality score"""
+        if overall_score >= 0.9:
+            return "Excellent"
+        elif overall_score >= 0.8:
+            return "Good" 
+        elif overall_score >= 0.7:
+            return "Fair"
+        elif overall_score >= 0.6:
+            return "Poor"
+        else:
+            return "Very Poor"
+
+    def check_data_consistency(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Check for data consistency issues"""
+        issues = []
+        
+        # Check for mixed data types in supposedly numeric columns
+        for col in data.columns:
+            if col.lower() != 'wardname':
+                # Try to convert to numeric and see how many fail
+                numeric_conversion = pd.to_numeric(data[col], errors='coerce')
+                conversion_failures = numeric_conversion.isna().sum() - data[col].isna().sum()
+                
+                if conversion_failures > 0:
+                    issues.append({
+                        'type': 'mixed_data_types',
+                        'column': col,
+                        'conversion_failures': int(conversion_failures),
+                        'recommendation': f'Column {col} contains non-numeric values that may need cleaning'
+                    })
+        
+        return {'issues': issues}
+
+    def validate_data_ranges(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Validate data ranges for known variable types"""
+        issues = []
+        
+        range_checks = {
+            'temperature': {'min': -50, 'max': 60, 'unit': '°C'},
+            'temp': {'min': -50, 'max': 60, 'unit': '°C'},
+            'rainfall': {'min': 0, 'max': 5000, 'unit': 'mm'},
+            'precipitation': {'min': 0, 'max': 5000, 'unit': 'mm'},
+            'humidity': {'min': 0, 'max': 100, 'unit': '%'},
+            'ndvi': {'min': -1, 'max': 1, 'unit': 'index'},
+            'evi': {'min': -1, 'max': 1, 'unit': 'index'},
+        }
+        
+        for col in data.columns:
+            if pd.api.types.is_numeric_dtype(data[col]):
+                col_lower = col.lower()
+                
+                for var_name, ranges in range_checks.items():
+                    if var_name in col_lower:
+                        out_of_range = data[
+                            (data[col] < ranges['min']) | 
+                            (data[col] > ranges['max'])
+                        ].dropna()
+                        
+                        if len(out_of_range) > 0:
+                            issues.append({
+                                'type': 'out_of_range_values',
+                                'column': col,
+                                'out_of_range_count': len(out_of_range),
+                                'expected_range': f"{ranges['min']}-{ranges['max']} {ranges['unit']}",
+                                'recommendation': f'Review {col} values outside expected range'
+                            })
+                        break
+        
+        return {'issues': issues}
+
+    def generate_enhanced_recommendations(self, quality_scores: Dict[str, float], 
+                                        severe_issues: List[Dict], 
+                                        issues_found: List[Dict]) -> List[str]:
+        """Generate intelligent recommendations based on quality analysis"""
+        recommendations = []
+        
+        # Quality score based recommendations
+        if quality_scores.get('overall', 0) >= 0.8:
+            recommendations.append("✅ Data quality is good for analysis")
+        elif quality_scores.get('overall', 0) >= 0.6:
+            recommendations.append("⚠️ Data quality is fair - consider addressing identified issues")
+        else:
+            recommendations.append("❌ Data quality needs significant improvement before analysis")
+        
+        # Specific improvement recommendations
+        if quality_scores.get('completeness', 1) < 0.8:
+            recommendations.append("🔧 Improve data completeness by filling missing values or excluding incomplete variables")
+        
+        if quality_scores.get('consistency', 1) < 0.8:
+            recommendations.append("🔧 Address data consistency issues (mixed types, formatting problems)")
+        
+        if quality_scores.get('accuracy', 1) < 0.8:
+            recommendations.append("🔧 Review and clean outliers that may be data entry errors")
+        
+        if quality_scores.get('validity', 1) < 0.8:
+            recommendations.append("🔧 Check for values outside expected ranges for your variables")
+        
+        # Issue-specific recommendations
+        if severe_issues:
+            recommendations.append("⚠️ Address severe issues before proceeding with analysis")
+        
+        # Add specific guidance for common issues
+        missing_issues = [issue for issue in issues_found if issue['type'] == 'missing_values']
+        if missing_issues:
+            recommendations.append("💡 Consider using imputation methods for missing values")
+        
+        outlier_issues = [issue for issue in issues_found if issue['type'] == 'extreme_outliers']
+        if outlier_issues:
+            recommendations.append("💡 Review outliers - they may indicate data quality issues or legitimate extreme values")
+        
+        return recommendations
     
     def _is_id_column(self, column_name: str, df: pd.DataFrame) -> bool:
         """

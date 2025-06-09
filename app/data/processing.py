@@ -189,7 +189,9 @@ class DataProcessor:
         Args:
             normalized_data: Normalized DataFrame
             selected_variables: Variables to include (None for all)
-            method: Scoring method ('mean', 'weighted', etc.)
+            method: Scoring method ('mean', 'pca')
+                - 'mean': Simple average (default, fast)
+                - 'pca': Principal Component Analysis (advanced, with feature importance)
             
         Returns:
             dict: Status and information about scoring

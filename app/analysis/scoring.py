@@ -52,10 +52,13 @@ def compute_composite_scores(normalized_data, selected_vars=None, method='mean',
     """
     Calculate composite scores using selected normalized variables
     
+    Note: This function now only supports 'mean' method. For PCA analysis, 
+    use the independent PCA pipeline in app.analysis.pca_pipeline
+    
     Args:
         normalized_data: DataFrame with normalized variables
         selected_vars: List of variables to use (if None, use all normalized variables)
-        method: Aggregation method ('mean', 'weighted_mean', 'pca')
+        method: Aggregation method (only 'mean' supported now)
         n_jobs: Number of parallel jobs (-1 for all available cores)
         metadata: Optional AnalysisMetadata instance for logging
         
@@ -63,6 +66,11 @@ def compute_composite_scores(normalized_data, selected_vars=None, method='mean',
         Dict with scores DataFrame and model formulas
     """
     try:
+        # Validate method
+        if method != 'mean':
+            logger.warning(f"Method '{method}' not supported. Using 'mean' method. For PCA analysis, use the independent PCA pipeline.")
+            method = 'mean'
+        
         # Record analysis step if metadata is provided
         step_id = None
         if metadata:
@@ -155,37 +163,14 @@ def compute_composite_scores(normalized_data, selected_vars=None, method='mean',
         def compute_model(i, combo):
             model_name = "model_{}".format(i+1)
             
-            # Calculate composite score based on method
-            if method == 'mean':
-                # Simple mean of normalized values
-                result_series = compute_composite_score_model(
-                    normalized_data, list(combo), metadata, step_id
-                )
-            elif method == 'weighted_mean':
-                # Weighted mean (equal weights for now)
-                weights = np.ones(len(combo)) / len(combo)
-                result_series = pd.Series(
-                    np.average(normalized_data[list(combo)], axis=1, weights=weights),
-                    index=normalized_data.index
-                )
-            elif method == 'pca':
-                # Principal Component Analysis would be implemented here
-                # For simplicity, fallback to mean
-                logger.warning("PCA method not implemented, falling back to mean")
-                result_series = compute_composite_score_model(
-                    normalized_data, list(combo), metadata, step_id
-                )
-            else:
-                # Default to mean
-                result_series = compute_composite_score_model(
-                    normalized_data, list(combo), metadata, step_id
-                )
-            
-            # Create model formula
-            variables_used = [col.replace('normalization_', '') for col in combo]
+            # Calculate composite score using mean method
+            result_series = compute_composite_score_model(
+                normalized_data, list(combo), metadata, step_id
+            )
             formula = {
                 'model': model_name,
-                'variables': variables_used
+                'variables': [col.replace('normalization_', '') for col in combo],
+                'method': 'mean'
             }
             
             return model_name, result_series, formula
@@ -221,9 +206,11 @@ def compute_composite_scores(normalized_data, selected_vars=None, method='mean',
         
         logger.info("Successfully generated {} composite score models".format(len(model_formulas)))
         
+        # Return simplified result for mean method only
         return {
             'scores': result,
-            'formulas': model_formulas
+            'formulas': model_formulas,
+            'method': method
         }
     
     except Exception as e:
@@ -244,6 +231,10 @@ def analyze_vulnerability(composite_scores, n_categories=3, metadata=None):
     Returns:
         DataFrame with vulnerability rankings
     """
+    print(f"\n🔍 VULNERABILITY DEBUG: Starting analyze_vulnerability function")
+    print(f"📊 VULNERABILITY DEBUG: n_categories={n_categories}")
+    print(f"🔧 VULNERABILITY DEBUG: composite_scores type: {type(composite_scores)}")
+    
     try:
         # Record analysis step if metadata is provided
         step_id = None
@@ -264,18 +255,24 @@ def analyze_vulnerability(composite_scores, n_categories=3, metadata=None):
         
         # Extract scores dataframe
         scores_df = composite_scores['scores']
+        print(f"📈 VULNERABILITY DEBUG: Scores DataFrame shape: {scores_df.shape}")
+        print(f"📋 VULNERABILITY DEBUG: Scores DataFrame columns: {list(scores_df.columns)}")
         
         # Get model columns
         model_cols = [col for col in scores_df.columns if col.startswith('model_')]
+        print(f"🤖 VULNERABILITY DEBUG: Found {len(model_cols)} model columns: {model_cols}")
         
         if not model_cols:
+            print("❌ VULNERABILITY DEBUG: No model scores found!")
             raise ValueError("No model scores found in composite scores")
         
         # Initialize results dataframe with WardName
         result = scores_df[['WardName']].copy()
+        print(f"🏘️ VULNERABILITY DEBUG: Result DataFrame initialized with {len(result)} wards")
         
         # Calculate median score across all models
         result['median_score'] = scores_df[model_cols].median(axis=1)
+        print(f"📊 VULNERABILITY DEBUG: Median scores calculated, range: {result['median_score'].min():.3f} to {result['median_score'].max():.3f}")
         
         if metadata:
             metadata.record_calculation(
@@ -291,51 +288,73 @@ def analyze_vulnerability(composite_scores, n_categories=3, metadata=None):
         # Sort by median score (descending) to get overall rank
         result = result.sort_values('median_score', ascending=False)
         result['overall_rank'] = range(1, len(result) + 1)
+        print(f"🏆 VULNERABILITY DEBUG: Ranking completed, top ward: {result.iloc[0]['WardName']} (score: {result.iloc[0]['median_score']:.3f})")
         
         # Reset index
         result = result.reset_index(drop=True)
         
-        # Categorize into vulnerability levels
+        # SIMPLE RISK CATEGORIZATION: High, Medium, Low Risk (consistent with PCA)
         n_wards = len(result)
-        category_bins = np.linspace(0, n_wards, n_categories + 1).astype(int)
-        category_labels = ['High', 'Medium', 'Low'][:n_categories]
         
-        result['vulnerability_category'] = pd.cut(
-            result['overall_rank'],
-            bins=category_bins,
-            labels=category_labels,
-            include_lowest=True
-        )
+        # Simple 3-category system: High, Medium, Low Risk
+        # Divide into thirds (approximately)
+        high_risk_count = n_wards // 3
+        low_risk_count = n_wards // 3
+        medium_risk_count = n_wards - high_risk_count - low_risk_count  # Remainder goes to medium
+        
+        print(f"🎯 RISK CATEGORIZATION: Using simplified High/Medium/Low Risk system")
+        print(f"📊 Total wards: {n_wards}")
+        print(f"🚨 High Risk: {high_risk_count} wards")
+        print(f"📋 Medium Risk: {medium_risk_count} wards")
+        print(f"✅ Low Risk: {low_risk_count} wards")
+        
+        # Assign risk categories based on ranking (higher rank = higher vulnerability)
+        result['vulnerability_category'] = 'Medium Risk'  # Default
+        result.loc[:high_risk_count-1, 'vulnerability_category'] = 'High Risk'
+        result.loc[n_wards-low_risk_count:, 'vulnerability_category'] = 'Low Risk'
+        
+        # Check the categorization results
+        category_counts = result['vulnerability_category'].value_counts()
+        print(f"✅ RISK CATEGORIZATION: Complete!")
+        print(f"🎯 Risk distribution: {dict(category_counts)}")
         
         # Record category counts if metadata is provided
         if metadata:
-            category_counts = result['vulnerability_category'].value_counts().to_dict()
+            category_counts_dict = result['vulnerability_category'].value_counts().to_dict()
             metadata.record_calculation(
                 step_id,
                 'vulnerability',
-                'category_assignment',
-                {'n_categories': n_categories, 'category_labels': category_labels},
-                {'category_counts': category_counts}
+                'risk_assignment',
+                {'approach': 'simplified_risk_levels', 'high_risk_count': high_risk_count, 'low_risk_count': low_risk_count},
+                {'category_counts': category_counts_dict}
             )
             
-            # Identify notable wards (e.g., highest and lowest vulnerability)
-            top_wards = result.head(5)['WardName'].tolist()
-            bottom_wards = result.tail(5)['WardName'].tolist()
+            # Identify the most important wards for decision making
+            top_5_vulnerable = result.head(5)['WardName'].tolist()
+            bottom_5_vulnerable = result.tail(5)['WardName'].tolist()
+            high_risk_wards = result[result['vulnerability_category'] == 'High Risk']['WardName'].tolist()
             
             metadata.record_calculation(
                 step_id,
                 'vulnerability',
-                'notable_wards_identification',
-                {'criterion': 'overall_rank'},
-                {'most_vulnerable': top_wards, 'least_vulnerable': bottom_wards}
+                'priority_wards_identification',
+                {'criterion': 'simplified_risk_levels'},
+                {
+                    'top_5_most_vulnerable': top_5_vulnerable,
+                    'bottom_5_least_vulnerable': bottom_5_vulnerable,
+                    'high_risk_wards': high_risk_wards
+                }
             )
         
         # Update metadata with output summary
         if metadata:
             output_summary = {
                 'ward_count': len(result),
-                'categories': {cat: int(count) for cat, count in category_counts.items()},
-                'top_vulnerable_wards': top_wards
+                'risk_categories': {cat: int(count) for cat, count in category_counts.items()},
+                'top_5_vulnerable': top_5_vulnerable,
+                'bottom_5_vulnerable': bottom_5_vulnerable,
+                'high_risk_count': high_risk_count,
+                'low_risk_count': low_risk_count
             }
             # Update the step with output information
             for step in metadata.steps:
@@ -343,9 +362,11 @@ def analyze_vulnerability(composite_scores, n_categories=3, metadata=None):
                     step['output_summary'] = output_summary
                     break
         
+        print(f"🎉 VULNERABILITY DEBUG: Analysis complete, returning DataFrame with shape: {result.shape}")
         return result
     
     except Exception as e:
+        print(f"💥 VULNERABILITY DEBUG: Error in analyze_vulnerability: {str(e)}")
         logger.error("Error analyzing vulnerability: {}".format(str(e)))
         traceback.print_exc()
         raise

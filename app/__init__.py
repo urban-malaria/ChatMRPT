@@ -11,9 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import blueprints and other necessary components
-from .models.interaction_logger import InteractionLogger
 from .core.llm_manager import LLMManager
-from .services.service_container import init_services
+from .services.container import init_services
 
 # --- Configuration ---
 INSTANCE_FOLDER_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'instance')
@@ -94,22 +93,26 @@ def create_app(config_name=None):
     Session(app)
     
     # --- Initialize Database ---
-    from .utils.database import init_db
-    try:
-        init_db()
-        app.logger.info("Database initialized successfully")
-    except Exception as e:
-        app.logger.error(f"Error initializing database: {e}")
+    # NOTE: Database initialization handled by interaction logging system
+    # from .utils.database import init_db
+    # try:
+    #     init_db()
+    #     app.logger.info("Database initialized successfully")
+    # except Exception as e:
+    #     app.logger.error("Error initializing database: {}".format(str(e)))
     
     # --- Initialize Modern Service Container ---
     from .services.container import init_services
     init_services(app)
     
     # --- Register Blueprints ---
-    from .web import main_bp, admin_bp
+    from .web import admin_bp, register_all_blueprints
     
-    app.register_blueprint(main_bp)
+    # Register admin blueprint separately
     app.register_blueprint(admin_bp)
+    
+    # Register all functional route blueprints (core, upload, analysis, visualization, etc.)
+    register_all_blueprints(app)
     
     # --- Initialize Additional Routes ---
     from .routes import init_routes

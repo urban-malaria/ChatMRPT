@@ -82,26 +82,48 @@ class AnalysisCoordinator:
         Returns:
             dict: Comprehensive analysis results
         """
+        print(f"\n🎯 COORDINATOR DEBUG: Starting run_full_analysis")
+        print(f"📊 COORDINATOR DEBUG: selected_variables={selected_variables}")
+        print(f"🔧 COORDINATOR DEBUG: na_methods={na_methods}")
+        print(f"🤝 COORDINATOR DEBUG: custom_relationships={custom_relationships}")
+        print(f"🤖 COORDINATOR DEBUG: llm_manager={llm_manager is not None}")
+        import sys
+        sys.stdout.flush()  # Force immediate output
+        
         try:
             # Check if data is loaded
+            print(f"📋 COORDINATOR DEBUG: Checking data availability...")
+            print(f"📊 COORDINATOR DEBUG: csv_data exists: {self.csv_data is not None}")
+            if self.csv_data is not None:
+                print(f"📈 COORDINATOR DEBUG: csv_data shape: {self.csv_data.shape}")
+            print(f"🗺️ COORDINATOR DEBUG: shapefile_data exists: {self.shapefile_data is not None}")
+            
             if self.csv_data is None:
+                print("❌ COORDINATOR DEBUG: No CSV data available!")
                 return {
                     'status': 'error',
                     'message': 'No CSV data loaded. Please load data first.'
                 }
             
             # Import analysis functions
+            print(f"📦 COORDINATOR DEBUG: Importing analysis modules...")
             try:
                 from app.analysis import run_full_analysis_pipeline, AnalysisMetadata
-            except ImportError:
+                print(f"✅ COORDINATOR DEBUG: Successfully imported analysis modules")
+            except ImportError as import_err:
+                print(f"❌ COORDINATOR DEBUG: Import error: {import_err}")
                 self.logger.error("Analysis module not available")
                 return {'status': 'error', 'message': 'Analysis module not available'}
             
             # Initialize analysis metadata
             session_id = os.path.basename(self.session_folder)
-            self.analysis_metadata = AnalysisMetadata(session_id, self.interaction_logger)
+            print(f"🆔 COORDINATOR DEBUG: session_id={session_id}")
+            self.analysis_metadata = AnalysisMetadata(session_id)
+            self.analysis_metadata.logger = self.interaction_logger
+            print(f"📝 COORDINATOR DEBUG: Analysis metadata initialized")
             
             # Run the full analysis pipeline
+            print(f"🚀 COORDINATOR DEBUG: Calling run_full_analysis_pipeline...")
             analysis_results = run_full_analysis_pipeline(
                 self,
                 selected_variables,
@@ -112,8 +134,11 @@ class AnalysisCoordinator:
                 self.interaction_logger,
                 llm_manager  # Pass the LLM manager for variable selection
             )
+            print(f"📈 COORDINATOR DEBUG: Pipeline returned status: {analysis_results.get('status')}")
+            print(f"💬 COORDINATOR DEBUG: Pipeline message: {analysis_results.get('message', 'No message')}")
             
             # Store results
+            print(f"💾 COORDINATOR DEBUG: Storing analysis results...")
             self.cleaned_data = analysis_results.get('cleaned_data')
             self.normalized_data = analysis_results.get('normalized_data')
             self.composite_scores = analysis_results.get('composite_scores')
@@ -121,12 +146,19 @@ class AnalysisCoordinator:
             self.variable_relationships = analysis_results.get('variable_relationships', {})
             self.composite_variables = analysis_results.get('composite_variables', [])
             
+            print(f"📊 COORDINATOR DEBUG: Results stored - vulnerability_rankings: {self.vulnerability_rankings is not None}")
+            if self.vulnerability_rankings is not None:
+                print(f"📈 COORDINATOR DEBUG: Vulnerability rankings shape: {self.vulnerability_rankings.shape}")
+            print(f"🔧 COORDINATOR DEBUG: Composite variables: {self.composite_variables}")
+            
             # Save analysis results
+            print(f"💾 COORDINATOR DEBUG: Saving analysis results to disk...")
             self._save_analysis_results(analysis_results)
             
             # Log success
             if self.interaction_logger:
                 try:
+                    print(f"📝 COORDINATOR DEBUG: Logging analysis event...")
                     self.interaction_logger.log_analysis_event(
                         session_id,
                         'full_analysis_complete',
@@ -135,18 +167,26 @@ class AnalysisCoordinator:
                             'rankings_generated': len(self.vulnerability_rankings) if self.vulnerability_rankings is not None else 0
                         }
                     )
+                    print(f"✅ COORDINATOR DEBUG: Analysis event logged successfully")
                 except Exception as log_error:
+                    print(f"⚠️ COORDINATOR DEBUG: Failed to log analysis event: {log_error}")
                     self.logger.warning(f"Failed to log analysis event: {log_error}")
             
-            return {
+            final_result = {
                 'status': 'success',
                 'message': 'Full analysis completed successfully',
                 'results': analysis_results,
                 'variables_used': self.composite_variables,
                 'rankings_count': len(self.vulnerability_rankings) if self.vulnerability_rankings is not None else 0
             }
+            print(f"🎉 COORDINATOR DEBUG: Analysis complete! Returning success result")
+            print(f"📊 COORDINATOR DEBUG: Final variables_used: {final_result['variables_used']}")
+            print(f"📈 COORDINATOR DEBUG: Final rankings_count: {final_result['rankings_count']}")
+            
+            return final_result
             
         except Exception as e:
+            print(f"💥 COORDINATOR DEBUG: Exception in run_full_analysis: {str(e)}")
             self.logger.error(f"Error in full analysis: {str(e)}", exc_info=True)
             return {
                 'status': 'error',
@@ -359,6 +399,23 @@ class AnalysisCoordinator:
                 scores_path = os.path.join(self.session_folder, 'analysis_composite_scores.csv')
                 if isinstance(results['composite_scores'], dict) and 'scores' in results['composite_scores']:
                     results['composite_scores']['scores'].to_csv(scores_path, index=False)
+                    
+            # Save composite_scores_mean as the main composite_scores file
+            if 'composite_scores_mean' in results and results['composite_scores_mean'] is not None:
+                scores_path = os.path.join(self.session_folder, 'composite_scores.csv')
+                if isinstance(results['composite_scores_mean'], dict) and 'scores' in results['composite_scores_mean']:
+                    results['composite_scores_mean']['scores'].to_csv(scores_path, index=False)
+                    
+                    # Also save the model formulas for proper reconstruction
+                    formulas_path = os.path.join(self.session_folder, 'model_formulas.csv') 
+                    if 'formulas' in results['composite_scores_mean']:
+                        formulas_df = pd.DataFrame(results['composite_scores_mean']['formulas'])
+                        if 'variables' in formulas_df.columns:
+                            # Convert variables list to comma-separated string for CSV
+                            formulas_df['variables'] = formulas_df['variables'].apply(
+                                lambda x: ','.join(x) if isinstance(x, list) else str(x)
+                            )
+                        formulas_df.to_csv(formulas_path, index=False)
             
             self.logger.info("Analysis results saved successfully")
             

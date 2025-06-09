@@ -1,43 +1,91 @@
+"""
+Analysis Metadata Module
+
+This module provides tracking and metadata capabilities for analysis operations.
+"""
+
 import time
 import logging
 from typing import Dict, List, Optional, Any, Union
+from dataclasses import dataclass, field
+from datetime import datetime
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-
+@dataclass
 class AnalysisMetadata:
     """
-    Class to capture and record analysis metadata for explanation purposes
+    Tracks metadata for an analysis operation
     
-    Extracted from the monolithic analysis.py to provide focused
-    metadata management functionality.
+    This class captures timing, variable usage, and other metadata
+    to help with performance optimization and debugging.
     """
+    session_id: str
+    start_time: float = field(default_factory=lambda: time.time())
+    variables_used: List[str] = field(default_factory=list)
+    method: str = "unspecified"
+    warnings: List[str] = field(default_factory=list)
+    events: List[Dict[str, Any]] = field(default_factory=list)
     
-    def __init__(self, session_id=None, interaction_logger=None):
-        """
-        Initialize analysis metadata tracker
+    # Legacy tracking attributes
+    steps: List[Dict[str, Any]] = field(default_factory=list)
+    decisions: List[Dict[str, Any]] = field(default_factory=list)
+    calculations: List[Dict[str, Any]] = field(default_factory=list)
+    anomalies: List[Dict[str, Any]] = field(default_factory=list)
+    logger: Optional[Any] = None
+    
+    def add_event(self, event_type: str, description: str, details: Optional[Dict[str, Any]] = None) -> None:
+        """Add an event to the metadata tracking"""
+        self.events.append({
+            "timestamp": time.time(),
+            "type": event_type,
+            "description": description,
+            "details": details or {}
+        })
+    
+    def record_warning(self, warning: str) -> None:
+        """Record a warning during analysis"""
+        self.warnings.append(warning)
+    
+    def set_variables(self, variables: List[str]) -> None:
+        """Set the variables used in this analysis"""
+        self.variables_used = variables
+    
+    def set_method(self, method: str) -> None:
+        """Set the analysis method used"""
+        self.method = method
+    
+    def get_elapsed_time(self) -> float:
+        """Get the elapsed time since this metadata object was created"""
+        return time.time() - self.start_time
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metadata to dictionary for storage/reporting"""
+        return {
+            "session_id": self.session_id,
+            "start_time": datetime.fromtimestamp(self.start_time).isoformat(),
+            "elapsed_time": self.get_elapsed_time(),
+            "variables_used": self.variables_used,
+            "method": self.method,
+            "warnings": self.warnings,
+            "events": self.events,
+            "event_count": len(self.events)
+        }
         
-        Args:
-            session_id: Session identifier for tracking
-            interaction_logger: Logger for database interactions
-        """
-        self.session_id = session_id
-        self.logger = interaction_logger
-        self.steps = []
-        self.decisions = []
-        self.calculations = []
-        self.anomalies = []
-        self.start_time = time.time()
-        
+    # Legacy methods from original implementation
     def record_step(self, step_name, input_data_summary=None, output_data_summary=None, 
                    algorithm=None, parameters=None):
         """Record an analysis step"""
+        # Safety check: ensure start_time is set
+        if self.start_time is None:
+            self.start_time = time.time()
+        
         step_info = {
             'step_id': len(self.steps) + 1,
             'step_name': step_name,
             'timestamp': time.time(),
-            'execution_time': time.time() - self.start_time,
+            'execution_time': time.time() - (self.start_time or time.time()),
             'input_summary': input_data_summary,
             'output_summary': output_data_summary,
             'algorithm': algorithm,

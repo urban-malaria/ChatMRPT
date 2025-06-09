@@ -23,6 +23,7 @@ from .validation import DataValidator, check_ward_mismatches, validate_variable_
 from .processing import DataProcessor, clean_dataset, normalize_dataset, calculate_composite_scores, analyze_urban_thresholds
 from .analysis import AnalysisCoordinator, run_complete_analysis
 from .reporting import ReportGenerator, generate_result_summary
+from .unified_dataset_builder import UnifiedDatasetBuilder, build_unified_dataset
 from .utils import (
     FileManager, DataConverter, ValidationHelper, SessionMetadata,
     create_temp_directory, cleanup_temp_directory, safe_filename, 
@@ -66,19 +67,42 @@ class DataHandler:
         self.session_metadata = SessionMetadata(session_folder)
         
         # Data storage - maintain original structure for compatibility
-        self.csv_data = None
-        self.shapefile_data = None
+        self._csv_data = None
+        self._shapefile_data = None
         self.cleaned_data = None
         self.normalized_data = None
-        self.composite_scores = None
-        self.vulnerability_rankings = None
-        self.urban_extent_results = None
-        self.variable_relationships = {}
-        self.composite_variables = []
-        self.na_handling_methods = []
+        self._data_loaded = False  # Track if we've attempted to load data
         
-        # Ensure session folder exists
-        os.makedirs(session_folder, exist_ok=True)
+        # Dual method composite scoring system
+        self.composite_scores_mean = None      # Mean method results
+        self.composite_scores_pca = None       # PCA method results
+        
+        # Dual method vulnerability rankings
+        self.vulnerability_rankings = None     # Mean method rankings (default)
+        self.vulnerability_rankings_pca = None # PCA method rankings
+        
+        # Urban extent analysis for both methods
+        self.urban_extent_results = None       # Mean method urban analysis
+        self.urban_extent_results_pca = None   # PCA method urban analysis
+        
+        # Analysis configuration and metadata
+        self.variable_relationships = None
+        self.composite_variables = None
+        self.variable_selection_method = None
+        self.variable_selection_explanations = {}
+        self.na_handling_methods = {}
+        
+        # Current viewing method ('mean' or 'pca')
+        self.current_method = 'mean'  # Default to mean method for backwards compatibility
+        
+        # Don't auto-create session folder - only create when data is actually uploaded
+        # This prevents confusion about whether data exists based on directory existence
+        
+        # Try to reload any existing data from the session folder
+        self._attempt_data_reload()
+        
+        # Try to reload any existing data from the session folder
+        self._attempt_data_reload()
         
         self.logger.info(f"DataHandler initialized with modular architecture - Session: {session_folder}")
     
@@ -145,10 +169,17 @@ class DataHandler:
             analysis_results = result['results']
             self.cleaned_data = analysis_results.get('cleaned_data')
             self.normalized_data = analysis_results.get('normalized_data')
-            self.composite_scores = analysis_results.get('composite_scores')
+            self.composite_scores_mean = analysis_results.get('composite_scores_mean')
+            self.composite_scores_pca = analysis_results.get('composite_scores_pca')
             self.vulnerability_rankings = analysis_results.get('vulnerability_rankings')
+            self.vulnerability_rankings_pca = analysis_results.get('vulnerability_rankings_pca')
             self.variable_relationships = analysis_results.get('variable_relationships', {})
             self.composite_variables = analysis_results.get('composite_variables', [])
+            
+            # **CRITICAL FIX: Set backward compatibility attribute for visualization**
+            # The visualization code expects 'composite_scores' (not 'composite_scores_mean')
+            if self.composite_scores_mean is not None:
+                self.composite_scores = self.composite_scores_mean
         
         return result
     
@@ -232,7 +263,9 @@ class DataHandler:
         
         Args:
             selected_variables: Variables to include in scoring
-            method: Scoring method ('mean', 'weighted', etc.)
+            method: Scoring method ('mean', 'pca')
+                - 'mean': Simple average (default, fast)
+                - 'pca': Principal Component Analysis (advanced, with feature importance)
             
         Returns:
             Composite scoring results
@@ -244,7 +277,10 @@ class DataHandler:
             self.normalized_data, selected_variables, method
         )
         if result['status'] == 'success':
-            self.composite_scores = result['scores']
+            if method == 'mean':
+                self.composite_scores_mean = result['scores']
+            else:
+                self.composite_scores_pca = result['scores']
             self.composite_variables = result.get('composite_variables', [])
         
         return result
@@ -259,12 +295,17 @@ class DataHandler:
         Returns:
             Vulnerability ranking results
         """
-        if self.composite_scores is None:
+        if self.composite_scores_mean is None and self.composite_scores_pca is None:
             return {'status': 'error', 'message': 'No composite scores available. Run compute_composite_scores() first.'}
         
-        result = self.processor.calculate_vulnerability_rankings(self.composite_scores, n_categories)
-        if result['status'] == 'success':
-            self.vulnerability_rankings = result['rankings']
+        if self.composite_scores_mean is not None:
+            result = self.processor.calculate_vulnerability_rankings(self.composite_scores_mean, n_categories)
+            if result['status'] == 'success':
+                self.vulnerability_rankings = result['rankings']
+        if self.composite_scores_pca is not None:
+            result = self.processor.calculate_vulnerability_rankings(self.composite_scores_pca, n_categories)
+            if result['status'] == 'success':
+                self.vulnerability_rankings_pca = result['rankings']
         
         return result
     
@@ -284,6 +325,7 @@ class DataHandler:
         result = self.processor.process_urban_extent(self.csv_data, self.shapefile_data, thresholds)
         if result['status'] == 'success':
             self.urban_extent_results = result['results']
+            self.urban_extent_results_pca = result['results_pca']
         
         return result
     
@@ -298,12 +340,15 @@ class DataHandler:
         analysis_results = {
             'cleaned_data': self.cleaned_data,
             'normalized_data': self.normalized_data,
-            'composite_scores': self.composite_scores,
+            'composite_scores_mean': self.composite_scores_mean,
+            'composite_scores_pca': self.composite_scores_pca,
             'vulnerability_rankings': self.vulnerability_rankings,
+            'vulnerability_rankings_pca': self.vulnerability_rankings_pca,
             'composite_variables': self.composite_variables,
             'variable_relationships': self.variable_relationships,
             'na_handling_methods': self.na_handling_methods,
-            'urban_extent_results': self.urban_extent_results
+            'urban_extent_results': self.urban_extent_results,
+            'urban_extent_results_pca': self.urban_extent_results_pca
         }
         
         return self.reporter.generate_analysis_summary(
@@ -320,12 +365,27 @@ class DataHandler:
         Returns:
             Formatted vulnerability results
         """
-        if self.vulnerability_rankings is None:
+        if self.vulnerability_rankings is None and self.vulnerability_rankings_pca is None:
             return {'status': 'error', 'message': 'No vulnerability rankings available'}
         
-        return self.reporter.format_vulnerability_results(
-            self.vulnerability_rankings, self.composite_variables, top_n
-        )
+        if self.vulnerability_rankings is not None:
+            mean_results = self.reporter.format_vulnerability_results(
+                self.vulnerability_rankings, self.composite_variables, top_n
+            )
+        else:
+            mean_results = {'status': 'error', 'message': 'No mean method rankings available'}
+        
+        if self.vulnerability_rankings_pca is not None:
+            pca_results = self.reporter.format_vulnerability_results(
+                self.vulnerability_rankings_pca, self.composite_variables, top_n
+            )
+        else:
+            pca_results = {'status': 'error', 'message': 'No PCA method rankings available'}
+        
+        return {
+            'mean_method': mean_results,
+            'pca_method': pca_results
+        }
     
     def export_analysis_report(self, format_type: str = 'comprehensive') -> Dict[str, Any]:
         """
@@ -341,12 +401,15 @@ class DataHandler:
         analysis_results = {
             'cleaned_data': self.cleaned_data,
             'normalized_data': self.normalized_data,
-            'composite_scores': self.composite_scores,
+            'composite_scores_mean': self.composite_scores_mean,
+            'composite_scores_pca': self.composite_scores_pca,
             'vulnerability_rankings': self.vulnerability_rankings,
+            'vulnerability_rankings_pca': self.vulnerability_rankings_pca,
             'composite_variables': self.composite_variables,
             'variable_relationships': self.variable_relationships,
             'na_handling_methods': self.na_handling_methods,
-            'urban_extent_results': self.urban_extent_results
+            'urban_extent_results': self.urban_extent_results,
+            'urban_extent_results_pca': self.urban_extent_results_pca
         }
         
         return self.reporter.export_analysis_report(analysis_results, format_type)
@@ -426,8 +489,8 @@ class DataHandler:
                 'shapefile_loaded': self.shapefile_data is not None,
                 'cleaned': self.cleaned_data is not None,
                 'normalized': self.normalized_data is not None,
-                'scored': self.composite_scores is not None,
-                'ranked': self.vulnerability_rankings is not None
+                'scored': self.composite_scores_mean is not None or self.composite_scores_pca is not None,
+                'ranked': self.vulnerability_rankings is not None or self.vulnerability_rankings_pca is not None
             },
             'available_methods': len([method for method in dir(self) if not method.startswith('_')])
         }
@@ -502,25 +565,342 @@ class DataHandler:
     def _attempt_data_reload(self):
         """Attempt to reload data from session files"""
         try:
-            # Try to reload CSV data
-            csv_path = os.path.join(self.session_folder, 'processed_data.csv')
-            if os.path.exists(csv_path):
-                self.csv_data = pd.read_csv(csv_path)
+            # Try to reload CSV data - check for PROCESSED data FIRST (has duplicates fixed)
+            processed_csv_path = os.path.join(self.session_folder, 'processed_data.csv')
+            if os.path.exists(processed_csv_path):
+                # Load processed data with duplicate ward names fixed
+                self.csv_data = pd.read_csv(processed_csv_path)
+                self.logger.info("Reloaded CSV data from processed_data.csv (duplicates fixed)")
+            else:
+                # Fallback to original uploaded data
+                original_csv_files = [f for f in os.listdir(self.session_folder) if f.endswith('.csv')]
+                if original_csv_files:
+                    csv_path = os.path.join(self.session_folder, original_csv_files[0])
+                    self.csv_data = pd.read_csv(csv_path)
+                    self.logger.info(f"Reloaded CSV data from {original_csv_files[0]} (original with duplicates)")
             
+            # Try to reload shapefile data - check for shapefile folder
+            shapefile_folder = os.path.join(self.session_folder, 'shapefile')
+            if os.path.exists(shapefile_folder):
+                # Find .shp file in shapefile folder
+                shp_files = [f for f in os.listdir(shapefile_folder) if f.endswith('.shp')]
+                if shp_files:
+                    import geopandas as gpd
+                    shp_path = os.path.join(shapefile_folder, shp_files[0])
+                    self.shapefile_data = gpd.read_file(shp_path)
+                    self.logger.info(f"Reloaded shapefile data from {shp_files[0]}")
+            
+            # **FIXED: Also reload composite_scores and analysis results**
             # Try to reload other data files
             files_to_reload = [
                 ('cleaned_data.csv', 'cleaned_data'),
                 ('normalized_data.csv', 'normalized_data'),
-                ('vulnerability_rankings.csv', 'vulnerability_rankings')
+                ('vulnerability_rankings.csv', 'vulnerability_rankings'),
+                ('vulnerability_rankings_pca.csv', 'vulnerability_rankings_pca'),
+                ('urban_extent_results.csv', 'urban_extent_results'),
+                ('urban_extent_results_pca.csv', 'urban_extent_results_pca')
             ]
             
-            for filename, attr_name in files_to_reload:
+            for filename, attribute_name in files_to_reload:
                 file_path = os.path.join(self.session_folder, filename)
                 if os.path.exists(file_path):
-                    setattr(self, attr_name, pd.read_csv(file_path))
+                    try:
+                        data = pd.read_csv(file_path)
+                        setattr(self, attribute_name, data)
+                        self.logger.info(f"Reloaded {attribute_name} from {filename}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not reload {attribute_name} from {filename}: {e}")
+
+            # **CRITICAL FIX: Reload analysis-specific files**
+            analysis_files_to_reload = [
+                ('analysis_cleaned_data.csv', 'cleaned_data'),
+                ('analysis_normalized_data.csv', 'normalized_data'),
+                ('analysis_vulnerability_rankings.csv', 'vulnerability_rankings'),
+                ('analysis_vulnerability_rankings_pca.csv', 'vulnerability_rankings_pca')
+            ]
+            
+            for filename, attribute_name in analysis_files_to_reload:
+                file_path = os.path.join(self.session_folder, filename)
+                if os.path.exists(file_path):
+                    try:
+                        data = pd.read_csv(file_path)
+                        setattr(self, attribute_name, data)
+                        self.logger.info(f"Reloaded {attribute_name} from {filename}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not reload {attribute_name} from {filename}: {e}")
+
+            # **CRITICAL FIX: Reload composite_scores as dict from CSV files**
+            # Try to reload composite_scores from saved CSV files
+            composite_scores_files = [
+                ('composite_scores.csv', 'model_formulas.csv', 'composite_scores_mean'),  # From processing module
+                ('analysis_composite_scores.csv', 'model_formulas.csv', 'composite_scores')  # From analysis module
+            ]
+            
+            for scores_file, formulas_file, attribute_name in composite_scores_files:
+                scores_path = os.path.join(self.session_folder, scores_file)
+                formulas_path = os.path.join(self.session_folder, formulas_file)
+                
+                if os.path.exists(scores_path):
+                    try:
+                        # Load the scores DataFrame
+                        scores_df = pd.read_csv(scores_path)
+                        
+                        # Load the formulas if available
+                        model_formulas = []
+                        if os.path.exists(formulas_path):
+                            formulas_df = pd.read_csv(formulas_path)
+                            for _, row in formulas_df.iterrows():
+                                # Handle variables column that might be comma-separated string
+                                variables = row['variables']
+                                if isinstance(variables, str):
+                                    variables = variables.split(',')
+                                elif pd.isna(variables):
+                                    variables = []
+                                
+                                model_formulas.append({
+                                    'model': row['model'],
+                                    'variables': variables,
+                                    'formula': row.get('formula', f"Mean of: {variables}")
+                                })
+                        else:
+                            # Generate basic formulas from model columns
+                            model_columns = [col for col in scores_df.columns if col.startswith('model_')]
+                            for model_col in model_columns:
+                                model_formulas.append({
+                                    'model': model_col,
+                                    'variables': [],
+                                    'formula': f"Composite score {model_col}"
+                                })
+                        
+                        # Reconstruct the composite_scores dict
+                        composite_scores_dict = {
+                            'scores': scores_df,
+                            'formulas': model_formulas,
+                            'model_formulas': model_formulas,  # Backward compatibility
+                            'method': 'mean'  # Default method
+                        }
+                        
+                        # Set the appropriate attribute
+                        setattr(self, attribute_name, composite_scores_dict)
+                        self.logger.info(f"Reloaded {attribute_name} from {scores_file}")
+                        
+                    except Exception as e:
+                        self.logger.warning(f"Could not reload {attribute_name} from {scores_file}: {e}")
+            
+            # **CRITICAL FIX: Set backward compatibility attributes**
+            # The visualization code expects composite_scores, not composite_scores_mean
+            if hasattr(self, 'composite_scores_mean') and self.composite_scores_mean is not None:
+                if not hasattr(self, 'composite_scores') or self.composite_scores is None:
+                    self.composite_scores = self.composite_scores_mean
+                    self.logger.info("Set composite_scores from composite_scores_mean for backward compatibility")
+                    
+            # Also ensure composite_scores_mean is set if we have composite_scores
+            if hasattr(self, 'composite_scores') and self.composite_scores is not None:
+                if not hasattr(self, 'composite_scores_mean') or self.composite_scores_mean is None:
+                    self.composite_scores_mean = self.composite_scores
+                    self.logger.info("Set composite_scores_mean from composite_scores for consistency")
             
         except Exception as e:
             self.logger.warning(f"Could not reload some data files: {str(e)}")
+    
+    def set_viewing_method(self, method: str) -> Dict[str, Any]:
+        """
+        Set the method for viewing results ('mean' or 'pca')
+        
+        Args:
+            method: Method to use for viewing ('mean' or 'pca')
+            
+        Returns:
+            Dict with status and current method info
+        """
+        if method not in ['mean', 'pca']:
+            return {
+                'status': 'error',
+                'message': f"Invalid method '{method}'. Must be 'mean' or 'pca'."
+            }
+        
+        self.current_method = method
+        
+        # Check if the selected method has results available
+        method_available = False
+        if method == 'mean':
+            method_available = self.composite_scores_mean is not None and self.vulnerability_rankings is not None
+        else:
+            method_available = self.composite_scores_pca is not None and self.vulnerability_rankings_pca is not None
+        
+        return {
+            'status': 'success',
+            'current_method': self.current_method,
+            'method_available': method_available,
+            'message': f'Viewing method set to {method.upper()}{"" if method_available else " (results not available)"}'
+        }
+    
+    def switch_analysis_method(self, method: str) -> bool:
+        """
+        Switch analysis method (backward compatibility alias for set_viewing_method)
+        
+        Args:
+            method: Method to switch to ('mean' or 'pca')
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        result = self.set_viewing_method(method)
+        return result['status'] == 'success'
+    
+    def get_current_composite_scores(self) -> Optional[Dict[str, Any]]:
+        """
+        Get composite scores for the currently selected viewing method
+        
+        Returns:
+            Composite scores dict or None if not available
+        """
+        if self.current_method == 'mean':
+            return self.composite_scores_mean
+        else:
+            return self.composite_scores_pca
+    
+    def get_current_vulnerability_rankings(self) -> Optional[Any]:
+        """
+        Get vulnerability rankings for the currently selected viewing method
+        
+        Returns:
+            Vulnerability rankings DataFrame or None if not available
+        """
+        if self.current_method == 'mean':
+            return self.vulnerability_rankings
+        else:
+            return self.vulnerability_rankings_pca
+    
+    def get_current_urban_extent_results(self) -> Optional[Dict[str, Any]]:
+        """
+        Get urban extent results for the currently selected viewing method
+        
+        Returns:
+            Urban extent results dict or None if not available
+        """
+        if self.current_method == 'mean':
+            return self.urban_extent_results
+        else:
+            return self.urban_extent_results_pca
+    
+    def get_method_comparison_summary(self) -> Dict[str, Any]:
+        """
+        Get a comparison summary of both methods' results with practical focus on top priorities
+        
+        Returns:
+            Dict with comparison information focused on actionable priorities
+        """
+        summary = {
+            'methods_available': [],
+            'current_method': self.current_method,
+            'mean_method': {
+                'available': False,
+                'composite_scores': None,
+                'vulnerability_rankings': None,
+                'top_vulnerable_wards': [],
+                'bottom_vulnerable_wards': [],
+                'immediate_action_count': 0,
+                'top_risk_ward': 'N/A',
+                'top_risk_score': 'N/A'
+            },
+            'pca_method': {
+                'available': False,
+                'composite_scores': None,
+                'vulnerability_rankings': None,
+                'top_vulnerable_wards': [],
+                'bottom_vulnerable_wards': [],
+                'immediate_action_count': 0,
+                'top_risk_ward': 'N/A',
+                'top_risk_score': 'N/A'
+            }
+        }
+        
+        # Check mean method availability
+        if self.composite_scores_mean is not None and self.vulnerability_rankings is not None:
+            summary['methods_available'].append('mean')
+            summary['mean_method']['available'] = True
+            summary['mean_method']['composite_scores'] = 'Available'
+            summary['mean_method']['vulnerability_rankings'] = 'Available'
+            
+            # Get practical priority information for mean method
+            if self.vulnerability_rankings is not None:
+                # Top 5 most vulnerable wards (keep 5 for summary consistency)
+                top_wards_df = self.vulnerability_rankings.sort_values('overall_rank').head(5)
+                top_wards = []
+                for _, row in top_wards_df.iterrows():
+                    top_wards.append({
+                        'ward_name': row['WardName'],
+                        'rank': int(row['overall_rank']),
+                        'score': round(float(row['median_score']), 3)
+                    })
+                summary['mean_method']['top_vulnerable_wards'] = top_wards
+                
+                # Bottom 5 least vulnerable wards (keep 5 for summary consistency)
+                bottom_wards_df = self.vulnerability_rankings.sort_values('overall_rank').tail(5)
+                bottom_wards = []
+                for _, row in bottom_wards_df.iterrows():
+                    bottom_wards.append({
+                        'ward_name': row['WardName'],
+                        'rank': int(row['overall_rank']),
+                        'score': round(float(row['median_score']), 3)
+                    })
+                summary['mean_method']['bottom_vulnerable_wards'] = bottom_wards
+                
+                # High risk count (practical categorization)
+                high_risk = self.vulnerability_rankings[
+                    self.vulnerability_rankings['vulnerability_category'] == 'High Risk'
+                ]
+                summary['mean_method']['immediate_action_count'] = len(high_risk)
+                
+                # Get top risk ward with score
+                top_ward_data = self.vulnerability_rankings.sort_values('overall_rank').iloc[0]
+                summary['mean_method']['top_risk_ward'] = top_ward_data['WardName']
+                summary['mean_method']['top_risk_score'] = top_ward_data['median_score']
+        
+        # Check PCA method availability
+        if self.composite_scores_pca is not None and self.vulnerability_rankings_pca is not None:
+            summary['methods_available'].append('pca')
+            summary['pca_method']['available'] = True
+            summary['pca_method']['composite_scores'] = 'Available'
+            summary['pca_method']['vulnerability_rankings'] = 'Available'
+            
+            # Get practical priority information for PCA method
+            if self.vulnerability_rankings_pca is not None:
+                # Top 5 most vulnerable wards (keep 5 for summary consistency)
+                top_wards_df = self.vulnerability_rankings_pca.sort_values('overall_rank').head(5)
+                top_wards = []
+                for _, row in top_wards_df.iterrows():
+                    top_wards.append({
+                        'ward_name': row['WardName'],
+                        'rank': int(row['overall_rank']),
+                        'score': round(float(row['median_score']), 3)
+                    })
+                summary['pca_method']['top_vulnerable_wards'] = top_wards
+                
+                # Bottom 5 least vulnerable wards (keep 5 for summary consistency)
+                bottom_wards_df = self.vulnerability_rankings_pca.sort_values('overall_rank').tail(5)
+                bottom_wards = []
+                for _, row in bottom_wards_df.iterrows():
+                    bottom_wards.append({
+                        'ward_name': row['WardName'],
+                        'rank': int(row['overall_rank']),
+                        'score': round(float(row['median_score']), 3)
+                    })
+                summary['pca_method']['bottom_vulnerable_wards'] = bottom_wards
+                
+                # High risk count (practical categorization)
+                high_risk = self.vulnerability_rankings_pca[
+                    self.vulnerability_rankings_pca['vulnerability_category'] == 'High Risk'
+                ]
+                summary['pca_method']['immediate_action_count'] = len(high_risk)
+                
+                # Get top risk ward with score
+                top_ward_data = self.vulnerability_rankings_pca.sort_values('overall_rank').iloc[0]
+                summary['pca_method']['top_risk_ward'] = top_ward_data['WardName']
+                summary['pca_method']['top_risk_score'] = top_ward_data['median_score']
+        
+        return summary
 
 
 # Package-level convenience functions for direct import

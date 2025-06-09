@@ -3,13 +3,15 @@
  * Initializes and coordinates all modules for the modular JavaScript architecture
  */
 
-// Import all modules - FIXED IMPORTS
-import chatManager from './modules/chat/chat-manager.js';
+// Import all modules - UPDATED TO USE REFACTORED CHAT MANAGER
+import chatManager from './modules/chat/chat-manager-refactored.js';
 import sidebarManager from './modules/ui/sidebar.js';
 import fileUploader from './modules/upload/file-uploader.js';
 import apiClient from './modules/utils/api-client.js';
 import DOMHelpers from './modules/utils/dom-helpers.js';
 import { SessionDataManager } from './modules/utils/storage.js';
+import { DataUploadManager } from './modules/data/data-upload-manager.js';
+import variableDisplayManager from './modules/utils/variable-display.js';
 
 /**
  * Theme Manager - Light/Dark Mode Toggle
@@ -125,6 +127,8 @@ class ChatMRPTApp {
         this.themeManager = null;
         this.sidebarController = null;
         
+        this.dataUploadManager = null;
+        
         this.init();
     }
 
@@ -159,6 +163,9 @@ class ChatMRPTApp {
             // Initialize Sidebar Controller
             this.sidebarController = new SidebarController();
 
+            // Initialize Data Upload Manager
+            this.dataUploadManager = new DataUploadManager();
+
             // Use existing singleton modules (they auto-initialize)
             this.modules = {
                 chat: this.chatManager,
@@ -187,6 +194,9 @@ class ChatMRPTApp {
 
             // Load initial state
             this.loadInitialState();
+
+            // Make chat manager globally available for method switching
+            window.chatManager = this.chatManager;
 
             this.initialized = true;
             this.isReady = true;
@@ -257,6 +267,41 @@ class ChatMRPTApp {
         // Handle beforeunload to save state
         window.addEventListener('beforeunload', () => {
             this.saveApplicationState();
+        });
+
+        // Setup data load event handling to preload variable metadata
+        this.setupDataLoadHandling();
+    }
+
+    /**
+     * Setup data load event handling to preload variable metadata
+     */
+    setupDataLoadHandling() {
+        // Listen for data upload success
+        document.addEventListener('dataUploadSuccess', async (event) => {
+            console.log('📊 Data upload successful, preloading variable metadata...');
+            
+            try {
+                // Get available variables from the uploaded data
+                const response = await fetch('/api/variables');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'success' && data.variables) {
+                        // Preload variable metadata for efficient display
+                        await variableDisplayManager.preloadVariables(data.variables);
+                        console.log('✅ Variable metadata preloaded for efficient display');
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Could not preload variable metadata:', error);
+                // Non-critical error, continue without preloading
+            }
+        });
+
+        // Listen for new session events to clear cache
+        document.addEventListener('newSession', () => {
+            variableDisplayManager.clearCache();
+            console.log('🧹 Variable cache cleared for new session');
         });
     }
 
@@ -552,6 +597,37 @@ class ChatMRPTApp {
             e.preventDefault();
             this.handlePagination('boxplot', 'next', e.target);
         });
+
+        // **ADDED: New pagination button handlers for dynamic visualization types**
+        DOMHelpers.addEventListenerWithDelegation('.prev-composite-map', 'click', (e) => {
+            e.preventDefault();
+            this.handlePagination('composite_map', 'prev', e.target);
+        });
+
+        DOMHelpers.addEventListenerWithDelegation('.next-composite-map', 'click', (e) => {
+            e.preventDefault();
+            this.handlePagination('composite_map', 'next', e.target);
+        });
+
+        DOMHelpers.addEventListenerWithDelegation('.prev-vulnerability-plot', 'click', (e) => {
+            e.preventDefault();
+            this.handlePagination('vulnerability_plot', 'prev', e.target);
+        });
+
+        DOMHelpers.addEventListenerWithDelegation('.next-vulnerability-plot', 'click', (e) => {
+            e.preventDefault();
+            this.handlePagination('vulnerability_plot', 'next', e.target);
+        });
+
+        DOMHelpers.addEventListenerWithDelegation('.prev-variable-map', 'click', (e) => {
+            e.preventDefault();
+            this.handlePagination('variable_map', 'prev', e.target);
+        });
+
+        DOMHelpers.addEventListenerWithDelegation('.next-variable-map', 'click', (e) => {
+            e.preventDefault();
+            this.handlePagination('variable_map', 'next', e.target);
+        });
     }
 
     /**
@@ -620,6 +696,9 @@ class ChatMRPTApp {
             if (button.classList.contains('prev') || 
                 button.classList.contains('prev-composite') || 
                 button.classList.contains('prev-boxplot') ||
+                button.classList.contains('prev-composite-map') ||
+                button.classList.contains('prev-vulnerability-plot') ||
+                button.classList.contains('prev-variable-map') ||
                 button.innerHTML.includes('chevron-left') ||
                 button.innerHTML.includes('arrow-left') ||
                 button.title.toLowerCase().includes('previous')) {
@@ -637,20 +716,45 @@ class ChatMRPTApp {
             // Get additional metadata
             const metadata = this.extractVisualizationMetadata(container);
 
-            // Call unified navigation endpoint
-            const response = await fetch('/navigate_visualization', {
+            // **FIXED: Use specific endpoints for known visualization types**
+            let endpoint = '/navigate_visualization';
+            let requestBody = {
+                viz_type: vizType,
+                direction: direction,
+                current_page: currentPage,
+                total_pages: totalPages,
+                metadata: metadata
+            };
+            
+            // Use specific endpoints for composite maps and box plots
+            if (vizType === 'composite_map') {
+                endpoint = '/navigate_composite_map';
+                requestBody = { 
+                    direction: direction, 
+                    current_page: currentPage 
+                };
+            } else if (vizType === 'boxplot' || vizType === 'vulnerability_boxplot' || vizType === 'vulnerability_plot') {
+                endpoint = '/navigate_boxplot';
+                requestBody = { 
+                    direction: direction, 
+                    current_page: currentPage 
+                };
+            }
+
+            console.log('🌐 Using endpoint:', endpoint, 'with body:', requestBody);
+
+            // Call navigation endpoint
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    viz_type: vizType,
-                    direction: direction,
-                    current_page: currentPage,
-                    total_pages: totalPages,
-                    metadata: metadata
-                })
+                body: JSON.stringify(requestBody)
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
             const result = await response.json();
             
@@ -673,7 +777,7 @@ class ChatMRPTApp {
 
         } catch (error) {
             console.error('💥 Universal pagination error:', error);
-            this.chatManager.addSystemMessage('Failed to navigate. Please try again.');
+            this.chatManager.addSystemMessage(`Failed to navigate: ${error.message}`);
         }
     }
 
@@ -690,12 +794,15 @@ class ChatMRPTApp {
         }
         
         // Check for specific button classes (legacy support)
-        if (container.querySelector('.prev-composite, .next-composite')) {
+        if (container.querySelector('.prev-composite, .next-composite, .prev-composite-map, .next-composite-map')) {
             console.log('🔍 Detected composite_map from button classes');
             return 'composite_map';
-        } else if (container.querySelector('.prev-boxplot, .next-boxplot')) {
+        } else if (container.querySelector('.prev-boxplot, .next-boxplot, .prev-vulnerability-plot, .next-vulnerability-plot')) {
             console.log('🔍 Detected boxplot from button classes');
             return 'boxplot';
+        } else if (container.querySelector('.prev-variable-map, .next-variable-map')) {
+            console.log('🔍 Detected variable_map from button classes');
+            return 'variable_map';
         }
         
         // Check iframe source
@@ -819,8 +926,8 @@ class ChatMRPTApp {
         }
 
         // Update button states
-        const prevBtns = container.querySelectorAll('.prev, .prev-composite, .prev-boxplot');
-        const nextBtns = container.querySelectorAll('.next, .next-composite, .next-boxplot');
+        const prevBtns = container.querySelectorAll('.prev, .prev-composite, .prev-boxplot, .prev-composite-map, .prev-vulnerability-plot, .prev-variable-map');
+        const nextBtns = container.querySelectorAll('.next, .next-composite, .next-boxplot, .next-composite-map, .next-vulnerability-plot, .next-variable-map');
 
         prevBtns.forEach(btn => {
             btn.disabled = currentPage <= 1;
@@ -1008,5 +1115,7 @@ window.sidebarManager = app.sidebarManager;
 window.fileUploader = app.fileUploader;
 window.themeManager = app.themeManager;
 window.sidebarController = app.sidebarController;
+window.dataUploadManager = app.dataUploadManager;
+window.variableDisplayManager = variableDisplayManager;
 
 export default app; 

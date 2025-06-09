@@ -30,17 +30,67 @@ from .urban_analysis import (
     classify_urban_wards,
     get_urban_statistics
 )
-from .pipeline import (
-    run_full_analysis_pipeline,
-    get_explanation_for_visualization,
-    get_explanation_for_ward,
-    get_explanation_for_analysis_result,
-    generate_analysis_report,
-    generate_markdown_report,
-    generate_html_report
-)
+from .pipeline import run_full_analysis_pipeline
+
+# Create a simple AnalysisEngine class inline
+class AnalysisEngine:
+    """Simple analysis engine wrapper for service container."""
+    
+    def __init__(self):
+        pass
+    
+    def run_standard_analysis(self, data_handler, session_id=None):
+        """Run standard analysis pipeline."""
+        try:
+            result = run_full_analysis_pipeline(data_handler=data_handler, session_id=session_id)
+            return {
+                'status': 'success',
+                'message': 'Analysis completed successfully',
+                'variables_used': result.get('variables_used', []),
+                'results': result
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Analysis failed: {str(e)}',
+                'variables_used': []
+            }
+    
+    def run_custom_analysis(self, data_handler, selected_variables, session_id=None):
+        """Run analysis with custom variables."""
+        try:
+            result = run_full_analysis_pipeline(
+                data_handler=data_handler, 
+                selected_variables=selected_variables,
+                session_id=session_id
+            )
+            return {
+                'status': 'success',
+                'message': 'Custom analysis completed successfully',
+                'variables_used': selected_variables,
+                'results': result
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Analysis failed: {str(e)}',
+                'variables_used': selected_variables
+            }
+    
+    def explain_variable_selection(self, variables, data_handler):
+        """Generate simple variable explanations."""
+        explanations = {}
+        for var in variables:
+            explanations[var] = f"Variable '{var}' used in malaria risk analysis"
+        
+        return {
+            'status': 'success',
+            'explanations': explanations,
+            'message': 'Variable explanations generated'
+        }
 
 __all__ = [
+    'AnalysisEngine',
     'AnalysisMetadata',
     'normalize_data',
     'normalize_variable', 
@@ -64,11 +114,5 @@ __all__ = [
     'validate_urban_analysis_inputs',
     'classify_urban_wards',
     'get_urban_statistics',
-    'run_full_analysis_pipeline',
-    'get_explanation_for_visualization',
-    'get_explanation_for_ward',
-    'get_explanation_for_analysis_result',
-    'generate_analysis_report',
-    'generate_markdown_report',
-    'generate_html_report'
+    'run_full_analysis_pipeline'
 ] 

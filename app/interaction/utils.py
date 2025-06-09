@@ -17,17 +17,22 @@ import json
 import logging
 import datetime
 from typing import Dict, List, Any, Optional, Union
+import re
+import uuid
+
+# Import unified utilities to replace redundant patterns
+from ..core.responses import ResponseBuilder
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-def validate_session_id(session_id):
+def validate_session_id(session_id: str) -> bool:
     """
-    Validate a session ID format
+    Validate session ID format and existence
     
     Args:
-        session_id: Session identifier to validate
+        session_id: Session ID string to validate
         
     Returns:
         bool: True if valid, False otherwise
@@ -35,8 +40,12 @@ def validate_session_id(session_id):
     if not session_id or not isinstance(session_id, str):
         return False
     
-    # Session ID should be non-empty string
-    return len(session_id.strip()) > 0
+    # Check if it's a valid UUID format
+    try:
+        uuid.UUID(session_id)
+        return True
+    except ValueError:
+        return False
 
 
 def safe_json_parse(json_string, default=None):
@@ -121,8 +130,6 @@ def sanitize_filename(filename):
     Returns:
         str: Sanitized filename
     """
-    import re
-    
     # Remove or replace invalid characters
     sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
     
@@ -199,7 +206,7 @@ def deep_merge_dicts(dict1, dict2):
         dict2: Second dictionary (takes precedence)
         
     Returns:
-        dict: Deep merged dictionary
+        dict: Merged dictionary
     """
     result = dict1.copy()
     

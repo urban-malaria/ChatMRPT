@@ -1,40 +1,32 @@
 """
-Modern service container with dependency injection for ChatMRPT application.
+Simple service container for core ChatMRPT functionality.
 
-This container provides a clean way to manage service dependencies and ensures
-proper initialization order and lifecycle management.
+This container provides basic dependency injection for the core services
+that work well: data handling, analysis, visualization, and reporting.
 """
 
 import logging
-from typing import Dict, Any, Optional, Type, TypeVar, Generic
+from typing import Dict, Any, Optional
 from flask import Flask
 
 from ..core.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
-
 
 class ServiceContainer:
     """
-    Modern dependency injection container for managing application services.
+    Simple dependency injection container for core ChatMRPT services.
     
-    This container supports:
-    - Lazy initialization
-    - Singleton pattern for services
-    - Dependency resolution
-    - Configuration injection
-    - Service lifecycle management
+    Manages only the proven, working services:
+    - Data handling (unified dataset processing)
+    - Analysis engine (composite scoring, PCA)
+    - Visualization service (6 core visualizations)
+    - Report generation
     """
     
     def __init__(self, app: Optional[Flask] = None):
-        """
-        Initialize the service container.
-        
-        Args:
-            app: Flask application instance
-        """
+        """Initialize the service container."""
         self._services: Dict[str, Any] = {}
         self._factories: Dict[str, callable] = {}
         self._singletons: Dict[str, Any] = {}
@@ -44,29 +36,17 @@ class ServiceContainer:
             self.init_app(app)
     
     def init_app(self, app: Flask) -> None:
-        """
-        Initialize the container with Flask app.
-        
-        Args:
-            app: Flask application instance
-        """
+        """Initialize the container with Flask app."""
         self._app = app
         app.services = self
         
-        # Register core services
+        # Register core services only
         self._register_core_services()
         
-        logger.info("Service container initialized with Flask app")
+        logger.info("Service container initialized with core services")
     
     def register(self, name: str, factory: callable, singleton: bool = True) -> None:
-        """
-        Register a service factory.
-        
-        Args:
-            name: Service name
-            factory: Factory function to create the service
-            singleton: Whether to treat as singleton
-        """
+        """Register a service factory."""
         self._factories[name] = factory
         
         if singleton:
@@ -75,18 +55,7 @@ class ServiceContainer:
         logger.debug(f"Registered service: {name} (singleton: {singleton})")
     
     def get(self, name: str) -> Any:
-        """
-        Get a service instance.
-        
-        Args:
-            name: Service name
-            
-        Returns:
-            Service instance
-            
-        Raises:
-            ConfigurationError: If service is not registered
-        """
+        """Get a service instance."""
         # Check if it's a singleton and already created
         if name in self._singletons:
             if self._singletons[name] is None:
@@ -98,22 +67,13 @@ class ServiceContainer:
         return self._create_service(name)
     
     def _create_service(self, name: str) -> Any:
-        """
-        Create a service instance using its factory.
-        
-        Args:
-            name: Service name
-            
-        Returns:
-            Service instance
-        """
+        """Create a service instance using its factory."""
         if name not in self._factories:
             raise ConfigurationError(f"Service '{name}' is not registered")
         
         factory = self._factories[name]
         
         try:
-            # Call factory with container for dependency injection
             service = factory(self)
             logger.debug(f"Created service instance: {name}")
             return service
@@ -122,33 +82,27 @@ class ServiceContainer:
             raise ConfigurationError(f"Failed to create service '{name}': {str(e)}")
     
     def _register_core_services(self) -> None:
-        """Register core application services."""
+        """Register only the core working services."""
         
-        # Interaction Logger
+        # Core Infrastructure
         self.register('interaction_logger', self._create_interaction_logger)
-        
-        # LLM Manager
         self.register('llm_manager', self._create_llm_manager)
         
-        # Data Services
+        # Data & Analysis Services (PROVEN TO WORK)
         self.register('data_service', self._create_data_service)
         self.register('analysis_service', self._create_analysis_service)
         self.register('visualization_service', self._create_visualization_service)
         
-        # AI Services
-        self.register('ai_service', self._create_ai_service)
-        self.register('nlu_service', self._create_nlu_service)
-        
-        # Report Services
+        # Report Services (WORKING)
         self.register('report_service', self._create_report_service)
         
-        # Message Service (depends on other services)
-        self.register('message_service', self._create_message_service)
+        # Request Interpreter (NEW)
+        self.register('request_interpreter', self._create_request_interpreter)
     
     def _create_interaction_logger(self, container: 'ServiceContainer'):
         """Create interaction logger service."""
         try:
-            from ..models.interaction_logger import InteractionLogger
+            from ..interaction import InteractionLogger
             
             db_path = self._app.config.get('INTERACTIONS_DB_FILE')
             return InteractionLogger(db_path=db_path)
@@ -173,96 +127,118 @@ class ServiceContainer:
             return None
     
     def _create_data_service(self, container: 'ServiceContainer'):
-        """Create data service."""
+        """Create data service - unified dataset processing."""
         try:
-            from .data.handler import DataService
+            from ..data import DataHandler
             
-            return DataService(
-                upload_folder=self._app.config.get('UPLOAD_FOLDER'),
-                interaction_logger=container.get('interaction_logger')
+            upload_folder = self._app.config.get('UPLOAD_FOLDER')
+            return DataHandler(
+                session_folder=upload_folder,
             )
-        except ImportError as e:
-            logger.warning(f"Data service not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to create data service: {e}")
             return None
     
     def _create_analysis_service(self, container: 'ServiceContainer'):
-        """Create analysis service."""
+        """Create analysis service - composite scoring and PCA."""
         try:
-            from .analysis.engine import AnalysisService
+            from ..analysis import AnalysisEngine
             
-            return AnalysisService(
-                llm_manager=container.get('llm_manager'),
-                interaction_logger=container.get('interaction_logger')
-            )
-        except ImportError as e:
-            logger.warning(f"Analysis service not available: {e}")
+            return AnalysisEngine()
+        except Exception as e:
+            logger.warning(f"Failed to create analysis service: {e}")
             return None
     
     def _create_visualization_service(self, container: 'ServiceContainer'):
-        """Create visualization service."""
+        """Create visualization service - 6 core visualizations."""
         try:
-            from .visualization.chart_service import VisualizationService
-            
-            return VisualizationService(
-                llm_manager=container.get('llm_manager'),
-                interaction_logger=container.get('interaction_logger')
+            from ..services.agents.visualizations import (
+                create_agent_composite_score_maps,
+                create_agent_vulnerability_map,
+                create_agent_box_plot_ranking,
+                create_agent_urban_extent_map,
+                create_agent_decision_tree,
+                create_agent_pca_vulnerability_map
             )
-        except ImportError as e:
-            logger.warning(f"Visualization service not available: {e}")
-            return None
-    
-    def _create_ai_service(self, container: 'ServiceContainer'):
-        """Create AI service."""
-        try:
-            from .ai.llm_service import AIService
             
-            return AIService(
-                llm_manager=container.get('llm_manager'),
-                interaction_logger=container.get('interaction_logger')
-            )
-        except ImportError as e:
-            logger.warning(f"AI service not available: {e}")
-            return None
-    
-    def _create_nlu_service(self, container: 'ServiceContainer'):
-        """Create NLU service."""
-        try:
-            from .ai.nlu_service import NLUService
+            class CoreVisualizationService:
+                """Simple wrapper for the 6 core visualization functions."""
+                
+                def __init__(self):
+                    self.composite_score_maps = create_agent_composite_score_maps
+                    self.vulnerability_map = create_agent_vulnerability_map
+                    self.box_plot_ranking = create_agent_box_plot_ranking
+                    self.urban_extent_map = create_agent_urban_extent_map
+                    self.decision_tree = create_agent_decision_tree
+                    self.pca_vulnerability_map = create_agent_pca_vulnerability_map
+                
+                def create_composite_workflow(self, data_handler, session_id=None):
+                    """Run the standard 5-visualization composite workflow."""
+                    results = {}
+                    
+                    # Standard composite workflow
+                    visualizations = [
+                        ('composite_maps', self.composite_score_maps),
+                        ('vulnerability_map', self.vulnerability_map),
+                        ('box_plot', self.box_plot_ranking),
+                        ('urban_extent', self.urban_extent_map),
+                        ('decision_tree', self.decision_tree)
+                    ]
+                    
+                    for name, func in visualizations:
+                        try:
+                            result = func(data_handler, session_id=session_id)
+                            results[name] = result
+                        except Exception as e:
+                            logger.error(f"Failed to create {name}: {e}")
+                            results[name] = {'status': 'error', 'message': str(e)}
+                    
+                    return results
+                
+                def create_pca_workflow(self, data_handler, session_id=None):
+                    """Run the PCA workflow (1 visualization)."""
+                    try:
+                        return self.pca_vulnerability_map(data_handler, session_id=session_id)
+                    except Exception as e:
+                        logger.error(f"Failed to create PCA visualization: {e}")
+                        return {'status': 'error', 'message': str(e)}
             
-            return NLUService(
-                llm_manager=container.get('llm_manager')
-            )
-        except ImportError as e:
-            logger.warning(f"NLU service not available: {e}")
+            return CoreVisualizationService()
+        except Exception as e:
+            logger.warning(f"Failed to create visualization service: {e}")
             return None
     
     def _create_report_service(self, container: 'ServiceContainer'):
         """Create report service."""
         try:
-            from .reports.generator import ReportService
+            from ..reports import ReportGenerator
             
-            return ReportService(
-                reports_folder=self._app.config.get('REPORTS_FOLDER'),
-                llm_manager=container.get('llm_manager')
-            )
-        except ImportError as e:
-            logger.warning(f"Report service not available: {e}")
+            return ReportGenerator()
+        except Exception as e:
+            logger.warning(f"Failed to create report service: {e}")
             return None
     
-    def _create_message_service(self, container: 'ServiceContainer'):
-        """Create message service (depends on other services)."""
+    def _create_request_interpreter(self, container: 'ServiceContainer'):
+        """Create request interpreter - natural language processing."""
         try:
-            from .message_service import MessageService
+            from ..core.request_interpreter import RequestInterpreter
             
-            return MessageService(
-                llm_manager=container.get('llm_manager'),
-                interaction_logger=container.get('interaction_logger'),
-                analysis_service=container.get('analysis_service')
+            llm_manager = container.get('llm_manager')
+            data_service = container.get('data_service')
+            analysis_service = container.get('analysis_service')
+            visualization_service = container.get('visualization_service')
+            
+            return RequestInterpreter(
+                llm_manager=llm_manager,
+                data_service=data_service,
+                analysis_service=analysis_service,
+                visualization_service=visualization_service
             )
-        except ImportError as e:
-            logger.warning(f"Message service not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to create request interpreter: {e}")
             return None
     
+    # Property accessors for core services
     @property
     def interaction_logger(self):
         """Get interaction logger service."""
@@ -289,65 +265,47 @@ class ServiceContainer:
         return self.get('visualization_service')
     
     @property
-    def ai_service(self):
-        """Get AI service."""
-        return self.get('ai_service')
-    
-    @property
-    def nlu_service(self):
-        """Get NLU service."""
-        return self.get('nlu_service')
-    
-    @property
     def report_service(self):
         """Get report service."""
         return self.get('report_service')
     
     @property
-    def message_service(self):
-        """Get message service."""
-        return self.get('message_service')
+    def request_interpreter(self):
+        """Get request interpreter."""
+        return self.get('request_interpreter')
     
     def health_check(self) -> Dict[str, Any]:
-        """
-        Check the health of all registered services.
-        
-        Returns:
-            Dictionary with service health status
-        """
-        health_status = {
-            "container": "healthy",
-            "services": {}
+        """Perform health check on all core services."""
+        status = {
+            'overall': 'healthy',
+            'services': {},
+            'timestamp': None
         }
         
-        for service_name in self._factories.keys():
+        import datetime
+        status['timestamp'] = datetime.datetime.utcnow().isoformat()
+        
+        # Check each core service
+        services = ['data_service', 'analysis_service', 'visualization_service', 'report_service']
+        
+        for service_name in services:
             try:
                 service = self.get(service_name)
-                if service is None:
-                    health_status["services"][service_name] = "unavailable"
-                elif hasattr(service, 'health_check'):
-                    health_status["services"][service_name] = service.health_check()
+                if service is not None:
+                    status['services'][service_name] = 'healthy'
                 else:
-                    health_status["services"][service_name] = "healthy"
+                    status['services'][service_name] = 'unavailable'
+                    status['overall'] = 'degraded'
             except Exception as e:
-                health_status["services"][service_name] = f"error: {str(e)}"
+                status['services'][service_name] = f'error: {str(e)}'
+                status['overall'] = 'unhealthy'
         
-        # Overall health
-        unhealthy_services = [
-            name for name, status in health_status["services"].items()
-            if status not in ["healthy", "unavailable"]
-        ]
-        
-        if unhealthy_services:
-            health_status["container"] = "degraded"
-            health_status["issues"] = unhealthy_services
-        
-        return health_status
+        return status
 
 
 def init_services(app: Flask) -> ServiceContainer:
     """
-    Initialize and configure the service container for the Flask app.
+    Initialize the service container with the Flask app.
     
     Args:
         app: Flask application instance
@@ -357,15 +315,14 @@ def init_services(app: Flask) -> ServiceContainer:
     """
     container = ServiceContainer(app)
     
-    # Add container to app context for templates
+    # Make services available in templates
     @app.context_processor
     def inject_services():
         return {'services': container}
     
-    # Add health check endpoint
+    # Health check endpoint
     @app.route('/health')
     def health_check():
         return container.health_check()
     
-    logger.info("Service container initialized and configured")
     return container 

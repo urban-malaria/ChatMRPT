@@ -20,6 +20,11 @@ export class FileUploader {
         this.allowedCsvTypes = ['.csv', '.xlsx', '.xls'];
         this.allowedShapefileTypes = ['.zip'];
         
+        this.maxCsvSize = 50 * 1024 * 1024; // 50MB
+        this.maxShapefileSize = 100 * 1024 * 1024; // 100MB
+        
+        this.chatManagerReady = false;
+        
         this.init();
     }
 
@@ -27,9 +32,45 @@ export class FileUploader {
      * Initialize file uploader
      */
     init() {
+        console.log('📁 FileUploader initializing...');
         this.initElements();
         this.setupEventListeners();
         this.setupModal();
+        
+        this.waitForChatManager();
+        
+        console.log('✅ FileUploader initialized');
+    }
+
+    /**
+     * Wait for chat manager to be ready before enabling full functionality
+     */
+    waitForChatManager() {
+        if (window.chatManager && typeof window.chatManager.addSystemMessage === 'function') {
+            this.chatManagerReady = true;
+            console.log('✅ Chat manager is ready for file upload messages');
+            return;
+        }
+        
+        document.addEventListener('chatMRPTReady', () => {
+            if (window.chatManager && typeof window.chatManager.addSystemMessage === 'function') {
+                this.chatManagerReady = true;
+                console.log('✅ Chat manager is ready for file upload messages');
+            }
+        });
+        
+        let attempts = 0;
+        const checkInterval = setInterval(() => {
+            attempts++;
+            if (window.chatManager && typeof window.chatManager.addSystemMessage === 'function') {
+                this.chatManagerReady = true;
+                console.log('✅ Chat manager is ready for file upload messages (via polling)');
+                clearInterval(checkInterval);
+            } else if (attempts >= 20) {
+                console.warn('⚠️ Chat manager not ready after 10 seconds, proceeding without chat messages');
+                clearInterval(checkInterval);
+            }
+        }, 500);
     }
 
     /**
@@ -209,14 +250,14 @@ export class FileUploader {
     }
 
     /**
-     * Handle successful upload
+     * Handle upload success
      * @param {Object} response - Upload response
-     * @param {File|null} csvFile - CSV file
-     * @param {File|null} shapeFile - Shapefile
+     * @param {File} csvFile - Uploaded CSV file
+     * @param {File} shapeFile - Uploaded shapefile
      */
     handleUploadSuccess(response, csvFile, shapeFile) {
         this.setUploadStatus('Files uploaded successfully!', 'success');
-        
+
         // Update session data
         const updates = {};
         if (csvFile) updates.csvLoaded = true;
@@ -226,21 +267,22 @@ export class FileUploader {
         // Update UI status
         this.updateSessionStatus();
 
-        // Add success message to chat
-        if (window.chatManager) {
-            window.chatManager.addSystemMessage(
-                `Files uploaded successfully! ${csvFile ? `CSV: ${csvFile.name}` : ''} ${shapeFile ? `Shapefile: ${shapeFile.name}` : ''}`
-            );
+        // Add success message to chat - WITH IMPROVED SAFETY CHECK
+        this.addChatMessage(() => {
+            const message = `Files uploaded successfully! ${csvFile ? `CSV: ${csvFile.name}` : ''} ${shapeFile ? `Shapefile: ${shapeFile.name}` : ''}`;
+            window.chatManager.addSystemMessage(message);
 
             if (response.message) {
                 window.chatManager.addAssistantMessage(response.message);
             }
             
-            // Add analysis prompt with Start Analysis button if available
-            if (response.analysis_prompt) {
-                window.chatManager.addAssistantMessage(response.analysis_prompt);
+            // Send proactive trigger message to epidemiologist
+            if (csvFile && shapeFile) {
+                setTimeout(() => {
+                    window.chatManager.sendMessage("I've uploaded both CSV and shapefile data. Can you analyze my data and recommend what analysis to run?");
+                }, 1000);
             }
-        }
+        });
 
         // Close modal after delay
         setTimeout(() => {
@@ -265,19 +307,19 @@ export class FileUploader {
         // Update UI status
         this.updateSessionStatus();
 
-        // Add success message to chat
-        if (window.chatManager) {
+        // Add success message to chat - WITH IMPROVED SAFETY CHECK
+        this.addChatMessage(() => {
             window.chatManager.addSystemMessage('Sample data loaded successfully!');
             
             if (response.message) {
                 window.chatManager.addAssistantMessage(response.message);
             }
             
-            // Add analysis prompt with Start Analysis button if available
-            if (response.analysis_prompt) {
-                window.chatManager.addAssistantMessage(response.analysis_prompt);
-            }
-        }
+            // Send proactive trigger message to epidemiologist
+            setTimeout(() => {
+                window.chatManager.sendMessage("I've loaded the sample data. Can you analyze what's available and recommend what analysis to run?");
+            }, 1000);
+        });
 
         // Close modal after delay
         setTimeout(() => {
@@ -292,9 +334,37 @@ export class FileUploader {
     handleUploadError(errorMessage) {
         this.setUploadStatus(errorMessage, 'error');
         
-        // Add error message to chat
-        if (window.chatManager) {
+        // Add error message to chat - WITH IMPROVED SAFETY CHECK
+        this.addChatMessage(() => {
             window.chatManager.addSystemMessage(`Upload failed: ${errorMessage}`);
+        });
+    }
+
+    /**
+     * Safely add a message to chat when ready
+     * @param {Function} messageFunction - Function to execute when chat manager is ready
+     */
+    addChatMessage(messageFunction) {
+        if (this.chatManagerReady && window.chatManager && typeof window.chatManager.addSystemMessage === 'function') {
+            try {
+                messageFunction();
+            } catch (error) {
+                console.error('Error adding chat message:', error);
+            }
+        } else {
+            console.warn('Chat manager not ready, retrying in 500ms...');
+            // Retry after a short delay
+            setTimeout(() => {
+                if (window.chatManager && typeof window.chatManager.addSystemMessage === 'function') {
+                    try {
+                        messageFunction();
+                    } catch (error) {
+                        console.error('Error adding delayed chat message:', error);
+                    }
+                } else {
+                    console.warn('Chat manager still not ready, message will be skipped');
+                }
+            }, 500);
         }
     }
 
@@ -340,7 +410,7 @@ export class FileUploader {
     isValidCsvFile(file) {
         const extension = this.getFileExtension(file.name);
         const isValidType = this.allowedCsvTypes.includes(extension);
-        const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB limit
+        const isValidSize = file.size <= this.maxCsvSize;
         
         return isValidType && isValidSize;
     }
@@ -353,7 +423,7 @@ export class FileUploader {
     isValidShapefileFile(file) {
         const extension = this.getFileExtension(file.name);
         const isValidType = this.allowedShapefileTypes.includes(extension);
-        const isValidSize = file.size <= 100 * 1024 * 1024; // 100MB limit
+        const isValidSize = file.size <= this.maxShapefileSize;
         
         return isValidType && isValidSize;
     }

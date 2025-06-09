@@ -1204,3 +1204,244 @@ body {
 .toggle-explanation-detail:hover {
     background: var(--bg-tertiary);
 } 
+
+/* ==========================================================================
+   Analysis Results & Method Toggle - Minimalist Design
+   ========================================================================== */
+
+.analysis-results {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: var(--space-5);
+    margin: var(--space-4) 0;
+    box-shadow: 0 2px 8px var(--shadow-light);
+}
+
+.analysis-results h3 {
+    color: var(--accent-primary);
+    margin-bottom: var(--space-4);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.analysis-overview {
+    background: var(--bg-secondary);
+    padding: var(--space-4);
+    border-radius: 8px;
+    margin-bottom: var(--space-4);
+    border-left: 4px solid var(--accent-primary);
+}
+
+.analysis-overview h4 {
+    color: var(--accent-primary);
+    margin-bottom: var(--space-3);
+    font-size: 1.1rem;
+}
+
+.risk-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+}
+
+.risk-category {
+    padding: var(--space-3);
+    border-radius: 8px;
+    border-left: 4px solid;
+}
+
+.risk-category.high-risk {
+    background: #fee2e2;
+    border-left-color: #dc2626;
+}
+
+.risk-category.high-risk strong {
+    color: #dc2626;
+}
+
+.risk-category.medium-risk {
+    background: #fef3c7;
+    border-left-color: #d97706;
+}
+
+.risk-category.medium-risk strong {
+    color: #d97706;
+}
+
+.risk-category.low-risk {
+    background: #dcfce7;
+    border-left-color: #16a34a;
+}
+
+.risk-category.low-risk strong {
+    color: #16a34a;
+}
+
+.key-maps-section {
+    background: var(--bg-tertiary);
+    padding: var(--space-4);
+    border-radius: 8px;
+    margin: var(--space-4) 0;
+}
+
+.key-maps-section h4 {
+    color: var(--accent-primary);
+    margin-bottom: var(--space-3);
+}
+
+.key-maps-section ul {
+    margin: var(--space-2) 0;
+}
+
+.key-maps-section li {
+    margin-bottom: var(--space-2);
+}
+
+.action-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-3);
+}
+
+.action-group {
+    background: var(--bg-secondary);
+    padding: var(--space-3);
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+}
+
+.action-group h5 {
+    color: var(--accent-primary);
+    margin-bottom: var(--space-2);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.action-group ul {
+    margin: 0;
+    padding-left: var(--space-4);
+}
+
+.action-group li {
+    margin-bottom: var(--space-1);
+    line-height: 1.4;
+}
+
+/* Method toggle buttons - Clean and modern */
+.method-toggle {
+    display: flex;
+    gap: var(--space-1);
+    margin: var(--space-4) 0;
+    padding: var(--space-2);
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    justify-content: center;
+}
+
+.method-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: var(--space-2) var(--space-4);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
+}
+
+.method-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+}
+
+.method-btn.active {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+    box-shadow: 0 2px 4px var(--shadow-light);
+}
+
+.single-method-info {
+    text-align: center;
+    padding: var(--space-3);
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin: var(--space-3) 0;
+}
+
+/* Method explanations - Clear and organized */
+.method-explanations {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: var(--space-4);
+    margin: var(--space-4) 0;
+    border: 1px solid var(--border-light);
+}
+
+.method-explanations h4 {
+    color: var(--accent-primary);
+    margin-bottom: var(--space-4);
+    text-align: center;
+}
+
+.method-summary {
+    margin: var(--space-3) 0;
+    padding: var(--space-3);
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent-primary);
+}
+
+.method-summary h5 {
+    color: var(--accent-primary);
+    margin-bottom: var(--space-2);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.method-summary p {
+    margin: var(--space-2) 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.method-comparison {
+    background: var(--bg-tertiary);
+    padding: var(--space-3);
+    border-radius: 6px;
+    margin-top: var(--space-3);
+    border: 1px solid var(--border-light);
+}
+
+.method-comparison p {
+    margin: var(--space-2) 0;
+    font-size: 0.9rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .action-options {
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
+    }
+    
+    .method-toggle {
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+    
+    .method-btn {
+        min-width: auto;
+    }
+    
+    .risk-breakdown {
+        gap: var(--space-2);
+    }
+} 
