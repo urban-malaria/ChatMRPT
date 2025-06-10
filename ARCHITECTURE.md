@@ -7,9 +7,10 @@ ChatMRPT is a modern, AI-powered malaria epidemiologist built with a sophisticat
 ### Key Architectural Principles
 - **Modular Design**: Clean separation of concerns across specialized modules
 - **Service-Oriented Architecture**: Core services managed through dependency injection
-- **Intelligent Request Processing**: Natural language to tool execution pipeline
+- **Intelligent Request Processing**: Enhanced natural language to tool execution pipeline with LLM-based classification
 - **Session Management**: Persistent conversation and analysis state
-- **Extensible Tool System**: 96+ tools organized into logical categories
+- **Extensible Tool System**: 100+ tools organized into 10 specialized categories
+- **Enhanced Knowledge System**: Multi-tool response combination with intelligent merging and smooth transitions
 
 ## 🧠 Core Architecture Components
 
@@ -49,33 +50,39 @@ class LLMManager:
 - Adaptive language based on user expertise
 
 ### 3. Request Interpreter (`app/core/request_interpreter.py`)
-The intelligent brain that converts natural language to tool executions:
+The enhanced intelligent brain that converts natural language to tool executions with LLM-powered classification:
 
 ```python
 class RequestInterpreter:
-    - intent_classification: Multi-method analysis
+    - intelligent_classification: LLM-based intent analysis with fallback patterns
+    - multi_tool_handling: Support for complex multi-tool requests
+    - response_combination: Intelligent merging of multiple tool responses
     - tool_mapping: Natural language to tool conversion
     - parameter_extraction: Context-aware argument parsing
     - execution_planning: Optimal tool selection and sequencing
 ```
 
-**Processing Pipeline:**
-1. Intent classification (knowledge, analysis, visualization, etc.)
-2. Tool selection based on intent and context
-3. Parameter extraction and validation
-4. Execution plan generation
-5. Tool orchestration and response formatting
+**Enhanced Processing Pipeline:**
+1. Intelligent intent classification using LLM with pattern-based fallback
+2. Multi-tool support for complex requests (e.g., multiple explain_concept calls)
+3. Tool selection based on intent and context
+4. Parameter extraction and validation
+5. Execution plan generation with parallel processing support
+6. Tool orchestration and intelligent response combination
+7. Response formatting with smooth transitions and proper structure
 
 ## 🛠️ Tool System Architecture
 
-### Tool Categories (96+ Tools)
+### Tool Categories (100+ Tools)
 
-#### 1. Knowledge Tools (`app/tools/knowledge_tools.py`)
-Educational and explanatory content with ChatMRPT personality:
-- Malaria epidemiology explanations
-- Nigeria-specific malaria information
-- Ward-level analysis guidance
-- Data interpretation assistance
+#### 1. Enhanced Knowledge Tools (`app/tools/knowledge_tools.py`)
+Educational and explanatory content with intelligent response combination:
+- Enhanced malaria epidemiology explanations with proper structure and length control
+- Nigeria-specific malaria information with smooth transitions
+- Ward-level analysis guidance with intelligent response merging
+- Data interpretation assistance with consistent epidemiologist persona
+- Multi-response combination for comprehensive answers (200-600 words optimal)
+- Intelligent transitions between different knowledge topics
 
 #### 2. Analysis Tools (`app/tools/analysis_tools.py`)
 Statistical analysis and data processing:
@@ -116,6 +123,43 @@ Helper functions and system operations:
 - Error recovery
 - Performance monitoring
 - System diagnostics
+
+#### 7. Group Analysis Tools (`app/tools/group_analysis_tools.py`)
+Specialized tools for multi-group comparison and segmentation:
+- Cross-group statistical comparisons
+- Demographic segmentation analysis
+- Intervention group effectiveness assessment
+- Population subgroup analysis
+
+#### 8. Methodology Tools (`app/tools/methodology_tools.py`)
+Research methodology guidance and validation:
+- Study design recommendations
+- Statistical method selection guidance
+- Data collection methodology advice
+- Analysis interpretation guidelines
+
+#### 9. Spatial Tools (`app/tools/spatial_tools.py`)
+Advanced spatial analysis and geographic modeling:
+- Spatial autocorrelation analysis
+- Geographic weighted regression
+- Spatial clustering identification
+- Distance-based analysis
+
+#### 10. Visual Explanation Tools (`app/tools/visual_explanation_tools.py`)
+Interactive analysis interpretation and guidance:
+- Step-by-step analysis explanations
+- Visual interpretation guidance
+- Interactive chart and map explanations
+- Analysis workflow demonstrations
+
+### Core Services
+
+#### Visual Explanation Service (`app/services/visual_explanation.py`)
+Centralized service for generating interactive explanations:
+- Dynamic explanation generation
+- Context-aware guidance
+- Multi-format explanation support
+- Integration with all tool categories
 
 ## 🌐 Web Architecture
 
@@ -248,19 +292,37 @@ User Input → Request Interpreter → Tool Selection → Execution → Response
 
 ## 🔮 Future Architecture Considerations
 
-### Planned Enhancements
-- **Microservices Migration**: Break down into smaller services
-- **API Gateway**: Centralized API management
-- **Message Queue**: Asynchronous processing
-- **Database Integration**: Persistent data storage
-- **Real-time Updates**: WebSocket integration
+### Planned Enhancements (See STATISTICAL_VISUALIZATION_ENHANCEMENT_OPPORTUNITIES.md)
+- **Machine Learning Integration**: Random Forest, clustering algorithms, classification models
+- **Multi-Panel Dashboards**: Comprehensive overview displays with linked interactions
+- **Intelligent Variable Selection**: Auto-detect optimal variables, handle multicollinearity
+- **Enhanced Chart Types**: Violin plots, parallel coordinates, bivariate choropleth maps
+- **Time Series Analysis**: Temporal analysis, forecasting, seasonal decomposition
+- **Advanced Spatial Methods**: Geographically weighted regression, spatial interpolation
+
+### Statistical Enhancement Roadmap
+**High Priority Enhancements:**
+1. Intelligent variable selection and multicollinearity handling
+2. Multi-panel dashboard creation with interactive linking
+3. Machine learning model integration (Random Forest, SVM, Neural Networks)
+4. Enhanced visualization types (violin plots, parallel coordinates, 3D surfaces)
+
+**Medium Priority Features:**
+5. Time series analysis and forecasting capabilities
+6. Model diagnostics with automated assumption testing
+7. Advanced spatial analysis methods (GWR, spatial interpolation)
+
+**Advanced Capabilities:**
+8. Specialized malaria epidemiological tools (ROC analysis, intervention impact)
+9. Performance optimization (caching, parallel processing)
+10. User experience enhancements (guided workflows, template gallery)
 
 ### Extensibility Features
 - **Plugin System**: Third-party tool integration
 - **Custom Visualizations**: User-defined chart types
 - **External Data Sources**: API integrations
 - **Multi-language Support**: Internationalization
-- **Advanced Analytics**: Machine learning integration
+- **Advanced Analytics**: Machine learning integration with comprehensive model library
 
 ## 📋 Configuration & Deployment
 

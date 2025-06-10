@@ -15,10 +15,12 @@
 - **Ward-Level Analysis**: Detailed sub-state analysis and prioritization
 
 ### 📊 **Advanced Analytics & Visualization**
-- **96+ Analysis Tools**: Comprehensive toolset across 6 categories
+- **100+ Analysis Tools**: Enhanced toolset across 8 categories with specialized modules
 - **Interactive Maps**: Choropleth, vulnerability, and composite risk visualizations  
-- **Statistical Analysis**: PCA, clustering, correlation analysis
+- **Statistical Analysis**: PCA, clustering, correlation analysis, advanced ML capabilities
 - **Risk Prioritization**: Evidence-based ward ranking and classification
+- **Enhanced Knowledge System**: Intelligent multi-tool response combination with smooth transitions
+- **Visual Explanations**: Interactive guidance for analysis interpretation
 
 ### 🏗️ **Modern Architecture**
 - **Modular Design**: 22 specialized modules for maintainability
@@ -85,13 +87,17 @@
 - **LLM Manager** (`app/core/llm_manager.py`): AI conversation management
 - **Request Interpreter** (`app/core/request_interpreter.py`): Natural language parsing
 
-### Tool Categories (96+ Tools)
-1. **Knowledge Tools**: Explanations and educational content
+### Tool Categories (100+ Tools)
+1. **Knowledge Tools**: Enhanced explanations with intelligent response combination
 2. **Analysis Tools**: Statistical analysis and data processing
 3. **Visualization Tools**: Maps, charts, and interactive displays
 4. **Summary Tools**: Report generation and insights
-5. **Data Tools**: Upload, validation, and management
+5. **Data Tools**: Upload, validation, and management  
 6. **Utility Tools**: Helper functions and system operations
+7. **Group Analysis Tools**: Multi-group comparison and segmentation analysis
+8. **Methodology Tools**: Research methodology guidance and validation
+9. **Spatial Tools**: Advanced spatial analysis and geographic modeling
+10. **Visual Explanation Tools**: Interactive analysis interpretation and guidance
 
 ### Route Structure
 - **Core Routes**: Index, session management, app status
@@ -111,12 +117,18 @@ ChatMRPT/
 │   │   ├── llm_manager.py        # AI conversation management
 │   │   └── request_interpreter.py # Natural language parsing
 │   ├── tools/                    # Analysis and processing tools
-│   │   ├── knowledge_tools.py    # Educational and explanatory content
+│   │   ├── knowledge_tools.py    # Enhanced educational content with multi-response combination
 │   │   ├── analysis_tools.py     # Statistical analysis functions
 │   │   ├── visualization_tools.py # Map and chart generation
 │   │   ├── summary_tools.py      # Report generation
 │   │   ├── data_tools.py         # Data management functions
-│   │   └── utility_tools.py      # Helper utilities
+│   │   ├── utility_tools.py      # Helper utilities
+│   │   ├── group_analysis_tools.py # Multi-group comparison and segmentation
+│   │   ├── methodology_tools.py  # Research methodology guidance
+│   │   ├── spatial_tools.py      # Advanced spatial analysis
+│   │   └── visual_explanation_tools.py # Interactive analysis guidance
+│   ├── services/                 # Core service modules
+│   │   └── visual_explanation.py # Visual explanation service
 │   ├── routes/                   # Flask route blueprints
 │   │   ├── main_routes.py        # Core application routes
 │   │   ├── upload_routes.py      # File upload handling
