@@ -35,6 +35,17 @@ instance/
 *.db
 *.sqlite3
 
+# Session and data directories
+sessions/
+data/
+test_results/
+unified_test_session_*/
+
+# Cleanup and temporary files
+cleanup_legacy_code.*
+fix_openai.*
+integration_example.py
+
 # OS specific
 .DS_Store
 Thumbs.db
