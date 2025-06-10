@@ -71,15 +71,27 @@ class RequestInterpreter:
                 "routing": "data_agent|knowledge_agent"
             }}
 
-            CONVERSATIONAL QUERY MAPPING:
+            INTELLIGENT CLASSIFICATION RULES:
             
-            STRICT GREETING DETECTION (only these exact phrases):
-            - "hello" (standalone) -> simple_greeting with greeting_type="hello"
-            - "hi" (standalone) -> simple_greeting with greeting_type="hi" 
-            - "who are you" -> explain_concept with concept="ChatMRPT"
-            - "tell me about yourself" -> explain_concept with concept="ChatMRPT"
-            - "what can you do" -> explain_concept with concept="system capabilities"
-            - "what is ChatMRPT" -> explain_concept with concept="ChatMRPT"
+            1. GREETINGS: Simple hello/hi responses
+               - Basic greetings like "hello", "hi" -> simple_greeting
+            
+            2. SYSTEM QUESTIONS: About ChatMRPT itself  
+               - "who are you", "what can you do", "tell me about yourself" -> explain_concept with concept="ChatMRPT"
+            
+            3. KNOWLEDGE/EDUCATIONAL: Any question about malaria, health, epidemiology, etc.
+               - Extract the main topic/concept from the user's question
+               - Use explain_concept with concept=[extracted main topic]
+               - Examples: history, transmission, control methods, epidemiology, vectors, etc.
+               - Be flexible in extracting concepts - users phrase things differently
+            
+            4. DATA ANALYSIS: Questions involving uploaded data, rankings, maps, comparisons
+               - Use appropriate data analysis tools
+               
+            CRITICAL: Don't hardcode question patterns! Users ask differently. Use LLM intelligence to:
+            - Classify intent (greeting/knowledge/data analysis/system)  
+            - Extract the core concept/topic flexibly
+            - Default to explain_concept for educational questions when unsure
             
             DATA ANALYSIS QUERIES (never treat as greetings):
             - "What are the top N..." -> get_composite_rankings + get_pca_rankings (both with top_n=N)
@@ -378,10 +390,19 @@ class RequestInterpreter:
                     return result['message']
             
             # THIRD PRIORITY: Use detailed explanations from knowledge tools (already LLM-generated)
+            knowledge_explanations = []
             for result in successful_results:
                 tool_name = result.get('tool_name', '')
                 if tool_name in ['explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results'] and 'explanation' in result:
-                    return result['explanation']
+                    knowledge_explanations.append(result['explanation'])
+            
+            # If we have knowledge explanations, combine them naturally
+            if knowledge_explanations:
+                if len(knowledge_explanations) == 1:
+                    return knowledge_explanations[0]
+                else:
+                    # Use LLM to combine multiple explanations with smooth transitions
+                    return self._combine_explanations_intelligently(knowledge_explanations, user_message, session_id)
             
             # FOURTH PRIORITY: Use detailed message from upload analysis tools (already LLM-generated)
             for result in successful_results:
@@ -566,5 +587,52 @@ Keep it natural and conversational, not rigid or template-like."""
             formatted_parts.append(' | '.join(parts))
         
         return '\n'.join(formatted_parts)
+
+    def _combine_explanations_intelligently(self, explanations: List[str], user_message: str, session_id: str = None) -> str:
+        """Use LLM to combine multiple explanations with smooth transitions and proper structure."""
+        try:
+            system_prompt = """
+            You are a malaria epidemiologist. You have multiple detailed explanations that need to be combined into a single, well-structured response.
+            
+            Your task:
+            1. Combine the explanations into a cohesive, flowing response
+            2. Add smooth transitions between topics using natural language
+            3. Organize with clear **bold headers** and logical structure  
+            4. Remove redundancy while keeping all important information
+            5. Ensure the response feels natural, not like separate sections pasted together
+            6. Keep the total length reasonable (600-800 words max)
+            
+            Structure guidelines:
+            • Start with a brief intro connecting to the user's question
+            • Use **bold headers** to organize main sections
+            • Create natural flow: "Building on this understanding..." or "This connects directly to..."
+            • End with a cohesive summary or practical next steps
+            • Maintain the expert malaria epidemiologist voice throughout
+            """
+            
+            user_prompt = f"""
+            The user asked: "{user_message}"
+            
+            I have {len(explanations)} separate explanations that need to be combined into one cohesive response:
+            
+            {chr(10).join([f"--- EXPLANATION {i+1} ---{chr(10)}{explanation}{chr(10)}" for i, explanation in enumerate(explanations)])}
+            
+            Please combine these into a single, well-structured response that flows naturally and addresses the user's question comprehensively. Focus on creating smooth transitions and eliminating redundancy while maintaining all the important information.
+            """
+            
+            combined_response = self.llm_manager.generate_response(
+                prompt=user_prompt,
+                system_message=system_prompt,
+                temperature=0.7,
+                max_tokens=1200,
+                session_id=session_id
+            )
+            
+            return combined_response.strip()
+            
+        except Exception as e:
+            logger.error(f"Error combining explanations intelligently: {e}")
+            # Fallback to simple combination with dividers
+            return '\n\n---\n\n'.join(explanations)
 
     # Legacy methods removed - all responses now generated by LLM

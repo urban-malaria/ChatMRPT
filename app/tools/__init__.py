@@ -66,6 +66,32 @@ from .data_analysis_tools import (
     generate_comprehensive_analysis_summary
 )
 
+from .visual_explanation_tools import (
+    explain_last_visualization,
+    explain_specific_visualization,
+    get_visualization_recommendations
+)
+
+from .spatial_tools import (
+    spatial_autocorrelation_analysis,
+    spatial_similarity_analysis,
+    spatial_dependency_test
+)
+
+from .group_analysis_tools import (
+    settlement_type_analysis,
+    cross_variable_analysis,
+    geographic_aggregation_analysis,
+    environmental_risk_grouping
+)
+
+from .methodology_tools import (
+    explain_pca_methodology,
+    explain_composite_score_methodology,
+    compare_methodologies,
+    get_variable_importance_analysis
+)
+
 # Comprehensive tool registry for LLM dynamic resolution
 TOOL_REGISTRY = {
     # Core Data Analysis Tools
@@ -119,7 +145,29 @@ TOOL_REGISTRY = {
     
     # Data Analysis Tools
     'analyze_uploaded_data_and_recommend': analyze_uploaded_data_and_recommend,
-    'generate_comprehensive_analysis_summary': generate_comprehensive_analysis_summary
+    'generate_comprehensive_analysis_summary': generate_comprehensive_analysis_summary,
+    
+    # Visual Explanation Tools
+    'explain_last_visualization': explain_last_visualization,
+    'explain_specific_visualization': explain_specific_visualization,
+    'get_visualization_recommendations': get_visualization_recommendations,
+    
+    # Spatial Analysis Tools
+    'spatial_autocorrelation_analysis': spatial_autocorrelation_analysis,
+    'spatial_similarity_analysis': spatial_similarity_analysis,
+    'spatial_dependency_test': spatial_dependency_test,
+    
+    # Group Analysis Tools
+    'settlement_type_analysis': settlement_type_analysis,
+    'cross_variable_analysis': cross_variable_analysis,
+    'geographic_aggregation_analysis': geographic_aggregation_analysis,
+    'environmental_risk_grouping': environmental_risk_grouping,
+    
+    # Methodology Explanation Tools
+    'explain_pca_methodology': explain_pca_methodology,
+    'explain_composite_score_methodology': explain_composite_score_methodology,
+    'compare_methodologies': compare_methodologies,
+    'get_variable_importance_analysis': get_variable_importance_analysis
 }
 
 def get_tool_function(tool_name: str):
@@ -150,6 +198,18 @@ def get_tools_by_category():
         ],
         'knowledge': [
             'simple_greeting', 'explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results'
+        ],
+        'visual_explanation': [
+            'explain_last_visualization', 'explain_specific_visualization', 'get_visualization_recommendations'
+        ],
+        'spatial_analysis': [
+            'spatial_autocorrelation_analysis', 'spatial_similarity_analysis', 'spatial_dependency_test'
+        ],
+        'group_analysis': [
+            'settlement_type_analysis', 'cross_variable_analysis', 'geographic_aggregation_analysis', 'environmental_risk_grouping'
+        ],
+        'methodology': [
+            'explain_pca_methodology', 'explain_composite_score_methodology', 'compare_methodologies', 'get_variable_importance_analysis'
         ],
         'system': [
             'check_data_availability', 'get_session_status', 'get_available_variables',
