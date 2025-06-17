@@ -5,12 +5,121 @@ Enhanced tools for analyzing uploaded malaria risk data
 
 import os
 import logging
+import json
 from typing import Dict, Any, List
 from flask import current_app
 import pandas as pd
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+def categorize_variables_with_llm(variable_names: List[str], session_id: str) -> Dict[str, Any]:
+    """
+    Use LLM to intelligently categorize dataset variables into epidemiological categories.
+    
+    Args:
+        variable_names: List of column names from the uploaded dataset
+        session_id: Session ID for LLM access
+    
+    Returns:
+        Dict with status and categorized variables
+    """
+    try:
+        # Get LLM manager
+        llm_manager = current_app.services.llm_manager
+        
+        system_prompt = """You are an expert malaria epidemiologist analyzing dataset variables for malaria risk assessment.
+
+Your task is to categorize variable names into epidemiological categories relevant for malaria risk analysis.
+
+**Categories to use:**
+1. **malaria_indicators** - Direct malaria measures (prevalence, cases, test positivity rates, parasitemia, fever rates, etc.)
+2. **environmental_factors** - Climate, geography, ecology (rainfall, temperature, elevation, NDVI, water bodies, flooding, etc.)
+3. **demographic_factors** - Population characteristics (age, population density, household size, migration, etc.)
+4. **infrastructure_factors** - Built environment and services (roads, markets, schools, health facilities, electricity, etc.)
+5. **intervention_factors** - Malaria control measures (ITN coverage, IRS, treatment access, bed nets, antimalarials, etc.)
+6. **geographic_factors** - Spatial identifiers and coordinates (ward names, coordinates, administrative boundaries, etc.)
+7. **unclassified** - Variables that don't clearly fit the above categories
+
+**Important Guidelines:**
+- Be flexible with variable name formats (abbreviations, underscores, mixed case)
+- Consider epidemiological context - what factors influence malaria transmission?
+- Geographic identifiers (like WardName, coordinates) go in geographic_factors
+- Population counts and densities are demographic_factors
+- Healthcare access and infrastructure are infrastructure_factors
+- Any direct malaria measurements are malaria_indicators
+
+Return ONLY a valid JSON object with this exact structure:
+{
+  "malaria_indicators": ["var1", "var2"],
+  "environmental_factors": ["var3", "var4"], 
+  "demographic_factors": ["var5", "var6"],
+  "infrastructure_factors": ["var7", "var8"],
+  "intervention_factors": ["var9", "var10"],
+  "geographic_factors": ["var11", "var12"],
+  "unclassified": ["var13", "var14"]
+}"""
+
+        user_prompt = f"""Categorize these {len(variable_names)} dataset variables for malaria risk analysis:
+
+{chr(10).join([f"- {var}" for var in variable_names])}
+
+Return the categorization as a JSON object."""
+
+        # Generate LLM response
+        llm_response = llm_manager.generate_response(
+            prompt=user_prompt,
+            system_message=system_prompt,
+            temperature=0.1,  # Low temperature for consistent categorization
+            max_tokens=1500,
+            session_id=session_id
+        )
+        
+        # Parse JSON response
+        try:
+            # Clean response (remove code blocks if present)
+            clean_response = llm_response.strip()
+            if clean_response.startswith('```json'):
+                clean_response = clean_response[7:-3]
+            elif clean_response.startswith('```'):
+                clean_response = clean_response[3:-3]
+            
+            categories = json.loads(clean_response)
+            
+            # Validate that all variables are accounted for
+            all_categorized = []
+            for category_vars in categories.values():
+                if isinstance(category_vars, list):
+                    all_categorized.extend(category_vars)
+            
+            missing_vars = set(variable_names) - set(all_categorized)
+            if missing_vars:
+                # Add missing variables to unclassified
+                if 'unclassified' not in categories:
+                    categories['unclassified'] = []
+                categories['unclassified'].extend(list(missing_vars))
+            
+            logger.info(f"✅ LLM successfully categorized {len(variable_names)} variables")
+            return {
+                'status': 'success',
+                'categories': categories,
+                'method': 'llm_classification'
+            }
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM categorization response: {e}")
+            logger.error(f"Raw LLM response: {llm_response[:500]}...")
+            return {
+                'status': 'error',
+                'message': f'LLM response parsing failed: {str(e)}'
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in LLM variable categorization: {e}")
+        return {
+            'status': 'error',
+            'message': f'LLM categorization failed: {str(e)}'
+        }
 
 def analyze_uploaded_data_and_recommend(session_id: str) -> Dict[str, Any]:
     """
@@ -70,20 +179,52 @@ def analyze_uploaded_data_and_recommend(session_id: str) -> Dict[str, Any]:
                     'missing_data': df.isnull().sum().sum()
                 }
                 
-                # Identify malaria-related variables
-                malaria_vars = [col for col in df.columns if any(term in col.lower() for term in 
-                               ['tpr', 'malaria', 'prevalence', 'case', 'incidence', 'parasite'])]
+                # Use LLM to intelligently categorize variables
+                variable_categorization = categorize_variables_with_llm(df.columns.tolist(), session_id)
                 
-                environmental_vars = [col for col in df.columns if any(term in col.lower() for term in 
-                                     ['ndvi', 'temperature', 'rainfall', 'elevation', 'precipitation', 'climate'])]
+                if variable_categorization['status'] == 'success':
+                    categories = variable_categorization['categories']
+                    malaria_vars = categories.get('malaria_indicators', [])
+                    environmental_vars = categories.get('environmental_factors', [])
+                    demographic_vars = categories.get('demographic_factors', [])
+                    infrastructure_vars = categories.get('infrastructure_factors', [])
+                    intervention_vars = categories.get('intervention_factors', [])
+                    geographic_vars = categories.get('geographic_factors', [])
+                    unclassified_vars = categories.get('unclassified', [])
+                else:
+                    # Fallback to simple keyword matching if LLM fails
+                    logger.warning("LLM categorization failed, using fallback keyword matching")
+                    malaria_vars = [col for col in df.columns if any(term in col.lower() for term in 
+                                   ['tpr', 'malaria', 'prevalence', 'pfpr'])]
+                    environmental_vars = [col for col in df.columns if any(term in col.lower() for term in 
+                                         ['ndvi', 'temperature', 'rainfall', 'elevation'])]
+                    demographic_vars = [col for col in df.columns if any(term in col.lower() for term in 
+                                       ['population', 'density', 'urban', 'literacy'])]
+                    infrastructure_vars = []
+                    intervention_vars = []
+                    geographic_vars = []
+                    unclassified_vars = [col for col in df.columns if col not in malaria_vars + environmental_vars + demographic_vars]
                 
-                demographic_vars = [col for col in df.columns if any(term in col.lower() for term in 
-                                   ['population', 'density', 'urban', 'rural', 'literacy', 'education'])]
-                
+                # Store all identified variables with comprehensive categorization
                 csv_analysis.update({
-                    'malaria_indicators': malaria_vars[:5],
-                    'environmental_factors': environmental_vars[:5], 
-                    'demographic_factors': demographic_vars[:5]
+                    'malaria_indicators': malaria_vars,
+                    'environmental_factors': environmental_vars, 
+                    'demographic_factors': demographic_vars,
+                    'infrastructure_factors': infrastructure_vars,
+                    'intervention_factors': intervention_vars,
+                    'geographic_factors': geographic_vars,
+                    'unclassified_factors': unclassified_vars,
+                    'all_variables': list(df.columns),
+                    'variable_counts': {
+                        'malaria': len(malaria_vars),
+                        'environmental': len(environmental_vars),
+                        'demographic': len(demographic_vars),
+                        'infrastructure': len(infrastructure_vars),
+                        'intervention': len(intervention_vars),
+                        'geographic': len(geographic_vars),
+                        'unclassified': len(unclassified_vars)
+                    },
+                    'categorization_method': 'llm' if variable_categorization.get('status') == 'success' else 'keyword_fallback'
                 })
                 
             except Exception as e:
@@ -133,14 +274,51 @@ def analyze_uploaded_data_and_recommend(session_id: str) -> Dict[str, Any]:
         # Create the response message
         if csv_analysis and shapefile_files:
             total_wards = csv_analysis.get('rows', 0)
+            variable_counts = csv_analysis.get('variable_counts', {})
+            categorization_method = csv_analysis.get('categorization_method', 'unknown')
+            
+            # Build dynamic variable summary
+            variable_summary = []
+            if variable_counts.get('malaria', 0) > 0:
+                variables = csv_analysis.get('malaria_indicators', [])
+                variable_summary.append(f"- **Malaria Indicators:** {variable_counts['malaria']} found ({', '.join(variables[:3])}{'...' if len(variables) > 3 else ''})")
+            
+            if variable_counts.get('environmental', 0) > 0:
+                variables = csv_analysis.get('environmental_factors', [])
+                variable_summary.append(f"- **Environmental Factors:** {variable_counts['environmental']} found ({', '.join(variables[:3])}{'...' if len(variables) > 3 else ''})")
+            
+            if variable_counts.get('demographic', 0) > 0:
+                variables = csv_analysis.get('demographic_factors', [])
+                variable_summary.append(f"- **Demographic Factors:** {variable_counts['demographic']} found ({', '.join(variables[:3])}{'...' if len(variables) > 3 else ''})")
+            
+            if variable_counts.get('infrastructure', 0) > 0:
+                variables = csv_analysis.get('infrastructure_factors', [])
+                variable_summary.append(f"- **Infrastructure Factors:** {variable_counts['infrastructure']} found ({', '.join(variables[:3])}{'...' if len(variables) > 3 else ''})")
+            
+            if variable_counts.get('intervention', 0) > 0:
+                variables = csv_analysis.get('intervention_factors', [])
+                variable_summary.append(f"- **Intervention Factors:** {variable_counts['intervention']} found ({', '.join(variables[:3])}{'...' if len(variables) > 3 else ''})")
+            
+            if variable_counts.get('geographic', 0) > 0:
+                variables = csv_analysis.get('geographic_factors', [])
+                variable_summary.append(f"- **Geographic Identifiers:** {variable_counts['geographic']} found ({', '.join(variables[:2])}{'...' if len(variables) > 2 else ''})")
+            
+            if variable_counts.get('unclassified', 0) > 0:
+                variables = csv_analysis.get('unclassified_factors', [])
+                variable_summary.append(f"- **Other Variables:** {variable_counts['unclassified']} found ({', '.join(variables[:2])}{'...' if len(variables) > 2 else ''})")
+            
+            # Analysis method note
+            method_note = "🤖 *Variables intelligently categorized using AI analysis*" if categorization_method == 'llm' else "⚠️ *Variables categorized using keyword matching (AI analysis unavailable)*"
+            
             message = f"""🎉 **Data Successfully Uploaded and Analyzed!**
 
 📊 **Your Dataset:**
 - **CSV Data:** {csv_files[0]} ({total_wards} wards, {csv_analysis.get('columns', 0)} variables)
 - **Shapefile:** {shapefile_files[0]} (Geographic boundaries)
-- **Malaria Indicators:** {len(csv_analysis.get('malaria_indicators', []))} found
-- **Environmental Factors:** {len(csv_analysis.get('environmental_factors', []))} found  
-- **Demographic Factors:** {len(csv_analysis.get('demographic_factors', []))} found
+
+📋 **Variable Analysis:**
+{chr(10).join(variable_summary)}
+{method_note}
 
 🔬 **Recommended Analysis:**
 I can run **analysis** using two proven methodologies:

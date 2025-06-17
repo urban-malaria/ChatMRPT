@@ -58,7 +58,8 @@ from .system_tools import (
     check_data_availability,
     get_session_status,
     get_available_variables,
-    get_ward_information
+    get_ward_information,
+    get_ward_variable_value
 )
 
 from .data_analysis_tools import (
@@ -69,7 +70,9 @@ from .data_analysis_tools import (
 from .visual_explanation_tools import (
     explain_last_visualization,
     explain_specific_visualization,
-    get_visualization_recommendations
+    get_visualization_recommendations,
+    track_visualization_creation,
+    get_session_visualizations
 )
 
 from .spatial_tools import (
@@ -90,6 +93,76 @@ from .methodology_tools import (
     explain_composite_score_methodology,
     compare_methodologies,
     get_variable_importance_analysis
+)
+
+# Import Settlement Validation and Analysis Tools
+from .settlement_validation_tools import (
+    create_building_classification_map,
+    create_settlement_validation_map,
+    get_building_statistics
+)
+
+from .settlement_tools import (
+    integrate_settlement_data_unified,
+    get_settlement_enhanced_analysis_summary,
+    create_settlement_enhanced_vulnerability_explanation
+)
+
+# Import Chat-Accessible Settlement Visualization Tools
+from .settlement_visualization_tools import (
+    create_settlement_map,
+    show_settlement_statistics,
+    create_ward_specific_settlement_map,
+    integrate_settlement_data_with_analysis,
+    check_settlement_dependencies
+)
+
+# Legacy settlement tools from standardized analysis
+from ..services.tools.standardized_analysis_tools import (
+    get_settlement_validation_summary
+)
+
+# Enhanced Environmental Risk Analysis Tools
+from .environmental_risk_tools import (
+    get_flood_prone_wards,
+    analyze_water_proximity_correlation,
+    get_ward_elevation_profile,
+    get_high_vegetation_wards,
+    analyze_low_lying_areas_risk
+)
+
+# Intervention Targeting Tools
+from .intervention_targeting_tools import (
+    identify_itn_priority_wards,
+    identify_irs_eligible_wards,
+    identify_coverage_gaps,
+    recommend_chw_deployment
+)
+
+# Scenario Simulation Tools
+from .scenario_simulation_tools import (
+    simulate_coverage_increase_impact,
+    simulate_variable_exclusion,
+    simulate_tpr_assumption_change,
+    simulate_compactness_threshold_scenario
+)
+
+# Strategic Decision Support Tools
+from .strategic_decision_tools import (
+    recommend_priority_targeting_strategy,
+    analyze_lga_risk_distribution,
+    generate_monitoring_priorities,
+    identify_deprioritization_candidates
+)
+
+# Memory Tools for Conversational Continuity
+from .memory_tools import (
+    get_conversation_history,
+    find_previous_discussion,
+    get_analysis_context,
+    save_analysis_result,
+    get_previous_analysis_results,
+    compare_with_previous_analysis
 )
 
 # Comprehensive tool registry for LLM dynamic resolution
@@ -142,6 +215,7 @@ TOOL_REGISTRY = {
     'get_session_status': get_session_status,
     'get_available_variables': get_available_variables,
     'get_ward_information': get_ward_information,
+    'get_ward_variable_value': get_ward_variable_value,
     
     # Data Analysis Tools
     'analyze_uploaded_data_and_recommend': analyze_uploaded_data_and_recommend,
@@ -151,6 +225,8 @@ TOOL_REGISTRY = {
     'explain_last_visualization': explain_last_visualization,
     'explain_specific_visualization': explain_specific_visualization,
     'get_visualization_recommendations': get_visualization_recommendations,
+    'track_visualization_creation': track_visualization_creation,
+    'get_session_visualizations': get_session_visualizations,
     
     # Spatial Analysis Tools
     'spatial_autocorrelation_analysis': spatial_autocorrelation_analysis,
@@ -167,7 +243,44 @@ TOOL_REGISTRY = {
     'explain_pca_methodology': explain_pca_methodology,
     'explain_composite_score_methodology': explain_composite_score_methodology,
     'compare_methodologies': compare_methodologies,
-    'get_variable_importance_analysis': get_variable_importance_analysis
+    'get_variable_importance_analysis': get_variable_importance_analysis,
+    
+    # Phase 2: Settlement Validation Tools
+    'create_settlement_validation_map': create_settlement_validation_map,
+    'get_settlement_validation_summary': get_settlement_validation_summary,
+    
+    # Environmental Risk Analysis Tools
+    'get_flood_prone_wards': get_flood_prone_wards,
+    'analyze_water_proximity_correlation': analyze_water_proximity_correlation,
+    'get_ward_elevation_profile': get_ward_elevation_profile,
+    'get_high_vegetation_wards': get_high_vegetation_wards,
+    'analyze_low_lying_areas_risk': analyze_low_lying_areas_risk,
+    
+    # Intervention Targeting Tools
+    'identify_itn_priority_wards': identify_itn_priority_wards,
+    'identify_irs_eligible_wards': identify_irs_eligible_wards,
+    'identify_coverage_gaps': identify_coverage_gaps,
+    'recommend_chw_deployment': recommend_chw_deployment,
+    
+    # Scenario Simulation Tools
+    'simulate_coverage_increase_impact': simulate_coverage_increase_impact,
+    'simulate_variable_exclusion': simulate_variable_exclusion,
+    'simulate_tpr_assumption_change': simulate_tpr_assumption_change,
+    'simulate_compactness_threshold_scenario': simulate_compactness_threshold_scenario,
+    
+    # Strategic Decision Support Tools
+    'recommend_priority_targeting_strategy': recommend_priority_targeting_strategy,
+    'analyze_lga_risk_distribution': analyze_lga_risk_distribution,
+    'generate_monitoring_priorities': generate_monitoring_priorities,
+    'identify_deprioritization_candidates': identify_deprioritization_candidates,
+    
+    # Memory Tools for Conversational Continuity
+    'get_conversation_history': get_conversation_history,
+    'find_previous_discussion': find_previous_discussion,
+    'get_analysis_context': get_analysis_context,
+    'save_analysis_result': save_analysis_result,
+    'get_previous_analysis_results': get_previous_analysis_results,
+    'compare_with_previous_analysis': compare_with_previous_analysis
 }
 
 def get_tool_function(tool_name: str):
@@ -200,7 +313,8 @@ def get_tools_by_category():
             'simple_greeting', 'explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results'
         ],
         'visual_explanation': [
-            'explain_last_visualization', 'explain_specific_visualization', 'get_visualization_recommendations'
+            'explain_last_visualization', 'explain_specific_visualization', 'get_visualization_recommendations',
+            'track_visualization_creation', 'get_session_visualizations'
         ],
         'spatial_analysis': [
             'spatial_autocorrelation_analysis', 'spatial_similarity_analysis', 'spatial_dependency_test'
@@ -211,9 +325,33 @@ def get_tools_by_category():
         'methodology': [
             'explain_pca_methodology', 'explain_composite_score_methodology', 'compare_methodologies', 'get_variable_importance_analysis'
         ],
+        'settlement_validation': [
+            'create_settlement_validation_map', 'get_settlement_validation_summary'
+        ],
+        'environmental_risk': [
+            'get_flood_prone_wards', 'analyze_water_proximity_correlation',
+            'get_ward_elevation_profile', 'get_high_vegetation_wards',
+            'analyze_low_lying_areas_risk'
+        ],
+        'intervention_targeting': [
+            'identify_itn_priority_wards', 'identify_irs_eligible_wards',
+            'identify_coverage_gaps', 'recommend_chw_deployment'
+        ],
+        'scenario_simulation': [
+            'simulate_coverage_increase_impact', 'simulate_variable_exclusion',
+            'simulate_tpr_assumption_change', 'simulate_compactness_threshold_scenario'
+        ],
+        'strategic_decision': [
+            'recommend_priority_targeting_strategy', 'analyze_lga_risk_distribution',
+            'generate_monitoring_priorities', 'identify_deprioritization_candidates'
+        ],
+        'memory': [
+            'get_conversation_history', 'find_previous_discussion', 'get_analysis_context',
+            'save_analysis_result', 'get_previous_analysis_results', 'compare_with_previous_analysis'
+        ],
         'system': [
             'check_data_availability', 'get_session_status', 'get_available_variables',
-            'get_ward_information', 'analyze_uploaded_data_and_recommend'
+            'get_ward_information', 'get_ward_variable_value', 'analyze_uploaded_data_and_recommend'
         ]
     }
 
