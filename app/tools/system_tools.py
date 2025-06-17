@@ -447,4 +447,106 @@ def get_ward_information(session_id: str, ward_name: str = None, limit: int = 10
             'status': 'error',
             'message': f'Error getting ward information: {str(e)}',
             'wards': []
+        }
+
+
+def get_ward_variable_value(session_id: str, ward_name: str, variable_name: str) -> Dict[str, Any]:
+    """
+    Get the value of a specific variable for a specific ward.
+    
+    Args:
+        session_id: The session ID
+        ward_name: Name of the ward to query
+        variable_name: Name of the variable to retrieve
+        
+    Returns:
+        Dictionary containing the variable value and metadata
+    """
+    try:
+        # Get data service
+        from .. import get_app
+        app = get_app()
+        data_service = app.services.data
+        
+        # Get unified dataset
+        unified_gdf = data_service.get_unified_dataset(session_id)
+        
+        if unified_gdf is None or unified_gdf.empty:
+            return {
+                'status': 'error',
+                'message': 'No data available for analysis. Please upload data first.'
+            }
+        
+        # Get ward column
+        ward_col = None
+        for col in ['ward', 'Ward', 'WARD', 'ward_name', 'Ward_Name', 'WARD_NAME']:
+            if col in unified_gdf.columns:
+                ward_col = col
+                break
+        
+        if not ward_col:
+            return {
+                'status': 'error',
+                'message': 'No ward column found in the dataset'
+            }
+        
+        # Check if variable exists
+        if variable_name not in unified_gdf.columns:
+            return {
+                'status': 'error',
+                'message': f'Variable "{variable_name}" not found in dataset',
+                'available_variables': list(unified_gdf.columns)
+            }
+        
+        # Find the ward
+        ward_data = unified_gdf[unified_gdf[ward_col].str.lower() == ward_name.lower()]
+        
+        if ward_data.empty:
+            # Try partial match
+            ward_data = unified_gdf[unified_gdf[ward_col].str.contains(ward_name, case=False, na=False)]
+        
+        if ward_data.empty:
+            return {
+                'status': 'error',
+                'message': f'Ward "{ward_name}" not found in dataset',
+                'available_wards': unified_gdf[ward_col].unique().tolist()[:10]  # Show first 10
+            }
+        
+        # Get the value
+        if len(ward_data) > 1:
+            # Multiple matches, use first and warn
+            ward_info = ward_data.iloc[0]
+            warning = f'Multiple wards matched "{ward_name}", using first match: {ward_info[ward_col]}'
+        else:
+            ward_info = ward_data.iloc[0]
+            warning = None
+        
+        value = ward_info[variable_name]
+        
+        # Clean up the value - convert numpy types to Python types
+        if pd.isna(value):
+            clean_value = None
+        elif hasattr(value, 'item'):  # numpy scalar
+            clean_value = value.item()
+        else:
+            clean_value = value
+        
+        result = {
+            'status': 'success',
+            'ward_name': ward_info[ward_col],
+            'variable_name': variable_name,
+            'value': clean_value,
+            'data_type': str(type(clean_value).__name__)
+        }
+        
+        if warning:
+            result['warning'] = warning
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting ward variable value: {e}")
+        return {
+            'status': 'error',
+            'message': f'Error getting ward variable value: {str(e)}'
         } 
