@@ -658,21 +658,292 @@ class ChatMRPTApp {
         if (iframe) {
             const newIframe = DOMHelpers.createElement('iframe', {
                 src: iframe.src,
-                style: 'width: 100%; height: 100%; border: none;'
+                style: 'width: 100%; height: 100%; border: none; border-radius: 8px;'
             });
+            
+            // Enhanced fullscreen iframe setup
+            this.setupFullscreenIframe(newIframe, modalBody);
             modalBody.appendChild(newIframe);
+            
         } else if (img) {
             const newImg = DOMHelpers.createElement('img', {
                 src: img.src,
-                style: 'max-width: 100%; max-height: 100%; object-fit: contain;'
+                style: 'max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;'
             });
             modalBody.appendChild(newImg);
         }
 
-        // Show modal
+        // Show modal with enhanced features
         if (window.bootstrap) {
             const modal = new bootstrap.Modal(modalElem);
             modal.show();
+            
+            // Add fullscreen enhancements after modal is shown
+            modalElem.addEventListener('shown.bs.modal', () => {
+                this.enhanceFullscreenModal(modalElem, modalBody);
+            }, { once: true });
+        }
+    }
+
+    /**
+     * Setup enhanced fullscreen iframe
+     */
+    setupFullscreenIframe(iframe, container) {
+        // Enable all interactive features
+        iframe.style.pointerEvents = 'auto';
+        iframe.allowFullscreen = true;
+        iframe.allow = 'fullscreen';
+        
+        // Add loading indicator
+        const loadingDiv = DOMHelpers.createElement('div', {
+            className: 'fullscreen-loading',
+            style: `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: var(--text-secondary);
+                font-size: 1.2rem;
+                z-index: 10;
+            `
+        }, '<i class="fas fa-spinner fa-spin"></i> <span style="margin-left: 8px;">Loading fullscreen view...</span>');
+        
+        container.appendChild(loadingDiv);
+        
+        // Handle iframe load
+        iframe.addEventListener('load', () => {
+            loadingDiv.style.display = 'none';
+            this.optimizeFullscreenContent(iframe);
+        });
+        
+        // Add interaction enhancements
+        iframe.addEventListener('mouseenter', () => {
+            iframe.style.filter = 'brightness(1.05)';
+            iframe.style.transition = 'filter 0.3s ease';
+        });
+        
+        iframe.addEventListener('mouseleave', () => {
+            iframe.style.filter = 'brightness(1)';
+        });
+    }
+
+    /**
+     * Enhance fullscreen modal experience
+     */
+    enhanceFullscreenModal(modalElem, modalBody) {
+        // Add keyboard shortcuts
+        const handleKeydown = (e) => {
+            switch(e.key) {
+                case 'Escape':
+                    // Let Bootstrap handle this
+                    break;
+                case 'f':
+                case 'F':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        this.toggleModalFullscreen(modalElem);
+                    }
+                    break;
+                case '+':
+                case '=':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        this.zoomModal(modalBody, 1.1);
+                    }
+                    break;
+                case '-':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        this.zoomModal(modalBody, 0.9);
+                    }
+                    break;
+                case '0':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        this.resetModalZoom(modalBody);
+                    }
+                    break;
+            }
+        };
+        
+        document.addEventListener('keydown', handleKeydown);
+        
+        // Clean up event listener when modal is hidden
+        modalElem.addEventListener('hidden.bs.modal', () => {
+            document.removeEventListener('keydown', handleKeydown);
+        }, { once: true });
+        
+        // Add zoom controls
+        this.addModalZoomControls(modalElem, modalBody);
+        
+        // Enable touch gestures for mobile
+        this.enableModalTouchGestures(modalBody);
+    }
+
+    /**
+     * Add zoom controls to modal
+     */
+    addModalZoomControls(modalElem, modalBody) {
+        const modalHeader = modalElem.querySelector('.modal-header');
+        if (!modalHeader) return;
+        
+        const zoomControls = DOMHelpers.createElement('div', {
+            className: 'modal-zoom-controls',
+            style: 'display: flex; gap: 8px; margin-left: auto; margin-right: 16px;'
+        });
+        
+        const zoomInBtn = DOMHelpers.createElement('button', {
+            className: 'btn btn-sm btn-outline-secondary',
+            title: 'Zoom In (Ctrl/Cmd + +)',
+            type: 'button'
+        }, '<i class="fas fa-search-plus"></i>');
+        
+        const zoomOutBtn = DOMHelpers.createElement('button', {
+            className: 'btn btn-sm btn-outline-secondary',
+            title: 'Zoom Out (Ctrl/Cmd + -)',
+            type: 'button'
+        }, '<i class="fas fa-search-minus"></i>');
+        
+        const resetZoomBtn = DOMHelpers.createElement('button', {
+            className: 'btn btn-sm btn-outline-secondary',
+            title: 'Reset Zoom (Ctrl/Cmd + 0)',
+            type: 'button'
+        }, '<i class="fas fa-expand-arrows-alt"></i>');
+        
+        const fullscreenBtn = DOMHelpers.createElement('button', {
+            className: 'btn btn-sm btn-outline-primary',
+            title: 'Toggle Fullscreen (Ctrl/Cmd + F)',
+            type: 'button'
+        }, '<i class="fas fa-expand"></i>');
+        
+        // Add event listeners
+        zoomInBtn.addEventListener('click', () => this.zoomModal(modalBody, 1.2));
+        zoomOutBtn.addEventListener('click', () => this.zoomModal(modalBody, 0.8));
+        resetZoomBtn.addEventListener('click', () => this.resetModalZoom(modalBody));
+        fullscreenBtn.addEventListener('click', () => this.toggleModalFullscreen(modalElem));
+        
+        zoomControls.appendChild(zoomInBtn);
+        zoomControls.appendChild(zoomOutBtn);
+        zoomControls.appendChild(resetZoomBtn);
+        zoomControls.appendChild(fullscreenBtn);
+        
+        // Insert before close button
+        const closeBtn = modalHeader.querySelector('.btn-close');
+        modalHeader.insertBefore(zoomControls, closeBtn);
+    }
+
+    /**
+     * Zoom modal content
+     */
+    zoomModal(modalBody, factor) {
+        const currentScale = parseFloat(modalBody.dataset.scale || '1');
+        const newScale = Math.max(0.5, Math.min(3, currentScale * factor));
+        
+        modalBody.style.transform = `scale(${newScale})`;
+        modalBody.style.transformOrigin = 'center center';
+        modalBody.dataset.scale = newScale.toString();
+        
+        // Adjust modal body overflow for zoomed content
+        if (newScale > 1) {
+            modalBody.style.overflow = 'auto';
+        } else {
+            modalBody.style.overflow = 'hidden';
+        }
+    }
+
+    /**
+     * Reset modal zoom
+     */
+    resetModalZoom(modalBody) {
+        modalBody.style.transform = 'scale(1)';
+        modalBody.style.overflow = 'hidden';
+        modalBody.dataset.scale = '1';
+    }
+
+    /**
+     * Toggle modal fullscreen
+     */
+    toggleModalFullscreen(modalElem) {
+        const modalDialog = modalElem.querySelector('.modal-dialog');
+        if (!modalDialog) return;
+        
+        if (modalDialog.classList.contains('modal-fullscreen')) {
+            modalDialog.classList.remove('modal-fullscreen');
+            modalDialog.classList.add('modal-xl');
+        } else {
+            modalDialog.classList.remove('modal-xl');
+            modalDialog.classList.add('modal-fullscreen');
+        }
+    }
+
+    /**
+     * Enable touch gestures for mobile
+     */
+    enableModalTouchGestures(modalBody) {
+        let initialDistance = 0;
+        let initialScale = 1;
+        
+        modalBody.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                initialDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+                initialScale = parseFloat(modalBody.dataset.scale || '1');
+            }
+        });
+        
+        modalBody.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const currentDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+                const scale = initialScale * (currentDistance / initialDistance);
+                const clampedScale = Math.max(0.5, Math.min(3, scale));
+                
+                modalBody.style.transform = `scale(${clampedScale})`;
+                modalBody.dataset.scale = clampedScale.toString();
+            }
+        });
+    }
+
+    /**
+     * Get distance between two touch points
+     */
+    getTouchDistance(touch1, touch2) {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    /**
+     * Optimize fullscreen content
+     */
+    optimizeFullscreenContent(iframe) {
+        try {
+            // Try to access iframe content for optimization
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (iframeDoc) {
+                // Optimize for fullscreen viewing
+                const body = iframeDoc.body;
+                if (body) {
+                    body.style.margin = '0';
+                    body.style.padding = '0';
+                    body.style.overflow = 'auto';
+                }
+                
+                // Optimize Plotly charts for fullscreen
+                const plotlyDivs = iframeDoc.querySelectorAll('.plotly-graph-div');
+                plotlyDivs.forEach(div => {
+                    div.style.width = '100%';
+                    div.style.height = '100vh';
+                    
+                    // Trigger Plotly resize if available
+                    if (iframeDoc.defaultView && iframeDoc.defaultView.Plotly) {
+                        setTimeout(() => {
+                            iframeDoc.defaultView.Plotly.Plots.resize(div);
+                        }, 100);
+                    }
+                });
+            }
+        } catch (error) {
+            console.debug('Cannot optimize iframe content (cross-origin):', error.message);
         }
     }
 

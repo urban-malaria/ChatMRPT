@@ -205,6 +205,43 @@ class VisualizationService:
                     "message": result.get('message', f"Error generating {viz_type}")
                 }
             
+            # Track visualization in session memory
+            if session_id:
+                try:
+                    from ...tools.visual_explanation_tools import track_visualization_creation
+                    
+                    # Extract variable from params
+                    variable = params.get('variable') if params else None
+                    group_by = params.get('group_by') if params else None
+                    
+                    # Create comprehensive tracking metadata
+                    tracking_metadata = {
+                        'file_path': result.get('file_path', ''),
+                        'filename': viz_filename,
+                        'title': result.get('title', f"{viz_type.replace('_', ' ').title()}"),
+                        'current_page': result.get('current_page', 1),
+                        'total_pages': result.get('total_pages', 1),
+                        'data_summary': result.get('data_summary', {}),
+                        'visual_elements': result.get('visual_elements', {})
+                    }
+                    
+                    # Track the visualization
+                    track_result = track_visualization_creation(
+                        session_id=session_id,
+                        viz_type=viz_type,
+                        variable=variable,
+                        group_by=group_by,
+                        metadata=tracking_metadata
+                    )
+                    
+                    if track_result['status'] == 'success':
+                        logger.info(f"Visualization {viz_type} tracked in session memory for {session_id}")
+                    else:
+                        logger.warning(f"Failed to track visualization: {track_result['message']}")
+                        
+                except Exception as e:
+                    logger.error(f"Error tracking visualization in session memory: {e}")
+            
             # Return visualization details
             # Standardize the result format
             return {

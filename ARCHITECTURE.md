@@ -2,35 +2,34 @@
 
 ## 🏗️ System Overview
 
-ChatMRPT is a modern, AI-powered malaria epidemiologist built with a sophisticated modular architecture. The system combines conversational AI with comprehensive data analysis tools to provide intelligent malaria surveillance and control insights.
+ChatMRPT v3.0 is a modern, AI-powered malaria epidemiologist built with a sophisticated modular architecture. The system combines conversational AI with comprehensive data analysis tools to provide intelligent malaria surveillance and control insights for Nigeria.
 
 ### Key Architectural Principles
 - **Modular Design**: Clean separation of concerns across specialized modules
-- **Service-Oriented Architecture**: Core services managed through dependency injection
+- **Service-Oriented Architecture**: Core services managed through modern dependency injection
 - **Intelligent Request Processing**: Enhanced natural language to tool execution pipeline with LLM-based classification
 - **Session Management**: Persistent conversation and analysis state
-- **Extensible Tool System**: 100+ tools organized into 10 specialized categories
-- **Enhanced Knowledge System**: Multi-tool response combination with intelligent merging and smooth transitions
+- **Extensible Tool System**: 11+ specialized tool categories with 100+ individual tools
+- **Blueprint-based Routing**: Organized Flask routing structure for maintainability
 
 ## 🧠 Core Architecture Components
 
-### 1. Service Container (`app/core/service_container.py`)
-The central dependency injection system that manages all core services:
+### 1. Service Container (`app/services/container.py`)
+The modern dependency injection system that manages all core services:
 
 ```python
 class ServiceContainer:
-    - llm_manager: LLMManager
-    - request_interpreter: RequestInterpreter
-    - data_manager: DataManager
-    - session_manager: SessionManager
-    - tool_registry: ToolRegistry
+    - Centralized service management and initialization
+    - Configuration management
+    - Service lifecycle management
+    - Integration with Flask application factory
 ```
 
 **Responsibilities:**
-- Centralized service management
-- Dependency injection for all components
-- Service lifecycle management
-- Configuration and initialization
+- Service registration and resolution
+- Configuration management and initialization
+- Application startup coordination
+- Resource management
 
 ### 2. LLM Manager (`app/core/llm_manager.py`)
 Manages AI conversation capabilities with enhanced ChatMRPT personality:
@@ -47,68 +46,61 @@ class LLMManager:
 - Nigeria state tracking and malaria expertise
 - Multi-format data handling (CSV, Excel, Shapefiles)
 - Ward-level analysis capabilities
+- Settlement analysis integration
 - Adaptive language based on user expertise
 
 ### 3. Request Interpreter (`app/core/request_interpreter.py`)
-The enhanced intelligent brain that converts natural language to tool executions with LLM-powered classification:
+The intelligent brain that converts natural language to tool executions:
 
 ```python
 class RequestInterpreter:
-    - intelligent_classification: LLM-based intent analysis with fallback patterns
+    - intelligent_classification: Pattern-based and LLM-assisted intent analysis
     - multi_tool_handling: Support for complex multi-tool requests
-    - response_combination: Intelligent merging of multiple tool responses
     - tool_mapping: Natural language to tool conversion
     - parameter_extraction: Context-aware argument parsing
     - execution_planning: Optimal tool selection and sequencing
 ```
 
 **Enhanced Processing Pipeline:**
-1. Intelligent intent classification using LLM with pattern-based fallback
-2. Multi-tool support for complex requests (e.g., multiple explain_concept calls)
-3. Tool selection based on intent and context
-4. Parameter extraction and validation
-5. Execution plan generation with parallel processing support
-6. Tool orchestration and intelligent response combination
-7. Response formatting with smooth transitions and proper structure
+1. Intent classification using multiple methods
+2. Tool selection based on intent and context
+3. Parameter extraction and validation
+4. Execution plan generation
+5. Tool orchestration and response formatting
+
+### 4. Session Management
+- **Session State** (`app/core/session_state.py`): Core session state management
+- **Session Memory** (`app/services/session_memory.py`): Enhanced memory management with persistence
 
 ## 🛠️ Tool System Architecture
 
 ### Tool Categories (100+ Tools)
 
-#### 1. Enhanced Knowledge Tools (`app/tools/knowledge_tools.py`)
-Educational and explanatory content with intelligent response combination:
-- Enhanced malaria epidemiology explanations with proper structure and length control
-- Nigeria-specific malaria information with smooth transitions
-- Ward-level analysis guidance with intelligent response merging
-- Data interpretation assistance with consistent epidemiologist persona
-- Multi-response combination for comprehensive answers (200-600 words optimal)
-- Intelligent transitions between different knowledge topics
+#### 1. Knowledge Tools (`app/tools/knowledge_tools.py`)
+Educational and explanatory content:
+- Malaria epidemiology explanations
+- Nigeria-specific malaria information
+- Ward-level analysis guidance
+- Data interpretation assistance
+- Settlement analysis explanations
 
-#### 2. Analysis Tools (`app/tools/analysis_tools.py`)
+#### 2. Data Analysis Tools (`app/tools/data_analysis_tools.py`)
 Statistical analysis and data processing:
 - Descriptive statistics
 - Correlation analysis
-- PCA and clustering
-- Time series analysis
+- Advanced statistical methods
 - Risk factor identification
+- Data quality assessment
 
-#### 3. Visualization Tools (`app/tools/visualization_tools.py`)
+#### 3. Visual Tools (`app/tools/visual_tools.py`)
 Map and chart generation:
 - Choropleth maps
 - Vulnerability classifications
 - Composite risk visualizations
 - Interactive dashboards
-- Statistical charts
+- Statistical charts and plots
 
-#### 4. Summary Tools (`app/tools/summary_tools.py`)
-Report generation and insights:
-- Executive summaries
-- Ward prioritization reports
-- Trend analysis reports
-- Comparative analysis
-- Recommendations generation
-
-#### 5. Data Tools (`app/tools/data_tools.py`)
+#### 4. Data Tools (`app/tools/data_tools.py`)
 Data management and validation:
 - File upload and processing
 - Data validation and cleaning
@@ -116,34 +108,42 @@ Data management and validation:
 - Ward name standardization
 - Data quality assessment
 
-#### 6. Utility Tools (`app/tools/utility_tools.py`)
-Helper functions and system operations:
-- Session management
-- Configuration handling
-- Error recovery
-- Performance monitoring
-- System diagnostics
+#### 5. Statistical Tools (`app/tools/statistical_tools.py`)
+Advanced statistical analysis:
+- Advanced statistical methods
+- Regression analysis
+- Model fitting and validation
+- Statistical testing
+- Performance metrics
 
-#### 7. Group Analysis Tools (`app/tools/group_analysis_tools.py`)
-Specialized tools for multi-group comparison and segmentation:
+#### 6. Spatial Tools (`app/tools/spatial_tools.py`)
+Geographic and spatial analysis:
+- Spatial autocorrelation analysis
+- Geographic analysis
+- Distance-based analysis
+- Spatial clustering identification
+- Geospatial data processing
+
+#### 7. Settlement Tools (`app/tools/settlement_tools.py`)
+Settlement analysis and validation:
+- Settlement pattern analysis
+- Validation workflows
+- Settlement clustering
+- Geographic settlement analysis
+
+#### 8. Group Analysis Tools (`app/tools/group_analysis_tools.py`)
+Multi-group comparison and segmentation:
 - Cross-group statistical comparisons
 - Demographic segmentation analysis
 - Intervention group effectiveness assessment
 - Population subgroup analysis
 
-#### 8. Methodology Tools (`app/tools/methodology_tools.py`)
+#### 9. Methodology Tools (`app/tools/methodology_tools.py`)
 Research methodology guidance and validation:
 - Study design recommendations
 - Statistical method selection guidance
 - Data collection methodology advice
 - Analysis interpretation guidelines
-
-#### 9. Spatial Tools (`app/tools/spatial_tools.py`)
-Advanced spatial analysis and geographic modeling:
-- Spatial autocorrelation analysis
-- Geographic weighted regression
-- Spatial clustering identification
-- Distance-based analysis
 
 #### 10. Visual Explanation Tools (`app/tools/visual_explanation_tools.py`)
 Interactive analysis interpretation and guidance:
@@ -151,6 +151,20 @@ Interactive analysis interpretation and guidance:
 - Visual interpretation guidance
 - Interactive chart and map explanations
 - Analysis workflow demonstrations
+
+#### 11. System Tools (`app/tools/system_tools.py`)
+System utilities and diagnostics:
+- System diagnostics
+- Performance monitoring
+- Error handling utilities
+- Configuration management
+
+#### 12. Settlement Validation Tools (`app/tools/settlement_validation_tools.py`)
+Specialized settlement validation:
+- Settlement data validation
+- Quality control workflows
+- Consistency checking
+- Validation reporting
 
 ### Core Services
 
@@ -163,32 +177,61 @@ Centralized service for generating interactive explanations:
 
 ## 🌐 Web Architecture
 
-### Route Organization
-The Flask application is organized into logical route blueprints:
+### Modern Blueprint Organization
+The Flask application uses a modern blueprint-based architecture organized in `app/web/routes/`:
 
-#### Main Routes (`app/routes/main_routes.py`)
-- Index page and core navigation
-- Session initialization
-- Application status and health checks
-- User preference management
+#### Core Routes (`app/web/routes/core_routes.py`)
+- Main application interface
+- Session initialization and management
+- User interface routing
+- Application status endpoints
 
-#### Upload Routes (`app/routes/upload_routes.py`)
+#### Upload Routes (`app/web/routes/upload_routes.py`)
 - File upload handling with validation
 - Multi-format support (CSV, Excel, Shapefiles)
 - Data preview and confirmation
 - Error handling and user feedback
 
-#### Analysis Routes (`app/routes/analysis_routes.py`)
+#### Analysis Routes (`app/web/routes/analysis_routes.py`)
 - Chat interface for conversational analysis
 - Tool execution and orchestration
-- Real-time response streaming
+- Real-time response handling
 - Session persistence and recovery
 
-#### API Routes (`app/routes/api_routes.py`)
-- RESTful API endpoints
-- Data export and download
-- System status and metrics
-- Integration capabilities
+#### Visualization Routes (`app/web/routes/visualization_routes.py`)
+- Map generation and serving
+- Chart creation and customization
+- Interactive visualization handling
+- Export functionality
+
+#### Reports API Routes (`app/web/routes/reports_api_routes.py`)
+- RESTful API endpoints for reports
+- Data export and download functionality
+- Report generation and management
+- API documentation endpoints
+
+#### Debug Routes (`app/web/routes/debug_routes.py`)
+- Development and diagnostic tools
+- System monitoring endpoints
+- Performance metrics
+- Debugging utilities
+
+#### Admin Routes (`app/web/admin.py`)
+- Administrative interface
+- System configuration
+- User management
+- Application monitoring
+
+#### Compatibility Routes (`app/web/routes/compatibility.py`)
+- Legacy system compatibility
+- Migration support
+- Backward compatibility features
+
+### Additional Route Configuration (`app/routes.py`)
+- Static file handling
+- Error pages (404, 500, 403)
+- Security headers
+- Health check endpoints
 
 ## 🔄 Data Flow Architecture
 
@@ -204,149 +247,175 @@ User Input → Request Interpreter → Tool Selection → Execution → Response
 ### Detailed Flow:
 
 1. **User Input Processing**
-   - Natural language query received
-   - Context and session state loaded
+   - Natural language query received via Flask routes
+   - Context and session state loaded from session management
    - Input validation and sanitization
 
 2. **Intent Classification**
-   - Multi-method classification system
-   - Rule-based pattern matching
-   - Semantic similarity analysis
-   - Context-aware routing
+   - Multi-method classification system in Request Interpreter
+   - Pattern-based matching with fallback strategies
+   - Context-aware routing to appropriate tools
 
 3. **Tool Selection & Mapping**
-   - Intent-to-tool mapping
-   - Parameter extraction
+   - Intent-to-tool mapping using tool registry
+   - Parameter extraction from natural language
    - Execution plan generation
    - Resource validation
 
 4. **Tool Execution**
-   - Parallel execution where possible
-   - Error handling and recovery
-   - Progress tracking
+   - Tool orchestration through service container
+   - Error handling and recovery mechanisms
+   - Progress tracking and logging
    - Result aggregation
 
 5. **Response Generation**
    - Result formatting and presentation
-   - Visualization generation
-   - Summary and insights
-   - Session state updates
+   - Visualization generation when needed
+   - Summary and insights compilation
+   - Session state updates and persistence
 
 ## 📊 Data Management Architecture
 
-### Data Storage Strategy
-- **Session Data**: Persistent conversation state
-- **Uploaded Data**: Temporary processing storage
-- **Analysis Results**: Cached computation results
-- **Visualization Assets**: Generated maps and charts
+### Storage Strategy
+- **Session Data**: Managed by session_memory service with persistence in `sessions/`
+- **Uploaded Data**: Temporary processing storage in `instance/uploads/`
+- **Analysis Results**: Cached computation results in memory and session
+- **Reports**: Generated reports stored in `instance/reports/`
+- **Logs**: Application logs in `instance/app.log`
 
 ### Data Processing Pipeline
-1. **Upload & Validation**: File format detection and validation
-2. **Standardization**: Ward name normalization and data cleaning
-3. **Analysis**: Statistical processing and computation
-4. **Visualization**: Map and chart generation
+1. **Upload & Validation**: Multi-format file handling with comprehensive validation
+2. **Standardization**: Nigerian ward name normalization and data cleaning
+3. **Analysis**: Statistical and spatial processing through specialized tools
+4. **Visualization**: Map and chart generation using visual tools
 5. **Storage**: Result caching and session persistence
 
 ## 🔒 Security & Error Handling
 
 ### Security Measures
-- Input validation and sanitization
+- Input validation and sanitization across all routes
 - File upload restrictions and validation
 - Session security and isolation
-- API rate limiting and protection
+- Security headers applied via middleware
+- Error handling with graceful degradation
 
 ### Error Handling Strategy
-- Graceful degradation for all components
-- Comprehensive exception handling
-- User-friendly error messages
+- Comprehensive exception handling in `app/core/exceptions.py`
+- User-friendly error pages (404, 500, 403)
+- Logging and monitoring through Flask logging system
 - Recovery mechanisms and fallbacks
-- Logging and monitoring
+- Graceful degradation for AI features
 
 ## 🚀 Performance & Scalability
 
-### Optimization Features
-- **Lazy Loading**: Components loaded on demand
-- **Caching**: Results and computations cached
-- **Parallel Processing**: Multiple tools executed simultaneously
-- **Resource Management**: Efficient memory and CPU usage
+### Current Optimization Features
+- **Service Container**: Efficient service management and initialization
+- **Session Management**: Optimized session state handling
+- **Tool Caching**: Results caching within sessions
+- **Blueprint Architecture**: Modular route organization for maintainability
 
-### Scalability Considerations
+### Scalability Design
 - Modular architecture supports horizontal scaling
 - Service-oriented design enables independent scaling
-- Stateless tool execution for distributed processing
-- Session management supports load balancing
+- Session management designed for load balancing
+- Tool system designed for parallel execution
 
 ## 🧪 Testing & Quality Assurance
 
-### Testing Strategy
-- **Unit Tests**: Individual component testing
+### Current Testing Strategy
+- **Unit Tests**: Individual component testing in `tests/`
 - **Integration Tests**: Service interaction testing
 - **End-to-End Tests**: Complete workflow testing
-- **Performance Tests**: Load and stress testing
+- **Conversational Tests**: AI interaction testing
 
-### Quality Metrics
-- **Code Coverage**: Comprehensive test coverage
-- **Performance Benchmarks**: Response time and resource usage
-- **Reliability Metrics**: Uptime and error rates
-- **User Experience**: Interaction quality and satisfaction
-
-## 🔮 Future Architecture Considerations
-
-### Planned Enhancements (See STATISTICAL_VISUALIZATION_ENHANCEMENT_OPPORTUNITIES.md)
-- **Machine Learning Integration**: Random Forest, clustering algorithms, classification models
-- **Multi-Panel Dashboards**: Comprehensive overview displays with linked interactions
-- **Intelligent Variable Selection**: Auto-detect optimal variables, handle multicollinearity
-- **Enhanced Chart Types**: Violin plots, parallel coordinates, bivariate choropleth maps
-- **Time Series Analysis**: Temporal analysis, forecasting, seasonal decomposition
-- **Advanced Spatial Methods**: Geographically weighted regression, spatial interpolation
-
-### Statistical Enhancement Roadmap
-**High Priority Enhancements:**
-1. Intelligent variable selection and multicollinearity handling
-2. Multi-panel dashboard creation with interactive linking
-3. Machine learning model integration (Random Forest, SVM, Neural Networks)
-4. Enhanced visualization types (violin plots, parallel coordinates, 3D surfaces)
-
-**Medium Priority Features:**
-5. Time series analysis and forecasting capabilities
-6. Model diagnostics with automated assumption testing
-7. Advanced spatial analysis methods (GWR, spatial interpolation)
-
-**Advanced Capabilities:**
-8. Specialized malaria epidemiological tools (ROC analysis, intervention impact)
-9. Performance optimization (caching, parallel processing)
-10. User experience enhancements (guided workflows, template gallery)
-
-### Extensibility Features
-- **Plugin System**: Third-party tool integration
-- **Custom Visualizations**: User-defined chart types
-- **External Data Sources**: API integrations
-- **Multi-language Support**: Internationalization
-- **Advanced Analytics**: Machine learning integration with comprehensive model library
+### Test Files
+- `tests/test_conversational_fix.py`: Conversational feature testing
+- `tests/test_final_tool_verification.py`: Tool execution testing
+- `tests/test_refactoring.py`: Architecture and refactoring tests
+- `tests/test_phase3_end_to_end.py`: End-to-end integration tests
 
 ## 📋 Configuration & Deployment
 
 ### Environment Configuration
 ```bash
-# Development
-FLASK_ENV=development
-DEBUG=True
+# Flask Environment
+FLASK_ENV=development  # or production
+DEBUG=True            # for development
 
-# Production
-FLASK_ENV=production
-DEBUG=False
-SECRET_KEY=secure_random_key
-
-# Optional AI Features
+# AI Features (Optional but recommended)
 OPENAI_API_KEY=your_api_key_here
+
+# Server Configuration
+HOST=127.0.0.1       # Default host
+PORT=5000            # Default port
 ```
 
-### Deployment Options
-- **Local Development**: Flask development server
-- **Production**: Gunicorn/uWSGI with Nginx
-- **Containerization**: Docker support
-- **Cloud Deployment**: Platform-specific configurations
+### Application Startup
+The application uses a modern factory pattern in `run.py`:
+- Configuration detection and loading
+- Service container initialization
+- Blueprint registration
+- Additional route setup
+- Development server startup
+
+### Deployment Considerations
+- **Development**: Flask development server via `python run.py`
+- **Production**: Gunicorn/uWSGI with Nginx recommended
+- **Containerization**: Docker support can be added
+- **Cloud Deployment**: Platform-specific configurations available
+
+## 🔮 Current Status & Roadmap
+
+### ✅ Fully Implemented
+- **Core Architecture**: Modern Flask application with service container
+- **AI Integration**: LLM-powered conversational interface with fallback
+- **Tool System**: 11+ specialized tool categories with 100+ tools
+- **Data Processing**: Multi-format support with validation
+- **Visualization**: Interactive maps and charts
+- **Session Management**: Persistent conversation state
+- **Settlement Analysis**: Advanced settlement validation and analysis
+- **Web Interface**: Modern blueprint-based routing system
+
+### 🚧 In Active Development
+- Enhanced machine learning integration
+- Advanced time series analysis capabilities
+- Multi-panel dashboard system
+- Performance optimization features
+
+### 🔮 Future Enhancements
+- **Machine Learning Integration**: Random Forest, clustering algorithms, classification models
+- **Advanced Analytics**: Time series forecasting, spatial interpolation
+- **Enhanced Visualizations**: Multi-panel dashboards, 3D visualizations
+- **Performance Optimization**: Caching, parallel processing, optimization
+
+## 📁 Directory Structure Summary
+
+```
+ChatMRPT/
+├── app/                          # Main application package
+│   ├── core/                     # Core system components
+│   ├── services/                 # Service layer with dependency injection
+│   ├── tools/                    # Comprehensive tool system (11+ categories)
+│   ├── web/                      # Web interface layer with blueprints
+│   ├── config/                   # Configuration management
+│   ├── models/                   # Data models
+│   ├── intelligence/             # AI intelligence layer
+│   ├── analysis/                 # Analysis modules
+│   ├── interaction/              # User interaction handling
+│   ├── reports/                  # Report generation
+│   ├── prompts/                  # AI prompts and templates
+│   ├── data/                     # Application data handling
+│   ├── sample_data/              # Sample datasets
+│   ├── static/                   # Static web assets
+│   ├── templates/                # HTML templates
+│   └── routes.py                 # Additional route definitions
+├── instance/                     # Instance-specific files (uploads, reports, logs)
+├── sessions/                     # Session persistence
+├── data/                         # User data storage
+├── tests/                        # Comprehensive test suite
+└── run.py                        # Application entry point
+```
 
 ---
 
-This architecture document provides a comprehensive overview of ChatMRPT's design and implementation. For specific implementation details, refer to the individual module documentation and code comments. 
+This architecture document reflects the current implementation of ChatMRPT v3.0. For specific implementation details, refer to the individual module documentation and code comments. 

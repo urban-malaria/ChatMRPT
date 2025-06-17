@@ -452,101 +452,96 @@ def get_ward_information(session_id: str, ward_name: str = None, limit: int = 10
 
 def get_ward_variable_value(session_id: str, ward_name: str, variable_name: str) -> Dict[str, Any]:
     """
-    Get the value of a specific variable for a specific ward.
+    Get specific variable value for a ward.
     
-    Args:
-        session_id: The session ID
-        ward_name: Name of the ward to query
-        variable_name: Name of the variable to retrieve
-        
-    Returns:
-        Dictionary containing the variable value and metadata
+    Handles requests like:
+    - "What is the TPR among under-fives in Ward X?"
+    - "What is the elevation profile of Ward Y?"
     """
     try:
-        # Get data service
-        from .. import get_app
-        app = get_app()
-        data_service = app.services.data
+        from ..data.unified_dataset_builder import load_unified_dataset
         
-        # Get unified dataset
-        unified_gdf = data_service.get_unified_dataset(session_id)
-        
-        if unified_gdf is None or unified_gdf.empty:
+        unified_gdf = load_unified_dataset(session_id)
+        if unified_gdf is None:
             return {
                 'status': 'error',
-                'message': 'No data available for analysis. Please upload data first.'
+                'message': 'No dataset available'
             }
         
-        # Get ward column
-        ward_col = None
-        for col in ['ward', 'Ward', 'WARD', 'ward_name', 'Ward_Name', 'WARD_NAME']:
-            if col in unified_gdf.columns:
-                ward_col = col
-                break
-        
-        if not ward_col:
+        # Find ward
+        ward_columns = [col for col in unified_gdf.columns if 'ward' in col.lower()]
+        if not ward_columns:
             return {
                 'status': 'error',
-                'message': 'No ward column found in the dataset'
+                'message': 'No ward column found in dataset'
             }
         
-        # Check if variable exists
-        if variable_name not in unified_gdf.columns:
+        ward_col = ward_columns[0]
+        ward_data = unified_gdf[unified_gdf[ward_col].str.contains(ward_name, case=False, na=False)]
+        
+        if len(ward_data) == 0:
             return {
                 'status': 'error',
-                'message': f'Variable "{variable_name}" not found in dataset',
-                'available_variables': list(unified_gdf.columns)
+                'message': f'Ward "{ward_name}" not found in dataset'
             }
         
-        # Find the ward
-        ward_data = unified_gdf[unified_gdf[ward_col].str.lower() == ward_name.lower()]
-        
-        if ward_data.empty:
-            # Try partial match
-            ward_data = unified_gdf[unified_gdf[ward_col].str.contains(ward_name, case=False, na=False)]
-        
-        if ward_data.empty:
-            return {
-                'status': 'error',
-                'message': f'Ward "{ward_name}" not found in dataset',
-                'available_wards': unified_gdf[ward_col].unique().tolist()[:10]  # Show first 10
-            }
-        
-        # Get the value
         if len(ward_data) > 1:
-            # Multiple matches, use first and warn
-            ward_info = ward_data.iloc[0]
-            warning = f'Multiple wards matched "{ward_name}", using first match: {ward_info[ward_col]}'
-        else:
-            ward_info = ward_data.iloc[0]
-            warning = None
+            ward_matches = ward_data[ward_col].tolist()
+            return {
+                'status': 'error',
+                'message': f'Multiple wards found matching "{ward_name}": {ward_matches}. Please be more specific.'
+            }
         
-        value = ward_info[variable_name]
+        # Find variable column
+        variable_columns = [col for col in unified_gdf.columns 
+                          if variable_name.lower() in col.lower() or 
+                          col.lower() in variable_name.lower()]
         
-        # Clean up the value - convert numpy types to Python types
+        if not variable_columns:
+            # Common variable mappings
+            variable_mappings = {
+                'tpr': ['u5_tpr_rdt', 'tpr'],
+                'elevation': ['elevation'],
+                'rainfall': ['mean_rainfall', 'rainfall'],
+                'temperature': ['temp_mean', 'temperature'],
+                'composite_score': ['composite_score'],
+                'pca_score': ['pca_score'],
+                'flood': ['flood'],
+                'distance_to_water': ['distance_to_water']
+            }
+            
+            for key, possible_cols in variable_mappings.items():
+                if key in variable_name.lower():
+                    variable_columns = [col for col in unified_gdf.columns if col in possible_cols]
+                    break
+        
+        if not variable_columns:
+            return {
+                'status': 'error',
+                'message': f'Variable "{variable_name}" not found. Available variables: {list(unified_gdf.columns)[:10]}...'
+            }
+        
+        variable_col = variable_columns[0]
+        ward_info = ward_data.iloc[0]
+        
+        value = ward_info[variable_col]
         if pd.isna(value):
-            clean_value = None
-        elif hasattr(value, 'item'):  # numpy scalar
-            clean_value = value.item()
+            value_text = "No data available"
         else:
-            clean_value = value
+            value_text = str(value)
         
-        result = {
+        return {
             'status': 'success',
             'ward_name': ward_info[ward_col],
-            'variable_name': variable_name,
-            'value': clean_value,
-            'data_type': str(type(clean_value).__name__)
+            'variable_name': variable_col,
+            'value': value,
+            'value_text': value_text,
+            'interpretation': f"The {variable_col} for {ward_info[ward_col]} is {value_text}"
         }
         
-        if warning:
-            result['warning'] = warning
-            
-        return result
-        
     except Exception as e:
-        logger.error(f"Error getting ward variable value: {e}")
+        logger.error(f"Error getting ward variable: {e}")
         return {
             'status': 'error',
-            'message': f'Error getting ward variable value: {str(e)}'
+            'message': f'Error retrieving variable: {str(e)}'
         } 

@@ -229,13 +229,14 @@ def run_pca_analysis(session_id: str) -> Dict[str, Any]:
         }
 
 
-def get_composite_rankings(session_id: str, top_n: int = 20) -> Dict[str, Any]:
+def get_composite_rankings(session_id: str, top_n: int = 20, location_filter: str = None) -> Dict[str, Any]:
     """
-    Get composite score rankings from unified dataset.
+    Get composite score rankings from unified dataset with optional location filtering.
     
     Args:
         session_id: Session identifier
-        top_n: Number of top/bottom wards to return (FIXED to match LLM parameter)
+        top_n: Number of top/bottom wards to return
+        location_filter: Optional filter by state, LGA, or ward name (e.g., "Kano", "Lagos")
         
     Returns:
         Dict with ranked wards by composite score
@@ -272,20 +273,46 @@ def get_composite_rankings(session_id: str, top_n: int = 20) -> Dict[str, Any]:
         
         ward_column = ward_columns[0]
         
+        # Apply location filtering if specified
+        filtered_gdf = unified_gdf.copy()
+        if location_filter:
+            location_filter = location_filter.upper()
+            # Find location columns (state, LGA, ward)
+            location_columns = []
+            for col in unified_gdf.columns:
+                if any(term in col.lower() for term in ['state', 'lga', 'ward']):
+                    location_columns.append(col)
+            
+            # Create filter mask
+            mask = pd.Series([False] * len(unified_gdf))
+            for col in location_columns:
+                if col in unified_gdf.columns:
+                    mask |= unified_gdf[col].astype(str).str.contains(location_filter, case=False, na=False)
+            
+            filtered_gdf = unified_gdf[mask]
+            
+            if len(filtered_gdf) == 0:
+                return {
+                    'status': 'error',
+                    'message': f'No wards found matching location filter: {location_filter}'
+                }
+        
         # Get rankings
-        ranked_df = unified_gdf.sort_values(score_column, ascending=False)
+        ranked_df = filtered_gdf.sort_values(score_column, ascending=False)
         
         top_wards = ranked_df.head(top_n)[[ward_column, score_column]].to_dict('records')
         bottom_wards = ranked_df.tail(top_n)[[ward_column, score_column]].to_dict('records')
         
         return {
             'status': 'success',
-            'message': f'Retrieved composite rankings for {len(unified_gdf)} wards',
+            'message': f'Retrieved composite rankings for {len(filtered_gdf)} wards' + (f' in {location_filter}' if location_filter else ''),
             'score_column': score_column,
             'ward_column': ward_column,
             'top_wards': top_wards,
             'bottom_wards': bottom_wards,
-            'total_wards': len(unified_gdf)
+            'total_wards': len(filtered_gdf),
+            'location_filter': location_filter,
+            'total_available_wards': len(unified_gdf)
         }
         
     except Exception as e:
@@ -631,14 +658,15 @@ def create_urban_extent_map(session_id: str, threshold: float = 50.0) -> Dict[st
         }
 
 
-def filter_wards_by_risk(session_id: str, risk_level: str, limit: int = 10) -> Dict[str, Any]:
+def filter_wards_by_risk(session_id: str, risk_level: str, limit: int = 10, location_filter: str = None) -> Dict[str, Any]:
     """
-    Filter wards by risk level using unified dataset.
+    Filter wards by risk level using unified dataset with optional location filtering.
     
     Args:
         session_id: Session identifier
         risk_level: Risk level to filter by ('High', 'Medium', 'Low')
         limit: Maximum number of wards to return
+        location_filter: Optional filter by state, LGA, or ward name (e.g., "Kano", "Lagos")
         
     Returns:
         Dict with filtered wards
@@ -651,17 +679,41 @@ def filter_wards_by_risk(session_id: str, risk_level: str, limit: int = 10) -> D
                 'message': 'No unified dataset available'
             }
         
+        # Apply location filtering first if specified
+        filtered_gdf = unified_gdf.copy()
+        if location_filter:
+            location_filter = location_filter.upper()
+            # Find location columns (state, LGA, ward)
+            location_columns = []
+            for col in unified_gdf.columns:
+                if any(term in col.lower() for term in ['state', 'lga', 'ward']):
+                    location_columns.append(col)
+            
+            # Create filter mask
+            mask = pd.Series([False] * len(unified_gdf))
+            for col in location_columns:
+                if col in unified_gdf.columns:
+                    mask |= unified_gdf[col].astype(str).str.contains(location_filter, case=False, na=False)
+            
+            filtered_gdf = unified_gdf[mask]
+            
+            if len(filtered_gdf) == 0:
+                return {
+                    'status': 'error',
+                    'message': f'No wards found matching location filter: {location_filter}'
+                }
+        
         # Find category columns
-        category_columns = [col for col in unified_gdf.columns if 'category' in col.lower()]
+        category_columns = [col for col in filtered_gdf.columns if 'category' in col.lower()]
         
         if category_columns:
             # Use the first category column found
             category_col = category_columns[0]
-            filtered_wards = unified_gdf[unified_gdf[category_col] == risk_level]
+            filtered_wards = filtered_gdf[filtered_gdf[category_col] == risk_level]
             
             # Find ward identifier
-            ward_columns = [col for col in unified_gdf.columns 
-                           if any(term in col.lower() for term in ['ward', 'name']) and unified_gdf[col].dtype == 'object']
+            ward_columns = [col for col in filtered_gdf.columns 
+                           if any(term in col.lower() for term in ['ward', 'name']) and filtered_gdf[col].dtype == 'object']
             
             if not ward_columns:
                 return {'status': 'error', 'message': 'No ward identifier found'}
@@ -671,11 +723,13 @@ def filter_wards_by_risk(session_id: str, risk_level: str, limit: int = 10) -> D
             
             return {
                 'status': 'success',
-                'message': f'Found {len(wards)} {risk_level.lower()} risk wards',
+                'message': f'Found {len(wards)} {risk_level.lower()} risk wards' + (f' in {location_filter}' if location_filter else ''),
                 'risk_level': risk_level,
                 'wards': wards,
+                'location_filter': location_filter,
                 'source': f'category_column_{category_col}',
-                'total_matches': len(filtered_wards)
+                'total_matches': len(filtered_wards),
+                'total_available_wards': len(filtered_gdf)
             }
         
         # Fallback to score-based filtering

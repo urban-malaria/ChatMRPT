@@ -41,10 +41,95 @@ def _get_unified_dataset(session_id: str) -> Optional[pd.DataFrame]:
         return None
 
 
-def _save_plotly_chart(fig, session_id: str, chart_name: str) -> Dict[str, str]:
-    """Save Plotly figure as HTML and return file paths."""
+def _store_last_visualization(session_id: str, viz_result: Dict[str, Any]) -> None:
+    """Store visualization result for explanation purposes."""
     try:
-        # Create session directory (not visualizations subdirectory)
+        # Store in session memory if available
+        if not hasattr(current_app, 'session_memory'):
+            current_app.session_memory = {}
+        
+        if session_id not in current_app.session_memory:
+            current_app.session_memory[session_id] = {}
+        
+        current_app.session_memory[session_id]['last_visualization'] = viz_result
+        logger.debug(f"Stored visualization for explanation: {viz_result.get('chart_type', 'unknown')}")
+        
+    except Exception as e:
+        logger.error(f"Error storing visualization for explanation: {e}")
+
+
+def _save_plotly_chart(fig, session_id: str, chart_name: str) -> Dict[str, str]:
+    """Save Plotly chart with optimal display settings"""
+    try:
+        # Apply optimal layout settings for all charts
+        fig.update_layout(
+            # Responsive design
+            autosize=True,
+            responsive=True,
+            
+            # Optimal margins for better display
+            margin=dict(l=60, r=60, t=80, b=60),
+            
+            # Enhanced interactivity
+            hovermode='closest',
+            dragmode='pan',
+            
+            # Better font settings
+            font=dict(
+                family="system-ui, -apple-system, sans-serif",
+                size=12,
+                color='#374151'
+            ),
+            
+            # Modern styling
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            
+            # Enhanced legend
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02,
+                bgcolor="rgba(255,255,255,0.9)",
+                bordercolor="rgba(0,0,0,0.1)",
+                borderwidth=1
+            ),
+            
+            # Better title styling
+            title=dict(
+                font=dict(size=16, color='#111827'),
+                x=0.5,
+                xanchor='center'
+            )
+        )
+        
+        # Configure modebar for better interactivity
+        config = {
+            "displayModeBar": True,
+            "displaylogo": False,
+            "modeBarButtonsToAdd": [
+                "drawline",
+                "drawopenpath",
+                "drawclosedpath",
+                "drawcircle",
+                "drawrect",
+                "eraseshape"
+            ],
+            "modeBarButtonsToRemove": ["lasso2d"],
+            "toImageButtonOptions": {
+                "format": "png",
+                "filename": chart_name,
+                "height": 800,
+                "width": 1200,
+                "scale": 2
+            },
+            "responsive": True,
+            "scrollZoom": True
+        }
+        
+        # Create session directory
         session_folder = f"instance/uploads/{session_id}"
         os.makedirs(session_folder, exist_ok=True)
         
@@ -53,11 +138,19 @@ def _save_plotly_chart(fig, session_id: str, chart_name: str) -> Dict[str, str]:
         filename = f"{chart_name}_{timestamp}.html"
         file_path = os.path.join(session_folder, filename)
         
-        # Save as HTML
-        fig.write_html(file_path, include_plotlyjs='cdn')
+        # Save with enhanced configuration
+        fig.write_html(
+            file_path, 
+            include_plotlyjs='cdn',
+            config=config,
+            div_id=f"plotly-div-{chart_name}",
+            full_html=True
+        )
         
-        # Generate web path - use serve_viz_file route for consistency
+        # Generate web path
         web_path = f"/serve_viz_file/{session_id}/{filename}"
+        
+        logger.info(f"💾 Saved enhanced interactive chart: {filename}")
         
         return {
             'file_path': file_path,
@@ -75,7 +168,7 @@ def _save_plotly_chart(fig, session_id: str, chart_name: str) -> Dict[str, str]:
 
 
 def histogram(session_id: str, variable: str, bins: int = 30, color_by: str = None) -> Dict[str, Any]:
-    """Create histogram visualization."""
+    """Create histogram visualization with optimal display settings."""
     try:
         df = _get_unified_dataset(session_id)
         if df is None:
@@ -84,25 +177,47 @@ def histogram(session_id: str, variable: str, bins: int = 30, color_by: str = No
         if variable not in df.columns:
             return {'status': 'error', 'message': f'Variable {variable} not found'}
         
-        # Create histogram
+        # Create histogram with enhanced styling
         if color_by and color_by in df.columns:
             fig = px.histogram(df, x=variable, color=color_by, nbins=bins,
-                             title=f'Distribution of {variable} by {color_by}')
+                             title=f'Distribution of {variable} by {color_by}',
+                             marginal="box")
         else:
             fig = px.histogram(df, x=variable, nbins=bins,
-                             title=f'Distribution of {variable}')
+                             title=f'Distribution of {variable}',
+                             marginal="rug")
         
-        fig.update_layout(height=500, template='plotly_white')
+        # Apply optimal layout
+        fig.update_layout(
+            height=500,
+            template='plotly_white',
+            showlegend=True if color_by else False,
+            xaxis_title=variable.replace('_', ' ').title(),
+            yaxis_title='Count',
+            bargap=0.1
+        )
+        
+        # Enhanced hover information
+        fig.update_traces(
+            hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
+        )
+        
         paths = _save_plotly_chart(fig, session_id, f'histogram_{variable}')
         
-        return {
+        result = {
             'status': 'success',
             'message': f'Histogram created for {variable}',
             'chart_type': 'histogram',
             'variable': variable,
+            'bins': bins,
             'color_by': color_by,
             **paths
         }
+        
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error creating histogram: {e}")
@@ -110,7 +225,7 @@ def histogram(session_id: str, variable: str, bins: int = 30, color_by: str = No
 
 
 def boxplot(session_id: str, variable: str, group_by: str = None) -> Dict[str, Any]:
-    """Create boxplot visualization."""
+    """Create boxplot visualization with optimal display settings."""
     try:
         df = _get_unified_dataset(session_id)
         if df is None:
@@ -119,17 +234,36 @@ def boxplot(session_id: str, variable: str, group_by: str = None) -> Dict[str, A
         if variable not in df.columns:
             return {'status': 'error', 'message': f'Variable {variable} not found'}
         
-        # Create boxplot
+        # Create boxplot with enhanced styling
         if group_by and group_by in df.columns:
-            fig = px.box(df, x=group_by, y=variable,
-                        title=f'{variable} Distribution by {group_by}')
+            fig = px.box(df, y=variable, x=group_by, 
+                        title=f'{variable} Distribution by {group_by}',
+                        points="outliers")
         else:
-            fig = px.box(df, y=variable, title=f'{variable} Distribution')
+            fig = px.box(df, y=variable, 
+                        title=f'{variable} Distribution',
+                        points="outliers")
         
-        fig.update_layout(height=500, template='plotly_white')
+        # Apply optimal layout
+        fig.update_layout(
+            height=500,
+            template='plotly_white',
+            xaxis_title=group_by.replace('_', ' ').title() if group_by else '',
+            yaxis_title=variable.replace('_', ' ').title(),
+            showlegend=False
+        )
+        
+        # Enhanced hover and styling
+        fig.update_traces(
+            boxpoints='outliers',
+            jitter=0.3,
+            pointpos=-1.8,
+            hovertemplate='<b>%{y}</b><extra></extra>'
+        )
+        
         paths = _save_plotly_chart(fig, session_id, f'boxplot_{variable}')
         
-        return {
+        result = {
             'status': 'success',
             'message': f'Boxplot created for {variable}',
             'chart_type': 'boxplot',
@@ -137,6 +271,11 @@ def boxplot(session_id: str, variable: str, group_by: str = None) -> Dict[str, A
             'group_by': group_by,
             **paths
         }
+        
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error creating boxplot: {e}")
@@ -173,7 +312,7 @@ def bar_chart(session_id: str, x_variable: str, y_variable: str = None, color_by
         chart_name = f'bar_chart_{x_variable}_{y_variable}' if y_variable else f'bar_chart_{x_variable}'
         paths = _save_plotly_chart(fig, session_id, chart_name)
         
-        return {
+        result = {
             'status': 'success',
             'message': f'Bar chart created for {x_variable}',
             'chart_type': 'bar_chart',
@@ -182,6 +321,11 @@ def bar_chart(session_id: str, x_variable: str, y_variable: str = None, color_by
             'color_by': color_by,
             **paths
         }
+        
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error creating bar chart: {e}")
@@ -212,7 +356,7 @@ def line_chart(session_id: str, x_variable: str, y_variable: str, color_by: str 
         fig.update_layout(height=500, template='plotly_white')
         paths = _save_plotly_chart(fig, session_id, f'line_chart_{x_variable}_{y_variable}')
         
-        return {
+        result = {
             'status': 'success',
             'message': f'Line chart created for {y_variable} vs {x_variable}',
             'chart_type': 'line_chart',
@@ -222,35 +366,60 @@ def line_chart(session_id: str, x_variable: str, y_variable: str, color_by: str 
             **paths
         }
         
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
+        
     except Exception as e:
         logger.error(f"Error creating line chart: {e}")
         return {'status': 'error', 'message': f'Error: {str(e)}'}
 
 
 def scatter_plot(session_id: str, x_variable: str, y_variable: str, color_by: str = None, size_by: str = None) -> Dict[str, Any]:
-    """Create scatter plot visualization."""
+    """Create scatter plot visualization with optimal display settings."""
     try:
         df = _get_unified_dataset(session_id)
         if df is None:
             return {'status': 'error', 'message': 'No dataset available'}
         
-        if x_variable not in df.columns or y_variable not in df.columns:
-            return {'status': 'error', 'message': 'Variables not found in dataset'}
+        missing_vars = [var for var in [x_variable, y_variable] if var not in df.columns]
+        if missing_vars:
+            return {'status': 'error', 'message': f'Variables not found: {missing_vars}'}
         
-        # Create scatter plot
+        # Create scatter plot with enhanced styling
         fig = px.scatter(
             df, x=x_variable, y=y_variable,
             color=color_by if color_by and color_by in df.columns else None,
             size=size_by if size_by and size_by in df.columns else None,
-            title=f'{y_variable} vs {x_variable}'
+            title=f'{y_variable} vs {x_variable}',
+            trendline="ols",
+            marginal_x="histogram",
+            marginal_y="histogram"
         )
         
-        fig.update_layout(height=500, template='plotly_white')
-        paths = _save_plotly_chart(fig, session_id, f'scatter_plot_{x_variable}_{y_variable}')
+        # Apply optimal layout
+        fig.update_layout(
+            height=600,
+            template='plotly_white',
+            xaxis_title=x_variable.replace('_', ' ').title(),
+            yaxis_title=y_variable.replace('_', ' ').title(),
+            showlegend=True if color_by else False
+        )
         
-        return {
+        # Enhanced hover information
+        hover_template = f'<b>{x_variable}</b>: %{{x}}<br><b>{y_variable}</b>: %{{y}}'
+        if color_by:
+            hover_template += f'<br><b>{color_by}</b>: %{{marker.color}}'
+        hover_template += '<extra></extra>'
+        
+        fig.update_traces(hovertemplate=hover_template)
+        
+        paths = _save_plotly_chart(fig, session_id, f'scatter_{x_variable}_{y_variable}')
+        
+        result = {
             'status': 'success',
-            'message': f'Scatter plot created for {y_variable} vs {x_variable}',
+            'message': f'Scatter plot created: {y_variable} vs {x_variable}',
             'chart_type': 'scatter_plot',
             'x_variable': x_variable,
             'y_variable': y_variable,
@@ -259,22 +428,27 @@ def scatter_plot(session_id: str, x_variable: str, y_variable: str, color_by: st
             **paths
         }
         
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
+        
     except Exception as e:
         logger.error(f"Error creating scatter plot: {e}")
         return {'status': 'error', 'message': f'Error: {str(e)}'}
 
 
 def heatmap(session_id: str, variables: List[str] = None, method: str = 'pearson') -> Dict[str, Any]:
-    """Create correlation heatmap visualization."""
+    """Create correlation heatmap with optimal display settings."""
     try:
         df = _get_unified_dataset(session_id)
         if df is None:
             return {'status': 'error', 'message': 'No dataset available'}
         
-        if variables:
-            available_vars = [var for var in variables if var in df.columns and pd.api.types.is_numeric_dtype(df[var])]
-        else:
-            available_vars = list(df.select_dtypes(include=[np.number]).columns)[:15]
+        # Get numeric variables
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        available_vars = variables if variables else numeric_cols
+        available_vars = [var for var in available_vars if var in numeric_cols]
         
         if len(available_vars) < 2:
             return {'status': 'error', 'message': 'Need at least 2 numeric variables for correlation heatmap'}
@@ -282,7 +456,7 @@ def heatmap(session_id: str, variables: List[str] = None, method: str = 'pearson
         # Calculate correlation matrix
         corr_matrix = df[available_vars].corr(method=method)
         
-        # Create heatmap
+        # Create enhanced heatmap
         fig = go.Figure(data=go.Heatmap(
             z=corr_matrix.values,
             x=corr_matrix.columns,
@@ -291,17 +465,23 @@ def heatmap(session_id: str, variables: List[str] = None, method: str = 'pearson
             zmid=0,
             text=np.round(corr_matrix.values, 2),
             texttemplate="%{text}",
-            textfont={"size": 10}
+            textfont={"size": 10},
+            hoverongaps=False,
+            hovertemplate='<b>%{x}</b> vs <b>%{y}</b><br>Correlation: %{z:.3f}<extra></extra>'
         ))
         
         fig.update_layout(
             title=f'Correlation Heatmap ({method.title()} method)',
-            height=600, width=600, template='plotly_white'
+            height=max(600, len(available_vars) * 40),
+            width=max(600, len(available_vars) * 40),
+            template='plotly_white',
+            xaxis=dict(side='bottom'),
+            yaxis=dict(side='left')
         )
         
         paths = _save_plotly_chart(fig, session_id, f'heatmap_correlation_{method}')
         
-        return {
+        result = {
             'status': 'success',
             'message': f'Correlation heatmap created using {method} method',
             'chart_type': 'heatmap',
@@ -309,6 +489,11 @@ def heatmap(session_id: str, variables: List[str] = None, method: str = 'pearson
             'method': method,
             **paths
         }
+        
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error creating heatmap: {e}")
@@ -338,14 +523,19 @@ def pie_chart(session_id: str, variable: str, limit: int = 10) -> Dict[str, Any]
         fig.update_layout(height=500, template='plotly_white')
         paths = _save_plotly_chart(fig, session_id, f'pie_chart_{variable}')
         
-        return {
+        result = {
             'status': 'success',
             'message': f'Pie chart created for {variable}',
             'chart_type': 'pie_chart',
             'variable': variable,
-            'categories_shown': len(value_counts),
+            'limit': limit,
             **paths
         }
+        
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error creating pie chart: {e}")
@@ -353,7 +543,7 @@ def pie_chart(session_id: str, variable: str, limit: int = 10) -> Dict[str, Any]
 
 
 def map_plot(session_id: str, color_variable: str = None, size_variable: str = None) -> Dict[str, Any]:
-    """Create geographic map visualization."""
+    """Create geographic map visualization with optimal display settings."""
     try:
         df = _get_unified_dataset(session_id)
         if df is None:
@@ -368,20 +558,39 @@ def map_plot(session_id: str, color_variable: str = None, size_variable: str = N
         
         lat_col, lon_col = lat_cols[0], lon_cols[0]
         
-        # Create scatter mapbox
-        fig = px.scatter_mapbox(
+        # Create enhanced scatter mapbox
+        fig = px.scatter_map(
             df, lat=lat_col, lon=lon_col,
             color=color_variable if color_variable and color_variable in df.columns else None,
             size=size_variable if size_variable and size_variable in df.columns else None,
             title='Geographic Distribution',
-            mapbox_style='open-street-map',
-            height=600
+            hover_data=[col for col in df.columns if col not in [lat_col, lon_col]][:5],
+            zoom=10
         )
         
-        fig.update_layout(template='plotly_white')
+        # Apply optimal map layout
+        fig.update_layout(
+            height=700,
+            template='plotly_white',
+            map=dict(
+                style='open-street-map',
+                center=dict(
+                    lat=df[lat_col].mean(),
+                    lon=df[lon_col].mean()
+                ),
+                zoom=10
+            ),
+            margin=dict(l=0, r=0, t=60, b=0)
+        )
+        
+        # Enhanced hover information
+        fig.update_traces(
+            hovertemplate='<b>Location</b><br>Lat: %{lat}<br>Lon: %{lon}<extra></extra>'
+        )
+        
         paths = _save_plotly_chart(fig, session_id, f'map_plot_{color_variable or "basic"}')
         
-        return {
+        result = {
             'status': 'success',
             'message': 'Geographic map created',
             'chart_type': 'map_plot',
@@ -389,6 +598,11 @@ def map_plot(session_id: str, color_variable: str = None, size_variable: str = N
             'size_variable': size_variable,
             **paths
         }
+        
+        # Store for explanation purposes
+        _store_last_visualization(session_id, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error creating map plot: {e}")
