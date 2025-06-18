@@ -77,10 +77,14 @@ test_reports/
 PAGINATION_AND_REPORT_FIXES.md
 CRITICAL_UI_FIX.css
 
-# Ignore all markdown files except README and ARCHITECTURE
+# Ignore all markdown files except README, ARCHITECTURE, and DEPLOYMENT
 *.md
 !README.md
 !ARCHITECTURE.md
+!DEPLOYMENT.md
+
+# Settlement data (large files - will be synced separately)
+kano_settlement_data/
 
 # Exclude PDFs, test files, Word/Excel documents, and py-sidebot-main folder
 *.pdf
