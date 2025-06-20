@@ -10,6 +10,7 @@ import logging
 import json
 from typing import Dict, Any, List, Optional
 from flask import current_app
+from difflib import get_close_matches
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,15 @@ class RequestInterpreter:
         self.data_service = data_service
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
+        
+        # Common ambiguous phrases that need clarification
+        self.ambiguous_patterns = {
+            'analysis': ['composite analysis', 'PCA analysis', 'statistical analysis', 'spatial analysis'],
+            'ranking': ['composite rankings', 'PCA rankings', 'vulnerability rankings'],
+            'map': ['vulnerability map', 'risk map', 'choropleth map'],
+            'top': ['top vulnerable wards', 'highest risk areas', 'most affected regions'],
+            'data': ['upload data', 'analyze data', 'view data', 'data summary']
+        }
 
 
     def parse_request(self, user_message: str, session_id: str) -> Dict[str, Any]:
@@ -78,6 +88,7 @@ class RequestInterpreter:
             
             2. SYSTEM QUESTIONS: About ChatMRPT itself  
                - "who are you", "what can you do", "tell me about yourself" -> explain_concept with concept="ChatMRPT"
+               - "help", "help me", "I need help", "what do I do" -> show_help_options
             
             3. KNOWLEDGE/EDUCATIONAL: Any question about malaria, health, epidemiology, etc.
                - Extract the main topic/concept from the user's question
@@ -120,7 +131,21 @@ class RequestInterpreter:
             - Scatter plots: Use x_variable and y_variable, suggest actual column names like "composite_score", "pca_score", "population_density", "elevation"
             - Maps: Use method="composite" or "pca" or "auto"
 
-            Only use exact tool names and parameters from the available list. Provide helpful error context if tools cannot satisfy the request.
+            AMBIGUOUS REQUEST HANDLING:
+            When user request is vague or could mean multiple things:
+            1. If asking about "analysis" without specifying type, return empty tool_calls and set intent_type="clarification_needed"
+            2. If asking about "data" without context, return empty tool_calls and set intent_type="clarification_needed"
+            3. If mentioning tools that don't exist, return empty tool_calls and set intent_type="clarification_needed"
+            4. If parameters are missing or unclear, return empty tool_calls and set intent_type="clarification_needed"
+            
+            Example ambiguous requests that need clarification:
+            - "run analysis" (which type?)
+            - "show me the data" (what aspect?)
+            - "what about ward X" (what information?)
+            - "make a chart" (what kind?)
+            - "do the thing" (what thing?)
+
+            Only use exact tool names and parameters from the available list. If unsure, set intent_type="clarification_needed" instead of guessing.
             """
             
             user_prompt = f'Parse this request: "{user_message}"'
@@ -135,7 +160,7 @@ class RequestInterpreter:
             
             logger.info(f"🔧 DEBUG: LLM raw response: {parse_response[:500]}...")
             
-            # Extract JSON - NO FALLBACKS
+            # Extract JSON - WITH CLARIFICATION FALLBACK
             clean_response = parse_response.strip()
             if clean_response.startswith('```json'):
                 clean_response = clean_response[7:-3]
@@ -145,23 +170,44 @@ class RequestInterpreter:
             try:
                 parsed_intent = json.loads(clean_response)
             except json.JSONDecodeError as e:
-                return {
-                    'status': 'error',
-                    'message': f'JSON parsing failed: {str(e)}',
-                    'raw_response': parse_response
-                }
+                # Instead of failing, try to understand what went wrong and ask for clarification
+                return self._generate_clarification_response(
+                    user_message, 
+                    "I'm having trouble understanding your request. Could you please rephrase it or be more specific?",
+                    session_id
+                )
             
             logger.info(f"🔧 DEBUG: Parsed intent tool_calls: {len(parsed_intent.get('tool_calls', []))}")
             
-            # Validate tool calls - NO FALLBACKS
+            # Check if clarification is needed
+            if parsed_intent.get('intent_type') == 'clarification_needed':
+                # Determine what kind of clarification to provide
+                clarification_type = self._determine_clarification_type(user_message, parsed_intent)
+                return self._generate_contextual_clarification(
+                    user_message, 
+                    clarification_type,
+                    session_id
+                )
+            
+            # Validate tool calls - WITH HELPFUL SUGGESTIONS
             for tool_call in parsed_intent.get('tool_calls', []):
                 tool_name = tool_call.get('tool_name')
                 if tool_name not in tool_names:
-                    return {
-                        'status': 'error',
-                        'message': f'Invalid tool name: {tool_name}. Available tools: {tool_names[:10]}...',
-                        'parsed_intent': parsed_intent
-                    }
+                    # Find similar tool names
+                    close_matches = get_close_matches(tool_name, tool_names, n=3, cutoff=0.6)
+                    
+                    if close_matches:
+                        suggestion_text = f"Did you mean one of these: {', '.join(close_matches)}?"
+                    else:
+                        # Try to understand what the user might want
+                        suggestion_text = self._suggest_relevant_tools(user_message, tool_names)
+                    
+                    return self._generate_clarification_response(
+                        user_message,
+                        f"I couldn't find a tool called '{tool_name}'. {suggestion_text}",
+                        session_id,
+                        available_tools=close_matches if close_matches else None
+                    )
             
             # Inject session_id
             for tool_call in parsed_intent['tool_calls']:
@@ -278,26 +324,47 @@ class RequestInterpreter:
         """Format execution results into comprehensive chat response - NO FALLBACKS."""
         try:
             if execution_results.get('status') == 'error':
-                return {
-                    'status': 'error',
-                    'response': f"❌ EXECUTION FAILED: {execution_results.get('message', 'Unknown error')}",
-                    'visualizations': [],
-                    'data_summary': None,
-                    'debug_info': execution_results
-                }
+                # Generate helpful error response
+                return self._generate_helpful_error_response(
+                    user_message, 
+                    execution_results.get('message', 'Unknown error'),
+                    session_id
+                )
             
             results = execution_results.get('results', [])
             successful_results = [r for r in results if r.get('status') == 'success']
             failed_results = [r for r in results if r.get('status') == 'error']
             
             if not successful_results:
-                return {
-                    'status': 'error',
-                    'response': f'❌ ALL TOOLS FAILED: {len(failed_results)} tools failed execution',
-                    'visualizations': [],
-                    'data_summary': None,
-                    'failed_tools': failed_results
-                }
+                # All tools failed - provide helpful guidance and trigger help
+                error_details = [f"{r.get('tool_name')}: {r.get('message')}" for r in failed_results]
+                
+                # Try to invoke help tool automatically
+                try:
+                    from ..tools import get_tool_function
+                    help_function = get_tool_function('show_help_options')
+                    if help_function:
+                        help_result = help_function(
+                            session_id=session_id,
+                            error_context=f"All requested operations failed: {'; '.join(error_details[:2])}"
+                        )
+                        if help_result.get('status') == 'success' and help_result.get('response'):
+                            return {
+                                'status': 'error',
+                                'response': help_result['response'],
+                                'visualizations': [],
+                                'error_handled': True,
+                                'help_provided': True
+                            }
+                except Exception as e:
+                    logger.error(f"Failed to invoke help tool: {e}")
+                
+                # Fallback to error response
+                return self._generate_helpful_error_response(
+                    user_message,
+                    f"I encountered issues with the analysis. Details: {'; '.join(error_details[:2])}",
+                    session_id
+                )
             
             # Collect visualizations and data
             visualizations = []
@@ -347,15 +414,20 @@ class RequestInterpreter:
         try:
             logger.info(f"Processing message for session {session_id}: {user_message[:100]}...")
             
-            # Step 1: Parse request - NO FALLBACKS
+            # Step 1: Parse request - WITH CLARIFICATION
             parse_result = self.parse_request(user_message, session_id)
+            
+            # Handle clarification responses
+            if parse_result.get('status') == 'clarification_needed':
+                return parse_result
+            
             if parse_result['status'] == 'error':
-                return {
-                    'status': 'error',
-                    'response': f'❌ REQUEST PARSING FAILED: {parse_result.get("message", "Unknown parsing error")}',
-                    'visualizations': [],
-                    'debug_info': parse_result
-                }
+                # Instead of showing technical error, ask for clarification
+                return self._generate_clarification_response(
+                    user_message,
+                    "I'm having trouble understanding what you'd like me to do. Could you please provide more details or rephrase your request?",
+                    session_id
+                )
             
             # Step 2: Execute intent - NO FALLBACKS
             execution_results = self.execute_intent(parse_result['parsed_intent'], session_id)
@@ -636,3 +708,268 @@ Keep it natural and conversational, not rigid or template-like."""
             return '\n\n---\n\n'.join(explanations)
 
     # Legacy methods removed - all responses now generated by LLM
+    
+    def _generate_clarification_response(self, user_message: str, clarification_message: str, 
+                                       session_id: str, available_tools: List[str] = None) -> Dict[str, Any]:
+        """Generate a helpful clarification response when request is ambiguous."""
+        try:
+            # Use LLM to generate a natural clarification
+            system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
+            
+The user's request was unclear or ambiguous. Your task is to:
+1. Acknowledge their request in a friendly way
+2. Explain what wasn't clear (without being technical)
+3. Offer helpful suggestions or ask clarifying questions
+4. If possible tools are provided, present them as options
+5. Guide them to rephrase or be more specific
+
+Be conversational and helpful, like a knowledgeable colleague would be.
+Don't mention technical terms like "parsing", "JSON", or "tool validation".
+"""
+            
+            user_prompt = f"""User said: "{user_message}"
+
+Issue: {clarification_message}
+
+{f"Possible tools that might help: {', '.join(available_tools)}" if available_tools else ""}
+
+Please generate a friendly, helpful clarification response that guides the user."""
+
+            clarification_response = self.llm_manager.generate_response(
+                prompt=user_prompt,
+                system_message=system_prompt,
+                temperature=0.8,
+                max_tokens=400,
+                session_id=session_id
+            )
+            
+            return {
+                'status': 'clarification_needed',
+                'response': clarification_response.strip(),
+                'visualizations': [],
+                'original_message': user_message,
+                'suggestions': available_tools if available_tools else []
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating clarification: {e}")
+            # Fallback to simple clarification
+            return {
+                'status': 'clarification_needed',
+                'response': clarification_message,
+                'visualizations': [],
+                'original_message': user_message
+            }
+    
+    def _suggest_relevant_tools(self, user_message: str, available_tools: List[str]) -> str:
+        """Suggest relevant tools based on keywords in user message."""
+        message_lower = user_message.lower()
+        suggestions = []
+        
+        # Check for common patterns
+        if any(word in message_lower for word in ['rank', 'top', 'vulnerable', 'highest']):
+            suggestions.extend(['get_composite_rankings', 'get_pca_rankings'])
+        
+        if any(word in message_lower for word in ['map', 'visualize', 'show']):
+            suggestions.append('create_vulnerability_map')
+            
+        if any(word in message_lower for word in ['scatter', 'plot', 'correlation']):
+            suggestions.append('scatter_plot')
+            
+        if any(word in message_lower for word in ['explain', 'what is', 'tell me about']):
+            suggestions.append('explain_concept')
+            
+        if any(word in message_lower for word in ['ward', 'specific area']):
+            suggestions.append('get_ward_information')
+        
+        # Filter to only include available tools
+        valid_suggestions = [s for s in suggestions if s in available_tools][:3]
+        
+        if valid_suggestions:
+            return f"Based on your question, you might want to try: {', '.join(valid_suggestions)}"
+        else:
+            return "Could you please be more specific about what kind of analysis or information you're looking for?"
+    
+    def _generate_helpful_error_response(self, user_message: str, error_details: str, session_id: str) -> Dict[str, Any]:
+        """Generate a helpful response when errors occur."""
+        try:
+            system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
+
+An error occurred while processing the user's request. Your task is to:
+1. Acknowledge the issue without being overly technical
+2. Suggest what might have gone wrong in simple terms
+3. Offer alternative approaches or clarifying questions
+4. Guide them on how to proceed
+
+Common issues and responses:
+- No data uploaded: "It looks like you haven't uploaded any data yet. Would you like me to guide you through the data upload process?"
+- Tool not found: "I couldn't find that specific analysis. Would you like me to show you what analyses are available?"
+- Invalid parameters: "I need a bit more information to complete that analysis. Could you specify..."
+
+Be helpful and solution-oriented, not just reporting errors."""
+
+            user_prompt = f"""User said: "{user_message}"
+
+Error encountered: {error_details}
+
+Please generate a helpful response that:
+1. Explains what might have gone wrong (simply)
+2. Offers solutions or alternatives
+3. Asks clarifying questions if needed
+4. Maintains a helpful, professional tone"""
+
+            error_response = self.llm_manager.generate_response(
+                prompt=user_prompt,
+                system_message=system_prompt,
+                temperature=0.8,
+                max_tokens=400,
+                session_id=session_id
+            )
+            
+            return {
+                'status': 'error',
+                'response': error_response.strip(),
+                'visualizations': [],
+                'original_message': user_message,
+                'error_handled': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating helpful error response: {e}")
+            # Fallback to simple error message
+            return {
+                'status': 'error',
+                'response': "I encountered an issue processing your request. Could you please try rephrasing it or let me know what specific analysis you're looking for?",
+                'visualizations': [],
+                'original_message': user_message
+            }
+    
+    def _determine_clarification_type(self, user_message: str, parsed_intent: Dict) -> str:
+        """Determine what type of clarification is needed based on the ambiguous request."""
+        message_lower = user_message.lower()
+        
+        # Analysis ambiguity
+        if any(word in message_lower for word in ['analysis', 'analyze', 'run']):
+            return 'analysis_type'
+        
+        # Data ambiguity
+        if any(word in message_lower for word in ['data', 'show', 'display']) and not any(word in message_lower for word in ['map', 'chart', 'plot']):
+            return 'data_view'
+        
+        # Visualization ambiguity
+        if any(word in message_lower for word in ['chart', 'graph', 'plot', 'visualize', 'map']):
+            return 'visualization_type'
+        
+        # Ward information ambiguity
+        if 'ward' in message_lower and not any(word in message_lower for word in ['ranking', 'top', 'information']):
+            return 'ward_info'
+        
+        # General ambiguity
+        return 'general'
+    
+    def _generate_contextual_clarification(self, user_message: str, clarification_type: str, session_id: str) -> Dict[str, Any]:
+        """Generate context-specific clarification based on the type of ambiguity."""
+        clarification_prompts = {
+            'analysis_type': {
+                'message': "I can help you with different types of analysis. Which would you prefer?",
+                'options': [
+                    "Composite vulnerability analysis - combines multiple risk factors",
+                    "PCA analysis - identifies key patterns in your data",
+                    "Statistical analysis - correlations and relationships",
+                    "Spatial analysis - geographic patterns"
+                ],
+                'suggestions': ['run_composite_analysis', 'run_pca_analysis', 'correlation_matrix']
+            },
+            'data_view': {
+                'message': "I can show you data in different ways. What would you like to see?",
+                'options': [
+                    "Ward rankings by vulnerability",
+                    "Summary statistics of your data",
+                    "Specific ward information",
+                    "Variable distributions"
+                ],
+                'suggestions': ['get_composite_rankings', 'descriptive_statistics', 'get_ward_information']
+            },
+            'visualization_type': {
+                'message': "I can create different visualizations. Which type would help you most?",
+                'options': [
+                    "Vulnerability map - geographic risk distribution",
+                    "Scatter plot - relationship between two variables",
+                    "Box plot - distribution comparisons",
+                    "Correlation matrix - variable relationships"
+                ],
+                'suggestions': ['create_vulnerability_map', 'scatter_plot', 'box_plot']
+            },
+            'ward_info': {
+                'message': "What would you like to know about this ward?",
+                'options': [
+                    "Vulnerability ranking and score",
+                    "Key risk factors",
+                    "Comparison with other wards",
+                    "Detailed statistics"
+                ],
+                'suggestions': ['get_ward_information', 'get_composite_rankings']
+            },
+            'general': {
+                'message': "I can help with malaria risk analysis. What would you like to explore?",
+                'options': [
+                    "Upload and analyze data",
+                    "View vulnerability rankings",
+                    "Create risk maps",
+                    "Learn about malaria concepts"
+                ],
+                'suggestions': []
+            }
+        }
+        
+        prompt_data = clarification_prompts.get(clarification_type, clarification_prompts['general'])
+        
+        # Use LLM to make the clarification more natural and contextual
+        system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
+
+The user made an ambiguous request. Based on the clarification type and options provided, 
+create a natural, conversational response that:
+1. Acknowledges their request
+2. Explains the available options conversationally
+3. Asks them to choose or be more specific
+4. Feels like a helpful colleague, not a menu system
+
+Don't just list options - weave them into natural language."""
+
+        user_prompt = f"""User said: "{user_message}"
+
+Clarification type: {clarification_type}
+Base message: {prompt_data['message']}
+Available options: {prompt_data['options']}
+
+Generate a helpful, conversational clarification response."""
+
+        try:
+            clarification_response = self.llm_manager.generate_response(
+                prompt=user_prompt,
+                system_message=system_prompt,
+                temperature=0.8,
+                max_tokens=400,
+                session_id=session_id
+            )
+            
+            return {
+                'status': 'clarification_needed',
+                'response': clarification_response.strip(),
+                'visualizations': [],
+                'original_message': user_message,
+                'suggestions': prompt_data.get('suggestions', [])
+            }
+            
+        except Exception as e:
+            # Fallback to structured response
+            options_text = '\n'.join([f"• {opt}" for opt in prompt_data['options']])
+            fallback_response = f"{prompt_data['message']}\n\n{options_text}"
+            
+            return {
+                'status': 'clarification_needed',
+                'response': fallback_response,
+                'visualizations': [],
+                'original_message': user_message,
+                'suggestions': prompt_data.get('suggestions', [])
+            }

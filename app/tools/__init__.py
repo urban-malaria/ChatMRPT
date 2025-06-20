@@ -51,7 +51,8 @@ from .knowledge_tools import (
     explain_concept,
     explain_methodology,
     explain_variable,
-    interpret_results
+    interpret_results,
+    show_help_options
 )
 
 from .system_tools import (
@@ -209,6 +210,7 @@ TOOL_REGISTRY = {
     'explain_methodology': explain_methodology,
     'explain_variable': explain_variable,
     'interpret_results': interpret_results,
+    'show_help_options': show_help_options,
     
     # System Tools
     'check_data_availability': check_data_availability,
@@ -310,7 +312,7 @@ def get_tools_by_category():
             'heatmap', 'pie_chart', 'map_plot', 'box_plot_flexible', 'scatter_plot_flexible'
         ],
         'knowledge': [
-            'simple_greeting', 'explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results'
+            'simple_greeting', 'explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results', 'show_help_options'
         ],
         'visual_explanation': [
             'explain_last_visualization', 'explain_specific_visualization', 'get_visualization_recommendations',

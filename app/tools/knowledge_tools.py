@@ -480,4 +480,139 @@ def interpret_results(session_id: str, analysis_type: str = 'composite', specifi
         
     except Exception as e:
         logger.error(f"Error interpreting results: {e}")
-        return {'status': 'error', 'message': f'Error generating result interpretation: {str(e)}'} 
+        return {'status': 'error', 'message': f'Error generating result interpretation: {str(e)}'}
+
+
+def show_help_options(session_id: str, error_context: str = None) -> dict:
+    """
+    Show comprehensive help options when user needs guidance.
+    
+    Args:
+        session_id: The session ID for tracking and context
+        error_context: Optional context about what went wrong
+        
+    Returns:
+        dict: Help response with suggestions and guidance
+    """
+    try:
+        from ..services import service_container
+        
+        llm_manager = service_container.get('llm_manager')
+        data_service = service_container.get('data_service')
+        
+        # Get session context to provide relevant help
+        session_context = _get_session_context(data_service, session_id)
+        
+        system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
+
+The user needs help understanding what you can do or how to proceed. Your task is to:
+
+1. Be warm and welcoming
+2. Provide clear, actionable guidance
+3. Suggest specific things they can try based on their current context
+4. Use natural, conversational language
+5. Make complex features sound simple and useful
+
+CONTEXT-AWARE HELP:
+- If they have data: Suggest specific analyses they can run
+- If no data: Guide them on data upload and what formats work
+- If analysis complete: Suggest visualizations or deeper insights
+- Always provide 3-5 specific example questions they can ask
+
+FORMAT:
+Use a friendly introduction, then organize help into clear sections with examples.
+Make it feel like a colleague explaining, not a manual."""
+
+        # Build context-aware prompt
+        context_details = []
+        
+        if session_context['total_wards'] > 0:
+            context_details.append(f"User has uploaded data for {session_context['total_wards']} wards")
+            
+            if session_context['has_composite_analysis'] or session_context['has_pca_analysis']:
+                context_details.append("They have completed some analyses")
+                example_questions = [
+                    "Show me the top 10 most vulnerable wards",
+                    "Create a vulnerability map",
+                    "What's the risk level for [specific ward name]?",
+                    "Compare composite and PCA rankings",
+                    "Explain what makes a ward high-risk"
+                ]
+            else:
+                example_questions = [
+                    "Run composite vulnerability analysis",
+                    "Analyze my data using PCA",
+                    "Show me summary statistics",
+                    "What variables are in my dataset?",
+                    "Create a scatter plot of population vs malaria cases"
+                ]
+        else:
+            context_details.append("No data uploaded yet")
+            example_questions = [
+                "How do I upload my data?",
+                "What file formats do you accept?",
+                "Explain composite vulnerability scoring",
+                "What is PCA analysis?",
+                "Tell me about malaria risk factors"
+            ]
+        
+        user_prompt = f"""Generate helpful guidance for the user.
+
+Context: {' | '.join(context_details) if context_details else 'New session'}
+{f"Error context: {error_context}" if error_context else ""}
+
+Include these example questions naturally in your response:
+{chr(10).join([f'• "{q}"' for q in example_questions])}
+
+Make the help feel personal and actionable based on their current situation."""
+
+        help_response = llm_manager.generate_response(
+            prompt=user_prompt,
+            system_message=system_prompt,
+            temperature=0.8,
+            max_tokens=800,
+            session_id=session_id
+        )
+        
+        return {
+            'status': 'success',
+            'message': 'Help guidance generated',
+            'response': help_response.strip(),
+            'help_type': 'contextual',
+            'session_context': {
+                'has_data': session_context['total_wards'] > 0,
+                'has_analysis': session_context['has_composite_analysis'] or session_context['has_pca_analysis']
+            },
+            'suggested_actions': example_questions
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating help: {e}")
+        # Fallback help response
+        fallback_help = """I'm ChatMRPT, your malaria risk assessment assistant! Here's how I can help:
+
+**If you have data to analyze:**
+• Upload CSV, Excel, or Shapefile data through the upload interface
+• Ask me to "run composite analysis" or "run PCA analysis"
+• Request visualizations like "create a vulnerability map"
+• Query specific wards: "What's the risk level for Dala ward?"
+
+**For learning about malaria:**
+• Ask about concepts: "Explain malaria transmission"
+• Methodology questions: "How does composite scoring work?"
+• Variable explanations: "What is pfpr?"
+
+**Need analysis help?**
+Try questions like:
+• "Show me the top 20 most vulnerable wards"
+• "Create a scatter plot of elevation vs malaria cases"
+• "What are the main risk factors in my data?"
+
+What would you like to explore?"""
+        
+        return {
+            'status': 'success',
+            'message': 'Help guidance provided',
+            'response': fallback_help,
+            'help_type': 'fallback'
+        } 

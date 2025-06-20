@@ -39,10 +39,10 @@ class DevelopmentConfig(BaseConfig):
         super().init_app(app)
         
         # Development-specific initialization
-        print(f"🚀 ChatMRPT Development Mode")
-        print(f"📂 Instance folder: {cls.INSTANCE_FOLDER_PATH}")
-        print(f"🤖 OpenAI API Key: {'✓ Set' if cls.OPENAI_API_KEY else '✗ Missing'}")
-        print(f"📊 Debug Mode: {app.config.get('DEBUG', False)}")
+        print(f"[DEV] ChatMRPT Development Mode")
+        print(f"[DEV] Instance folder: {cls.INSTANCE_FOLDER_PATH}")
+        print(f"[DEV] OpenAI API Key: {'Set' if cls.OPENAI_API_KEY else 'Missing'}")
+        print(f"[DEV] Debug Mode: {app.config.get('DEBUG', False)}")
         
         # Set up development-specific middleware
         @app.before_request

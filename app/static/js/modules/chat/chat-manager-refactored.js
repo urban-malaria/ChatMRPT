@@ -97,6 +97,48 @@ export class ChatManager {
                 this.transitionToNormalChat();
             }
             
+            // Handle clarification responses
+            if (response.status === 'clarification_needed' && response.response) {
+                this.messageHandler.addAssistantMessage(response.response);
+                
+                // If suggestions are provided, show them as clickable options
+                if (response.suggestions && response.suggestions.length > 0) {
+                    const suggestionsHTML = `
+                        <div class="clarification-suggestions mt-2">
+                            <p class="mb-2"><small>Quick options:</small></p>
+                            <div class="suggestion-buttons">
+                                ${response.suggestions.map(suggestion => 
+                                    `<button class="btn btn-sm btn-outline-primary suggestion-btn me-2 mb-2" data-suggestion="${suggestion}">${suggestion}</button>`
+                                ).join(' ')}
+                            </div>
+                        </div>
+                    `;
+                    this.messageHandler.addAssistantMessage(suggestionsHTML);
+                    
+                    // Add click handlers for suggestions
+                    setTimeout(() => {
+                        document.querySelectorAll('.suggestion-btn').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const suggestion = btn.getAttribute('data-suggestion');
+                                this.messageHandler.sendMessage(`Use ${suggestion}`);
+                            });
+                        });
+                    }, 100);
+                }
+                return;
+            }
+            
+            // Handle error responses
+            if (response.status === 'error' && response.response) {
+                this.messageHandler.addAssistantMessage(response.response);
+                
+                // If it's a handled error, it already has helpful guidance
+                if (response.error_handled) {
+                    return;
+                }
+                return;
+            }
+            
             // Handle regular responses with intelligent variable display
             if (response.response) {
                 console.log('🔍 DEBUG: Processing response.response');
