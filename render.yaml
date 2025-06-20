@@ -2,7 +2,8 @@ services:
   - type: web
     name: chatmrpt
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      chmod +x build.sh && ./build.sh && pip install -r requirements.txt
     startCommand: gunicorn 'run:app' --bind=0.0.0.0:$PORT
     envVars:
       - key: FLASK_ENV
@@ -18,7 +19,7 @@ services:
     disk:
       name: data
       mountPath: /app/instance
-      sizeGB: 1
+      sizeGB: 10
     plan: free
     autoDeploy: true
     healthCheckPath: /ping
