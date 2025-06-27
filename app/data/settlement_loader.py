@@ -285,9 +285,10 @@ class SettlementLoader:
     def _standardize_kano_data_structure(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
         Standardize Kano data structure based on actual discovered columns:
-        - clssfct: classification numbers (0-4+)
-        - sttlmn_: settlement type labels ('informal', etc.)
+        - clssfct: classification numbers (0-6)
+        - sttlmn_: settlement type labels ('informal', 'formal', 'non-residential')
         - latitud, longitd: coordinates
+        - Cluster mapping: 0,1,4=informal; 2,5,6=formal; 3=non-residential
         """
         # Standardize column names for our system
         column_mappings = {
@@ -325,17 +326,31 @@ class SettlementLoader:
             # Create from cluster numbers using our classification rules
             gdf = self._classify_settlements(gdf)
         else:
+            # Log original settlement types for debugging
+            logger.info(f"🏘️ Original settlement types in data: {gdf['settlement_type'].unique()}")
+            
             # Clean existing settlement_type values
             gdf['settlement_type'] = gdf['settlement_type'].str.lower().str.strip()
-            # Map variations to standard names
+            
+            # Log settlement type distribution before mapping
+            logger.info(f"📊 Settlement type distribution before mapping:")
+            type_counts = gdf['settlement_type'].value_counts()
+            for stype, count in type_counts.items():
+                logger.info(f"   '{stype}': {count:,} buildings")
+            
+            # Map variations to standard names - use space format to match original data
             settlement_mapping = {
                 'formal': 'formal',
                 'informal': 'informal', 
                 'slum': 'informal',  # Map slum to informal
-                'non-residential': 'non-residential',
-                'nonresidential': 'non-residential',
-                'non_residential': 'non-residential',
-                'mixed': 'non-residential'  # Map mixed to non-residential
+                'non residential': 'non residential',  # Keep original format with space
+                'non-residential': 'non residential',  # Map dash to space format
+                'nonresidential': 'non residential',
+                'non_residential': 'non residential',
+                'mixed': 'non residential',  # Map mixed to non residential
+                'commercial': 'non residential',  # Add commercial mapping
+                'industrial': 'non residential',  # Add industrial mapping
+                'institutional': 'non residential'  # Add institutional mapping
             }
             gdf['settlement_type'] = gdf['settlement_type'].map(settlement_mapping).fillna('informal')
         
@@ -350,10 +365,14 @@ class SettlementLoader:
         Updated to use 3 settlement types: formal, informal, non-residential
         """
         # Load classification rules from config
+        # Updated based on actual Kano data structure:
+        # Cluster 3 = Non-residential
+        # Clusters 0, 1, 4 = Informal
+        # Clusters 2, 5, 6 = Formal
         classification_rules = self.config.get('classification_rules', {
-            'informal': [0, 1, 2],
-            'formal': [3, 4, 5], 
-            'non-residential': [6, 7]
+            'informal': [0, 1, 4],
+            'formal': [2, 5, 6], 
+            'non residential': [3]
         })
         
         def get_settlement_type(cluster):
@@ -364,6 +383,14 @@ class SettlementLoader:
         
         # Add settlement classification
         if 'cluster' in gdf.columns:
+            # Log unique cluster values for debugging
+            unique_clusters = sorted(gdf['cluster'].unique())
+            logger.info(f"🔢 Unique cluster values in data: {unique_clusters}")
+            logger.info(f"📊 Cluster value counts:")
+            cluster_counts = gdf['cluster'].value_counts().sort_index()
+            for cluster, count in cluster_counts.items():
+                logger.info(f"   Cluster {cluster}: {count:,} buildings")
+            
             gdf['settlement_type'] = gdf['cluster'].apply(get_settlement_type)
         
         return gdf
@@ -392,9 +419,9 @@ class SettlementLoader:
         # Future: load from JSON config file for easy modification
         default_config = {
             'classification_rules': {
-                'informal': [0, 1, 2],
-                'formal': [3, 4, 5],
-                'non-residential': [6, 7]
+                'informal': [0, 1, 4],
+                'formal': [2, 5, 6],
+                'non-residential': [3]
             },
             'risk_factors': {
                 'informal': 1.5,  # 50% higher risk
