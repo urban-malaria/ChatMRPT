@@ -107,6 +107,20 @@ class DataHandler:
         self.logger.info(f"DataHandler initialized with modular architecture - Session: {session_folder}")
     
     # ===========================================
+    # BACKWARD COMPATIBILITY PROPERTIES
+    # ===========================================
+    
+    @property
+    def df(self):
+        """Backward compatibility property for accessing CSV data as DataFrame"""
+        return self.csv_data
+    
+    @df.setter
+    def df(self, value):
+        """Backward compatibility setter for CSV data"""
+        self.csv_data = value
+    
+    # ===========================================
     # ORIGINAL INTERFACE METHODS (Backward Compatibility)
     # ===========================================
     

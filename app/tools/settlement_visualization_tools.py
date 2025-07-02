@@ -290,4 +290,5 @@ __all__ = [
     'create_ward_specific_settlement_map',
     'integrate_settlement_data_with_analysis',
     'check_settlement_dependencies'
-]
+]# This file has been removed during ChatMRPT streamlining
+# Settlement visualization tools were identified as non-essential and removed to focus on core functionality

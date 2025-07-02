@@ -246,13 +246,18 @@ def send_message():
         # Update session state based on tools used
         tools_used = response.get('tools_used', [])
         
-        if 'run_composite_analysis' in tools_used or 'run_pca_analysis' in tools_used:
+        if any(tool in tools_used for tool in ['run_composite_analysis', 'run_pca_analysis', 'runcompleteanalysis']):
             session['analysis_complete'] = True
-            session['analysis_type'] = 'composite' if 'run_composite_analysis' in tools_used else 'pca'
-            logger.info(f"Session {session_id}: Analysis completed via Request Interpreter")
+            if 'runcompleteanalysis' in tools_used:
+                session['analysis_type'] = 'dual_method'
+            elif 'run_composite_analysis' in tools_used:
+                session['analysis_type'] = 'composite'
+            else:
+                session['analysis_type'] = 'pca'
+            logger.info(f"Session {session_id}: Analysis completed via Request Interpreter ({session['analysis_type']})")
         
         # Clear any pending actions if analysis was run
-        if any(tool in tools_used for tool in ['run_composite_analysis', 'run_pca_analysis']):
+        if any(tool in tools_used for tool in ['run_composite_analysis', 'run_pca_analysis', 'runcompleteanalysis']):
                 session.pop('pending_action', None)
                 session.pop('pending_variables', None)
         

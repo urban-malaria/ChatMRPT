@@ -4,294 +4,404 @@ Tool Functions for ChatMRPT LLM Integration
 Comprehensive tool system for natural language interaction with ChatMRPT.
 Tools are organized by category and provide clean interfaces between
 user requests and system functionality.
+
+Updated to use Pydantic-based tools with the new ToolRegistry system.
 """
 
-from .data_tools import (
-    run_composite_analysis,
-    run_pca_analysis,
-    get_composite_rankings,
-    get_pca_rankings,
-    create_composite_score_maps,
-    create_vulnerability_map,
-    create_decision_tree,
-    create_urban_extent_map,
-    filter_wards_by_risk,
-    filter_wards_by_criteria,
-    get_session_data_summary
+# ToolRegistry will be initialized at runtime to avoid circular imports
+
+# DEPRECATED: These imports will be replaced by new tool architecture
+# See TOOL_ARCHITECTURE.md for details
+# from .data_tools import (
+#     run_composite_analysis,
+#     run_pca_analysis,
+#     get_composite_rankings,
+#     get_pca_rankings,
+#     create_composite_score_maps,
+#     create_vulnerability_map,
+#     create_decision_tree,
+#     create_urban_extent_map,
+#     filter_wards_by_risk,
+#     filter_wards_by_criteria,
+#     get_session_data_summary
+# )
+
+# from .statistical_tools import (
+#     summary_stats,
+#     correlation,
+#     chi_square,
+#     t_test,
+#     anova
+# )
+
+# from .visual_tools import (
+#     histogram,
+#     boxplot,
+#     bar_chart,
+#     line_chart,
+#     scatter_plot,
+#     heatmap,
+#     pie_chart,
+#     map_plot
+# )
+
+# from .knowledge_tools import (
+#     simple_greeting,
+#     explain_concept
+# )
+
+# from .system_tools import (
+#     check_data_availability,
+#     get_session_status,
+#     get_available_variables,
+#     get_ward_information,
+#     get_ward_variable_value
+# )
+
+# from .data_analysis_tools import (
+#     analyze_uploaded_data_and_recommend,
+#     generate_comprehensive_analysis_summary
+# )
+
+# visual_explanation_tools removed during streamlining
+
+# from .spatial_tools import (
+#     spatial_autocorrelation_analysis,
+#     spatial_similarity_analysis,
+#     spatial_dependency_test
+# )
+
+# from .group_analysis_tools import (
+#     settlement_type_analysis,
+#     cross_variable_analysis,
+#     geographic_aggregation_analysis,
+#     environmental_risk_grouping
+# )
+
+# from .methodology_tools import (
+#     explain_pca_methodology,
+#     explain_composite_score_methodology,
+#     compare_methodologies,
+#     get_variable_importance_analysis
+# )
+
+# KEEPING SETTLEMENT TOOLS - These are working correctly
+from .settlement_tools import *
+from .settlement_validation_tools import *
+from .settlement_visualization_tools import *
+
+# NEW ARCHITECTURE - Phase 1 Tools
+from .risk_analysis_tools import (
+    GetWardRiskScore,
+    GetTopRiskWards,
+    FilterWardsByRiskLevel,
+    GetRiskStatistics
 )
 
-from .statistical_tools import (
-    summary_stats,
-    correlation,
-    chi_square,
-    t_test,
-    anova,
-    distribution_test,
-    group_summary,
-    descriptive_stats,
-    regression_analysis
+from .ward_data_tools import (
+    GetWardInformation,
+    GetWardVariable,
+    CompareWards,
+    SearchWards
 )
 
-from .visual_tools import (
-    histogram,
-    boxplot,
-    bar_chart,
-    line_chart,
-    scatter_plot,
-    heatmap,
-    pie_chart,
-    map_plot,
-    box_plot,
-    box_plot_flexible,
-    scatter_plot_flexible
+from .statistical_analysis_tools import (
+    GetDescriptiveStatistics,
+    GetCorrelationAnalysis,
+    PerformRegressionAnalysis,
+    PerformANOVAAnalysis,
+    PerformTTest,
+    GetDistributionAnalysis,
+    PerformClusterAnalysis,
+    GetVariableImportance
 )
 
-from .knowledge_tools import (
-    simple_greeting,
-    explain_concept,
-    explain_methodology,
-    explain_variable,
-    interpret_results,
-    show_help_options
+from .visualization_maps_tools import (
+    CreateVulnerabilityMap,
+    CreatePCAMap,
+    CreateUrbanExtentMap,
+    CreateDecisionTree,
+    CreateCompositeScoreMaps,
+    CreateBoxPlot,
+    CreateInterventionMap
 )
 
-from .system_tools import (
-    check_data_availability,
-    get_session_status,
-    get_available_variables,
-    get_ward_information,
-    get_ward_variable_value
+# Phase 3: VISUALIZATION_CHARTS tools
+from .visualization_charts_tools import (
+    # Statistical Distribution Charts
+    CreateHistogram,
+    CreateViolinPlot,
+    CreateDensityPlot,
+    
+    # Correlation & Relationship Charts
+    CreateScatterPlot,
+    CreateCorrelationHeatmap,
+    CreatePairPlot,
+    CreateRegressionPlot,
+    
+    # Comparative Charts
+    CreateBarChart,
+    CreateGroupedBarChart,
+    CreateStackedBarChart,
+    
+    # Ranking & Performance Charts
+    CreateLollipopChart,
+    
+    # Categorical Analysis
+    CreatePieChart,
+    CreateDonutChart,
+    
+    # Advanced Statistical Charts
+    CreateQQPlot,
+    CreateResidualPlot,
+    CreateBoxPlotGrid,
+    
+    # Geographic/Spatial Charts
+    CreateBubbleMap,
+    CreateCoordinatePlot
 )
 
-from .data_analysis_tools import (
-    analyze_uploaded_data_and_recommend,
-    generate_comprehensive_analysis_summary
+# Phase 4: INTERVENTION_TARGETING tools
+from .intervention_targeting_tools import (
+    GetInterventionPriorities,
+    IdentifyCoverageGaps,
+    GetReprioritizationStrategy,
+    CalculateResourceNeeds
 )
 
-from .visual_explanation_tools import (
-    explain_last_visualization,
-    explain_specific_visualization,
-    get_visualization_recommendations,
-    track_visualization_creation,
-    get_session_visualizations
+# Phase 5: SCENARIO_SIMULATION tools
+from .scenario_simulation_tools import (
+    SimulateCoverageIncrease,
+    SimulateResourceReallocation,
+    SimulateClimateChange,
+    CompareMultipleScenarios
 )
 
-from .spatial_tools import (
-    spatial_autocorrelation_analysis,
-    spatial_similarity_analysis,
-    spatial_dependency_test
+# Phase 4: SMART_KNOWLEDGE tools (data-driven insights)
+from .smart_knowledge_tools import (
+    ExplainDataContext,
+    GetPersonalizedRecommendations,
+    InterpretYourResults,
+    GetDataDrivenInsights
 )
 
-from .group_analysis_tools import (
-    settlement_type_analysis,
-    cross_variable_analysis,
-    geographic_aggregation_analysis,
-    environmental_risk_grouping
+# Data Preparation Tools
+from .data_preparation_tools import (
+    CreateUnifiedDataset,
+    CheckDataReadiness
 )
 
-from .methodology_tools import (
-    explain_pca_methodology,
-    explain_composite_score_methodology,
-    compare_methodologies,
-    get_variable_importance_analysis
+# Advanced Mapping Tools
+from .advanced_mapping_tools import (
+    CreateMultiLayerRiskMap,
+    CreateEnvironmentalDriverMap
 )
 
-# Import Settlement Validation and Analysis Tools
-from .settlement_validation_tools import (
-    create_building_classification_map,
-    create_settlement_validation_map,
-    get_building_statistics
+from .settlement_intervention_tools import (
+    CreateSettlementAnalysisMap,
+    CreateInterventionTargetingMap
 )
 
-from .settlement_tools import (
-    integrate_settlement_data_unified,
-    get_settlement_enhanced_analysis_summary,
-    create_settlement_enhanced_vulnerability_explanation
+from .spatial_autocorrelation_tools import (
+    CreateSpatialAutocorrelationMap
 )
 
-# Import Chat-Accessible Settlement Visualization Tools
-from .settlement_visualization_tools import (
-    create_settlement_map,
-    show_settlement_statistics,
-    create_ward_specific_settlement_map,
-    integrate_settlement_data_with_analysis,
-    check_settlement_dependencies
-)
-
-# Legacy settlement tools from standardized analysis
-from ..services.tools.standardized_analysis_tools import (
-    get_settlement_validation_summary
+# Complete Analysis Tools - Coordinated Dual-Method Workflow
+from .complete_analysis_tools import (
+    RunCompleteAnalysis,
+    RunCompositeAnalysis,
+    RunPCAAnalysis
 )
 
 # Enhanced Environmental Risk Analysis Tools
-from .environmental_risk_tools import (
-    get_flood_prone_wards,
-    analyze_water_proximity_correlation,
-    get_ward_elevation_profile,
-    get_high_vegetation_wards,
-    analyze_low_lying_areas_risk
-)
+# from .environmental_risk_tools import (
+#     get_flood_prone_wards,
+#     analyze_water_proximity_correlation,
+#     get_ward_elevation_profile,
+#     get_high_vegetation_wards,
+#     analyze_low_lying_areas_risk
+# )
 
 # Intervention Targeting Tools
-from .intervention_targeting_tools import (
-    identify_itn_priority_wards,
-    identify_irs_eligible_wards,
-    identify_coverage_gaps,
-    recommend_chw_deployment
-)
+# from .intervention_targeting_tools import (
+#     identify_itn_priority_wards,
+#     identify_irs_eligible_wards,
+#     identify_coverage_gaps,
+#     recommend_chw_deployment
+# )
 
-# Scenario Simulation Tools
-from .scenario_simulation_tools import (
-    simulate_coverage_increase_impact,
-    simulate_variable_exclusion,
-    simulate_tpr_assumption_change,
-    simulate_compactness_threshold_scenario
-)
+# scenario_simulation_tools removed during streamlining
 
 # Strategic Decision Support Tools
-from .strategic_decision_tools import (
-    recommend_priority_targeting_strategy,
-    analyze_lga_risk_distribution,
-    generate_monitoring_priorities,
-    identify_deprioritization_candidates
-)
+# from .strategic_decision_tools import (
+#     recommend_priority_targeting_strategy,
+#     analyze_lga_risk_distribution,
+#     generate_monitoring_priorities,
+#     identify_deprioritization_candidates
+# )
 
-# Memory Tools for Conversational Continuity
-from .memory_tools import (
-    get_conversation_history,
-    find_previous_discussion,
-    get_analysis_context,
-    save_analysis_result,
-    get_previous_analysis_results,
-    compare_with_previous_analysis
-)
+# memory_tools removed during streamlining
 
-# Comprehensive tool registry for LLM dynamic resolution
-TOOL_REGISTRY = {
-    # Core Data Analysis Tools
-    'run_composite_analysis': run_composite_analysis,
-    'run_pca_analysis': run_pca_analysis,
-    'get_composite_rankings': get_composite_rankings,
-    'get_pca_rankings': get_pca_rankings,
-    'create_composite_score_maps': create_composite_score_maps,
+# Initialize Pydantic tool registry at runtime
+_pydantic_registry = None
 
-    'create_vulnerability_map': create_vulnerability_map,
-    'create_decision_tree': create_decision_tree,
-    'create_urban_extent_map': create_urban_extent_map,
-    'filter_wards_by_risk': filter_wards_by_risk,
-    'filter_wards_by_criteria': filter_wards_by_criteria,
-    'get_session_data_summary': get_session_data_summary,
+def _initialize_pydantic_registry():
+    """Initialize Pydantic registry lazily to avoid circular imports."""
+    global _pydantic_registry
+    if _pydantic_registry is None:
+        try:
+            from ..core.tool_registry import ToolRegistry
+            _pydantic_registry = ToolRegistry()
+            
+            # Simple tool discovery without problematic timeouts
+            try:
+                tools_discovered = _pydantic_registry.discover_tools()
+                print(f"✅ Discovered {tools_discovered} Pydantic tools")
+            except Exception as discovery_error:
+                print(f"⚠️ Tool discovery error: {discovery_error}")
+                # Continue with partial registry rather than failing completely
+                
+        except Exception as e:
+            print(f"⚠️ Error initializing tool registry: {e}")
+            # Create minimal registry to prevent crashes
+            class MinimalRegistry:
+                def get_tool_names(self): return []
+                def get_tool_schemas(self): return {}
+                def execute_tool(self, *args, **kwargs): return {'status': 'error', 'message': 'Registry unavailable'}
+            _pydantic_registry = MinimalRegistry()
+    return _pydantic_registry
+
+# Hybrid tool registry that combines Pydantic tools with legacy tools
+TOOL_REGISTRY = {}
+
+# Legacy tools to add (will be skipped if Pydantic version exists)
+# DEPRECATED: Most legacy tools commented out during architecture refactoring
+legacy_tools = {
+    # ALL LEGACY TOOLS REMOVED - CLEAN SLATE FOR NEW ARCHITECTURE
+    # (System tools moved to deprecated folder)
     
-    # Statistical Analysis Tools
-    'summary_stats': summary_stats,
-    'correlation': correlation,
-    'chi_square': chi_square,
-    't_test': t_test,
-    'anova': anova,
-    'distribution_test': distribution_test,
-    'group_summary': group_summary,
-    'descriptive_stats': descriptive_stats,
-    'regression_analysis': regression_analysis,
+    # NO LEGACY TOOLS ACTIVE
     
-    # Visualization Tools
-    'histogram': histogram,
-    'boxplot': box_plot_flexible,  # Use flexible version
-    'box_plot': box_plot_flexible,  # Use flexible version
-    'bar_chart': bar_chart,
-    'line_chart': line_chart,
-    'scatter_plot': scatter_plot_flexible,  # Use flexible version
-    'heatmap': heatmap,
-    'pie_chart': pie_chart,
-    'map_plot': map_plot,
+    # ALL OTHER LEGACY TOOLS REMOVED - See TOOL_ARCHITECTURE.md
     
-    # Knowledge Tools
-    'simple_greeting': simple_greeting,
-    'explain_concept': explain_concept,
-    'explain_methodology': explain_methodology,
-    'explain_variable': explain_variable,
-    'interpret_results': interpret_results,
-    'show_help_options': show_help_options,
-    
-    # System Tools
-    'check_data_availability': check_data_availability,
-    'get_session_status': get_session_status,
-    'get_available_variables': get_available_variables,
-    'get_ward_information': get_ward_information,
-    'get_ward_variable_value': get_ward_variable_value,
-    
-    # Data Analysis Tools
-    'analyze_uploaded_data_and_recommend': analyze_uploaded_data_and_recommend,
-    'generate_comprehensive_analysis_summary': generate_comprehensive_analysis_summary,
-    
-    # Visual Explanation Tools
-    'explain_last_visualization': explain_last_visualization,
-    'explain_specific_visualization': explain_specific_visualization,
-    'get_visualization_recommendations': get_visualization_recommendations,
-    'track_visualization_creation': track_visualization_creation,
-    'get_session_visualizations': get_session_visualizations,
-    
-    # Spatial Analysis Tools
-    'spatial_autocorrelation_analysis': spatial_autocorrelation_analysis,
-    'spatial_similarity_analysis': spatial_similarity_analysis,
-    'spatial_dependency_test': spatial_dependency_test,
-    
-    # Group Analysis Tools
-    'settlement_type_analysis': settlement_type_analysis,
-    'cross_variable_analysis': cross_variable_analysis,
-    'geographic_aggregation_analysis': geographic_aggregation_analysis,
-    'environmental_risk_grouping': environmental_risk_grouping,
-    
-    # Methodology Explanation Tools
-    'explain_pca_methodology': explain_pca_methodology,
-    'explain_composite_score_methodology': explain_composite_score_methodology,
-    'compare_methodologies': compare_methodologies,
-    'get_variable_importance_analysis': get_variable_importance_analysis,
-    
-    # Phase 2: Settlement Validation Tools
-    'create_settlement_validation_map': create_settlement_validation_map,
-    'get_settlement_validation_summary': get_settlement_validation_summary,
-    
-    # Environmental Risk Analysis Tools
-    'get_flood_prone_wards': get_flood_prone_wards,
-    'analyze_water_proximity_correlation': analyze_water_proximity_correlation,
-    'get_ward_elevation_profile': get_ward_elevation_profile,
-    'get_high_vegetation_wards': get_high_vegetation_wards,
-    'analyze_low_lying_areas_risk': analyze_low_lying_areas_risk,
-    
-    # Intervention Targeting Tools
-    'identify_itn_priority_wards': identify_itn_priority_wards,
-    'identify_irs_eligible_wards': identify_irs_eligible_wards,
-    'identify_coverage_gaps': identify_coverage_gaps,
-    'recommend_chw_deployment': recommend_chw_deployment,
-    
-    # Scenario Simulation Tools
-    'simulate_coverage_increase_impact': simulate_coverage_increase_impact,
-    'simulate_variable_exclusion': simulate_variable_exclusion,
-    'simulate_tpr_assumption_change': simulate_tpr_assumption_change,
-    'simulate_compactness_threshold_scenario': simulate_compactness_threshold_scenario,
-    
-    # Strategic Decision Support Tools
-    'recommend_priority_targeting_strategy': recommend_priority_targeting_strategy,
-    'analyze_lga_risk_distribution': analyze_lga_risk_distribution,
-    'generate_monitoring_priorities': generate_monitoring_priorities,
-    'identify_deprioritization_candidates': identify_deprioritization_candidates,
-    
-    # Memory Tools for Conversational Continuity
-    'get_conversation_history': get_conversation_history,
-    'find_previous_discussion': find_previous_discussion,
-    'get_analysis_context': get_analysis_context,
-    'save_analysis_result': save_analysis_result,
-    'get_previous_analysis_results': get_previous_analysis_results,
-    'compare_with_previous_analysis': compare_with_previous_analysis
+    # ORIGINAL LEGACY TOOLS (ALL COMMENTED OUT):
+    # 'run_composite_analysis': run_composite_analysis,
+    # 'run_pca_analysis': run_pca_analysis,
+    # ... (removed for brevity - see git history)
 }
+
+# Initialize the hybrid registry
+def _build_tool_registry():
+    """Build the combined tool registry with Pydantic and legacy tools."""
+    global TOOL_REGISTRY
+    
+    # Initialize Pydantic registry
+    registry = _initialize_pydantic_registry()
+    
+    # Add Pydantic tools with wrappers
+    for tool_name in registry.get_tool_names():
+        def create_wrapper(name):
+            def wrapper(session_id: str, **kwargs):
+                try:
+                    result = registry.execute_tool(name, session_id, **kwargs)
+                    # Convert ToolExecutionResult to legacy dict format
+                    if hasattr(result, 'status'):
+                        response = {
+                            'status': 'success' if result.success else 'error',
+                            'message': result.message,
+                            **result.data
+                        }
+                        if result.error_details:
+                            response['error_details'] = result.error_details
+                        if result.execution_time:
+                            response['execution_time'] = result.execution_time
+                        return response
+                    return result
+                except Exception as e:
+                    return {
+                        'status': 'error',
+                        'message': f'Tool execution failed: {str(e)}',
+                        'error_details': str(e)
+                    }
+            return wrapper
+        
+        TOOL_REGISTRY[tool_name] = create_wrapper(tool_name)
+    
+    # Add legacy tools that don't have Pydantic equivalents
+    for tool_name, tool_func in legacy_tools.items():
+        if tool_name not in TOOL_REGISTRY:
+            TOOL_REGISTRY[tool_name] = tool_func
+
+# Build the registry on first access
+_registry_built = False
+
+def _ensure_registry_built():
+    """Ensure the tool registry is built."""
+    global _registry_built
+    if not _registry_built:
+        # TEMPORARILY DISABLE FAST STARTUP - Always build full registry
+        print("🔧 Building full tool registry for reliability...")
+        _build_tool_registry()
+        _registry_built = True
+
+def _build_minimal_registry():
+    """Build a minimal registry for fast startup."""
+    global TOOL_REGISTRY
+    
+    # Include essential tools for basic functionality AND analysis tools
+    essential_tools = [
+        'simple_greeting', 
+        'explain_concept',
+        'run_complete_analysis',
+        'run_composite_analysis', 
+        'run_pca_analysis',
+        'gettopriskwards',
+        'createvulnerabilitymap',
+        'createpcamap'
+    ]
+    
+    # Create deferred wrapper that will load tools on first use
+    def create_deferred_wrapper(tool_name):
+        def deferred_wrapper(session_id: str, **kwargs):
+            global _registry_built
+            
+            # On first use, build full registry and execute
+            if not _registry_built:
+                print(f"🔄 Loading tool '{tool_name}' - building full registry...")
+                _registry_built = False  # Reset to allow full build
+                _build_tool_registry()
+                _registry_built = True
+            
+            # Now execute the actual tool
+            if tool_name in TOOL_REGISTRY:
+                return TOOL_REGISTRY[tool_name](session_id, **kwargs)
+            else:
+                return {
+                    'status': 'error', 
+                    'message': f'Tool {tool_name} not available after full registry build'
+                }
+        return deferred_wrapper
+    
+    TOOL_REGISTRY = {name: create_deferred_wrapper(name) for name in essential_tools}
 
 def get_tool_function(tool_name: str):
     """Get a tool function by name for dynamic resolution."""
+    _ensure_registry_built()
     return TOOL_REGISTRY.get(tool_name)
 
 def get_all_tools():
     """Get all available tools for LLM use."""
+    _ensure_registry_built()
     return TOOL_REGISTRY
+
+def get_pydantic_registry():
+    """Get the Pydantic tool registry for schema generation."""
+    return _initialize_pydantic_registry()
+
+def get_tool_schemas():
+    """Get OpenAI-compatible schemas for all tools."""
+    registry = _initialize_pydantic_registry()
+    return registry.get_tool_schemas()
 
 def get_tools_by_category():
     """Get tools organized by category."""
@@ -304,20 +414,16 @@ def get_tools_by_category():
             'generate_comprehensive_analysis_summary'
         ],
         'statistical': [
-            'summary_stats', 'correlation', 'chi_square', 't_test', 'anova',
-            'distribution_test', 'group_summary', 'descriptive_stats', 'regression_analysis'
+            'summary_stats', 'correlation', 'chi_square', 't_test', 'anova'
         ],
         'visualization': [
             'histogram', 'boxplot', 'box_plot', 'bar_chart', 'line_chart', 'scatter_plot',
-            'heatmap', 'pie_chart', 'map_plot', 'box_plot_flexible', 'scatter_plot_flexible'
+            'heatmap', 'pie_chart', 'map_plot'
         ],
         'knowledge': [
-            'simple_greeting', 'explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results', 'show_help_options'
+            'simple_greeting', 'explain_concept'
         ],
-        'visual_explanation': [
-            'explain_last_visualization', 'explain_specific_visualization', 'get_visualization_recommendations',
-            'track_visualization_creation', 'get_session_visualizations'
-        ],
+        # 'visual_explanation': removed during streamlining
         'spatial_analysis': [
             'spatial_autocorrelation_analysis', 'spatial_similarity_analysis', 'spatial_dependency_test'
         ],
@@ -327,9 +433,7 @@ def get_tools_by_category():
         'methodology': [
             'explain_pca_methodology', 'explain_composite_score_methodology', 'compare_methodologies', 'get_variable_importance_analysis'
         ],
-        'settlement_validation': [
-            'create_settlement_validation_map', 'get_settlement_validation_summary'
-        ],
+        # 'settlement_validation': removed during streamlining
         'environmental_risk': [
             'get_flood_prone_wards', 'analyze_water_proximity_correlation',
             'get_ward_elevation_profile', 'get_high_vegetation_wards',
@@ -339,18 +443,12 @@ def get_tools_by_category():
             'identify_itn_priority_wards', 'identify_irs_eligible_wards',
             'identify_coverage_gaps', 'recommend_chw_deployment'
         ],
-        'scenario_simulation': [
-            'simulate_coverage_increase_impact', 'simulate_variable_exclusion',
-            'simulate_tpr_assumption_change', 'simulate_compactness_threshold_scenario'
-        ],
+        # 'scenario_simulation': removed during streamlining
         'strategic_decision': [
             'recommend_priority_targeting_strategy', 'analyze_lga_risk_distribution',
             'generate_monitoring_priorities', 'identify_deprioritization_candidates'
         ],
-        'memory': [
-            'get_conversation_history', 'find_previous_discussion', 'get_analysis_context',
-            'save_analysis_result', 'get_previous_analysis_results', 'compare_with_previous_analysis'
-        ],
+        # 'memory': removed during streamlining
         'system': [
             'check_data_availability', 'get_session_status', 'get_available_variables',
             'get_ward_information', 'get_ward_variable_value', 'analyze_uploaded_data_and_recommend'
@@ -358,5 +456,6 @@ def get_tools_by_category():
     }
 
 __all__ = [
-    'TOOL_REGISTRY', 'get_tool_function', 'get_all_tools', 'get_tools_by_category'
+    'TOOL_REGISTRY', 'get_tool_function', 'get_all_tools', 'get_tools_by_category',
+    'get_pydantic_registry', 'get_tool_schemas'
 ] 

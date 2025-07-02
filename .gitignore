@@ -24,6 +24,13 @@ var/
 .installed.cfg
 *.egg
 
+# Virtual environments
+venv/
+ENV/
+chatmrpt_venv_new/
+*_venv/
+*.venv
+
 # Flask
 instance/
 .webassets-cache
@@ -40,6 +47,66 @@ sessions/
 data/
 test_results/
 unified_test_session_*/
+memory/
+
+# Test files and debugging scripts
+test_*.py
+debug_*.py
+check_*.py
+analyze_*.py
+investigate_*.py
+fix_*.py
+verify_*.py
+diagnose_*.py
+extract_*.py
+manual_*.py
+comprehensive_*.py
+simple_*.py
+alternative_*.py
+authenticate_*.py
+setup_*.py
+run_*.py
+
+# JSON files (conversation logs, test results, config)
+*.json
+!package.json
+!tsconfig.json
+
+# Text files (transcripts, logs, notes)
+*.txt
+!requirements.txt
+
+# CSV output files
+*_extraction_*.csv
+*_output*.csv
+*.csv
+!requirements.csv
+
+# Output directories
+*_output/
+*_extraction_output/
+poc_extraction_output/
+osun_extraction_output/
+
+# Large data files
+*.zip
+*.gz
+*.tar
+*.rar
+
+# Image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.ico
+
+# Documentation and notes (except core docs)
+*.md
+!README.md
+!ARCHITECTURE.md
+!DEPLOYMENT.md
 
 # Cleanup and temporary files
 cleanup_legacy_code.*
@@ -50,60 +117,46 @@ integration_example.py
 .DS_Store
 Thumbs.db
 
-# Virtual Environment
-venv/
-ENV/
+# Temporary Office files
+~$*
+*.tmp
 
-# Temporary test files
-test_*_debug.py
-debug_*.py
-# But allow test files in the tests directory
-!tests/test_*_debug.py
-!tests/debug_*.py
+# Excel and Word documents
+*.docx
+*.xlsx
+*.xls
+*.doc
+*.ppt
+*.pptx
 
-# Test reports directory
-test_reports/
+# PDFs
+*.pdf
+*.PDF
 
-# Keep structured test files
-!test_data_package.py
-!test_interaction_package.py
-!test_refactoring.py
-!test_analysis_comparison.py
-!test_scoring_performance.py
-!test_message_response.py
-!test_intent_extraction.py
+# Development and configuration files
+ee_config.py
+config_*.py
 
-# Documentation files that shouldn't be in repo
-PAGINATION_AND_REPORT_FIXES.md
-CRITICAL_UI_FIX.css
-
-# Ignore all markdown files except README, ARCHITECTURE, and DEPLOYMENT
-*.md
-!README.md
-!ARCHITECTURE.md
-!DEPLOYMENT.md
+# Test session data
+test_session_data_flow.py
+test_frontend_integration.py
+test_phase*.py
 
 # Settlement data (large files - will be synced separately)
 kano_settlement_data/
 
-# Exclude PDFs, test files, Word/Excel documents, and py-sidebot-main folder
-*.pdf
-*.PDF
-test_*.py
-debug_*.py
-diagnose_*.py
-check_*.py
-extract_*.py
-manual_*.py
-analyze_*.py
-investigate_*.py
-*.docx
-*.xlsx
-*.xls
-py-sidebot-main/
+# Keep only essential files
+!core_*.py
+!main.py
+!app.py
+!run.py
 
-# Keep essential test files
-!tests/test_*.py
+# Git files
+.git/
 
-# Exclude other temporary files
-~$* 
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~ 

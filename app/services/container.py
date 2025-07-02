@@ -84,7 +84,7 @@ class ServiceContainer:
     def _register_core_services(self) -> None:
         """Register only the core working services."""
         
-        # Core Infrastructure
+        # Core Infrastructure (FAST)
         self.register('interaction_logger', self._create_interaction_logger)
         self.register('llm_manager', self._create_llm_manager)
         
@@ -98,6 +98,14 @@ class ServiceContainer:
         
         # Request Interpreter (NEW)
         self.register('request_interpreter', self._create_request_interpreter)
+        
+        # Phase 6: 6-Phase Architecture Integration (LAZY LOADING for speed)
+        # These are registered but NOT created until first access
+        self.register('production_deployment_manager', self._create_production_deployment_manager, singleton=True)
+        self.register('conversation_router', self._create_conversation_router, singleton=True)
+        self.register('chatmrpt_agent', self._create_chatmrpt_agent, singleton=True)
+        self.register('langchain_chain', self._create_langchain_chain, singleton=True)
+        self.register('reflection_engine', self._create_reflection_engine, singleton=True)
     
     def _create_interaction_logger(self, container: 'ServiceContainer'):
         """Create interaction logger service."""
@@ -238,6 +246,74 @@ class ServiceContainer:
             logger.warning(f"Failed to create request interpreter: {e}")
             return None
     
+    def _create_production_deployment_manager(self, container: 'ServiceContainer'):
+        """Create production deployment manager - orchestrates the 6-phase architecture."""
+        try:
+            from ..core.production_deployment import get_deployment_manager
+            
+            # Initialize and return the deployment manager
+            deployment_manager = get_deployment_manager()
+            
+            # Initialize the system if not already done
+            if hasattr(deployment_manager, 'initialize_system'):
+                try:
+                    deployment_manager.initialize_system()
+                    logger.info("Production deployment system initialized successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to fully initialize deployment system: {e}")
+            
+            return deployment_manager
+        except Exception as e:
+            logger.warning(f"Failed to create production deployment manager: {e}")
+            return None
+    
+    def _create_conversation_router(self, container: 'ServiceContainer'):
+        """Create conversation router for intelligent request routing."""
+        try:
+            from ..core.conversation_router import get_conversation_router
+            
+            conversation_router = get_conversation_router()
+            
+            # Inject request interpreter
+            request_interpreter = container.get('request_interpreter')
+            if request_interpreter:
+                conversation_router.set_request_interpreter(request_interpreter)
+            
+            return conversation_router
+        except Exception as e:
+            logger.warning(f"Failed to create conversation router: {e}")
+            return None
+    
+    def _create_chatmrpt_agent(self, container: 'ServiceContainer'):
+        """Create ChatMRPT ReAct agent for complex reasoning."""
+        try:
+            from ..core.chatmrpt_agent import get_chatmrpt_agent
+            
+            return get_chatmrpt_agent()
+        except Exception as e:
+            logger.warning(f"Failed to create ChatMRPT agent: {e}")
+            return None
+    
+    def _create_langchain_chain(self, container: 'ServiceContainer'):
+        """Create LangChain conversation chain."""
+        try:
+            from ..core.langchain_integration import get_conversation_chain
+            
+            return get_conversation_chain()
+        except Exception as e:
+            logger.warning(f"Failed to create LangChain chain: {e}")
+            return None
+    
+    def _create_reflection_engine(self, container: 'ServiceContainer'):
+        """Create reflection engine for performance monitoring and learning."""
+        try:
+            from ..core.reflection_engine import get_reflection_engine
+            
+            return get_reflection_engine()
+        except Exception as e:
+            logger.warning(f"Failed to create reflection engine: {e}")
+            return None
+    
     # Property accessors for core services
     @property
     def interaction_logger(self):
@@ -273,6 +349,32 @@ class ServiceContainer:
     def request_interpreter(self):
         """Get request interpreter."""
         return self.get('request_interpreter')
+    
+    # Phase 6: 6-Phase Architecture Services
+    @property
+    def production_deployment_manager(self):
+        """Get production deployment manager."""
+        return self.get('production_deployment_manager')
+    
+    @property
+    def conversation_router(self):
+        """Get conversation router."""
+        return self.get('conversation_router')
+    
+    @property
+    def chatmrpt_agent(self):
+        """Get ChatMRPT ReAct agent."""
+        return self.get('chatmrpt_agent')
+    
+    @property
+    def langchain_chain(self):
+        """Get LangChain conversation chain."""
+        return self.get('langchain_chain')
+    
+    @property
+    def reflection_engine(self):
+        """Get reflection engine."""
+        return self.get('reflection_engine')
     
     def health_check(self) -> Dict[str, Any]:
         """Perform health check on all core services."""

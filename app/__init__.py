@@ -103,6 +103,12 @@ def create_app(config_name=None):
     
     # --- Initialize Modern Service Container ---
     from .services.container import init_services
+    
+    # Check for tool scoring configuration
+    tool_scoring_disabled = os.environ.get('DISABLE_TOOL_SCORING', 'false').lower() == 'true'
+    if tool_scoring_disabled:
+        app.logger.info("🚫 Tool scoring disabled for faster startup")
+    
     init_services(app)
     
     # --- Register Blueprints ---

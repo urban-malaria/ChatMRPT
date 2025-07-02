@@ -215,6 +215,22 @@ def upload_both_files():
         overall_status = 'warning'
         message = 'Files uploaded with warnings'
     
+    # Trigger automatic data description workflow if both files loaded successfully
+    if session.get('csv_loaded', False) and session.get('shapefile_loaded', False) and overall_status in ['success', 'warning']:
+        try:
+            # Get data summary for automatic description
+            data_summary = data_service.get_data_summary()
+            
+            # Store the data summary for the conversation system
+            session['data_summary'] = data_summary
+            session['should_describe_data'] = True
+            session['should_ask_analysis_permission'] = True
+            
+            logger.info("Data upload complete - automatic data description workflow triggered")
+            
+        except Exception as e:
+            logger.warning(f"Failed to generate data summary for automatic workflow: {e}")
+    
     response = {
         'status': overall_status,
         'message': message,

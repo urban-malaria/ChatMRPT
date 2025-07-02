@@ -27,7 +27,7 @@ class AnalysisEngine:
         self.logger = logger
         self.data_handler = data_handler
         
-    def run_composite_analysis(self, variables: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run_composite_analysis(self, session_id: str, variables: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Run composite scoring analysis with SETTLEMENT INTEGRATION.
         
@@ -75,7 +75,7 @@ class AnalysisEngine:
                 'analysis_type': 'composite_scoring_with_settlements'
             }
     
-    def run_pca_analysis(self, variables: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Run PCA analysis with SETTLEMENT INTEGRATION.
         

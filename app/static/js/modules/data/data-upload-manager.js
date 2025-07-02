@@ -68,6 +68,9 @@ export class DataUploadManager {
         this.notifyUploadStateChange();
         
         console.log('✅ Upload state updated:', this.uploadState);
+        
+        // Trigger automatic data description workflow
+        this.triggerDataDescriptionWorkflow(uploadData);
     }
 
     /**
@@ -126,6 +129,36 @@ export class DataUploadManager {
         };
         this.saveUploadState();
         this.notifyUploadStateChange();
+    }
+
+    /**
+     * Trigger automatic data description workflow after successful upload
+     */
+    async triggerDataDescriptionWorkflow(uploadData) {
+        try {
+            // Check if both CSV and shapefile were uploaded successfully
+            const hasCSV = uploadData.csv_result && uploadData.csv_result.status === 'success';
+            const hasShapefile = uploadData.shp_result && 
+                                 (uploadData.shp_result.status === 'success' || uploadData.shp_result.status === 'warning');
+            
+            if (hasCSV && hasShapefile) {
+                console.log('🎯 Triggering automatic data description workflow...');
+                
+                // Send automatic message to trigger data description
+                const automaticMessage = "I've uploaded both CSV and shapefile data. Can you analyze my data and recommend what analysis to run?";
+                
+                // Dispatch event to trigger automatic chat message
+                document.dispatchEvent(new CustomEvent('sendAutomaticMessage', {
+                    detail: { message: automaticMessage }
+                }));
+                
+                console.log('✅ Automatic data description workflow triggered');
+            } else {
+                console.log('ℹ️ Partial upload - waiting for both files before triggering workflow');
+            }
+        } catch (error) {
+            console.error('❌ Error triggering data description workflow:', error);
+        }
     }
 
     /**

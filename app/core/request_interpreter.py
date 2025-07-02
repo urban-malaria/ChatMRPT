@@ -29,6 +29,15 @@ class RequestInterpreter:
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
         
+        # Initialize dynamic tool registry  
+        from .tool_registry import get_tool_registry
+        self.tool_registry = get_tool_registry()
+        
+        # Also import tools module for hybrid access
+        from ..tools import get_pydantic_registry, get_tool_schemas
+        self.pydantic_registry = get_pydantic_registry()
+        self.get_tool_schemas = get_tool_schemas
+        
         # Common ambiguous phrases that need clarification
         self.ambiguous_patterns = {
             'analysis': ['composite analysis', 'PCA analysis', 'statistical analysis', 'spatial analysis'],
@@ -37,34 +46,105 @@ class RequestInterpreter:
             'top': ['top vulnerable wards', 'highest risk areas', 'most affected regions'],
             'data': ['upload data', 'analyze data', 'view data', 'data summary']
         }
+        
+        # Intelligent defaults for common ambiguous requests
+        self.intelligent_defaults = {
+            'analysis': {
+                'default_tools': ['get_composite_rankings', 'getcompositerankings'],  # Try both versions
+                'default_params': {'top_n': 10},
+                'message': "Running composite vulnerability analysis by default"
+            },
+            'ranking': {
+                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
+                'default_params': {'top_n': 10},
+                'message': "Showing vulnerability rankings by default"
+            },
+            'top wards': {
+                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
+                'default_params': {'top_n': 10},
+                'message': "Showing top 10 vulnerable wards by default"
+            },
+            'vulnerable areas': {
+                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
+                'default_params': {'top_n': 15},
+                'message': "Showing top 15 vulnerable areas by default"
+            },
+            'risk assessment': {
+                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
+                'default_params': {'top_n': 10},
+                'message': "Performing vulnerability risk assessment by default"
+            }
+        }
 
 
     def parse_request(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Parse user request into structured intent - NO FALLBACKS."""
+        """Parse user request into structured intent using dynamic tool registry."""
         try:
-            from ..tools import get_all_tools
+            # Check for analysis permission workflow
+            from flask import session
+            if session.get('should_ask_analysis_permission', False):
+                if self._is_confirmation_message(user_message):
+                    # Clear the flag and trigger analysis
+                    session['should_ask_analysis_permission'] = False
+                    return self._create_automatic_analysis_intent()
             
-            # Get available tools
-            all_tools = get_all_tools()
-            tool_names = list(all_tools.keys())
+            # Get available tools from both registries for comprehensive coverage
+            legacy_tools = self.tool_registry.list_tools()
+            pydantic_tools = self.pydantic_registry.get_tool_names()
             
-            # Create system prompt
+            # Combine tool names for validation
+            tool_names = set(legacy_tools + pydantic_tools)
+            
+            # Prioritize Pydantic tools and get enhanced schemas
+            pydantic_schemas = self.get_tool_schemas()
+            legacy_schemas = self.tool_registry.get_openai_function_schemas()
+            
+            # Combine schemas, giving priority to Pydantic versions
+            all_schemas = {}
+            for schema in legacy_schemas:
+                all_schemas[schema['name']] = schema
+            for schema in pydantic_schemas:
+                all_schemas[schema['name']] = schema  # Overrides legacy if same name
+            
+            # Create comprehensive tool documentation
+            tool_documentation = self._generate_enhanced_tool_documentation(all_schemas)
+            
+            # Get session context for better understanding
+            from flask import session
+            session_context = {
+                'data_uploaded': session.get('csv_loaded', False) and session.get('shapefile_loaded', False),
+                'analysis_complete': session.get('analysis_complete', False),
+                'analysis_type': session.get('analysis_type', 'none'),
+                'variables_used': session.get('variables_used', [])
+            }
+            
+            # Create context-aware system prompt
+            context_info = ""
+            if session_context['data_uploaded']:
+                context_info += "✅ User has uploaded CSV and shapefile data.\n"
+                context_info += "✅ Data is available for analysis and querying.\n"
+            if session_context['analysis_complete']:
+                context_info += f"✅ User has completed {session_context['analysis_type']} analysis.\n"
+                context_info += "✅ Analysis results and unified dataset are available for querying.\n"
+                context_info += "⚠️  User may be asking follow-up questions about previous analysis results.\n"
+                context_info += "⚠️  Always use data analysis tools for questions about wards, rankings, settlements, etc.\n"
+            if session_context['variables_used']:
+                context_info += f"📊 Previous analysis used variables: {', '.join(session_context['variables_used'][:5])}.\n"
+            
             system_prompt = f"""
             Parse user requests into structured tool calls for ChatMRPT malaria analysis system.
 
-            Available tools: {', '.join(tool_names)}
+            SESSION CONTEXT:
+            {context_info}
 
-            CRITICAL PARAMETER MAPPING:
-            - get_composite_rankings(session_id, top_n=20) - NO 'ward' parameter
-            - get_pca_rankings(session_id, top_n=20) - NO 'ward' parameter  
-            - scatter_plot(session_id, x_variable, y_variable, color_by=None, size_by=None)
-            - create_vulnerability_map(session_id, method="composite"|"pca"|"auto")
-            - All visualization tools use x_variable/y_variable NOT x_axis/y_axis
+            AVAILABLE TOOLS AND PARAMETERS:
+            {tool_documentation}
 
-            TOOL AVAILABILITY:
-            - NO radar_chart tool exists
-            - Use create_vulnerability_map instead of specific chart requests
-            - For ward-specific queries, use top_n parameter and filter results
+            PARAMETER VALIDATION:
+            - All tools are auto-validated using Pydantic models
+            - Required parameters MUST be provided
+            - Use exact parameter names as specified in tool schemas
+            - For ward-specific queries, use the ward_name parameter where available
 
             Return JSON in this EXACT format:
             {{
@@ -116,6 +196,17 @@ class RequestInterpreter:
             - "Show scatter plot X vs Y" -> scatter_plot with x_variable="X", y_variable="Y"
             - Comparison questions -> call both relevant ranking tools with same top_n
             - Visualization requests -> map to available visualization tools only
+            
+            SETTLEMENT ANALYSIS QUERIES:
+            - "Which settlement types..." -> Use createsettlementanalysismap or getdescriptivestatistics with settlement variables
+            - "Settlement vulnerability/risk" -> Use ward data tools and settlement analysis (createsettlementanalysismap)
+            - "Informal vs formal" -> Use createsettlementanalysismap with analysis_focus="settlement_types"
+            - "Highest malaria vulnerability" -> Use getcompositerankings with settlement context or createsettlementanalysismap
+            
+            RESOURCE ALLOCATION QUERIES:
+            - "Budget for nets/resources" -> Always use intervention targeting tools
+            - "Which wards should I prioritize" -> Use get_composite_rankings or intervention tools
+            - "Resource allocation/distribution" -> Use intervention targeting or optimization tools
 
             CRITICAL TOP_N PARAMETER EXTRACTION:
             - Extract numbers from user queries: "top 10" -> top_n=10, "top 15" -> top_n=15
@@ -146,6 +237,104 @@ class RequestInterpreter:
             - "do the thing" (what thing?)
 
             Only use exact tool names and parameters from the available list. If unsure, set intent_type="clarification_needed" instead of guessing.
+
+            FEW-SHOT EXAMPLES FOR PRECISE TOOL SELECTION:
+
+            Example 1:
+            User: "What are the top 10 most vulnerable wards?"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Get top 10 most vulnerable wards",
+                "tool_calls": [
+                    {{
+                        "tool_name": "getcompositerankings",
+                        "parameters": {{"top_n": 10}},
+                        "reasoning": "User wants vulnerability rankings"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+            
+            Example: Settlement Analysis
+            User: "Which settlement types have the highest malaria vulnerability?"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Analyze settlement vulnerability patterns",
+                "tool_calls": [
+                    {{
+                        "tool_name": "createsettlementanalysismap",
+                        "parameters": {{"analysis_focus": "settlement_types"}},
+                        "reasoning": "User wants settlement type vulnerability analysis"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+
+            Example 2:
+            User: "If ITN coverage in Kano Municipal increases by 30%, what happens?"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Simulate coverage increase impact",
+                "tool_calls": [
+                    {{
+                        "tool_name": "simulatecoverageimpact",
+                        "parameters": {{
+                            "ward_name": "Kano Municipal",
+                            "coverage_increase": 0.3,
+                            "intervention_type": "ITN"
+                        }},
+                        "reasoning": "User wants scenario simulation for specific ward"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+
+            Example 3:
+            User: "What is malaria transmission?"
+            Response: {{
+                "intent_type": "knowledge",
+                "primary_goal": "Explain malaria transmission",
+                "tool_calls": [
+                    {{
+                        "tool_name": "explain_concept",
+                        "parameters": {{"concept": "transmission"}},
+                        "reasoning": "Educational question about malaria concept"
+                    }}
+                ],
+                "requires_session_data": false,
+                "routing": "knowledge_agent"
+            }}
+
+            Example 4:
+            User: "Hello"
+            Response: {{
+                "intent_type": "system",
+                "primary_goal": "Respond to greeting",
+                "tool_calls": [
+                    {{
+                        "tool_name": "simple_greeting",
+                        "parameters": {{}},
+                        "reasoning": "Simple greeting requires greeting response"
+                    }}
+                ],
+                "requires_session_data": false,
+                "routing": "knowledge_agent"
+            }}
+
+            Example 5:
+            User: "run analysis"
+            Response: {{
+                "intent_type": "clarification_needed",
+                "primary_goal": "Need to clarify analysis type",
+                "tool_calls": [],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+
+            Use these patterns as guidance for consistent tool selection and parameter extraction.
             """
             
             user_prompt = f'Parse this request: "{user_message}"'
@@ -181,7 +370,12 @@ class RequestInterpreter:
             
             # Check if clarification is needed
             if parsed_intent.get('intent_type') == 'clarification_needed':
-                # Determine what kind of clarification to provide
+                # Try to apply intelligent defaults before asking for clarification
+                default_response = self._try_intelligent_defaults(user_message, session_id)
+                if default_response:
+                    return default_response
+                
+                # If no defaults apply, determine what kind of clarification to provide
                 clarification_type = self._determine_clarification_type(user_message, parsed_intent)
                 return self._generate_contextual_clarification(
                     user_message, 
@@ -209,11 +403,10 @@ class RequestInterpreter:
                         available_tools=close_matches if close_matches else None
                     )
             
-            # Inject session_id
+            # Don't inject session_id here - it's passed separately to execute_tool_with_registry
             for tool_call in parsed_intent['tool_calls']:
                 if 'parameters' not in tool_call:
                     tool_call['parameters'] = {}
-                tool_call['parameters']['session_id'] = session_id
             
             return {
                 'status': 'success',
@@ -232,43 +425,47 @@ class RequestInterpreter:
 
 
     def execute_intent(self, parsed_intent: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Execute the parsed intent by calling appropriate tools."""
+        """Execute the parsed intent by calling appropriate tools via dynamic registry."""
         try:
-            from ..tools import get_tool_function
-            
             tool_calls = parsed_intent.get('tool_calls', [])
-            logger.info(f"🔧 DEBUG: Executing {len(tool_calls)} tool calls")
+            logger.info(f"🔧 DEBUG: Executing {len(tool_calls)} tool calls via dynamic registry")
             execution_results = []
+            
+            # Check if unified dataset needs to be created before executing data-dependent tools
+            data_dependent_tools = [tc for tc in tool_calls if self._requires_unified_dataset(tc.get('tool_name'))]
+            if data_dependent_tools:
+                logger.info(f"🔧 DEBUG: {len(data_dependent_tools)} tools require unified dataset, checking availability...")
+                
+                # Try to ensure unified dataset exists
+                unified_check_result = self._ensure_unified_dataset_exists(session_id)
+                if not unified_check_result['success']:
+                    logger.warning(f"🔧 DEBUG: Unified dataset not available: {unified_check_result['message']}")
+                    # Continue anyway - tools will handle missing data gracefully
+                else:
+                    logger.info(f"🔧 DEBUG: Unified dataset is available for analysis tools")
             
             for tool_call in tool_calls:
                 tool_name = tool_call.get('tool_name')
                 parameters = tool_call.get('parameters', {})
                 
-                # 🔧 CRITICAL FIX: Inject session_id into ALL tool calls
-                parameters['session_id'] = session_id
+                logger.info(f"🔧 DEBUG: Executing tool '{tool_name}' with params: {parameters}")
                 
-                logger.info(f"🔧 DEBUG: Looking for tool '{tool_name}'")
-                tool_function = get_tool_function(tool_name)
-                if not tool_function:
-                    logger.error(f"🔧 DEBUG: Tool '{tool_name}' NOT FOUND")
-                    execution_results.append({
-                        'tool_name': tool_name,
-                        'status': 'error',
-                        'message': f'Tool {tool_name} not found'
-                    })
-                    continue
-                
-                logger.info(f"🔧 DEBUG: Tool '{tool_name}' found, executing with params: {parameters}")
+                # Use dynamic registry to execute tool
                 try:
-                    result = tool_function(**parameters)
+                    result = self.execute_tool_with_registry(tool_name, session_id, **parameters)
                     logger.info(f"🔧 DEBUG: Tool '{tool_name}' executed, result status: {result.get('status') if isinstance(result, dict) else 'unknown'}")
+                    
                     if isinstance(result, dict) and result.get('status') == 'error':
                         logger.error(f"🔧 DEBUG: Tool '{tool_name}' error details: {result.get('message', 'No error message')}")
                     
+                    # Ensure result is a dictionary
                     if not isinstance(result, dict):
                         result = {'status': 'success', 'data': result}
                     
-                    result['tool_name'] = tool_name
+                    # Ensure tool_name is set
+                    if 'tool_name' not in result:
+                        result['tool_name'] = tool_name
+                        
                     execution_results.append(result)
                     
                 except Exception as tool_error:
@@ -276,7 +473,8 @@ class RequestInterpreter:
                     execution_results.append({
                         'tool_name': tool_name,
                         'status': 'error',
-                        'message': str(tool_error)
+                        'message': str(tool_error),
+                        'error_details': f"Exception: {type(tool_error).__name__}"
                     })
             
             successful_tools = [r for r in execution_results if r.get('status') == 'success']
@@ -287,15 +485,16 @@ class RequestInterpreter:
             if ('run_composite_analysis' in successful_tool_names and 'run_pca_analysis' in successful_tool_names):
                 logger.info("🔧 DEBUG: Both analyses completed - triggering comprehensive summary")
                 try:
-                    summary_function = get_tool_function('generate_comprehensive_analysis_summary')
-                    if summary_function:
-                        summary_result = summary_function(session_id=session_id)
-                        if isinstance(summary_result, dict):
-                            summary_result['tool_name'] = 'generate_comprehensive_analysis_summary'
-                            execution_results.append(summary_result)
-                            if summary_result.get('status') == 'success':
-                                successful_tools.append(summary_result)
-                                logger.info("🔧 DEBUG: Comprehensive summary generated successfully")
+                    summary_result = self.execute_tool_with_registry(
+                        'generate_comprehensive_analysis_summary', 
+                        session_id
+                    )
+                    if isinstance(summary_result, dict):
+                        summary_result['tool_name'] = 'generate_comprehensive_analysis_summary'
+                        execution_results.append(summary_result)
+                        if summary_result.get('status') == 'success':
+                            successful_tools.append(summary_result)
+                            logger.info("🔧 DEBUG: Comprehensive summary generated successfully")
                 except Exception as e:
                     logger.error(f"🔧 DEBUG: Failed to generate comprehensive summary: {e}")
             
@@ -341,21 +540,19 @@ class RequestInterpreter:
                 
                 # Try to invoke help tool automatically
                 try:
-                    from ..tools import get_tool_function
-                    help_function = get_tool_function('show_help_options')
-                    if help_function:
-                        help_result = help_function(
-                            session_id=session_id,
-                            error_context=f"All requested operations failed: {'; '.join(error_details[:2])}"
-                        )
-                        if help_result.get('status') == 'success' and help_result.get('response'):
-                            return {
-                                'status': 'error',
-                                'response': help_result['response'],
-                                'visualizations': [],
-                                'error_handled': True,
-                                'help_provided': True
-                            }
+                    help_result = self.execute_tool_with_registry(
+                        'show_help_options',
+                        session_id,
+                        error_context=f"All requested operations failed: {'; '.join(error_details[:2])}"
+                    )
+                    if help_result.get('status') == 'success' and help_result.get('response'):
+                        return {
+                            'status': 'error',
+                            'response': help_result['response'],
+                            'visualizations': [],
+                            'error_handled': True,
+                            'help_provided': True
+                        }
                 except Exception as e:
                     logger.error(f"Failed to invoke help tool: {e}")
                 
@@ -414,6 +611,15 @@ class RequestInterpreter:
         try:
             logger.info(f"Processing message for session {session_id}: {user_message[:100]}...")
             
+            # Check for automatic data description workflow
+            from flask import session
+            if session.get('should_describe_data', False):
+                # Clear the flag to prevent repeated triggering
+                session['should_describe_data'] = False
+                
+                # Generate automatic data description
+                return self._generate_automatic_data_description(session_id)
+            
             # Step 1: Parse request - WITH CLARIFICATION
             parse_result = self.parse_request(user_message, session_id)
             
@@ -445,6 +651,138 @@ class RequestInterpreter:
                 'visualizations': []
             }
 
+    def _generate_automatic_data_description(self, session_id: str) -> Dict[str, Any]:
+        """Generate automatic description of uploaded data and ask for analysis permission."""
+        try:
+            from flask import session
+            
+            # Get data summary from session
+            data_summary = session.get('data_summary', {})
+            
+            if not data_summary:
+                # Fallback: try to generate data summary from data service
+                try:
+                    data_summary = self.data_service.get_data_summary()
+                except Exception as e:
+                    logger.warning(f"Could not generate data summary: {e}")
+                    data_summary = {}
+            
+            # Get basic session information
+            csv_rows = session.get('csv_rows', 'unknown')
+            csv_columns = session.get('csv_columns', 'unknown')
+            csv_filename = session.get('csv_filename', 'data')
+            shapefile_loaded = session.get('shapefile_loaded', False)
+            available_variables = session.get('available_variables', [])
+            
+            # Create comprehensive data description
+            description_parts = []
+            
+            # Basic file information
+            description_parts.append("## 📊 Your Data Upload Summary")
+            description_parts.append(f"**CSV File:** {csv_filename}")
+            description_parts.append(f"**Records:** {csv_rows} wards")
+            description_parts.append(f"**Variables:** {csv_columns} columns")
+            if shapefile_loaded:
+                description_parts.append("**Spatial Data:** ✅ Ward boundaries loaded")
+            
+            # Variables information
+            if available_variables:
+                description_parts.append("\n## 📋 Available Variables")
+                variable_list = ", ".join(available_variables[:15])  # Show first 15 variables
+                if len(available_variables) > 15:
+                    variable_list += f" (and {len(available_variables) - 15} more)"
+                description_parts.append(f"**Key Variables:** {variable_list}")
+            
+            # Data summary statistics (if available)
+            if data_summary and isinstance(data_summary, dict):
+                if 'statistical_summary' in data_summary:
+                    description_parts.append("\n## 📈 Data Overview")
+                    stats = data_summary['statistical_summary']
+                    description_parts.append(f"Data appears to be ready for malaria risk analysis with {len(stats)} numeric variables.")
+                
+                if 'data_quality' in data_summary:
+                    quality = data_summary['data_quality']
+                    if quality.get('missing_data_percentage', 0) > 0:
+                        description_parts.append(f"**Data Quality:** {quality.get('missing_data_percentage', 0):.1f}% missing values detected")
+                    else:
+                        description_parts.append("**Data Quality:** ✅ No missing values detected")
+            
+            # Analysis recommendation and permission request
+            description_parts.append("\n## 🎯 Recommended Next Steps")
+            description_parts.append("I can run a comprehensive malaria risk analysis including:")
+            description_parts.append("• **Composite Score Analysis** - Combines multiple risk factors")
+            description_parts.append("• **PCA Analysis** - Identifies key vulnerability patterns")
+            description_parts.append("• **Vulnerability Rankings** - Ranks wards by risk level")
+            description_parts.append("• **Risk Visualizations** - Interactive maps and charts")
+            
+            description_parts.append("\n**Would you like me to proceed with the composite score and PCA analysis?**")
+            description_parts.append("*(This will create a unified dataset and comprehensive risk assessment)*")
+            
+            # Set flag for analysis permission handling
+            session['should_ask_analysis_permission'] = True
+            
+            response_text = "\n".join(description_parts)
+            
+            logger.info(f"Generated automatic data description for session {session_id}")
+            
+            return {
+                'status': 'success',
+                'response': response_text,
+                'visualizations': [],
+                'automatic_workflow': 'data_description_complete'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating automatic data description: {e}")
+            return {
+                'status': 'error',
+                'response': "Your data has been uploaded successfully! Please tell me what analysis you'd like to run.",
+                'visualizations': []
+            }
+
+    def _is_confirmation_message(self, user_message: str) -> bool:
+        """Check if user message is a confirmation for running analysis."""
+        confirmation_patterns = [
+            'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'proceed', 'go ahead', 
+            'run', 'start', 'analyze', 'do it', 'continue', 'confirm', 'agreed',
+            'composite', 'pca', 'analysis', 'first run'
+        ]
+        
+        user_lower = user_message.lower().strip()
+        
+        # Direct confirmation words
+        if any(pattern in user_lower for pattern in confirmation_patterns):
+            return True
+            
+        # Negative patterns to avoid false positives
+        negative_patterns = ['no', 'not', "don't", 'stop', 'cancel', 'wait']
+        if any(pattern in user_lower for pattern in negative_patterns):
+            return False
+            
+        return False
+
+    def _create_automatic_analysis_intent(self) -> Dict[str, Any]:
+        """Create intent for automatic composite and PCA analysis."""
+        return {
+            'status': 'success',
+            'parsed_intent': {
+                'intent_type': 'data_analysis',
+                'primary_goal': 'Run complete dual-method analysis (Composite + PCA)',
+                'tool_calls': [
+                    {
+                        'tool_name': 'runcompleteanalysis',
+                        'parameters': {
+                            'include_visualizations': True,
+                            'create_unified_dataset': True
+                        },
+                        'reasoning': 'User confirmed they want to run both composite and PCA analysis together with unified dataset creation'
+                    }
+                ],
+                'requires_session_data': True,
+                'routing': 'data_agent',
+                'automatic_workflow': 'complete_analysis_granted'
+            }
+        }
 
     def _generate_response_text(self, user_message: str, successful_results: List[Dict], session_id: str = None) -> str:
         """Generate natural language response using LLM to interpret tool results."""
@@ -973,3 +1311,305 @@ Generate a helpful, conversational clarification response."""
                 'original_message': user_message,
                 'suggestions': prompt_data.get('suggestions', [])
             }
+    
+    def _generate_tool_documentation(self) -> str:
+        """Generate comprehensive tool documentation for LLM prompt"""
+        documentation = []
+        
+        # Group tools by category for better organization
+        tools_by_category = {}
+        for tool_name in self.tool_registry.list_tools():
+            metadata = self.tool_registry.get_tool_metadata(tool_name)
+            if metadata:
+                category = metadata.category.value
+                if category not in tools_by_category:
+                    tools_by_category[category] = []
+                tools_by_category[category].append((tool_name, metadata))
+        
+        # Generate documentation for each category
+        for category, tools in tools_by_category.items():
+            documentation.append(f"\n{category.upper().replace('_', ' ')} TOOLS:")
+            
+            for tool_name, metadata in tools:
+                # Basic tool info
+                doc_lines = [f"• {tool_name}: {metadata.description}"]
+                
+                # Parameters
+                if metadata.parameters and "properties" in metadata.parameters:
+                    props = metadata.parameters["properties"]
+                    required = metadata.parameters.get("required", [])
+                    
+                    param_docs = []
+                    for param_name, param_info in props.items():
+                        if param_name == "session_id":
+                            continue  # Skip session_id as it's auto-provided
+                        
+                        param_type = param_info.get("type", "string")
+                        param_desc = param_info.get("description", "")
+                        is_required = param_name in required
+                        
+                        req_marker = " (REQUIRED)" if is_required else " (optional)"
+                        param_docs.append(f"    - {param_name}: {param_type}{req_marker} - {param_desc}")
+                    
+                    if param_docs:
+                        doc_lines.append("  Parameters:")
+                        doc_lines.extend(param_docs)
+                
+                # Examples
+                if metadata.examples:
+                    doc_lines.append(f"  Examples: {', '.join(metadata.examples[:2])}")
+                
+                documentation.extend(doc_lines)
+                documentation.append("")  # Empty line for readability
+        
+        return "\n".join(documentation)
+    
+    def _generate_enhanced_tool_documentation(self, schemas: Dict[str, Dict]) -> str:
+        """Generate enhanced tool documentation using combined schemas"""
+        documentation = []
+        
+        # Categorize tools for better organization
+        categories = {
+            'core_analysis': [],
+            'statistical': [],
+            'visualization': [],
+            'knowledge': [],
+            'system': [],
+            'other': []
+        }
+        
+        for tool_name, schema in schemas.items():
+            # Categorize based on tool name patterns
+            if any(x in tool_name.lower() for x in ['composite', 'pca', 'ranking', 'vulnerability']):
+                categories['core_analysis'].append((tool_name, schema))
+            elif any(x in tool_name.lower() for x in ['stats', 'correlation', 'summary', 'anova', 'test']):
+                categories['statistical'].append((tool_name, schema))
+            elif any(x in tool_name.lower() for x in ['plot', 'chart', 'histogram', 'scatter', 'map', 'visual']):
+                categories['visualization'].append((tool_name, schema))
+            elif any(x in tool_name.lower() for x in ['explain', 'greeting', 'help', 'concept']):
+                categories['knowledge'].append((tool_name, schema))
+            elif any(x in tool_name.lower() for x in ['check', 'data', 'session', 'available', 'ward']):
+                categories['system'].append((tool_name, schema))
+            else:
+                categories['other'].append((tool_name, schema))
+        
+        # Generate documentation for each category
+        for category_name, tools in categories.items():
+            if not tools:
+                continue
+                
+            documentation.append(f"\n{category_name.upper().replace('_', ' ')} TOOLS:")
+            
+            for tool_name, schema in tools:
+                # Basic tool info
+                description = schema.get('description', 'No description available')
+                doc_lines = [f"• {tool_name}: {description}"]
+                
+                # Parameters with enhanced details
+                parameters = schema.get('parameters', {})
+                if parameters and 'properties' in parameters:
+                    props = parameters['properties']
+                    required = parameters.get('required', [])
+                    
+                    param_docs = []
+                    for param_name, param_info in props.items():
+                        if param_name == "session_id":
+                            continue  # Skip session_id as it's auto-provided
+                        
+                        param_type = param_info.get("type", "string")
+                        param_desc = param_info.get("description", "")
+                        is_required = param_name in required
+                        
+                        # Add enum values if available
+                        enum_values = param_info.get("enum", [])
+                        pattern = param_info.get("pattern", "")
+                        
+                        req_marker = " (REQUIRED)" if is_required else " (optional)"
+                        param_line = f"    - {param_name}: {param_type}{req_marker} - {param_desc}"
+                        
+                        if enum_values:
+                            param_line += f" Options: {enum_values}"
+                        elif pattern:
+                            param_line += f" Pattern: {pattern}"
+                        
+                        param_docs.append(param_line)
+                    
+                    if param_docs:
+                        doc_lines.append("  Parameters:")
+                        doc_lines.extend(param_docs)
+                
+                documentation.extend(doc_lines)
+                documentation.append("")  # Empty line for readability
+        
+        return "\n".join(documentation)
+    
+    def execute_tool_with_registry(self, tool_name: str, session_id: str, **parameters):
+        """Execute a tool using the dynamic registry with Pydantic priority"""
+        # Try Pydantic registry first
+        if tool_name in self.pydantic_registry.get_tool_names():
+            return self.pydantic_registry.execute_tool(tool_name, session_id, **parameters)
+        # Fallback to legacy registry
+        return self.tool_registry.execute_tool(tool_name, session_id, **parameters)
+    
+    def _try_intelligent_defaults(self, user_message: str, session_id: str) -> Optional[Dict[str, Any]]:
+        """Try to apply intelligent defaults for common ambiguous requests"""
+        user_message_lower = user_message.lower()
+        
+        # Check each pattern for matches
+        for pattern, default_config in self.intelligent_defaults.items():
+            if pattern in user_message_lower:
+                logger.info(f"🤖 Applying intelligent default for pattern: {pattern}")
+                
+                # Create tool calls using the default configuration
+                # Try to find the first available tool from the list
+                tool_calls = []
+                all_available_tools = set(self.pydantic_registry.get_tool_names() + self.tool_registry.list_tools())
+                
+                for tool_name in default_config['default_tools']:
+                    if tool_name in all_available_tools:
+                        tool_calls.append({
+                            'tool_name': tool_name,
+                            'parameters': default_config['default_params'].copy(),
+                            'reasoning': f"Intelligent default for ambiguous request: {pattern}"
+                        })
+                        break  # Use only the first available tool
+                
+                # If no tools found, use the first one anyway (fallback)
+                if not tool_calls and default_config['default_tools']:
+                    tool_calls.append({
+                        'tool_name': default_config['default_tools'][0],
+                        'parameters': default_config['default_params'].copy(),
+                        'reasoning': f"Fallback intelligent default for ambiguous request: {pattern}"
+                    })
+                
+                # Check if session has data before proceeding
+                if not self.validate_session_data_exists(session_id):
+                    return {
+                        'status': 'error',
+                        'message': 'No data uploaded yet. Please upload your data first before running analysis.',
+                        'visualizations': [],
+                        'original_message': user_message
+                    }
+                
+                # Execute the default tools
+                default_intent = {
+                    'intent_type': 'data_analysis',
+                    'primary_goal': f"Applied intelligent default: {default_config['message']}",
+                    'tool_calls': tool_calls,
+                    'requires_session_data': True,
+                    'routing': 'data_agent'
+                }
+                
+                # Execute the intent
+                execution_result = self.execute_intent(default_intent, session_id)
+                
+                # Add a note about the intelligent default being applied
+                if execution_result.get('status') == 'success':
+                    response_message = execution_result.get('response', '')
+                    default_note = f"\n\n💡 Note: {default_config['message']}. If you wanted something different, please be more specific in your request."
+                    execution_result['response'] = response_message + default_note
+                
+                return execution_result
+        
+        # Check for common phrases that might need number extraction
+        import re
+        number_matches = re.findall(r'\b(\d+)\b', user_message_lower)
+        if number_matches and any(phrase in user_message_lower for phrase in ['top', 'highest', 'most', 'vulnerable', 'risk']):
+            top_n = int(number_matches[0])
+            if 1 <= top_n <= 100:  # Reasonable range
+                logger.info(f"🤖 Applying intelligent default with extracted number: {top_n}")
+                
+                tool_calls = [{
+                    'tool_name': 'getcompositerankings',
+                    'parameters': {'top_n': top_n},
+                    'reasoning': f"Extracted top_n={top_n} from user request"
+                }]
+                
+                if not self.validate_session_data_exists(session_id):
+                    return {
+                        'status': 'error',
+                        'message': 'No data uploaded yet. Please upload your data first before running analysis.',
+                        'visualizations': [],
+                        'original_message': user_message
+                    }
+                
+                default_intent = {
+                    'intent_type': 'data_analysis',
+                    'primary_goal': f"Show top {top_n} vulnerability rankings",
+                    'tool_calls': tool_calls,
+                    'requires_session_data': True,
+                    'routing': 'data_agent'
+                }
+                
+                execution_result = self.execute_intent(default_intent, session_id)
+                
+                if execution_result.get('status') == 'success':
+                    response_message = execution_result.get('response', '')
+                    default_note = f"\n\n💡 Note: I extracted the number {top_n} from your request. If you wanted something different, please clarify."
+                    execution_result['response'] = response_message + default_note
+                
+                return execution_result
+        
+        return None  # No intelligent defaults apply
+    
+    def validate_session_data_exists(self, session_id: str) -> bool:
+        """Check if session has uploaded data"""
+        from ..tools.base import validate_session_data_exists
+        return validate_session_data_exists(session_id)
+    
+    def _requires_unified_dataset(self, tool_name: str) -> bool:
+        """Check if a tool requires unified dataset"""
+        # Tools that require access to session data
+        data_dependent_tools = {
+            'getwardriskscore', 'gettopriskwards', 'filterwardsbyrisk', 'getriskstatistics',
+            'getwardinformation', 'getwardvariable', 'comparewards', 'searchwards',
+            'getdescriptivestatistics', 'getcorrelationanalysis', 'performregressionanalysis',
+            'createvulnerabilitymap', 'createpcamap', 'createscatterplot', 'createboxplot',
+            'getinterventionpriorities', 'simulatecoverageincrease',
+            # Add missing analysis tools
+            'run_composite_analysis', 'run_pca_analysis', 'create_unified_dataset',
+            'runcompositeanalysis', 'runpcaanalysis', 'createunifieddataset',
+            'composite_analysis', 'pca_analysis', 'unified_dataset',
+            # Complete analysis tools
+            'runcompleteanalysis', 'run_complete_analysis', 'complete_analysis'
+        }
+        return tool_name.lower() in data_dependent_tools
+    
+    def _ensure_unified_dataset_exists(self, session_id: str) -> Dict[str, Any]:
+        """Ensure unified dataset exists for session"""
+        try:
+            import os
+            from ..data.unified_dataset_builder import load_unified_dataset, UnifiedDatasetBuilder
+            
+            # Check if unified dataset already exists
+            unified_path = os.path.join(f"instance/uploads/{session_id}", "unified_dataset.geoparquet")
+            if os.path.exists(unified_path):
+                # Try to load it to ensure it's valid
+                gdf = load_unified_dataset(session_id)
+                if gdf is not None:
+                    return {'success': True, 'message': 'Unified dataset exists and is valid'}
+            
+            # Check if we have the required base data to create unified dataset
+            session_folder = f"instance/uploads/{session_id}"
+            csv_exists = os.path.exists(os.path.join(session_folder, "processed_data.csv"))
+            shapefile_exists = os.path.exists(os.path.join(session_folder, "shapefile", "processed.shp"))
+            
+            if not csv_exists or not shapefile_exists:
+                return {
+                    'success': False, 
+                    'message': f'Missing base data - CSV: {csv_exists}, Shapefile: {shapefile_exists}'
+                }
+            
+            # Try to create unified dataset
+            logger.info(f"Creating unified dataset for session {session_id}")
+            builder = UnifiedDatasetBuilder(session_id)
+            result = builder.build_unified_dataset()
+            
+            if result['status'] == 'success':
+                return {'success': True, 'message': 'Unified dataset created successfully'}
+            else:
+                return {'success': False, 'message': f'Failed to create unified dataset: {result.get("message")}'}
+                
+        except Exception as e:
+            logger.error(f"Error ensuring unified dataset exists: {e}")
+            return {'success': False, 'message': f'Error: {str(e)}'}

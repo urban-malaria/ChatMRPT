@@ -85,6 +85,17 @@ export class ChatManager {
      * Setup response handling for non-visualization actions
      */
     setupResponseHandling() {
+        // Handle automatic messages from upload workflow
+        document.addEventListener('sendAutomaticMessage', (event) => {
+            const { message } = event.detail;
+            console.log('🎯 Automatic message triggered:', message);
+            
+            // Send the automatic message through the message handler
+            if (this.messageHandler) {
+                this.messageHandler.sendMessage(message);
+            }
+        });
+        
         document.addEventListener('messageResponse', async (event) => {
             const { response } = event.detail;
             

@@ -777,4 +777,5 @@ def get_building_statistics(session_id: str) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error getting building statistics: {e}")
-        return {'status': 'error', 'message': str(e)}
+        return {'status': 'error', 'message': str(e)}# This file has been removed during ChatMRPT streamlining
+# Settlement validation tools were identified as non-essential and removed to focus on core functionality

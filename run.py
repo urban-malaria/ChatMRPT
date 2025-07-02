@@ -12,6 +12,11 @@ import sys
 from app import create_app
 from flask import redirect, url_for
 
+# Production-ready startup with intelligent caching
+if '--disable-tool-scoring' in sys.argv:
+    os.environ['DISABLE_TOOL_SCORING'] = 'true'
+    print("🚫 Tool scoring disabled for faster startup")
+
 # Get configuration name from environment
 config_name = os.environ.get('FLASK_ENV', 'development')
 
@@ -44,6 +49,9 @@ if __name__ == '__main__':
     print("Environment: " + str(config_name))
     print("URL: http://" + str(host) + ":" + str(port))
     print("Debug Mode: " + str(debug_mode))
+    
+    tool_scoring = os.environ.get('DISABLE_TOOL_SCORING', 'false') != 'true'
+    print("Tool Scoring: " + str(tool_scoring))
     
     if openai_api_key:
         print("API Key: Configured [OK]")
