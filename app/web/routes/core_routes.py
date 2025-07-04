@@ -83,6 +83,25 @@ def index():
                 except Exception as e:
                     logger.warning(f"Failed to log new session: {e}")
     
+    # Preload knowledge tools in background for fast user interaction
+    if hasattr(current_app, 'services'):
+        try:
+            # Import and trigger background loading
+            from ...core.tiered_tool_loader import get_tiered_tool_loader
+            import threading
+            
+            def background_load_knowledge_tools():
+                try:
+                    loader = get_tiered_tool_loader()
+                    loader.preload_knowledge_tools_for_app_visit()
+                except Exception as e:
+                    logger.warning(f"Background knowledge tools loading failed: {e}")
+            
+            # Start background thread to load knowledge tools
+            threading.Thread(target=background_load_knowledge_tools, daemon=True).start()
+        except Exception as e:
+            logger.warning(f"Failed to start background knowledge tools loading: {e}")
+    
     # Check for UI preference
     use_tailwind = request.args.get('use_tailwind', 'false').lower() == 'true'
     

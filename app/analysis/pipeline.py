@@ -138,6 +138,97 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
         if clean_result['status'] == 'error':
             return clean_result
         
+        # 1.5. Apply region-aware variable selection if no variables specified
+        if selected_variables is None:
+            logger.info("Step 1.5: Applying region-aware variable selection")
+            from .region_aware_selection import apply_region_aware_selection
+            
+            region_result = apply_region_aware_selection(
+                data_handler.cleaned_data, 
+                data_handler.shapefile_data,
+                llm_manager
+            )
+            
+            if region_result['status'] == 'success':
+                selected_variables = region_result['selected_variables']
+                selection_method = region_result.get('selection_method', 'region_specific')
+                logger.info(f"Region-aware selection: {region_result['zone_detected']} zone, "
+                           f"{len(selected_variables)} variables selected via {selection_method}")
+                
+                # Store region metadata for later use
+                metadata.record_step(
+                    'region_aware_selection',
+                    {
+                        'zone_detected': region_result['zone_detected'],
+                        'detection_method': region_result['detection_method'],
+                        'variables_selected': len(selected_variables),
+                        'selection_method': region_result.get('selection_method', 'region_specific')
+                    },
+                    {
+                        'selected_variables': selected_variables,
+                        'zone_metadata': region_result['zone_metadata']
+                    },
+                    'region_aware_selection',
+                    {'automated_selection': True}
+                )
+                
+                # Save region metadata to file for unified dataset integration
+                try:
+                    session_folder = getattr(data_handler, 'session_folder', f"instance/uploads/{session_id}")
+                    if session_folder:
+                        import json
+                        region_metadata = {
+                            'zone_detected': region_result['zone_detected'],
+                            'detection_method': region_result['detection_method'],
+                            'selected_variables': selected_variables,
+                            'selection_method': region_result.get('selection_method', 'region_specific'),
+                            'zone_metadata': region_result['zone_metadata'],
+                            'total_available_variables': region_result.get('total_available_variables', 0),
+                            'variables_selected': len(selected_variables),
+                            'timestamp': time.time()
+                        }
+                        
+                        region_metadata_path = os.path.join(session_folder, 'region_metadata.json')
+                        with open(region_metadata_path, 'w') as f:
+                            json.dump(region_metadata, f, indent=2, default=str)
+                        
+                        logger.info(f"💾 Saved region metadata to {region_metadata_path}")
+                        
+                except Exception as save_error:
+                    logger.warning(f"Could not save region metadata: {save_error}")
+            else:
+                logger.warning(f"Region-aware selection failed: {region_result.get('message', 'Unknown error')}")
+                # Fallback to all available analysis variables (exclude identifiers)
+                identifier_columns = ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
+                selected_variables = [col for col in data_handler.cleaned_data.columns 
+                                    if col not in identifier_columns]
+                
+                # Save fallback metadata
+                try:
+                    session_folder = getattr(data_handler, 'session_folder', f"instance/uploads/{session_id}")
+                    if session_folder:
+                        import json
+                        fallback_metadata = {
+                            'zone_detected': None,
+                            'detection_method': 'failed',
+                            'selected_variables': selected_variables,
+                            'selection_method': 'all_available_fallback',
+                            'zone_metadata': {},
+                            'error_message': region_result.get('message', 'Unknown error'),
+                            'total_available_variables': len(selected_variables),
+                            'variables_selected': len(selected_variables),
+                            'timestamp': time.time()
+                        }
+                        
+                        region_metadata_path = os.path.join(session_folder, 'region_metadata.json')
+                        with open(region_metadata_path, 'w') as f:
+                            json.dump(fallback_metadata, f, indent=2, default=str)
+                        
+                        logger.info(f"💾 Saved fallback region metadata to {region_metadata_path}")
+                        
+                except Exception as save_error:
+                    logger.warning(f"Could not save fallback region metadata: {save_error}")
+        
         # 2. Determine variable relationships if needed
         relationship_result = run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stages, custom_relationships)
         if relationship_result['status'] == 'error':
@@ -259,6 +350,21 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
             print(f"PIPELINE DEBUG: Error saving analysis results: {e}")
             # Don't fail the pipeline if save fails - just log it
             logger.warning(f"Could not save analysis results: {e}")
+        
+        # Create/update unified dataset with region metadata
+        try:
+            print("PIPELINE DEBUG: Creating unified dataset with region metadata...")
+            from ..data.unified_dataset_builder import build_unified_dataset
+            
+            unified_result = build_unified_dataset(session_id)
+            if unified_result['status'] == 'success':
+                print(f"PIPELINE DEBUG: ✅ Unified dataset created successfully: {unified_result['message']}")
+            else:
+                print(f"PIPELINE DEBUG: ⚠️ Unified dataset creation failed: {unified_result.get('message', 'Unknown error')}")
+                
+        except Exception as unified_error:
+            print(f"PIPELINE DEBUG: Error creating unified dataset: {unified_error}")
+            logger.warning(f"Could not create unified dataset: {unified_error}")
             
         summary = {
             'status': 'success',
@@ -290,7 +396,13 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
             
             # **CRITICAL BACKWARD COMPATIBILITY FIX**
             # Visualization code expects 'composite_scores' (not 'composite_scores_mean')
-            'composite_scores': data_handler.composite_scores
+            'composite_scores': data_handler.composite_scores,
+            
+            # Add region-aware metadata
+            'region_metadata': {
+                'zone_detected': region_result.get('zone_detected') if 'region_result' in locals() else None,
+                'selection_method': region_result.get('selection_method') if 'region_result' in locals() else 'default'
+            }
         }
         
         return summary

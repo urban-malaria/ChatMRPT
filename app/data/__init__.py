@@ -120,6 +120,28 @@ class DataHandler:
         """Backward compatibility setter for CSV data"""
         self.csv_data = value
     
+    @property
+    def csv_data(self):
+        """Property for accessing CSV data"""
+        return self._csv_data
+    
+    @csv_data.setter
+    def csv_data(self, value):
+        """Property setter for CSV data"""
+        self._csv_data = value
+        if value is not None:
+            self._data_loaded = True
+    
+    @property
+    def shapefile_data(self):
+        """Property for accessing shapefile data"""
+        return self._shapefile_data
+    
+    @shapefile_data.setter
+    def shapefile_data(self, value):
+        """Property setter for shapefile data"""
+        self._shapefile_data = value
+    
     # ===========================================
     # ORIGINAL INTERFACE METHODS (Backward Compatibility)
     # ===========================================
@@ -149,6 +171,40 @@ class DataHandler:
     def check_wardname_mismatches(self) -> Optional[List[str]]:
         """Check ward name mismatches - Original interface method"""
         return self.validator.check_wardname_mismatches(self.csv_data, self.shapefile_data)
+    
+    def fix_wardname_mismatches(self, csv_data: pd.DataFrame) -> pd.DataFrame:
+        """Fix ward name mismatches using fuzzy matching"""
+        if self.shapefile_data is None:
+            return csv_data
+        
+        from difflib import get_close_matches
+        
+        csv_wards = set(csv_data['WardName'].unique()) if 'WardName' in csv_data.columns else set()
+        shp_wards = set(self.shapefile_data['WardName'].unique()) if 'WardName' in self.shapefile_data.columns else set()
+        
+        # Find mismatches
+        csv_only = csv_wards - shp_wards
+        
+        if not csv_only:
+            return csv_data
+        
+        # Create mapping for fixes
+        ward_mapping = {}
+        
+        for ward in csv_only:
+            # Find closest match in shapefile
+            matches = get_close_matches(ward, shp_wards, n=1, cutoff=0.8)
+            if matches:
+                ward_mapping[ward] = matches[0]
+                self.logger.info(f"Mapping '{ward}' -> '{matches[0]}'")
+        
+        # Apply mapping
+        if ward_mapping:
+            csv_data = csv_data.copy()
+            csv_data['WardName'] = csv_data['WardName'].replace(ward_mapping)
+            self.logger.info(f"Fixed {len(ward_mapping)} ward name mismatches")
+        
+        return csv_data
     
     def get_available_variables(self) -> List[str]:
         """Get available variables - Original interface method"""
@@ -579,30 +635,43 @@ class DataHandler:
     def _attempt_data_reload(self):
         """Attempt to reload data from session files"""
         try:
-            # Try to reload CSV data - check for PROCESSED data FIRST (has duplicates fixed)
-            processed_csv_path = os.path.join(self.session_folder, 'processed_data.csv')
-            if os.path.exists(processed_csv_path):
-                # Load processed data with duplicate ward names fixed
-                self.csv_data = pd.read_csv(processed_csv_path)
-                self.logger.info("Reloaded CSV data from processed_data.csv (duplicates fixed)")
+            # Try to reload CSV data - prioritize RAW data for new workflow
+            raw_csv_path = os.path.join(self.session_folder, 'raw_data.csv')
+            if os.path.exists(raw_csv_path):
+                # Load raw data (new workflow - deferred cleaning)
+                self.csv_data = pd.read_csv(raw_csv_path)
+                self.logger.info("Reloaded CSV data from raw_data.csv (new workflow)")
             else:
-                # Fallback to original uploaded data
-                original_csv_files = [f for f in os.listdir(self.session_folder) if f.endswith('.csv')]
-                if original_csv_files:
-                    csv_path = os.path.join(self.session_folder, original_csv_files[0])
-                    self.csv_data = pd.read_csv(csv_path)
-                    self.logger.info(f"Reloaded CSV data from {original_csv_files[0]} (original with duplicates)")
+                # Fallback to processed data for backward compatibility
+                processed_csv_path = os.path.join(self.session_folder, 'processed_data.csv')
+                if os.path.exists(processed_csv_path):
+                    self.csv_data = pd.read_csv(processed_csv_path)
+                    self.logger.info("Reloaded CSV data from processed_data.csv (legacy)")
+                else:
+                    # Final fallback to any CSV file
+                    original_csv_files = [f for f in os.listdir(self.session_folder) if f.endswith('.csv')]
+                    if original_csv_files:
+                        csv_path = os.path.join(self.session_folder, original_csv_files[0])
+                        self.csv_data = pd.read_csv(csv_path)
+                        self.logger.info(f"Reloaded CSV data from {original_csv_files[0]} (fallback)")
             
-            # Try to reload shapefile data - check for shapefile folder
+            # Try to reload shapefile data - prioritize RAW shapefile for new workflow
             shapefile_folder = os.path.join(self.session_folder, 'shapefile')
             if os.path.exists(shapefile_folder):
-                # Find .shp file in shapefile folder
-                shp_files = [f for f in os.listdir(shapefile_folder) if f.endswith('.shp')]
-                if shp_files:
+                # Look for raw shapefile first
+                raw_shp_path = os.path.join(shapefile_folder, 'raw.shp')
+                if os.path.exists(raw_shp_path):
                     import geopandas as gpd
-                    shp_path = os.path.join(shapefile_folder, shp_files[0])
-                    self.shapefile_data = gpd.read_file(shp_path)
-                    self.logger.info(f"Reloaded shapefile data from {shp_files[0]}")
+                    self.shapefile_data = gpd.read_file(raw_shp_path)
+                    self.logger.info("Reloaded shapefile data from raw.shp (new workflow)")
+                else:
+                    # Fallback to any .shp file in folder
+                    shp_files = [f for f in os.listdir(shapefile_folder) if f.endswith('.shp')]
+                    if shp_files:
+                        import geopandas as gpd
+                        shp_path = os.path.join(shapefile_folder, shp_files[0])
+                        self.shapefile_data = gpd.read_file(shp_path)
+                        self.logger.info(f"Reloaded shapefile data from {shp_files[0]} (fallback)")
             
             # **FIXED: Also reload composite_scores and analysis results**
             # Try to reload other data files

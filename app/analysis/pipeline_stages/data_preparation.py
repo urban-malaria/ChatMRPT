@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stages, na_methods=None):
-    """Run the data cleaning stage of the pipeline"""
-    logger.info("Step 1: Cleaning data")
+    """Run the deferred data cleaning stage (ward mismatches + spatial imputation)"""
+    logger.info("Step 1: Deferred cleaning (raw data → ward fixes + spatial imputation)")
     
     if rerun_stages['clean']:
         start_time = time.time()
@@ -33,7 +33,21 @@ def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stag
                     'message': 'No CSV data available for cleaning'
                 }
             
-            # Clean the data using the original pipeline logic
+            # Step 1: Handle ward name mismatches if both CSV and shapefile exist
+            if data_handler.shapefile_data is not None:
+                logger.info("Checking for ward name mismatches...")
+                ward_mismatches = data_handler.check_wardname_mismatches()
+                
+                if ward_mismatches and len(ward_mismatches) > 0:
+                    logger.info(f"Found {len(ward_mismatches)} ward name mismatches, fixing...")
+                    # Apply ward name fixes to raw data
+                    data_handler.csv_data = data_handler.fix_wardname_mismatches(data_handler.csv_data)
+                    logger.info("Ward name mismatches fixed in raw data")
+                else:
+                    logger.info("No ward name mismatches detected")
+            
+            # Step 2: Handle missing values with spatial neighbor imputation
+            logger.info("Applying spatial neighbor imputation for missing values...")
             cleaned_data = handle_missing_values(
                 data_handler.csv_data,
                 na_methods,
@@ -58,9 +72,20 @@ def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stag
                     }
                     break
             
+            # Determine what cleaning was performed
+            cleaning_performed = []
+            if data_handler.shapefile_data is not None:
+                ward_mismatches = data_handler.check_wardname_mismatches()
+                if ward_mismatches and len(ward_mismatches) > 0:
+                    cleaning_performed.append(f"Fixed {len(ward_mismatches)} ward name mismatches")
+                else:
+                    cleaning_performed.append("No ward name mismatches")
+            
+            cleaning_performed.append("Applied spatial neighbor imputation for missing values")
+            
             return {
                 'status': 'success',
-                'message': f'Successfully cleaned {len(cleaned_data)} rows',
+                'message': f'Deferred cleaning completed: {"; ".join(cleaning_performed)} - {len(cleaned_data)} rows processed',
                 'execution_time': execution_time
             }
             

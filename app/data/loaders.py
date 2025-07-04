@@ -70,12 +70,13 @@ class CSVLoader:
                 )
                 self.logger.info(f"Loaded CSV file: {file_path}")
             
-            # Process the loaded data
-            processed_data = self._process_csv_data(data)
+            # Save raw data only (new workflow - no pre-cleaning)
+            raw_output_path = os.path.join(self.session_folder, 'raw_data.csv')
+            data.to_csv(raw_output_path, index=False)
+            self.logger.info(f"Saved raw data to: {raw_output_path}")
             
-            # Save processed CSV locally
-            output_path = os.path.join(self.session_folder, 'processed_data.csv')
-            processed_data.to_csv(output_path, index=False)
+            # Use raw data for analysis (no processing at upload time)
+            processed_data = data
             
             # Log the operation if interaction logger is available
             if self.interaction_logger:
@@ -243,14 +244,20 @@ class ShapefileLoader:
                 shapefile_data = gpd.read_file(shp_files[0])
                 self.logger.info(f"Loaded shapefile with CRS: {shapefile_data.crs}")
                 
-                # Process the shapefile data
-                processed_data = self._process_shapefile_data(shapefile_data)
+                # Save raw shapefile ZIP for analysis workflow
+                raw_zip_path = os.path.join(self.session_folder, 'raw_shapefile.zip')
+                import shutil
+                shutil.copy2(zip_file_path, raw_zip_path)
+                self.logger.info(f"Saved raw shapefile ZIP to: {raw_zip_path}")
                 
-                # Save shapefile locally for future use
+                # Save extracted raw shapefile for analysis
                 shp_output_dir = os.path.join(self.session_folder, 'shapefile')
                 os.makedirs(shp_output_dir, exist_ok=True)
-                output_path = os.path.join(shp_output_dir, 'processed.shp')
-                processed_data.to_file(output_path)
+                output_path = os.path.join(shp_output_dir, 'raw.shp')
+                shapefile_data.to_file(output_path)
+                
+                # Use raw data (no processing at upload time)
+                processed_data = shapefile_data
                 
                 return {
                     'status': 'success',

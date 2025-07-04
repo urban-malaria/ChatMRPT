@@ -14,7 +14,6 @@ This package breaks down the monolithic main.py blueprint into smaller, focused 
 from .core_routes import core_bp
 from .upload_routes import upload_bp
 from .analysis_routes import analysis_bp
-from .enhanced_analysis_routes import enhanced_analysis_bp
 from .visualization_routes import viz_bp
 from .reports_api_routes import reports_bp
 from .debug_routes import debug_bp
@@ -23,7 +22,6 @@ __all__ = [
     'core_bp',
     'upload_bp',
     'analysis_bp',
-    'enhanced_analysis_bp',
     'viz_bp',
     'reports_bp',
     'debug_bp',
@@ -40,9 +38,6 @@ def register_all_blueprints(app):
     
     # Register analysis routes (analysis processing and AI chat)
     app.register_blueprint(analysis_bp)
-    
-    # Register enhanced analysis routes (6-phase architecture integration)
-    app.register_blueprint(enhanced_analysis_bp)
     
     # Register visualization routes (visualization generation and navigation)
     app.register_blueprint(viz_bp)

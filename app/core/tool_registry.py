@@ -826,14 +826,19 @@ class ToolRegistry:
                 
                 # Convert ToolExecutionResult to dictionary format expected by request_interpreter
                 if hasattr(result, 'success'):
+                    # Extract web_path and chart_type from data dict if they exist
+                    result_data = result.data or {}
+                    web_path = result_data.get('web_path') or getattr(result, 'web_path', None)
+                    chart_type = result_data.get('chart_type') or getattr(result, 'chart_type', None)
+                    
                     return {
                         'status': 'success' if result.success else 'error',
                         'message': result.message,
                         'tool_name': tool_name,
-                        'data': result.data or {},
+                        'data': result_data,
                         'execution_time': getattr(result, 'execution_time', None),
-                        'web_path': getattr(result, 'web_path', None),
-                        'chart_type': getattr(result, 'chart_type', None),
+                        'web_path': web_path,
+                        'chart_type': chart_type,
                         'error_details': getattr(result, 'error_details', None)
                     }
                 

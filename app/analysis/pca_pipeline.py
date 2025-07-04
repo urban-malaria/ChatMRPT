@@ -50,13 +50,15 @@ class PCAAnalysisPipeline:
         
         logger.info(f"🔬 PCA PIPELINE: Initialized for session {session_id}")
     
-    def run_complete_pca_analysis(self, data_handler, selected_variables: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run_complete_pca_analysis(self, data_handler, selected_variables: Optional[List[str]] = None, 
+                                 llm_manager=None) -> Dict[str, Any]:
         """
         Run the complete PCA analysis pipeline.
         
         Args:
             data_handler: DataHandler with loaded CSV data
             selected_variables: Optional list of variables to use for PCA
+            llm_manager: Optional LLM manager for variable selection fallback
             
         Returns:
             Dict containing complete PCA analysis results
@@ -71,6 +73,29 @@ class PCAAnalysisPipeline:
                     'message': 'Failed to load raw data for PCA analysis',
                     'data': None
                 }
+            
+            # Step 1.5: Apply region-aware variable selection if no variables specified
+            if selected_variables is None:
+                logger.info("🌍 PCA PIPELINE: Applying region-aware variable selection")
+                from .region_aware_selection import apply_region_aware_selection
+                
+                region_result = apply_region_aware_selection(
+                    self.raw_data, 
+                    data_handler.shapefile_data,
+                    llm_manager
+                )
+                
+                if region_result['status'] == 'success':
+                    selected_variables = region_result['selected_variables']
+                    logger.info(f"🌍 PCA region-aware selection: {region_result['zone_detected']} zone, "
+                               f"{len(selected_variables)} variables selected")
+                else:
+                    logger.warning(f"PCA region-aware selection failed: {region_result.get('message', 'Unknown error')}")
+                    # Fallback to all available numeric analysis variables (exclude identifiers)
+                    identifier_columns = ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
+                    selected_variables = [col for col in self.raw_data.columns 
+                                        if col not in identifier_columns and 
+                                        pd.api.types.is_numeric_dtype(self.raw_data[col])]
             
             # Step 2: Clean and prepare data for PCA
             if not self._clean_and_prepare_data(selected_variables):
@@ -572,7 +597,7 @@ class PCAAnalysisPipeline:
 
 
 def run_independent_pca_analysis(data_handler, selected_variables: Optional[List[str]] = None, 
-                                session_id: Optional[str] = None) -> Dict[str, Any]:
+                                session_id: Optional[str] = None, llm_manager=None) -> Dict[str, Any]:
     """
     Run complete independent PCA analysis pipeline.
     
@@ -582,6 +607,7 @@ def run_independent_pca_analysis(data_handler, selected_variables: Optional[List
         data_handler: DataHandler with loaded CSV data
         selected_variables: Optional list of variables to use for PCA
         session_id: Session identifier
+        llm_manager: Optional LLM manager for variable selection fallback
         
     Returns:
         Dict containing complete PCA analysis results
@@ -594,7 +620,7 @@ def run_independent_pca_analysis(data_handler, selected_variables: Optional[List
         pca_pipeline = PCAAnalysisPipeline(session_id)
         
         # Run complete analysis
-        result = pca_pipeline.run_complete_pca_analysis(data_handler, selected_variables)
+        result = pca_pipeline.run_complete_pca_analysis(data_handler, selected_variables, llm_manager)
         
         return result
         

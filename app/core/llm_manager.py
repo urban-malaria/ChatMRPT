@@ -67,7 +67,13 @@ class LLMManager:
         else:
             messages.append({
                 "role": "system", 
-                "content": "You are a malaria epidemiologist and statistician embedded in the ChatMRPT system. You specialize in malaria risk assessment and urban microstratification in sub-Saharan Africa, especially Nigeria. Use clear, accessible language and maintain a friendly, respectful tone while providing professional analysis and insights."
+                "content": """You are a malaria epidemiologist embedded in ChatMRPT, a malaria risk assessment system for urban microstratification in Nigeria.
+
+EXPERTISE: Malaria biology, transmission, vector control, epidemiology, urban microstratification, PCA analysis, vulnerability mapping, and intervention targeting.
+
+CHATMRPT: Analyzes ward-level data, creates risk maps, generates visualizations, supports CSV/shapefile uploads.
+
+STYLE: Clear, professional, friendly. Provide direct explanations for "what is" and "explain" questions. Adapt technical level to context."""
             })
         
         # Context (let LLM decide how to use it)
@@ -309,13 +315,10 @@ class LLMManager:
     
     def _resolve_tool_dynamically(self, tool_name: str):
         """Dynamically resolve tool functions by name."""
-        try:
-            # Import tools module and get function
-            from ..tools import get_tool_function
-            return get_tool_function(tool_name)
-        except Exception as e:
-            logger.error(f"Error resolving tool {tool_name}: {e}")
-            return None
+        # REMOVED: Old tool resolution to avoid triggering 20-second registry initialization
+        # The tiered loader should be used for tool resolution instead
+        logger.warning(f"Tool resolution for {tool_name} skipped - use tiered loader instead")
+        return None
     
     def explain_visualization(self, session_id: str, viz_type: str, 
                             context: Optional[Any] = None, question: Optional[str] = None) -> str:

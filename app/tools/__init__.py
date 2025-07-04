@@ -210,7 +210,13 @@ from .spatial_autocorrelation_tools import (
 from .complete_analysis_tools import (
     RunCompleteAnalysis,
     RunCompositeAnalysis,
-    RunPCAAnalysis
+    RunPCAAnalysis,
+    GenerateComprehensiveAnalysisSummary
+)
+
+# Methodology Explanation Tools
+from .methodology_explanation_tools import (
+    ExplainAnalysisMethodology
 )
 
 # Enhanced Environmental Risk Analysis Tools
@@ -411,7 +417,7 @@ def get_tools_by_category():
             'get_pca_rankings', 'create_composite_score_maps', 'create_vulnerability_map',
             'create_decision_tree', 'create_urban_extent_map', 'filter_wards_by_risk',
             'filter_wards_by_criteria', 'get_session_data_summary', 'analyze_uploaded_data_and_recommend',
-            'generate_comprehensive_analysis_summary'
+            'generate_comprehensive_analysis_summary', 'explain_analysis_methodology'
         ],
         'statistical': [
             'summary_stats', 'correlation', 'chi_square', 't_test', 'anova'

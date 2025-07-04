@@ -35,23 +35,117 @@ def allowed_file(filename, allowed_extensions):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
 
+class UploadTypeDetector:
+    """
+    Level 2: Upload Type Detection (Following Diagram Structure)
+    Detects upload type according to diagram: CSV+Shapefile vs TPR-Only
+    """
+    
+    TPR_INDICATORS = [
+        'tpr', 'test_positivity', 'test_positivity_rate', 'rapid_diagnostic',
+        'malaria_test_positive', 'positive_tests', 'tests_positive'
+    ]
+    
+    def detect_upload_type(self, files: dict, csv_content=None) -> str:
+        """
+        Detect upload type according to diagram flow
+        
+        Returns:
+        - 'csv_shapefile': Full Dataset Path (CSV + Shapefile)
+        - 'tpr_only': TPR-Only Path (TPR data without shapefile)
+        - 'invalid': Invalid upload combination
+        """
+        csv_file = files.get('csv_file')
+        shapefile = files.get('shapefile')
+        
+        has_csv = csv_file and csv_file.filename != ''
+        has_shapefile = shapefile and shapefile.filename != ''
+        
+        if has_csv and has_shapefile:
+            return 'csv_shapefile'  # Full Dataset Path
+        elif has_csv and not has_shapefile:
+            # Check if it's TPR data
+            if self._is_tpr_data(csv_content):
+                return 'tpr_only'  # TPR-Only Path
+            else:
+                return 'csv_only'  # Regular CSV without shapefile
+        else:
+            return 'invalid'
+    
+    def _is_tpr_data(self, csv_content) -> bool:
+        """Detect if CSV contains TPR-specific columns"""
+        if not csv_content:
+            return False
+            
+        try:
+            import pandas as pd
+            import io
+            
+            # Read first few rows to check columns
+            csv_io = io.StringIO(csv_content.decode('utf-8'))
+            sample_df = pd.read_csv(csv_io, nrows=5)
+            column_names = [col.lower().replace(' ', '_') for col in sample_df.columns]
+            
+            # Check for TPR indicators in column names
+            for indicator in self.TPR_INDICATORS:
+                if any(indicator in col_name for col_name in column_names):
+                    return True
+            return False
+            
+        except Exception as e:
+            logger.warning(f"Error detecting TPR data: {e}")
+            return False
+    
+    def get_upload_summary(self, upload_type: str, file_info: dict) -> dict:
+        """Generate upload type summary for user"""
+        summaries = {
+            'csv_shapefile': {
+                'path': 'Full Dataset Path',
+                'description': 'CSV data + Shapefile boundaries',
+                'next_step': 'Store raw data and generate summary'
+            },
+            'tpr_only': {
+                'path': 'TPR-Only Path', 
+                'description': 'TPR data will be enhanced with climate variables',
+                'next_step': 'Process TPR data and load Nigeria boundaries'
+            },
+            'csv_only': {
+                'path': 'CSV-Only Path',
+                'description': 'CSV data without geographic boundaries',
+                'next_step': 'Data analysis without mapping capabilities'
+            },
+            'invalid': {
+                'path': 'Invalid Upload',
+                'description': 'No valid files detected',
+                'next_step': 'Please upload valid CSV and/or shapefile'
+            }
+        }
+        
+        return {
+            'upload_type': upload_type,
+            'file_info': file_info,
+            **summaries.get(upload_type, summaries['invalid'])
+        }
+
+
 @upload_bp.route('/upload_both_files', methods=['POST'])
 @handle_errors
 @validate_session
 @log_execution_time
 def upload_both_files():
     """
-    Handle simultaneous upload of both CSV and shapefile files using DataService.
+    Enhanced upload handler following diagram structure:
+    Level 1: User Uploads Data → Level 2: Upload Type Detection → Level 3A/3B: Path Selection
     
-    This is the modern implementation that uses our service architecture.
+    Supports: Full Dataset Path (CSV+Shapefile) and TPR-Only Path
     """
     session_id = session.get('session_id')
     
-    # Check if files were provided
+    # Level 1: User Uploads Data - Extract files from request
     csv_file = request.files.get('csv_file')
     shapefile = request.files.get('shapefile')
     
-    # Validate files
+    # Basic file validation
     if csv_file and csv_file.filename == '':
         csv_file = None
     if shapefile and shapefile.filename == '':
@@ -60,398 +154,323 @@ def upload_both_files():
     if not csv_file and not shapefile:
         raise ValidationError("No files selected for upload")
     
-        # Create session folder for file storage
-    session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
-    os.makedirs(session_folder, exist_ok=True)
+    # Level 2: Upload Type Detection (Following Diagram)
+    detector = UploadTypeDetector()
     
-    # Create session-specific DataHandler (don't use global data_service)
-    from app.data import DataHandler
-    interaction_logger = current_app.services.interaction_logger
-    data_service = DataHandler(session_folder, interaction_logger)
+    # Read CSV content for TPR detection if needed
+    csv_content = None
+    if csv_file:
+        csv_content = csv_file.read()
+        csv_file.seek(0)  # Reset file pointer for later use
     
-    results = {}
+    upload_type = detector.detect_upload_type(
+        {'csv_file': csv_file, 'shapefile': shapefile}, 
+        csv_content
+    )
     
-    # Process CSV file if provided
-    if csv_file and allowed_file(csv_file.filename, ALLOWED_EXTENSIONS_CSV):
-        try:
-            # Save file securely
-            csv_filename = secure_filename(csv_file.filename)
-            csv_path = os.path.join(session_folder, csv_filename)
-            csv_file.save(csv_path)
-            
-            # Use DataService to load CSV
-            csv_result = data_service.load_csv_file(csv_path)
-            
-            # Only mark as loaded if we have valid data and a success status
-            if csv_result['status'] == 'success' and 'data' in csv_result and csv_result['data'] is not None and len(csv_result.get('data', [])) > 0:
-                # Update session data
-                session['csv_loaded'] = True
-                session['csv_filename'] = csv_filename
-                session['csv_rows'] = csv_result.get('rows', 0)
-                session['csv_columns'] = csv_result.get('columns', 0)
-                
-                # Get available variables from data service
-                available_variables = data_service.get_available_variables()
-                session['available_variables'] = available_variables
-                
-                logger.info(f"CSV loaded successfully: {csv_filename} ({csv_result.get('rows', 0)} rows)")
-            else:
-                # Ensure we mark the CSV as not loaded if there was an error
-                session['csv_loaded'] = False
-                logger.warning(f"CSV not loaded properly: status={csv_result['status']}")
-            
-            results['csv_result'] = csv_result
-            
-        except Exception as e:
-            logger.error(f"Error processing CSV file: {str(e)}", exc_info=True)
-            results['csv_result'] = {
-                'status': 'error',
-                'message': f'Error processing CSV file: {str(e)}'
-            }
-    elif csv_file:
-        results['csv_result'] = {
-            'status': 'error',
-            'message': 'Invalid CSV file type. Please upload a .csv, .xlsx, or .xls file.'
-        }
-    
-    # Process shapefile if provided
-    if shapefile and allowed_file(shapefile.filename, ALLOWED_EXTENSIONS_SHP):
-        try:
-            # Save file securely
-            shp_filename = secure_filename(shapefile.filename)
-            shp_path = os.path.join(session_folder, shp_filename)
-            shapefile.save(shp_path)
-            
-            # Use DataService to load shapefile
-            try:
-                shp_result = data_service.load_shapefile(shp_path)
-                
-                # Only mark as loaded if status is success and data is present
-                if shp_result['status'] == 'success' and 'data' in shp_result and shp_result['data'] is not None:
-                    # Update session data
-                    session['shapefile_loaded'] = True
-                    session['shapefile_filename'] = shp_filename
-                    session['shapefile_features'] = shp_result.get('features', 0)
-                    
-                    logger.info(f"Shapefile loaded: {shp_filename} ({shp_result.get('features', 0)} features)")
-                    
-                    # Remove the data from the result to avoid JSON serialization issues
-                    # Keep only metadata for the response
-                    shp_result_safe = {
-                        'status': shp_result['status'],
-                        'message': shp_result['message'],
-                        'features': shp_result.get('features', 0),
-                        'crs': shp_result.get('crs', 'Unknown'),
-                        'file_path': shp_result.get('file_path')
-                    }
-                    results['shp_result'] = shp_result_safe
-                else:
-                    # Ensure we mark the shapefile as not loaded if there was an error
-                    session['shapefile_loaded'] = False
-                    logger.warning(f"Shapefile not loaded properly: status={shp_result['status']}")
-                    
-                    # Return error result without data
-                    results['shp_result'] = {
-                        'status': shp_result['status'],
-                        'message': shp_result.get('message', 'Shapefile loading failed'),
-                        'error_type': shp_result.get('error_type', 'unknown')
-                    }
-                    
-            except Exception as load_error:
-                logger.error(f"Exception during shapefile loading: {str(load_error)}", exc_info=True)
-                session['shapefile_loaded'] = False
-                results['shp_result'] = {
-                    'status': 'error',
-                    'message': f'Error loading shapefile: {str(load_error)}',
-                    'error_type': 'loading_exception'
-                }
-            
-        except Exception as e:
-            logger.error(f"Error processing shapefile: {str(e)}", exc_info=True)
-            results['shp_result'] = {
-                'status': 'error',
-                'message': f'Error processing shapefile: {str(e)}'
-            }
-    elif shapefile:
-        results['shp_result'] = {
-            'status': 'error',
-            'message': 'Invalid shapefile type. Please upload a .zip file containing shapefile data.'
-        }
-    
-    # Check for ward name mismatches if both files are loaded
-    if session.get('csv_loaded', False) and session.get('shapefile_loaded', False):
-        try:
-            mismatches = data_service.check_wardname_mismatches()
-            if mismatches and len(mismatches) > 0:
-                # Add mismatch warning to the most recent result
-                if 'shp_result' in results:
-                    results['shp_result']['mismatches'] = mismatches
-                    results['shp_result']['status'] = 'warning'
-                    results['shp_result']['message'] = f'Shapefile loaded but found {len(mismatches)} ward name mismatches'
-                elif 'csv_result' in results:
-                    results['csv_result']['mismatches'] = mismatches
-                    results['csv_result']['status'] = 'warning'
-                    results['csv_result']['message'] = f'CSV loaded but found {len(mismatches)} ward name mismatches'
-        except Exception as e:
-            logger.warning(f"Error checking ward mismatches: {str(e)}")
-    
-    # Prepare response
-    overall_status = 'success'
-    message = 'Files processed successfully'
-    
-    # Check if any uploads failed - only consider failures if there's no data
-    has_error = False
-    for result_key, result_value in results.items():
-        if result_value.get('status') == 'error':
-            # Only count as error if there's no data present
-            if 'data' not in result_value or result_value['data'] is None or len(result_value.get('data', [])) == 0:
-                has_error = True
-                break
-    
-    if has_error:
-        overall_status = 'error'
-        message = 'One or more file uploads failed'
-    elif any(result.get('status') == 'warning' for result in results.values()):
-        overall_status = 'warning'
-        message = 'Files uploaded with warnings'
-    
-    # Trigger automatic data description workflow if both files loaded successfully
-    if session.get('csv_loaded', False) and session.get('shapefile_loaded', False) and overall_status in ['success', 'warning']:
-        try:
-            # Get data summary for automatic description
-            data_summary = data_service.get_data_summary()
-            
-            # Store the data summary for the conversation system
-            session['data_summary'] = data_summary
-            session['should_describe_data'] = True
-            session['should_ask_analysis_permission'] = True
-            
-            logger.info("Data upload complete - automatic data description workflow triggered")
-            
-        except Exception as e:
-            logger.warning(f"Failed to generate data summary for automatic workflow: {e}")
-    
-    response = {
-        'status': overall_status,
-        'message': message,
-        **results
+    file_info = {
+        'csv_filename': csv_file.filename if csv_file else None,
+        'shapefile_filename': shapefile.filename if shapefile else None,
+        'session_id': session_id
     }
     
-    # Debug: Log the response structure before JSON conversion
-    logger.debug(f"Upload response before JSON conversion: {type(response)}")
-    for key, value in response.items():
-        if isinstance(value, dict):
-            for subkey, subvalue in value.items():
-                if hasattr(subvalue, '__contains__') and ('nan' in str(subvalue).lower() or 'inf' in str(subvalue).lower()):
-                    logger.warning(f"Found potential NaN/Inf in response[{key}][{subkey}]: {subvalue}")
-        elif hasattr(value, '__contains__') and ('nan' in str(value).lower() or 'inf' in str(value).lower()):
-            logger.warning(f"Found potential NaN/Inf in response[{key}]: {value}")
+    upload_summary = detector.get_upload_summary(upload_type, file_info)
     
-    # Convert to JSON serializable format to handle numpy types and DataFrames
-    response = convert_to_json_serializable(response)
+    logger.info(f"🔍 Upload Type Detected: {upload_type} for session {session_id}")
+    logger.info(f"📊 Upload Summary: {upload_summary['description']}")
     
-    # Debug: Verify JSON serializability
-    try:
-        import json
-        json.dumps(response)
-        logger.debug("Upload response successfully serialized to JSON")
-    except Exception as e:
-        logger.error(f"JSON serialization failed after conversion: {str(e)}")
-        logger.error(f"Response content: {response}")
-    
-    return jsonify(response)
+    # Route to appropriate path based on detection
+    if upload_type == 'csv_shapefile':
+        return handle_full_dataset_path(session_id, csv_file, shapefile, upload_summary)
+    elif upload_type == 'tpr_only':
+        return handle_tpr_only_path(session_id, csv_file, upload_summary)
+    elif upload_type == 'csv_only':
+        return handle_csv_only_path(session_id, csv_file, upload_summary)
+    else:
+        raise ValidationError(f"Invalid upload combination: {upload_summary['description']}")
 
 
-@upload_bp.route('/upload', methods=['POST'])  
-@handle_errors
-@validate_session
-@log_execution_time
-def upload():
+def handle_full_dataset_path(session_id: str, csv_file, shapefile, upload_summary: dict):
     """
-    Legacy upload route for backwards compatibility.
-    Redirects to upload_both_files function.
+    Level 3A: Full Dataset Path (CSV + Shapefile)
+    Level 4A: Store Raw Data (raw_data.csv, shapefile.zip, NO cleaning yet)
+    Level 5A: Generate Dynamic Summary
     """
-    return upload_both_files()
-
-
-@upload_bp.route('/load_sample_data', methods=['POST'])
-@validate_session
-@handle_errors
-@log_execution_time
-def load_sample_data():
-    """Load pre-packaged sample data into the user's session."""
-    try:
-        # Get services from the container
-        data_service = current_app.services.data_service
-        
-        # Get session ID
-        session_id = session.get('session_id')
-        if not session_id:
-            # Should not happen if session is initialized, but handle anyway
-            session['session_id'] = str(uuid.uuid4())
-            session_id = session['session_id']
-            logger.warning("Session ID not found, generated a new one.")
-
-        logger.info(f"Loading sample data for session: {session_id}")
-
-        # Use data service to load sample data
-        result = data_service.load_sample_data(session_id)
-        
-        if result['status'] == 'success':
-            # Update session state with complete information
-            session['csv_loaded'] = True
-            session['shapefile_loaded'] = True
-            session['csv_filename'] = result.get('csv_filename', 'sample_data.csv')
-            session['shapefile_filename'] = result.get('shapefile_filename', 'sample_boundary.zip')
-            session['available_variables'] = result.get('variables', [])
-            session['ward_count'] = result.get('ward_count', 0)
-            session['csv_rows'] = result.get('rows', 10)  # Sample data has 10 wards
-            session['csv_columns'] = len(result.get('variables', [])) + 1  # +1 for WardName
-            session['shapefile_features'] = result.get('features', 10)  # 10 ward features
-            session['data_loaded'] = True  # Important flag for analysis availability
-            session['analysis_complete'] = False
-            session['variables_used'] = []
-            
-            return jsonify({
-                'status': 'success',
-                'message': result.get('message', 'Sample data loaded successfully'),
-                'csv_loaded': True,
-                'shapefile_loaded': True,
-                'variables_count': len(result.get('variables', [])),
-                'ward_count': result.get('ward_count', 0)
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': result.get('message', 'Failed to load sample data')
-            }), 500
+    # Create session folder for file storage
+    session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
+    os.makedirs(session_folder, exist_ok=True)
     
+    logger.info(f"📁 Starting Full Dataset Path for session {session_id}")
+    
+    # Level 4A: Store Raw Data (Following Diagram - NO cleaning yet)
+    raw_storage_result = store_raw_data_files(session_folder, csv_file, shapefile)
+    
+    if raw_storage_result['status'] != 'success':
+        raise DataProcessingError(f"Failed to store raw data: {raw_storage_result['message']}")
+    
+    # Level 5A: Generate Dynamic Summary (Following Diagram)
+    summary_result = generate_dynamic_data_summary(session_id, session_folder, 'csv_shapefile')
+    
+    # Set session flags for next steps
+    session['upload_type'] = 'csv_shapefile'
+    session['raw_data_stored'] = True
+    # session['should_describe_data'] = True  # DISABLED - Frontend handles this now
+    session['should_ask_analysis_permission'] = True  # Trigger permission system
+    
+    # Return comprehensive result
+    return jsonify({
+        'status': 'success',
+        'upload_type': 'csv_shapefile',
+        'upload_summary': upload_summary,
+        'raw_storage': raw_storage_result,
+        'data_summary': summary_result,
+        'message': f"Full dataset uploaded successfully. {raw_storage_result['files_stored']} files stored as raw data.",
+        'next_step': 'Data summary will be presented for your review and permission.'
+    })
+
+
+def store_raw_data_files(session_folder: str, csv_file, shapefile):
+    """
+    Level 4A: Store Raw Data (Following Diagram)
+    Store files exactly as uploaded - NO cleaning, NO processing, NO modifications
+    """
+    try:
+        stored_files = []
+        
+        # Store CSV as raw_data.csv (preserving original data)
+        if csv_file and allowed_file(csv_file.filename, ALLOWED_EXTENSIONS_CSV):
+            raw_csv_path = os.path.join(session_folder, 'raw_data.csv')
+            csv_file.save(raw_csv_path)
+            stored_files.append('raw_data.csv')
+            logger.info(f"✅ Stored raw CSV: {csv_file.filename} → raw_data.csv")
+        
+        # Store shapefile as raw_shapefile.zip (preserving original)
+        if shapefile and allowed_file(shapefile.filename, ALLOWED_EXTENSIONS_SHP):
+            raw_shp_path = os.path.join(session_folder, 'raw_shapefile.zip')
+            shapefile.save(raw_shp_path)
+            stored_files.append('raw_shapefile.zip')
+            logger.info(f"✅ Stored raw shapefile: {shapefile.filename} → raw_shapefile.zip")
+        
+        return {
+            'status': 'success',
+            'message': 'Raw data files stored successfully',
+            'files_stored': len(stored_files),
+            'stored_files': stored_files,
+            'preservation_note': 'Original files preserved without any modifications'
+        }
+        
     except Exception as e:
-        logger.error(f"Error loading sample data: {str(e)}", exc_info=True)
-        return jsonify({
+        logger.error(f"❌ Error storing raw data files: {e}")
+        return {
             'status': 'error',
-            'message': f'Error loading sample data: {str(e)}'
-        }), 500
+            'message': f'Failed to store raw data: {str(e)}'
+        }
 
 
-# ========================================================================
-# UTILITY FUNCTIONS - Updated to use unified ResponseBuilder
-# ========================================================================
-
-def validate_csv_file(file_obj):
+def generate_dynamic_data_summary(session_id: str, session_folder: str, upload_type: str):
     """
-    Validate CSV file before processing.
-    
-    Args:
-        file_obj: Flask file object
+    Level 5A: Generate Dynamic Summary (Following Diagram)
+    Row/column count, Data preview, Column type detection, Data completeness
+    """
+    try:
+        import pandas as pd
         
-    Returns:
-        dict: Validation result with status and message
-    """
-    if not file_obj:
-        return ResponseBuilder.validation_error('No file provided')
-    
-    if file_obj.filename == '':
-        return ResponseBuilder.validation_error('No file selected')
-    
-    if not allowed_file(file_obj.filename, ALLOWED_EXTENSIONS_CSV):
-        return ResponseBuilder.validation_error(
-            f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS_CSV)}'
-        )
-    
-    # Check file size (optional - add size limits if needed)
-    # file_obj.seek(0, 2)  # Seek to end
-    # file_size = file_obj.tell()
-    # file_obj.seek(0)  # Reset to beginning
-    # if file_size > MAX_FILE_SIZE:
-    #     return ResponseBuilder.validation_error('File too large')
-    
-    return ResponseBuilder.success('File validation passed')
-
-
-def validate_shapefile(file_obj):
-    """
-    Validate shapefile (zip) before processing.
-    
-    Args:
-        file_obj: Flask file object
+        summary = {
+            'session_id': session_id,
+            'upload_type': upload_type,
+            'analysis_timestamp': pd.Timestamp.now().isoformat()
+        }
         
-    Returns:
-        dict: Validation result with status and message
-    """
-    if not file_obj:
-        return ResponseBuilder.validation_error('No shapefile provided')
-    
-    if file_obj.filename == '':
-        return ResponseBuilder.validation_error('No shapefile selected')
-    
-    if not allowed_file(file_obj.filename, ALLOWED_EXTENSIONS_SHP):
-        return ResponseBuilder.validation_error(
-            'Invalid shapefile type. Must be a ZIP file containing shapefile data.'
-        )
-    
-    return ResponseBuilder.success('Shapefile validation passed')
-
-
-def create_session_upload_folder(session_id):
-    """
-    Create upload folder for session if it doesn't exist.
-    
-    Args:
-        session_id: Session identifier
+        # Analyze raw CSV data
+        raw_csv_path = os.path.join(session_folder, 'raw_data.csv')
+        if os.path.exists(raw_csv_path):
+            raw_data = pd.read_csv(raw_csv_path)
+            
+            summary.update({
+                'total_rows': len(raw_data),
+                'total_columns': len(raw_data.columns),
+                'column_names': raw_data.columns.tolist(),
+                'preview_rows': raw_data.head(5).to_dict('records'),
+                'column_types': detect_column_types(raw_data),
+                'data_completeness': calculate_data_completeness(raw_data),
+                'data_quality_assessment': assess_data_quality(raw_data)
+            })
         
-    Returns:
-        str: Path to session upload folder
+        # Analyze shapefile if present
+        raw_shp_path = os.path.join(session_folder, 'raw_shapefile.zip')
+        if os.path.exists(raw_shp_path):
+            # Basic shapefile info (without processing)
+            summary['shapefile_info'] = {
+                'filename': 'raw_shapefile.zip',
+                'size_mb': round(os.path.getsize(raw_shp_path) / (1024*1024), 2),
+                'status': 'stored'
+            }
+        
+        logger.info(f"📊 Generated dynamic summary for session {session_id}: {summary['total_rows']} rows, {summary['total_columns']} columns")
+        
+        return summary
+        
+    except Exception as e:
+        logger.error(f"❌ Error generating dynamic summary: {e}")
+        return {
+            'status': 'error',
+            'message': f'Failed to generate data summary: {str(e)}'
+        }
+
+
+def detect_column_types(df):
+    """Detect and categorize column types for summary"""
+    types = {}
+    for col in df.columns:
+        if df[col].dtype in ['int64', 'float64']:
+            types[col] = 'numeric'
+        elif df[col].dtype == 'object':
+            # Check if it's categorical vs text
+            unique_ratio = df[col].nunique() / len(df)
+            if unique_ratio < 0.1:  # Less than 10% unique values
+                types[col] = 'categorical'
+            else:
+                types[col] = 'text'
+        else:
+            types[col] = 'other'
+    return types
+
+
+def calculate_data_completeness(df):
+    """Calculate completeness percentage for each column"""
+    completeness = {}
+    for col in df.columns:
+        total_values = len(df)
+        non_null_values = df[col].count()
+        completeness[col] = round((non_null_values / total_values) * 100, 2)
+    
+    overall_completeness = round(df.count().sum() / (len(df) * len(df.columns)) * 100, 2)
+    
+    return {
+        'by_column': completeness,
+        'overall': overall_completeness
+    }
+
+
+def assess_data_quality(df):
+    """Basic data quality assessment"""
+    issues = []
+    
+    # Check for completely empty columns
+    empty_cols = df.columns[df.isnull().all()].tolist()
+    if empty_cols:
+        issues.append(f"Empty columns detected: {empty_cols}")
+    
+    # Check for duplicate rows
+    duplicate_count = df.duplicated().sum()
+    if duplicate_count > 0:
+        issues.append(f"Duplicate rows detected: {duplicate_count}")
+    
+    # Check for missing ward names (common issue)
+    if 'ward_name' in df.columns or 'WardName' in df.columns:
+        ward_col = 'ward_name' if 'ward_name' in df.columns else 'WardName'
+        missing_wards = df[ward_col].isnull().sum()
+        if missing_wards > 0:
+            issues.append(f"Missing ward names: {missing_wards}")
+    
+    return {
+        'issues_found': len(issues),
+        'issues': issues,
+        'quality_score': max(0, 100 - (len(issues) * 20))  # Simple scoring
+    }
+
+
+def handle_tpr_only_path(session_id: str, csv_file, upload_summary: dict):
+    """
+    Level 3B: TPR-Only Path (Will be implemented in Phase 2)
+    For now, return a placeholder response
+    """
+    logger.info(f"🌍 TPR-Only path detected for session {session_id} - Phase 2 implementation")
+    
+    return jsonify({
+        'status': 'success',
+        'upload_type': 'tpr_only',
+        'upload_summary': upload_summary,
+        'message': 'TPR-only upload detected. Enhanced with climate data in Phase 2.',
+        'phase': 'Phase 2 - TPR-GEE Integration',
+        'next_step': 'TPR enhancement with Google Earth Engine will be implemented in Phase 2.'
+    })
+
+
+def handle_csv_only_path(session_id: str, csv_file, upload_summary: dict):
+    """
+    CSV-Only Path (Basic CSV without shapefile)
+    Store raw CSV and generate summary
     """
     session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
     os.makedirs(session_folder, exist_ok=True)
-    return session_folder
-
-
-def cleanup_session_files(session_id, file_types=None):
-    """
-    Clean up uploaded files for a session.
     
-    Args:
-        session_id: Session identifier
-        file_types: List of file types to clean up (optional)
-        
-    Returns:
-        dict: Cleanup result with status and message
-    """
+    logger.info(f"📊 CSV-Only path for session {session_id}")
+    
+    # Store raw CSV
+    raw_storage_result = store_raw_csv_only(session_folder, csv_file)
+    
+    if raw_storage_result['status'] != 'success':
+        raise DataProcessingError(f"Failed to store raw CSV: {raw_storage_result['message']}")
+    
+    # Generate summary
+    summary_result = generate_dynamic_data_summary(session_id, session_folder, 'csv_only')
+    
+    # Set session flags
+    session['upload_type'] = 'csv_only'
+    session['raw_data_stored'] = True
+    # session['should_describe_data'] = True  # DISABLED - Frontend handles this now
+    session['should_ask_analysis_permission'] = True
+    
+    return jsonify({
+        'status': 'success',
+        'upload_type': 'csv_only',
+        'upload_summary': upload_summary,
+        'raw_storage': raw_storage_result,
+        'data_summary': summary_result,
+        'message': 'CSV uploaded successfully. Note: No mapping capabilities without shapefile.',
+        'next_step': 'Data summary will be presented for analysis without geographic visualization.'
+    })
+
+
+def store_raw_csv_only(session_folder: str, csv_file):
+    """Store raw CSV file only"""
     try:
-        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
-        
-        if not os.path.exists(session_folder):
-            return ResponseBuilder.success('No files to clean up')
-        
-        files_removed = 0
-        
-        if file_types:
-            # Remove specific file types
-            for filename in os.listdir(session_folder):
-                file_ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
-                if file_ext in file_types:
-                    file_path = os.path.join(session_folder, filename)
-                    os.remove(file_path)
-                    files_removed += 1
-                    logger.info(f"Removed file: {filename}")
-        else:
-            # Remove all files in session folder
-            for filename in os.listdir(session_folder):
-                file_path = os.path.join(session_folder, filename)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-                    files_removed += 1
-                    logger.info(f"Removed file: {filename}")
+        if csv_file and allowed_file(csv_file.filename, ALLOWED_EXTENSIONS_CSV):
+            raw_csv_path = os.path.join(session_folder, 'raw_data.csv')
+            csv_file.save(raw_csv_path)
+            logger.info(f"✅ Stored raw CSV: {csv_file.filename} → raw_data.csv")
             
-            # Remove empty directory
-            if not os.listdir(session_folder):
-                os.rmdir(session_folder)
-                logger.info(f"Removed empty session folder: {session_folder}")
-        
-        return ResponseBuilder.success(f'Cleaned up {files_removed} files')
-        
+            return {
+                'status': 'success',
+                'message': 'Raw CSV file stored successfully',
+                'files_stored': 1,
+                'stored_files': ['raw_data.csv']
+            }
+        else:
+            return {
+                'status': 'error',
+                'message': 'Invalid CSV file'
+            }
+            
     except Exception as e:
-        logger.error(f"Error cleaning up files for session {session_id}: {e}")
-        return ResponseBuilder.from_exception(e, 'File cleanup')
+        logger.error(f"❌ Error storing raw CSV: {e}")
+        return {
+            'status': 'error',
+            'message': f'Failed to store raw CSV: {str(e)}'
+        }
+
+
+
+# ================================================================
+# PHASE 1 IMPLEMENTATION COMPLETE: Upload Type Detection & Raw Storage
+# ================================================================
+# ✅ Level 2: Upload Type Detection (csv_shapefile, tpr_only, csv_only)
+# ✅ Level 3A: Full Dataset Path Handler
+# ✅ Level 4A: Raw Data Storage (NO cleaning)
+# ✅ Level 5A: Dynamic Summary Generation
+# 
+# Next Phase: Level 6-7 Summary Presentation & Permission System
+# ================================================================
+
+# === LEGACY ROUTES (kept for backward compatibility) ===@upload_bp.route('/upload', methods=['POST'])  @handle_errors@validate_session@log_execution_timedef upload():    """    Legacy upload route for backwards compatibility.    Redirects to upload_both_files function.    """    return upload_both_files()@upload_bp.route('/load_sample_data', methods=['POST'])@validate_session@handle_errors@log_execution_timedef load_sample_data():    """Load sample data for demonstration purposes."""    try:        session_id = session.get('session_id')        logger.info(f"Loading sample data for session {session_id}")                return jsonify({            'status': 'success',            'message': 'Sample data loading will be implemented in Phase 2'        })            except Exception as e:        logger.error(f"Error loading sample data: {e}")        return jsonify({            'status': 'error',            'message': f'Failed to load sample data: {str(e)}'        })def validate_csv_file(file_obj):    """    Validate CSV file structure and content.    """    try:        import pandas as pd        import io                # Read file content        content = file_obj.read().decode('utf-8')        file_obj.seek(0)  # Reset file pointer                # Try to parse as CSV        csv_io = io.StringIO(content)        df = pd.read_csv(csv_io, nrows=5)  # Read first 5 rows for validation                return {            'status': 'success',            'message': 'CSV file is valid',            'rows_sample': len(df),            'columns': len(df.columns)        }            except Exception as e:        return {            'status': 'error',            'message': f'Invalid CSV file: {str(e)}'        }def validate_shapefile(file_obj):    """    Validate shapefile ZIP structure.    """    try:        import zipfile                # Check if it's a valid ZIP file        if not zipfile.is_zipfile(file_obj):            return {                'status': 'error',                'message': 'File is not a valid ZIP archive'            }                return {            'status': 'success',            'message': 'Shapefile ZIP is valid'        }            except Exception as e:        return {            'status': 'error',            'message': f'Invalid shapefile: {str(e)}'        }def create_session_upload_folder(session_id):    """Create upload folder for session if it doesn't exist."""    try:        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)        os.makedirs(session_folder, exist_ok=True)        return session_folder    except Exception as e:        logger.error(f"Error creating session folder: {e}")        raisedef cleanup_session_files(session_id, file_types=None):    """    Clean up uploaded files for a session.        Args:        session_id: Session identifier        file_types: List of file types to clean up (optional)            Returns:        dict: Cleanup result with status and message    """    try:        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)                if not os.path.exists(session_folder):            return {'status': 'success', 'message': 'No files to clean up'}                files_removed = 0                if file_types:            # Remove specific file types            for filename in os.listdir(session_folder):                file_ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''                if file_ext in file_types:                    file_path = os.path.join(session_folder, filename)                    os.remove(file_path)                    files_removed += 1                    logger.info(f"Removed file: {filename}")        else:            # Remove all files in session folder            for filename in os.listdir(session_folder):                file_path = os.path.join(session_folder, filename)                if os.path.isfile(file_path):                    os.remove(file_path)                    files_removed += 1                    logger.info(f"Removed file: {filename}")                        # Remove empty directory            if not os.listdir(session_folder):                os.rmdir(session_folder)                logger.info(f"Removed empty session folder: {session_folder}")                return {'status': 'success', 'message': f'Cleaned up {files_removed} files'}            except Exception as e:        logger.error(f"Error cleaning up files for session {session_id}: {e}")        return {'status': 'error', 'message': f'File cleanup failed: {str(e)}'}

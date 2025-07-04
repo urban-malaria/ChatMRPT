@@ -8,6 +8,7 @@ Handles end-to-end interaction logic as outlined in the architecture.
 
 import logging
 import json
+import time
 from typing import Dict, Any, List, Optional
 from flask import current_app
 from difflib import get_close_matches
@@ -29,14 +30,9 @@ class RequestInterpreter:
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
         
-        # Initialize dynamic tool registry  
-        from .tool_registry import get_tool_registry
-        self.tool_registry = get_tool_registry()
-        
-        # Also import tools module for hybrid access
-        from ..tools import get_pydantic_registry, get_tool_schemas
-        self.pydantic_registry = get_pydantic_registry()
-        self.get_tool_schemas = get_tool_schemas
+        # Initialize tiered tool loading system (ONLY system needed)
+        from .tiered_tool_loader import get_tiered_tool_loader
+        self.tiered_loader = get_tiered_tool_loader()
         
         # Common ambiguous phrases that need clarification
         self.ambiguous_patterns = {
@@ -47,38 +43,24 @@ class RequestInterpreter:
             'data': ['upload data', 'analyze data', 'view data', 'data summary']
         }
         
-        # Intelligent defaults for common ambiguous requests
+        # Intelligent defaults for common ambiguous requests (simplified)
         self.intelligent_defaults = {
-            'analysis': {
-                'default_tools': ['get_composite_rankings', 'getcompositerankings'],  # Try both versions
+            ('analysis', 'ranking', 'top wards', 'risk assessment'): {
+                'default_tools': ['getcompositerankings'],  # Use tiered loader tool
                 'default_params': {'top_n': 10},
-                'message': "Running composite vulnerability analysis by default"
+                'message': "Running vulnerability analysis by default"
             },
-            'ranking': {
-                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
-                'default_params': {'top_n': 10},
-                'message': "Showing vulnerability rankings by default"
-            },
-            'top wards': {
-                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
-                'default_params': {'top_n': 10},
-                'message': "Showing top 10 vulnerable wards by default"
-            },
-            'vulnerable areas': {
-                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
+            ('vulnerable areas',): {
+                'default_tools': ['getcompositerankings'], 
                 'default_params': {'top_n': 15},
-                'message': "Showing top 15 vulnerable areas by default"
-            },
-            'risk assessment': {
-                'default_tools': ['get_composite_rankings', 'getcompositerankings'],
-                'default_params': {'top_n': 10},
-                'message': "Performing vulnerability risk assessment by default"
+                'message': "Showing top vulnerable areas by default"
             }
         }
 
+    # Removed redundant legacy tool registry methods - using tiered loader only
 
     def parse_request(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Parse user request into structured intent using dynamic tool registry."""
+        """Parse user request into structured intent using tiered tool loader."""
         try:
             # Check for analysis permission workflow
             from flask import session
@@ -88,26 +70,15 @@ class RequestInterpreter:
                     session['should_ask_analysis_permission'] = False
                     return self._create_automatic_analysis_intent()
             
-            # Get available tools from both registries for comprehensive coverage
-            legacy_tools = self.tool_registry.list_tools()
-            pydantic_tools = self.pydantic_registry.get_tool_names()
+            # Get available tools from tiered loader only
+            available_tool_names = self.tiered_loader.get_all_available_tool_names()
+            tool_names = set(available_tool_names)
             
-            # Combine tool names for validation
-            tool_names = set(legacy_tools + pydantic_tools)
-            
-            # Prioritize Pydantic tools and get enhanced schemas
-            pydantic_schemas = self.get_tool_schemas()
-            legacy_schemas = self.tool_registry.get_openai_function_schemas()
-            
-            # Combine schemas, giving priority to Pydantic versions
-            all_schemas = {}
-            for schema in legacy_schemas:
-                all_schemas[schema['name']] = schema
-            for schema in pydantic_schemas:
-                all_schemas[schema['name']] = schema  # Overrides legacy if same name
+            # Get basic tool schemas from tiered loader (avoids 30-second delay from heavy registry)
+            tool_schemas = self.tiered_loader.get_basic_tool_schemas()
             
             # Create comprehensive tool documentation
-            tool_documentation = self._generate_enhanced_tool_documentation(all_schemas)
+            tool_documentation = self._generate_enhanced_tool_documentation_from_schemas(tool_schemas)
             
             # Get session context for better understanding
             from flask import session
@@ -158,7 +129,8 @@ class RequestInterpreter:
                     }}
                 ],
                 "requires_session_data": true|false,
-                "routing": "data_agent|knowledge_agent"
+                "routing": "data_agent|knowledge_agent",
+                "direct_response": "For knowledge questions, provide explanation here"
             }}
 
             INTELLIGENT CLASSIFICATION RULES:
@@ -171,10 +143,10 @@ class RequestInterpreter:
                - "help", "help me", "I need help", "what do I do" -> show_help_options
             
             3. KNOWLEDGE/EDUCATIONAL: Any question about malaria, health, epidemiology, etc.
-               - Extract the main topic/concept from the user's question
-               - Use explain_concept with concept=[extracted main topic]
-               - Examples: history, transmission, control methods, epidemiology, vectors, etc.
-               - Be flexible in extracting concepts - users phrase things differently
+               - Provide direct explanations without using tools
+               - Return explanation directly in the response text
+               - Set intent_type="knowledge" with empty tool_calls array
+               - Include comprehensive malaria expertise in response
             
             4. DATA ANALYSIS: Questions involving uploaded data, rankings, maps, comparisons
                - Use appropriate data analysis tools
@@ -272,7 +244,34 @@ class RequestInterpreter:
                 "routing": "data_agent"
             }}
 
+            Example: Variable Distribution
+            User: "Show me the distribution of pfpr variable"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Visualize spatial distribution of pfpr variable",
+                "tool_calls": [
+                    {{
+                        "tool_name": "variable_distribution",
+                        "parameters": {{"variable_name": "pfpr"}},
+                        "reasoning": "User wants to see spatial distribution map of pfpr variable"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+
             Example 2:
+            User: "What is malaria transmission?"
+            Response: {{
+                "intent_type": "knowledge",
+                "primary_goal": "Explain malaria transmission",
+                "tool_calls": [],
+                "requires_session_data": false,
+                "routing": "knowledge_agent",
+                "direct_response": "Malaria is transmitted through the bite of infected female Anopheles mosquitoes. When an infected mosquito bites a person, it injects Plasmodium parasites into the bloodstream. These parasites travel to the liver, multiply, and then return to infect red blood cells. The cycle continues when another mosquito bites the infected person and picks up the parasites, becoming a vector for further transmission. Key factors affecting transmission include mosquito breeding sites (stagnant water), climate conditions, and human behavior patterns."
+            }}
+
+            Example 3:
             User: "If ITN coverage in Kano Municipal increases by 30%, what happens?"
             Response: {{
                 "intent_type": "data_analysis",
@@ -386,15 +385,15 @@ class RequestInterpreter:
             # Validate tool calls - WITH HELPFUL SUGGESTIONS
             for tool_call in parsed_intent.get('tool_calls', []):
                 tool_name = tool_call.get('tool_name')
-                if tool_name not in tool_names:
+                if not self.tiered_loader.is_tool_available(tool_name):
                     # Find similar tool names
-                    close_matches = get_close_matches(tool_name, tool_names, n=3, cutoff=0.6)
+                    close_matches = get_close_matches(tool_name, available_tool_names, n=3, cutoff=0.6)
                     
                     if close_matches:
                         suggestion_text = f"Did you mean one of these: {', '.join(close_matches)}?"
                     else:
                         # Try to understand what the user might want
-                        suggestion_text = self._suggest_relevant_tools(user_message, tool_names)
+                        suggestion_text = self._suggest_relevant_tools(user_message, available_tool_names)
                     
                     return self._generate_clarification_response(
                         user_message,
@@ -635,6 +634,18 @@ class RequestInterpreter:
                     session_id
                 )
             
+            # Check for direct response from parsing (knowledge questions)
+            parsed_intent = parse_result['parsed_intent']
+            if 'direct_response' in parsed_intent and parsed_intent['direct_response']:
+                logger.info("🚀 Using direct response from parsing - no tool execution needed")
+                return {
+                    'status': 'success',
+                    'response': parsed_intent['direct_response'],
+                    'visualizations': [],
+                    'intent_type': parsed_intent.get('intent_type', 'knowledge'),
+                    'method': 'direct_parsing_response'
+                }
+            
             # Step 2: Execute intent - NO FALLBACKS
             execution_results = self.execute_intent(parse_result['parsed_intent'], session_id)
             
@@ -652,93 +663,22 @@ class RequestInterpreter:
             }
 
     def _generate_automatic_data_description(self, session_id: str) -> Dict[str, Any]:
-        """Generate automatic description of uploaded data and ask for analysis permission."""
-        try:
-            from flask import session
-            
-            # Get data summary from session
-            data_summary = session.get('data_summary', {})
-            
-            if not data_summary:
-                # Fallback: try to generate data summary from data service
-                try:
-                    data_summary = self.data_service.get_data_summary()
-                except Exception as e:
-                    logger.warning(f"Could not generate data summary: {e}")
-                    data_summary = {}
-            
-            # Get basic session information
-            csv_rows = session.get('csv_rows', 'unknown')
-            csv_columns = session.get('csv_columns', 'unknown')
-            csv_filename = session.get('csv_filename', 'data')
-            shapefile_loaded = session.get('shapefile_loaded', False)
-            available_variables = session.get('available_variables', [])
-            
-            # Create comprehensive data description
-            description_parts = []
-            
-            # Basic file information
-            description_parts.append("## 📊 Your Data Upload Summary")
-            description_parts.append(f"**CSV File:** {csv_filename}")
-            description_parts.append(f"**Records:** {csv_rows} wards")
-            description_parts.append(f"**Variables:** {csv_columns} columns")
-            if shapefile_loaded:
-                description_parts.append("**Spatial Data:** ✅ Ward boundaries loaded")
-            
-            # Variables information
-            if available_variables:
-                description_parts.append("\n## 📋 Available Variables")
-                variable_list = ", ".join(available_variables[:15])  # Show first 15 variables
-                if len(available_variables) > 15:
-                    variable_list += f" (and {len(available_variables) - 15} more)"
-                description_parts.append(f"**Key Variables:** {variable_list}")
-            
-            # Data summary statistics (if available)
-            if data_summary and isinstance(data_summary, dict):
-                if 'statistical_summary' in data_summary:
-                    description_parts.append("\n## 📈 Data Overview")
-                    stats = data_summary['statistical_summary']
-                    description_parts.append(f"Data appears to be ready for malaria risk analysis with {len(stats)} numeric variables.")
-                
-                if 'data_quality' in data_summary:
-                    quality = data_summary['data_quality']
-                    if quality.get('missing_data_percentage', 0) > 0:
-                        description_parts.append(f"**Data Quality:** {quality.get('missing_data_percentage', 0):.1f}% missing values detected")
-                    else:
-                        description_parts.append("**Data Quality:** ✅ No missing values detected")
-            
-            # Analysis recommendation and permission request
-            description_parts.append("\n## 🎯 Recommended Next Steps")
-            description_parts.append("I can run a comprehensive malaria risk analysis including:")
-            description_parts.append("• **Composite Score Analysis** - Combines multiple risk factors")
-            description_parts.append("• **PCA Analysis** - Identifies key vulnerability patterns")
-            description_parts.append("• **Vulnerability Rankings** - Ranks wards by risk level")
-            description_parts.append("• **Risk Visualizations** - Interactive maps and charts")
-            
-            description_parts.append("\n**Would you like me to proceed with the composite score and PCA analysis?**")
-            description_parts.append("*(This will create a unified dataset and comprehensive risk assessment)*")
-            
-            # Set flag for analysis permission handling
-            session['should_ask_analysis_permission'] = True
-            
-            response_text = "\n".join(description_parts)
-            
-            logger.info(f"Generated automatic data description for session {session_id}")
-            
-            return {
-                'status': 'success',
-                'response': response_text,
-                'visualizations': [],
-                'automatic_workflow': 'data_description_complete'
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating automatic data description: {e}")
-            return {
-                'status': 'error',
-                'response': "Your data has been uploaded successfully! Please tell me what analysis you'd like to run.",
-                'visualizations': []
-            }
+        """DISABLED: Old duplicate data description system - now handled by frontend file-uploader.js"""
+        from flask import session
+        
+        # The new file-uploader.js handles the upload display professionally
+        # This old system was creating duplicate messages with emojis
+        logger.info(f"Automatic data description disabled - handled by frontend for session {session_id}")
+        
+        # Set flag for analysis permission handling (this is still needed)
+        session['should_ask_analysis_permission'] = True
+        
+        return {
+            'status': 'success',
+            'response': '',  # Empty response - frontend handles the display
+            'visualizations': [],
+            'automatic_workflow': 'data_description_complete'
+        }
 
     def _is_confirmation_message(self, user_message: str) -> bool:
         """Check if user message is a confirmation for running analysis."""
@@ -748,7 +688,19 @@ class RequestInterpreter:
             'composite', 'pca', 'analysis', 'first run'
         ]
         
+        # Comprehensive analysis patterns (from workflow guidance)
+        comprehensive_patterns = [
+            'comprehensive analysis', 'complete analysis', 'full analysis',
+            'run comprehensive analysis', 'proceed with analysis',
+            'ready to analyze', 'run the analysis', 'start analysis',
+            'comprehensive malaria risk analysis', 'ready for analysis'
+        ]
+        
         user_lower = user_message.lower().strip()
+        
+        # Check for comprehensive analysis phrases first (more specific)
+        if any(pattern in user_lower for pattern in comprehensive_patterns):
+            return True
         
         # Direct confirmation words
         if any(pattern in user_lower for pattern in confirmation_patterns):
@@ -1364,6 +1316,15 @@ Generate a helpful, conversational clarification response."""
         
         return "\n".join(documentation)
     
+    def _generate_enhanced_tool_documentation_from_schemas(self, schemas: List[Dict]) -> str:
+        """Generate enhanced tool documentation from schema list"""
+        documentation = []
+        
+        # Convert list of schemas to dict format for existing logic
+        schemas_dict = {schema['name']: schema for schema in schemas}
+        
+        return self._generate_enhanced_tool_documentation(schemas_dict)
+    
     def _generate_enhanced_tool_documentation(self, schemas: Dict[str, Dict]) -> str:
         """Generate enhanced tool documentation using combined schemas"""
         documentation = []
@@ -1444,35 +1405,106 @@ Generate a helpful, conversational clarification response."""
         return "\n".join(documentation)
     
     def execute_tool_with_registry(self, tool_name: str, session_id: str, **parameters):
-        """Execute a tool using the dynamic registry with Pydantic priority"""
-        # Try Pydantic registry first
-        if tool_name in self.pydantic_registry.get_tool_names():
-            return self.pydantic_registry.execute_tool(tool_name, session_id, **parameters)
-        # Fallback to legacy registry
-        return self.tool_registry.execute_tool(tool_name, session_id, **parameters)
+        """Execute a tool using the tiered loading system (simplified)"""
+        
+        # Intercept explanation requests and handle directly (eliminates expensive nested LLM calls)
+        if tool_name.lower() == 'explainconcept':
+            logger.info(f"🚀 Handling explanation request directly (no nested LLM call): {parameters.get('concept', 'unknown concept')}")
+            return self._handle_explanation_directly(session_id, **parameters)
+        
+        # Block redundant greeting system when Phase 1 upload is complete (professional integration)
+        if tool_name.lower() in ['simple_greeting', 'simplegreeting']:
+            from flask import session
+            if session.get('raw_data_stored', False):
+                logger.info(f"🚫 Blocking redundant greeting - Phase 1 upload completed")
+                return {
+                    'status': 'success',
+                    'response': '',  # Silent - Phase 1 already handled greeting
+                    'data': {}
+                }
+        
+        logger.info(f"🚀 Executing tool '{tool_name}' via tiered loader")
+        return self.tiered_loader.execute_tool(tool_name, session_id, **parameters)
+    
+    def _handle_explanation_directly(self, session_id: str, **parameters):
+        """Handle explanation requests directly without nested LLM calls"""
+        import time
+        start_time = time.time()
+        
+        try:
+            concept = parameters.get('concept', 'unknown topic')
+            technical_level = parameters.get('technical_level', 'intermediate')
+            include_context = parameters.get('include_context', True)
+            
+            # Build concise explanation prompt for the main LLM
+            if concept.lower() in ['chatmrpt', 'system capabilities', 'what can you do']:
+                explanation_prompt = f"Explain ChatMRPT's capabilities clearly at a {technical_level} level. Cover urban microstratification, risk analysis, mapping, and intervention targeting."
+            
+            elif any(keyword in concept.lower() for keyword in ['how to use', 'upload data', 'data accept', 'getting started', 'data format']):
+                explanation_prompt = f"Provide step-by-step guidance for using ChatMRPT at a {technical_level} level: data requirements, upload process, and what happens after upload."
+            
+            else:
+                explanation_prompt = f"Explain '{concept}' from a malaria epidemiology perspective at a {technical_level} level. Be comprehensive but concise."
+            
+            # Add session context if requested
+            context_info = ""
+            if include_context:
+                from flask import session
+                if session.get('csv_loaded') and session.get('shapefile_loaded'):
+                    context_info = "\n\nNote: Reference the user's uploaded data when relevant to make the explanation more practical and applicable to their specific analysis."
+            
+            # Get explanation from main LLM (no nested call - same LLM with enhanced system prompt)
+            explanation = self.llm_manager.generate_response(
+                prompt=explanation_prompt + context_info,
+                temperature=0.7,
+                max_tokens=400,  # Reduced for faster response
+                session_id=session_id
+            )
+            
+            execution_time = time.time() - start_time
+            
+            return {
+                'status': 'success',
+                'message': f'Successfully explained "{concept}"',
+                'response': explanation,
+                'concept': concept,
+                'technical_level': technical_level,
+                'execution_time': round(execution_time, 2),
+                'tool_name': 'explainconcept',
+                'method': 'direct_explanation'  # Flag to show this was optimized
+            }
+            
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Error in direct explanation handling: {e}")
+            return {
+                'status': 'error',
+                'message': f'Failed to explain concept: {str(e)}',
+                'execution_time': round(execution_time, 2),
+                'tool_name': 'explainconcept'
+            }
     
     def _try_intelligent_defaults(self, user_message: str, session_id: str) -> Optional[Dict[str, Any]]:
         """Try to apply intelligent defaults for common ambiguous requests"""
         user_message_lower = user_message.lower()
         
-        # Check each pattern for matches
-        for pattern, default_config in self.intelligent_defaults.items():
-            if pattern in user_message_lower:
-                logger.info(f"🤖 Applying intelligent default for pattern: {pattern}")
-                
-                # Create tool calls using the default configuration
-                # Try to find the first available tool from the list
-                tool_calls = []
-                all_available_tools = set(self.pydantic_registry.get_tool_names() + self.tool_registry.list_tools())
-                
-                for tool_name in default_config['default_tools']:
-                    if tool_name in all_available_tools:
-                        tool_calls.append({
-                            'tool_name': tool_name,
-                            'parameters': default_config['default_params'].copy(),
-                            'reasoning': f"Intelligent default for ambiguous request: {pattern}"
-                        })
-                        break  # Use only the first available tool
+        # Check each pattern group for matches
+        for pattern_group, default_config in self.intelligent_defaults.items():
+            for pattern in pattern_group:
+                if pattern in user_message_lower:
+                    logger.info(f"🤖 Applying intelligent default for pattern: {pattern}")
+                    
+                    # Create tool calls using the default configuration
+                    tool_calls = []
+                    
+                    for tool_name in default_config['default_tools']:
+                        if self.tiered_loader.is_tool_available(tool_name):
+                            tool_calls.append({
+                                'tool_name': tool_name,
+                                'parameters': default_config['default_params'].copy(),
+                                'reasoning': f"Intelligent default for ambiguous request: {pattern}"
+                            })
+                            break  # Use only the first available tool
                 
                 # If no tools found, use the first one anyway (fallback)
                 if not tool_calls and default_config['default_tools']:

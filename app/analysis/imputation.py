@@ -5,7 +5,6 @@ import pandas as pd
 import traceback
 from typing import Dict, List, Optional, Any, Union
 from collections import defaultdict
-from libpysal.weights import Queen
 import concurrent.futures
 
 # Set up logging
@@ -122,7 +121,8 @@ def handle_spatial_imputation(data, column, shapefile, n_jobs=-1, metadata=None)
         # Merge data with shapefile for spatial analysis
         merged = shapefile.merge(data[['WardName', column]], on='WardName', how='inner')
         
-        # Create spatial weights using queen contiguity
+        # Create spatial weights using queen contiguity (lazy import to avoid 15-second startup delay)
+        from libpysal.weights import Queen
         weights = Queen.from_dataframe(merged)
         
         # Find rows with missing values

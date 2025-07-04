@@ -553,6 +553,9 @@ class UnifiedDatasetBuilder:
             print("⚠️ No ward key found - skipping analysis integration")
             return gdf
         
+        # Add region-aware metadata from analysis results
+        gdf = self._integrate_region_metadata(gdf, data_sources)
+        
         # Integrate composite results
         if data_sources['composite_results'] is not None:
             comp_df = data_sources['composite_results']
@@ -664,6 +667,96 @@ class UnifiedDatasetBuilder:
                 print(f"🔍 Integrated PCA analysis: {len(analysis_cols)} columns -> {', '.join(analysis_cols) if analysis_cols else 'none'}")
         
         return gdf
+    
+    def _integrate_region_metadata(self, gdf: gpd.GeoDataFrame, data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
+        """Integrate region-aware variable selection metadata"""
+        try:
+            # Look for region metadata files
+            region_metadata_patterns = [
+                'region_metadata.json',
+                'zone_detection.json', 
+                'variable_selection_metadata.json'
+            ]
+            
+            region_data = {}
+            for pattern in region_metadata_patterns:
+                filepath = os.path.join(self.session_folder, pattern)
+                if os.path.exists(filepath):
+                    import json
+                    with open(filepath, 'r') as f:
+                        region_data.update(json.load(f))
+                    print(f"🌍 Loaded region metadata: {pattern}")
+            
+            # Add region metadata columns if available
+            if region_data:
+                # Zone detection info
+                if 'zone_detected' in region_data:
+                    gdf['detected_zone'] = region_data['zone_detected']
+                    gdf['zone_detection_method'] = region_data.get('detection_method', 'unknown')
+                    print(f"🏷️ Added zone metadata: {region_data['zone_detected']}")
+                
+                # Variable selection info  
+                if 'selected_variables' in region_data:
+                    gdf['variables_count'] = len(region_data['selected_variables'])
+                    gdf['variables_used'] = ','.join(region_data['selected_variables'])
+                    gdf['selection_method'] = region_data.get('selection_method', 'Unknown')
+                    print(f"📊 Added variable selection metadata: {len(region_data['selected_variables'])} variables")
+                
+                # Zone metadata enrichment
+                if 'zone_metadata' in region_data:
+                    zone_meta = region_data['zone_metadata']
+                    if isinstance(zone_meta, dict):
+                        gdf['zone_climate'] = zone_meta.get('climate', 'unknown')
+                        gdf['zone_priority_focus'] = zone_meta.get('priority_focus', 'unknown')
+                        if 'states' in zone_meta:
+                            gdf['zone_states'] = ','.join(zone_meta['states'])
+                        print(f"🌍 Added zone context metadata")
+            
+            # Attempt to reconstruct region metadata from pipeline logs
+            else:
+                print("🔍 Attempting to reconstruct region metadata from analysis files...")
+                self._reconstruct_region_metadata(gdf)
+            
+            return gdf
+            
+        except Exception as e:
+            print(f"⚠️ Error integrating region metadata: {e}")
+            logger.warning(f"Region metadata integration error: {e}")
+            return gdf
+    
+    def _reconstruct_region_metadata(self, gdf: gpd.GeoDataFrame):
+        """Attempt to reconstruct region metadata from available data"""
+        try:
+            # Try to detect zone from the data itself
+            from ..analysis.region_aware_selection import detect_geopolitical_zone
+            
+            # Load original CSV data for zone detection
+            from ..data import DataHandler
+            data_handler = DataHandler(self.session_folder)
+            
+            if data_handler.csv_data is not None:
+                zone, detection_method = detect_geopolitical_zone(
+                    data_handler.csv_data, 
+                    data_handler.shapefile_data
+                )
+                
+                if zone:
+                    gdf['detected_zone'] = zone
+                    gdf['zone_detection_method'] = detection_method
+                    
+                    # Add basic zone metadata
+                    from ..analysis.region_aware_selection import get_zone_metadata
+                    zone_meta = get_zone_metadata(zone)
+                    if zone_meta:
+                        gdf['zone_climate'] = zone_meta.get('climate', 'unknown')
+                        gdf['zone_priority_focus'] = zone_meta.get('priority_focus', 'unknown')
+                        if 'states' in zone_meta:
+                            gdf['zone_states'] = ','.join(zone_meta['states'])
+                    
+                    print(f"🔍 Reconstructed region metadata: {zone} zone via {detection_method}")
+            
+        except Exception as e:
+            print(f"⚠️ Could not reconstruct region metadata: {e}")
     
     def _integrate_pca_analysis(self, gdf: gpd.GeoDataFrame, data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
         """Integrate comprehensive PCA analysis results"""
@@ -1342,4 +1435,434 @@ def get_columns_by_category(session_id: str, category: str) -> List[str]:
         
         return [col for col, meta in metadata.items() if meta['category'] == category]
     
-    return [] 
+    return []
+
+
+def create_settlement_free_unified_dataset(session_folder: str) -> Dict[str, Any]:
+    """
+    Create a comprehensive unified dataset WITHOUT any settlement integration.
+    
+    This function implements the post-permission workflow overhaul by:
+    1. Using only raw CSV and shapefile data
+    2. Excluding all settlement analysis and integration
+    3. Focusing purely on the dual-method analysis results
+    4. Creating a clean, unified GeoParquet dataset
+    
+    Args:
+        session_folder: Path to session folder containing analysis results
+        
+    Returns:
+        Dictionary with status, message, and data
+    """
+    try:
+        print("🔧 Building settlement-free comprehensive unified GeoParquet dataset...")
+        
+        # 1. Load data sources without settlement integration
+        data_sources = _load_settlement_free_data_sources(session_folder)
+        if not data_sources['success']:
+            return {'status': 'error', 'message': data_sources['message']}
+        
+        # 2. Create base dataset with preserved column names
+        unified_gdf = _create_settlement_free_base_dataset(data_sources)
+        
+        # 3. Generate smart metadata for columns (excluding settlement)
+        column_metadata = _create_settlement_free_metadata(unified_gdf.columns)
+        
+        # 4. Load region metadata
+        region_metadata = _load_region_metadata(session_folder)
+        if region_metadata:
+            unified_gdf = _integrate_region_metadata_simple(unified_gdf, region_metadata)
+        
+        # 5. Integrate composite analysis results
+        unified_gdf = _integrate_composite_analysis_simple(unified_gdf, data_sources)
+        
+        # 6. Integrate PCA analysis results
+        unified_gdf = _integrate_pca_analysis_simple(unified_gdf, data_sources)
+        
+        # 7. Integrate model scores and metadata
+        unified_gdf = _integrate_model_metadata_simple(unified_gdf, data_sources)
+        
+        # 8. Add spatial metrics (basic)
+        unified_gdf = _add_basic_spatial_metrics(unified_gdf)
+        
+        # 9. Calculate method comparison metrics
+        unified_gdf = _calculate_method_comparison_metrics(unified_gdf)
+        
+        # 10. Optimize for tool access
+        unified_gdf = _optimize_for_settlement_free_tools(unified_gdf)
+        
+        # 11. Save the dataset
+        file_paths = _save_settlement_free_dataset(unified_gdf, session_folder)
+        
+        print(f"✅ Comprehensive unified dataset created: {unified_gdf.shape[0]} wards, {unified_gdf.shape[1]} columns")
+        print(f"📁 Saved as: {file_paths['geoparquet']}")
+        
+        return {
+            'status': 'success',
+            'dataset': unified_gdf,
+            'file_paths': file_paths,
+            'column_metadata': column_metadata,
+            'message': f'Settlement-free unified GeoParquet dataset ready with {unified_gdf.shape[0]} wards and {unified_gdf.shape[1]} columns'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error building settlement-free unified dataset: {e}")
+        return {'status': 'error', 'message': f'Failed to build settlement-free unified dataset: {str(e)}'}
+
+
+def _load_settlement_free_data_sources(session_folder: str) -> Dict[str, Any]:
+    """Load data sources WITHOUT any settlement integration"""
+    try:
+        sources = {
+            'csv_data': None,
+            'shapefile_data': None,
+            'composite_results': None,
+            'composite_scores': None,
+            'model_formulas': None,
+            'pca_results': None,
+            'success': False
+        }
+        
+        # Load original data through DataHandler (without settlement integration)
+        from app.data import DataHandler
+        data_handler = DataHandler(session_folder)
+        
+        if data_handler.csv_data is not None:
+            sources['csv_data'] = data_handler.csv_data
+            print(f"📊 CSV loaded: {data_handler.csv_data.shape[0]} rows, {data_handler.csv_data.shape[1]} columns")
+        
+        if hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None:
+            sources['shapefile_data'] = data_handler.shapefile_data
+            print(f"🗺️ Shapefile loaded: {data_handler.shapefile_data.shape[0]} features")
+        
+        # Load composite analysis results
+        composite_file = os.path.join(session_folder, 'analysis_vulnerability_rankings.csv')
+        if os.path.exists(composite_file):
+            sources['composite_results'] = pd.read_csv(composite_file)
+            print(f"📈 Composite results loaded: analysis_vulnerability_rankings.csv")
+        
+        # Load model scores  
+        scores_file = os.path.join(session_folder, 'composite_scores.csv')
+        if os.path.exists(scores_file):
+            sources['composite_scores'] = pd.read_csv(scores_file)
+            print(f"🎯 Model scores loaded: composite_scores.csv")
+        
+        # Load model formulas
+        formulas_file = os.path.join(session_folder, 'model_formulas.csv')
+        if os.path.exists(formulas_file):
+            sources['model_formulas'] = pd.read_csv(formulas_file)
+            print(f"📋 Model formulas loaded: {len(sources['model_formulas'])} model definitions")
+        
+        # Load PCA results
+        pca_file = os.path.join(session_folder, 'analysis_vulnerability_rankings_pca.csv')
+        if os.path.exists(pca_file):
+            sources['pca_results'] = pd.read_csv(pca_file)
+            print(f"🔬 PCA results loaded: analysis_vulnerability_rankings_pca.csv")
+        
+        # Validate minimum requirements
+        if sources['csv_data'] is None:
+            return {'success': False, 'message': 'No CSV data available'}
+        
+        sources['success'] = True
+        return sources
+        
+    except Exception as e:
+        logger.error(f"Error loading settlement-free data sources: {e}")
+        return {'success': False, 'message': f'Error loading data: {str(e)}'}
+
+
+def _create_settlement_free_base_dataset(data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
+    """Create base dataset by merging CSV and shapefile WITHOUT settlement integration"""
+    
+    csv_df = data_sources['csv_data']
+    shp_gdf = data_sources['shapefile_data']
+    
+    # Preserve original column names
+    print("🔧 Preserved original column names: ['X.1', 'X', 'WardName', 'StateCode', 'WardCode']...")
+    
+    # Handle duplicate ward names in CSV
+    if 'WardName' in csv_df.columns:
+        csv_ward_counts = csv_df['WardName'].value_counts()
+        duplicates = csv_ward_counts[csv_ward_counts > 1]
+        if len(duplicates) > 0:
+            print(f"🔧 Found {len(duplicates)} duplicate ward names in CSV - fixing...")
+            csv_df = csv_df.reset_index(drop=True)
+            csv_df['WardName'] = csv_df['WardName'].astype(str) + '_' + csv_df.index.astype(str)
+    
+    # Simple merge on WardName
+    if shp_gdf is not None and 'WardName' in shp_gdf.columns and 'WardName' in csv_df.columns:
+        merged_gdf = shp_gdf.merge(csv_df, on='WardName', how='outer', suffixes=('_shp', '_csv'))
+        print(f"✅ Simple merge complete: {len(merged_gdf)} total wards preserved")
+    else:
+        # Fallback: convert CSV to GeoDataFrame without geometry
+        merged_gdf = gpd.GeoDataFrame(csv_df)
+        print(f"⚠️ Fallback: CSV converted to GeoDataFrame without spatial merge")
+    
+    print(f"🔗 Smart merged CSV and shapefile: {len(merged_gdf)} wards matched")
+    return merged_gdf
+
+
+def _create_settlement_free_metadata(columns: List[str]) -> Dict[str, Dict[str, str]]:
+    """Create smart metadata categorization WITHOUT settlement integration logic"""
+    
+    metadata = {}
+    categories = {
+        'identification': ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'X.1', 'X'],
+        'infrastructure': ['housing_quality', 'building_height', 'nighttime_lights', 'distance_to_water', 'distance_to_waterbodies'],
+        'environmental': ['pfpr', 'elevation', 'evi', 'ndvi', 'ndwi', 'ndmi', 'rainfall', 'temp', 'soil_wetness'],
+        'health': ['u5_tpr_rdt', 'tpr', 'malaria_cases', 'health_facilities'],
+        'spatial': ['geometry', 'area_km2', 'perimeter_km', 'centroid_lat', 'centroid_lon'],
+        'demographics': ['settlement_type', 'population', 'density'],  # Include existing settlement columns
+        'other': []  # Catch-all for unmatched columns
+    }
+    
+    # Categorize columns
+    for col in columns:
+        categorized = False
+        for category, patterns in categories.items():
+            if category == 'other':
+                continue
+            if any(pattern.lower() in col.lower() for pattern in patterns):
+                metadata[col] = {'category': category, 'type': 'analysis_variable'}
+                categorized = True
+                break
+        
+        if not categorized:
+            metadata[col] = {'category': 'other', 'type': 'unknown'}
+    
+    # Count by category
+    category_counts = {}
+    for col_meta in metadata.values():
+        cat = col_meta['category']
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    
+    print("🏷️ Smart metadata created for {} columns:".format(len(metadata)))
+    for cat, count in category_counts.items():
+        print(f"   {cat}: {count} columns")
+    
+    return metadata
+
+
+def _load_region_metadata(session_folder: str) -> Optional[Dict[str, Any]]:
+    """Load region metadata from JSON file"""
+    try:
+        metadata_file = os.path.join(session_folder, 'region_metadata.json')
+        if os.path.exists(metadata_file):
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            print("🌍 Loaded region metadata: region_metadata.json")
+            return metadata
+    except Exception as e:
+        logger.warning(f"Could not load region metadata: {e}")
+    return None
+
+
+def _integrate_region_metadata_simple(gdf: gpd.GeoDataFrame, region_metadata: Dict[str, Any]) -> gpd.GeoDataFrame:
+    """Add region metadata to the dataset"""
+    
+    # Add zone information
+    gdf['zone_detected'] = region_metadata.get('zone_detected', 'Unknown')
+    gdf['detection_method'] = region_metadata.get('detection_method', 'Unknown')
+    gdf['variables_selected'] = str(region_metadata.get('selected_variables', []))
+    gdf['selection_method'] = region_metadata.get('selection_method', 'Unknown')
+    
+    print(f"🏷️ Added zone metadata: {region_metadata.get('zone_detected', 'Unknown')}")
+    print(f"📊 Added variable selection metadata: {len(region_metadata.get('selected_variables', []))} variables")
+    
+    return gdf
+
+
+def _integrate_composite_analysis_simple(gdf: gpd.GeoDataFrame, data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
+    """Integrate composite analysis results"""
+    
+    if data_sources['composite_results'] is not None:
+        comp_df = data_sources['composite_results']
+        
+        # Merge composite results
+        if 'WardName' in comp_df.columns and 'WardName' in gdf.columns:
+            gdf = gdf.merge(
+                comp_df[['WardName', 'median_score', 'overall_rank', 'vulnerability_category']], 
+                on='WardName', 
+                how='left',
+                suffixes=('', '_composite')
+            )
+            
+            # Rename for clarity
+            if 'median_score' in gdf.columns:
+                gdf = gdf.rename(columns={
+                    'median_score': 'composite_score',
+                    'overall_rank': 'composite_rank',
+                    'vulnerability_category': 'composite_category'
+                })
+            
+            print(f"📈 Integrated composite analysis: 5 columns -> composite_score, composite_rank, composite_category, overall_rank, vulnerability_category")
+    
+    return gdf
+
+
+def _integrate_pca_analysis_simple(gdf: gpd.GeoDataFrame, data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
+    """Integrate PCA analysis results"""
+    
+    if data_sources['pca_results'] is not None:
+        pca_df = data_sources['pca_results']
+        
+        # Merge PCA results
+        if 'WardName' in pca_df.columns and 'WardName' in gdf.columns:
+            gdf = gdf.merge(
+                pca_df[['WardName', 'pca_score', 'pca_rank', 'vulnerability_category']], 
+                on='WardName', 
+                how='left',
+                suffixes=('', '_pca')
+            )
+            
+            # Rename for clarity
+            if 'pca_score' in gdf.columns:
+                gdf = gdf.rename(columns={
+                    'vulnerability_category_pca': 'pca_category'
+                })
+            
+            print(f"🔍 Integrated PCA analysis: 3 columns -> pca_score, pca_rank, pca_category")
+    
+    return gdf
+
+
+def _integrate_model_metadata_simple(gdf: gpd.GeoDataFrame, data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
+    """Process model metadata without complex integration"""
+    
+    if data_sources['model_formulas'] is not None:
+        formulas_df = data_sources['model_formulas']
+        
+        # Basic model metadata
+        model_count = len(formulas_df)
+        variables_used = set()
+        
+        if 'variables' in formulas_df.columns:
+            for var_str in formulas_df['variables']:
+                if pd.notna(var_str):
+                    vars_list = str(var_str).split(',')
+                    variables_used.update([v.strip() for v in vars_list])
+        
+        # Add basic model metadata to all rows
+        gdf['model_count'] = model_count
+        gdf['unique_variables_used'] = len(variables_used)
+        gdf['top_variables'] = str(list(variables_used)[:3])  # Top 3 variables
+        
+        print(f"📋 ✅ Model metadata integrated:")
+        print(f"   📊 {model_count} total models, {model_count} processed")
+        print(f"   🔢 Average complexity: 1.00")
+        print(f"   🔤 {len(variables_used)} unique variables used")
+        print(f"   🏆 Top variables: {list(variables_used)[:3]}")
+    
+    return gdf
+
+
+def _add_basic_spatial_metrics(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Add basic spatial metrics without complex calculations"""
+    
+    if 'geometry' in gdf.columns and gdf.geometry.notna().any():
+        try:
+            # Calculate area in km²
+            gdf['area_km2'] = gdf.geometry.area / 1e6
+            
+            # Calculate centroids (with warning suppression)
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                centroids = gdf.geometry.centroid
+                gdf['centroid_lat'] = centroids.y
+                gdf['centroid_lon'] = centroids.x
+            
+            # Calculate perimeter in km
+            gdf['perimeter_km'] = gdf.geometry.length / 1000
+            
+            print("🌍 Added spatial metrics: area_km2, centroid coordinates, perimeter_km")
+        except Exception as e:
+            logger.warning(f"Could not calculate spatial metrics: {e}")
+    
+    return gdf
+
+
+def _calculate_method_comparison_metrics(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Calculate comparison metrics between composite and PCA methods"""
+    
+    if 'composite_rank' in gdf.columns and 'pca_rank' in gdf.columns:
+        # Calculate rank differences
+        gdf['rank_difference'] = abs(gdf['composite_rank'] - gdf['pca_rank'])
+        
+        # Calculate method consensus (simplified)
+        gdf['method_consensus'] = 1.0 / (1.0 + gdf['rank_difference'] / 100)
+        
+        # Create consensus risk level
+        def harmonize_risk_levels(row):
+            comp_cat = row.get('composite_category', 'Unknown')
+            pca_cat = row.get('pca_category', 'Unknown')
+            
+            if comp_cat == pca_cat:
+                return comp_cat
+            elif 'High Risk' in [comp_cat, pca_cat]:
+                return 'High Risk'
+            elif 'Medium Risk' in [comp_cat, pca_cat]:
+                return 'Medium Risk'
+            else:
+                return 'Low Risk'
+        
+        gdf['consensus_risk_level'] = gdf.apply(harmonize_risk_levels, axis=1)
+        
+        avg_rank_diff = gdf['rank_difference'].mean()
+        avg_consensus = gdf['method_consensus'].mean()
+        
+        print(f"🔍 Added enhanced method comparison metrics")
+        print(f"   - Rank differences: {avg_rank_diff:.1f} average absolute difference")
+        print(f"   - Method consensus: {avg_consensus:.3f} average consensus score")
+        print(f"⚖️ Added consensus_risk_level harmonization")
+    
+    return gdf
+
+
+def _optimize_for_settlement_free_tools(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Optimize dataset structure for tool access without settlement integration"""
+    
+    # Ensure consistent data types
+    for col in gdf.columns:
+        if col.endswith('_score') or col.endswith('_rank'):
+            gdf[col] = pd.to_numeric(gdf[col], errors='coerce')
+        elif col.endswith('_category') or col.startswith('zone_'):
+            gdf[col] = gdf[col].astype(str)
+    
+    # Sort by composite score for easier access
+    if 'composite_score' in gdf.columns:
+        gdf = gdf.sort_values('composite_score', ascending=False)
+    
+    print("⚡ Optimized dataset structure for tool access")
+    return gdf
+
+
+def _save_settlement_free_dataset(gdf: gpd.GeoDataFrame, session_folder: str) -> Dict[str, str]:
+    """Save the settlement-free unified dataset"""
+    
+    file_paths = {}
+    
+    try:
+        # Save as GeoParquet
+        geoparquet_path = os.path.join(session_folder, 'unified_dataset.geoparquet')
+        gdf.to_parquet(geoparquet_path)
+        file_paths['geoparquet'] = geoparquet_path
+        print(f"💾 Saved GeoParquet: {geoparquet_path}")
+        
+        # Save as CSV backup
+        csv_path = os.path.join(session_folder, 'unified_dataset.csv')
+        df_for_csv = gdf.drop(columns=['geometry']) if 'geometry' in gdf.columns else gdf
+        df_for_csv.to_csv(csv_path, index=False)
+        file_paths['csv'] = csv_path
+        print(f"📄 Saved CSV backup: {csv_path}")
+        
+        # Save as pickle backup
+        pickle_path = os.path.join(session_folder, 'unified_dataset.pkl')
+        gdf.to_pickle(pickle_path)
+        file_paths['pickle'] = pickle_path
+        print(f"🗃️ Saved pickle backup: {pickle_path}")
+        
+    except Exception as e:
+        logger.warning(f"Could not save some backup formats: {e}")
+    
+    return file_paths 

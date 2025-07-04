@@ -267,21 +267,13 @@ export class FileUploader {
         // Update UI status
         this.updateSessionStatus();
 
-        // Add success message to chat - WITH IMPROVED SAFETY CHECK
+        // Add Phase 1 enhanced success message to chat
         this.addChatMessage(() => {
-            const message = `Files uploaded successfully! ${csvFile ? `CSV: ${csvFile.name}` : ''} ${shapeFile ? `Shapefile: ${shapeFile.name}` : ''}`;
-            window.chatManager.addSystemMessage(message);
-
-            if (response.message) {
-                window.chatManager.addAssistantMessage(response.message);
-            }
+            // Show upload type detection results
+            this.displayUploadResults(response, csvFile, shapeFile);
             
-            // Send proactive trigger message to epidemiologist
-            if (csvFile && shapeFile) {
-                setTimeout(() => {
-                    window.chatManager.sendMessage("I've uploaded both CSV and shapefile data. Can you analyze my data and recommend what analysis to run?");
-                }, 1000);
-            }
+            // Send proactive trigger based on upload type
+            this.sendProactiveMessage(response, csvFile, shapeFile);
         });
 
         // Close modal after delay
@@ -514,6 +506,312 @@ export class FileUploader {
             bothLoaded: sessionData.csvLoaded && sessionData.shapefileLoaded,
             analysisReady: sessionData.csvLoaded && sessionData.shapefileLoaded
         };
+    }
+
+    /**
+     * Display Phase 1 upload results in chat
+     * @param {Object} response - Backend response with enhanced structure
+     * @param {File} csvFile - Uploaded CSV file
+     * @param {File} shapeFile - Uploaded shapefile
+     */
+    displayUploadResults(response, csvFile, shapeFile) {
+        // 1. Simple, clear confirmation  
+        const fileSize1 = (csvFile.size / (1024 * 1024)).toFixed(1);
+        const fileSize2 = shapeFile ? (shapeFile.size / (1024 * 1024)).toFixed(1) : null;
+        
+        if (csvFile && shapeFile) {
+            window.chatManager.addSystemMessage(`Perfect! Received **${csvFile.name}** (${fileSize1}MB) and **${shapeFile.name}** (${fileSize2}MB)`);
+        } else {
+            window.chatManager.addSystemMessage(`Perfect! Received **${csvFile.name}** (${fileSize1}MB)`);
+        }
+
+        if (response.data_summary && response.data_summary.total_rows) {
+            const summary = response.data_summary;
+            
+            // 2. Data discovery message with variable categories
+            const variableCategories = this.categorizeVariables(summary.column_names, summary.column_types);
+            const recordLabel = this.detectRecordType(summary.column_names);
+            
+            const discoveryMessage = `I've analyzed your dataset and here's what I found:
+
+**${summary.total_rows} ${recordLabel}** across **${summary.total_columns} variables** including:
+
+${variableCategories}`;
+            
+            window.chatManager.addAssistantMessage(discoveryMessage);
+            
+            // 3. Data completeness info
+            const completenessInfo = this.generateCompletenessInfo(summary.data_completeness);
+            if (completenessInfo) {
+                window.chatManager.addAssistantMessage(completenessInfo);
+            }
+            
+            // 4. Data sample
+            if (summary.preview_rows && summary.preview_rows.length > 0) {
+                const sampleMessage = this.generateProfessionalDataSample(summary.preview_rows, summary.column_names);
+                window.chatManager.addAssistantMessage(sampleMessage);
+            }
+            
+            // 5. Ready for analysis - following workflow diagram
+            setTimeout(() => {
+                const nextStepsMessage = `**Ready for Analysis!** 
+
+I can proceed with the full malaria risk analysis (composite scoring + PCA) to generate risk maps and ward rankings, or we can first explore your data variables.
+
+**Option 1:** Proceed with complete analysis (recommended)
+**Option 2:** Visualize variables first (e.g., "show me the distribution of pfpr variable")
+
+May I proceed with the comprehensive risk analysis?`;
+                window.chatManager.addAssistantMessage(nextStepsMessage);
+            }, 300);
+        }
+    }
+
+
+
+
+
+
+
+    /**
+     * Generate completeness information with missing variables
+     * @param {Object} completenessData - Data completeness object
+     * @returns {string} Completeness information
+     */
+    generateCompletenessInfo(completenessData) {
+        if (!completenessData) return null;
+        
+        const overall = completenessData.overall || 100;
+        const byColumn = completenessData.by_column || {};
+        
+        // Find variables with missing data
+        const missingVars = Object.entries(byColumn)
+            .filter(([, completeness]) => completeness < 100)
+            .sort(([, a], [, b]) => a - b)
+            .slice(0, 3); // Show worst 3
+        
+        if (missingVars.length === 0 || overall >= 99) {
+            return `Your data is **${overall.toFixed(1)}% complete** with excellent quality scores.`;
+        }
+        
+        const missingList = missingVars.map(([col, completeness]) => 
+            `${col} (${(100 - completeness).toFixed(1)}% missing)`
+        ).join(', ');
+        
+        return `Your data is **${overall.toFixed(1)}% complete**. Variables with missing values: ${missingList}. During analysis, these will be imputed using spatial neighbor means.`;
+    }
+
+
+
+
+
+    /**
+     * Send proactive message based on upload type
+     * @param {Object} response - Backend response
+     * @param {File} csvFile - Uploaded CSV file
+     * @param {File} shapeFile - Uploaded shapefile
+     */
+    sendProactiveMessage(response, csvFile, shapeFile) {
+        // Don't send automatic proactive messages that trigger analysis
+        // The "Ready for Analysis" section already provides clear next steps
+        // Let the user decide what to do next
+        return;
+    }
+
+    /**
+     * Categorize variables into meaningful groups
+     * @param {Array} columnNames - All column names
+     * @param {Object} columnTypes - Column type mapping
+     * @returns {string} Formatted variable categories
+     */
+    categorizeVariables(columnNames, columnTypes) {
+        if (!columnNames || columnNames.length === 0) return '';
+        
+        const categories = {
+            environmental: [],
+            demographic: [],
+            geographic: [],
+            health: [],
+            other: []
+        };
+        
+        // Categorize each column
+        columnNames.forEach(col => {
+            const colLower = col.toLowerCase();
+            
+            if (colLower.includes('rainfall') || colLower.includes('temperature') || 
+                colLower.includes('ndvi') || colLower.includes('humidity') || 
+                colLower.includes('elevation')) {
+                categories.environmental.push(col);
+            } else if (colLower.includes('population') || colLower.includes('density') || 
+                       colLower.includes('housing') || colLower.includes('urban')) {
+                categories.demographic.push(col);
+            } else if (colLower.includes('ward') || colLower.includes('lga') || 
+                       colLower.includes('state') || colLower.includes('region')) {
+                categories.geographic.push(col);
+            } else if (colLower.includes('health') || colLower.includes('facility') || 
+                       colLower.includes('distance') || colLower.includes('pfpr') ||
+                       colLower.includes('tpr') || colLower.includes('test')) {
+                categories.health.push(col);
+            } else {
+                categories.other.push(col);
+            }
+        });
+        
+        // Format output
+        const output = [];
+        if (categories.environmental.length > 0) {
+            output.push(`• Environmental factors (${categories.environmental.join(', ')})`);
+        }
+        if (categories.demographic.length > 0) {
+            output.push(`• Demographic data (${categories.demographic.join(', ')})`);
+        }
+        if (categories.geographic.length > 0) {
+            output.push(`• Geographic indicators (${categories.geographic.join(', ')})`);
+        }
+        if (categories.health.length > 0) {
+            output.push(`• Health-related variables (${categories.health.join(', ')})`);
+        }
+        
+        return output.join('\n');
+    }
+
+    /**
+     * Detect record type from column names
+     * @param {Array} columnNames - Column names
+     * @returns {string} Record type label
+     */
+    detectRecordType(columnNames) {
+        if (!columnNames) return 'records';
+        
+        const colsLower = columnNames.map(c => c.toLowerCase()).join(' ');
+        
+        if (colsLower.includes('ward')) return 'wards';
+        if (colsLower.includes('district')) return 'districts';
+        if (colsLower.includes('region')) return 'regions';
+        if (colsLower.includes('village')) return 'villages';
+        if (colsLower.includes('community')) return 'communities';
+        if (colsLower.includes('facility')) return 'facilities';
+        
+        return 'locations';
+    }
+
+    /**
+     * Generate professional data sample
+     * @param {Array} previewRows - Sample rows
+     * @param {Array} columnNames - Column names
+     * @returns {string} Formatted data sample
+     */
+    generateProfessionalDataSample(previewRows, columnNames) {
+        if (!previewRows || previewRows.length === 0) return '';
+        
+        const sampleSize = Math.min(previewRows.length, 5);
+        const rows = previewRows.slice(0, sampleSize);
+        
+        // Find identifier column
+        const idCol = this.findIdentifierColumn(columnNames);
+        const recordType = this.detectRecordType(columnNames);
+        
+        let sampleText = `**Data Sample** (showing ${sampleSize} of ${sampleSize} ${recordType}):\n\n`;
+        
+        rows.forEach((row, index) => {
+            const wardNum = index + 1;
+            const identifier = row[idCol] || `${recordType.slice(0, -1)} ${wardNum}`;
+            
+            // Get key data points
+            const keyData = this.extractKeyDataPoints(row, columnNames);
+            
+            sampleText += `**${recordType.slice(0, -1).charAt(0).toUpperCase() + recordType.slice(0, -1).slice(1)} ${wardNum}**: **${identifier}**`;
+            
+            if (keyData.length > 0) {
+                sampleText += ` • ${keyData.join(' • ')}`;
+            }
+            
+            sampleText += '\n';
+        });
+        
+        return sampleText;
+    }
+
+    /**
+     * Find the identifier column (ward name, etc)
+     * @param {Array} columnNames - Column names
+     * @returns {string} Identifier column name
+     */
+    findIdentifierColumn(columnNames) {
+        const patterns = ['wardname', 'ward_name', 'name', 'district', 'region', 'location'];
+        
+        for (const col of columnNames) {
+            const colLower = col.toLowerCase().replace(/[_\s-]/g, '');
+            for (const pattern of patterns) {
+                if (colLower.includes(pattern)) {
+                    return col;
+                }
+            }
+        }
+        
+        return columnNames[0]; // Fallback to first column
+    }
+
+    /**
+     * Extract key data points for display
+     * @param {Object} row - Data row
+     * @param {Array} columnNames - Column names
+     * @returns {Array} Key data points formatted
+     */
+    extractKeyDataPoints(row, columnNames) {
+        const keyData = [];
+        const seen = new Set();
+        
+        // Priority columns to show
+        const priorities = [
+            { pattern: 'lgacode', format: (val) => `LGACode: ${val}` },
+            { pattern: 'urban', format: (val) => `Urban: ${val}` },
+            { pattern: 'housing_quality', format: (val) => `housing_quality: ${this.formatNumber(val)}` },
+            { pattern: 'mean_rainfall', format: (val) => `mean_rainfall: ${this.formatNumber(val)}` },
+            { pattern: 'pfpr', format: (val) => `pfpr: ${this.formatNumber(val)}` },
+            { pattern: 'tpr', format: (val) => `tpr: ${this.formatNumber(val)}` },
+            { pattern: 'test_positivity', format: (val) => `test_positivity: ${this.formatNumber(val)}` }
+        ];
+        
+        // Match columns to priorities
+        for (const priority of priorities) {
+            for (const col of columnNames) {
+                const colLower = col.toLowerCase().replace(/[_\s-]/g, '');
+                if (colLower.includes(priority.pattern) && !seen.has(priority.pattern)) {
+                    const value = row[col];
+                    if (value !== null && value !== undefined && value !== '') {
+                        keyData.push(priority.format(value));
+                        seen.add(priority.pattern);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        return keyData.slice(0, 4); // Show max 4 data points
+    }
+
+    /**
+     * Format numbers intelligently
+     * @param {*} value - Value to format
+     * @returns {string} Formatted value
+     */
+    formatNumber(value) {
+        if (typeof value !== 'number') return value;
+        
+        // Very small numbers (likely percentages as decimals)
+        if (value > 0 && value < 1) {
+            return value.toFixed(6).replace(/\.?0+$/, '');
+        }
+        
+        // Larger numbers
+        if (value > 1000) {
+            return value.toFixed(1);
+        }
+        
+        // Regular numbers
+        return value.toFixed(2).replace(/\.?0+$/, '');
     }
 
     /**

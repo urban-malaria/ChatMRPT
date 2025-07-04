@@ -382,6 +382,7 @@ def validate_session_data_exists(session_id: str) -> bool:
 def get_session_unified_dataset(session_id: str):
     """Get unified dataset for session with error handling and automatic creation"""
     try:
+        # Lazy import to avoid 30-second startup delay from geopandas
         from ..data.unified_dataset_builder import load_unified_dataset, UnifiedDatasetBuilder
         
         # First try to load existing unified dataset
