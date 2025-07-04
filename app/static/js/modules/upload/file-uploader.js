@@ -84,6 +84,19 @@ export class FileUploader {
         this.filesUploadStatus = DOMHelpers.getElementById('files-upload-status');
         this.useSampleDataBtn = DOMHelpers.getElementById('use-sample-data-btn-modal');
 
+        // TPR elements
+        this.tprFileInput = DOMHelpers.getElementById('tpr-file-upload');
+        this.uploadTprBtn = DOMHelpers.getElementById('upload-tpr-btn');
+        this.tprUploadStatus = DOMHelpers.getElementById('tpr-upload-status');
+        this.downloadContent = DOMHelpers.getElementById('download-content');
+
+        // Debug TPR elements
+        console.log('🔍 TPR Elements Debug:');
+        console.log('  - tprFileInput:', !!this.tprFileInput, this.tprFileInput?.id);
+        console.log('  - uploadTprBtn:', !!this.uploadTprBtn, this.uploadTprBtn?.id);
+        console.log('  - tprUploadStatus:', !!this.tprUploadStatus, this.tprUploadStatus?.id);
+        console.log('  - downloadContent:', !!this.downloadContent, this.downloadContent?.id);
+
         // Initialize Bootstrap modal
         const uploadModalElem = DOMHelpers.getElementById('uploadModal');
         if (uploadModalElem && window.bootstrap) {
@@ -127,6 +140,15 @@ export class FileUploader {
             this.shapefileInput.addEventListener('change', () => {
                 this.validateShapefileFile();
             });
+        }
+
+        // TPR upload button
+        if (this.uploadTprBtn) {
+            this.uploadTprBtn.addEventListener('click', () => {
+                console.log('🖱️ TPR upload button clicked!');
+                this.uploadTprFile();
+            });
+            console.log('✅ TPR upload button found and event listener added');
         }
 
         // Handle sample data link in chat (using event delegation)
@@ -515,63 +537,120 @@ export class FileUploader {
      * @param {File} shapeFile - Uploaded shapefile
      */
     displayUploadResults(response, csvFile, shapeFile) {
-        // 1. Simple, clear confirmation  
-        const fileSize1 = (csvFile.size / (1024 * 1024)).toFixed(1);
-        const fileSize2 = shapeFile ? (shapeFile.size / (1024 * 1024)).toFixed(1) : null;
-        
-        if (csvFile && shapeFile) {
-            window.chatManager.addSystemMessage(`Perfect! Received **${csvFile.name}** (${fileSize1}MB) and **${shapeFile.name}** (${fileSize2}MB)`);
-        } else {
-            window.chatManager.addSystemMessage(`Perfect! Received **${csvFile.name}** (${fileSize1}MB)`);
-        }
+        // 1. Basic confirmation
+        window.chatManager.addSystemMessage(`Files uploaded successfully: ${csvFile.name} and ${shapeFile.name}`);
 
+        // 2. What did I find in your data? (the main story)
         if (response.data_summary && response.data_summary.total_rows) {
             const summary = response.data_summary;
             
-            // 2. Data discovery message with variable categories
-            const variableCategories = this.categorizeVariables(summary.column_names, summary.column_types);
-            const recordLabel = this.detectRecordType(summary.column_names);
+            const completenessInfo = this.generateCompletenessInfo(summary.data_completeness);
+            const variableTypes = this.generateVariableTypesSummary(summary.column_types, summary.column_names);
             
             const discoveryMessage = `I've analyzed your dataset and here's what I found:
 
-**${summary.total_rows} ${recordLabel}** across **${summary.total_columns} variables** including:
+**${summary.total_rows} wards** with **${summary.total_columns} variables** including:
+${variableTypes}
 
-${variableCategories}`;
+${completenessInfo}`;
             
             window.chatManager.addAssistantMessage(discoveryMessage);
             
-            // 3. Data completeness info
-            const completenessInfo = this.generateCompletenessInfo(summary.data_completeness);
-            if (completenessInfo) {
-                window.chatManager.addAssistantMessage(completenessInfo);
-            }
-            
-            // 4. Data sample
+            // 3. Show actual data sample (properly formatted)
             if (summary.preview_rows && summary.preview_rows.length > 0) {
-                const sampleMessage = this.generateProfessionalDataSample(summary.preview_rows, summary.column_names);
+                const sampleMessage = this.generateCleanDataSample(summary.preview_rows, summary.column_names);
                 window.chatManager.addAssistantMessage(sampleMessage);
             }
             
-            // 5. Ready for analysis - following workflow diagram
-            setTimeout(() => {
-                const nextStepsMessage = `**Ready for Analysis!** 
+            // 4. Only mention issues if there are real problems
+            if (summary.data_quality_assessment?.issues?.length > 0) {
+                const issuesMessage = `**Data Quality Notes:**
+${summary.data_quality_assessment.issues.map(issue => `• ${issue}`).join('\n')}
 
-I can proceed with the full malaria risk analysis (composite scoring + PCA) to generate risk maps and ward rankings, or we can first explore your data variables.
-
-**Option 1:** Proceed with complete analysis (recommended)
-**Option 2:** Visualize variables first (e.g., "show me the distribution of pfpr variable")
-
-May I proceed with the comprehensive risk analysis?`;
-                window.chatManager.addAssistantMessage(nextStepsMessage);
-            }, 300);
+Your data is still excellent quality and ready for analysis.`;
+                
+                window.chatManager.addAssistantMessage(issuesMessage);
+            }
         }
+
+        // 5. What you can do now
+        const nextStepsMessage = `**Ready for Analysis!**
+
+I can help you create:
+• **Risk maps** showing high-vulnerability areas
+• **Ward rankings** to identify priority locations  
+• **Statistical analysis** to find key risk factors
+• **Intervention targeting** recommendations
+
+Would you like me to proceed with the composite score and PCA analysis? *(This will create acomprehensive risk assessment with ward rankings.)*`;
+
+        window.chatManager.addAssistantMessage(nextStepsMessage);
     }
 
+    /**
+     * Generate clean, readable data sample
+     * @param {Array} previewRows - First 5 rows of data
+     * @param {Array} columnNames - All column names  
+     * @returns {string} Clean data sample
+     */
+    generateCleanDataSample(previewRows, columnNames) {
+        if (!previewRows || previewRows.length === 0) return '';
+        
+        const sampleSize = Math.min(previewRows.length, 5);
+        const rows = previewRows.slice(0, sampleSize);
+        
+        // Find the most meaningful columns dynamically
+        const availableColumns = Object.keys(rows[0]);
+        const keyColumns = this.selectKeyColumns(availableColumns);
+        
+        let sampleText = `**Data Sample** (${sampleSize} wards):\n\n`;
+        
+        rows.forEach((row, index) => {
+            const wardName = row['WardName'] || row['ward_name'] || `Ward ${index + 1}`;
+            const details = keyColumns.map(col => {
+                const value = row[col];
+                if (col === 'WardName' || col === 'ward_name') return null; // Skip ward name in details
+                
+                // Format numeric values nicely
+                if (typeof value === 'number') {
+                    return `${col}: ${value > 1 ? Math.round(value * 100) / 100 : (value * 100).toFixed(1)}`;
+                }
+                return `${col}: ${value || 'N/A'}`;
+            }).filter(Boolean).join(', ');
+            
+            sampleText += `• **${wardName}** - ${details}\n`;
+        });
+        
+        return sampleText;
+    }
 
-
-
-
-
+    /**
+     * Select the most meaningful columns for preview
+     * @param {Array} availableColumns - All available column names
+     * @returns {Array} Selected key columns
+     */
+    selectKeyColumns(availableColumns) {
+        // Priority columns in order of importance
+        const priorityColumns = [
+            'WardName', 'ward_name', 'Urban', 'urban', 'LGACode', 'tpr', 'housing_quality', 
+            'population', 'pfpr', 'mean_rainfall', 'elevation', 'flood', 'Source'
+        ];
+        
+        const selected = [];
+        for (const col of priorityColumns) {
+            if (availableColumns.includes(col) && selected.length < 4) {
+                selected.push(col);
+            }
+        }
+        
+        // If we don't have enough, add some others
+        if (selected.length < 3) {
+            const remaining = availableColumns.filter(col => !selected.includes(col)).slice(0, 3);
+            selected.push(...remaining);
+        }
+        
+        return selected;
+    }
 
     /**
      * Generate completeness information with missing variables
@@ -579,7 +658,7 @@ May I proceed with the comprehensive risk analysis?`;
      * @returns {string} Completeness information
      */
     generateCompletenessInfo(completenessData) {
-        if (!completenessData) return null;
+        if (!completenessData) return 'Your data appears complete with excellent quality.';
         
         const overall = completenessData.overall || 100;
         const byColumn = completenessData.by_column || {};
@@ -590,20 +669,54 @@ May I proceed with the comprehensive risk analysis?`;
             .sort(([, a], [, b]) => a - b)
             .slice(0, 3); // Show worst 3
         
-        if (missingVars.length === 0 || overall >= 99) {
-            return `Your data is **${overall.toFixed(1)}% complete** with excellent quality scores.`;
+        if (missingVars.length === 0) {
+            return `Your data is **${overall}% complete** with excellent quality.`;
         }
         
         const missingList = missingVars.map(([col, completeness]) => 
             `${col} (${(100 - completeness).toFixed(1)}% missing)`
         ).join(', ');
         
-        return `Your data is **${overall.toFixed(1)}% complete**. Variables with missing values: ${missingList}. During analysis, these will be imputed using spatial neighbor means.`;
+        return `Your data is **${overall}% complete**. Variables with missing values: ${missingList}. During analysis, these will be imputed using spatial neighbor means.`;
     }
 
-
-
-
+    /**
+     * Generate variable types summary based on actual data
+     * @param {Object} columnTypes - Column type mapping
+     * @param {Array} columnNames - All column names
+     * @returns {string} Variable types summary
+     */
+    generateVariableTypesSummary(columnTypes, columnNames) {
+        if (!columnTypes || !columnNames) return '';
+        
+        const typeGroups = {
+            numeric: [],
+            categorical: [],
+            text: []
+        };
+        
+        Object.entries(columnTypes).forEach(([col, type]) => {
+            if (typeGroups[type]) {
+                typeGroups[type].push(col);
+            }
+        });
+        
+        const summary = [];
+        if (typeGroups.numeric.length > 0) {
+            // Show some example numeric variables
+            const examples = typeGroups.numeric.slice(0, 3).join(', ');
+            summary.push(`• **${typeGroups.numeric.length} quantitative variables** (${examples}${typeGroups.numeric.length > 3 ? ', ...' : ''})`);
+        }
+        if (typeGroups.categorical.length > 0) {
+            const examples = typeGroups.categorical.slice(0, 2).join(', ');
+            summary.push(`• **${typeGroups.categorical.length} categorical variables** (${examples}${typeGroups.categorical.length > 2 ? ', ...' : ''})`);
+        }
+        if (typeGroups.text.length > 0) {
+            summary.push(`• **${typeGroups.text.length} identifier variables** (ward names, codes)`);
+        }
+        
+        return summary.join('\n');
+    }
 
     /**
      * Send proactive message based on upload type
@@ -612,206 +725,27 @@ May I proceed with the comprehensive risk analysis?`;
      * @param {File} shapeFile - Uploaded shapefile
      */
     sendProactiveMessage(response, csvFile, shapeFile) {
-        // Don't send automatic proactive messages that trigger analysis
-        // The "Ready for Analysis" section already provides clear next steps
-        // Let the user decide what to do next
-        return;
-    }
-
-    /**
-     * Categorize variables into meaningful groups
-     * @param {Array} columnNames - All column names
-     * @param {Object} columnTypes - Column type mapping
-     * @returns {string} Formatted variable categories
-     */
-    categorizeVariables(columnNames, columnTypes) {
-        if (!columnNames || columnNames.length === 0) return '';
+        const uploadType = response.upload_type;
+        let proactiveMessage = '';
         
-        const categories = {
-            environmental: [],
-            demographic: [],
-            geographic: [],
-            health: [],
-            other: []
-        };
-        
-        // Categorize each column
-        columnNames.forEach(col => {
-            const colLower = col.toLowerCase();
-            
-            if (colLower.includes('rainfall') || colLower.includes('temperature') || 
-                colLower.includes('ndvi') || colLower.includes('humidity') || 
-                colLower.includes('elevation')) {
-                categories.environmental.push(col);
-            } else if (colLower.includes('population') || colLower.includes('density') || 
-                       colLower.includes('housing') || colLower.includes('urban')) {
-                categories.demographic.push(col);
-            } else if (colLower.includes('ward') || colLower.includes('lga') || 
-                       colLower.includes('state') || colLower.includes('region')) {
-                categories.geographic.push(col);
-            } else if (colLower.includes('health') || colLower.includes('facility') || 
-                       colLower.includes('distance') || colLower.includes('pfpr') ||
-                       colLower.includes('tpr') || colLower.includes('test')) {
-                categories.health.push(col);
-            } else {
-                categories.other.push(col);
-            }
-        });
-        
-        // Format output
-        const output = [];
-        if (categories.environmental.length > 0) {
-            output.push(`• Environmental factors (${categories.environmental.join(', ')})`);
-        }
-        if (categories.demographic.length > 0) {
-            output.push(`• Demographic data (${categories.demographic.join(', ')})`);
-        }
-        if (categories.geographic.length > 0) {
-            output.push(`• Geographic indicators (${categories.geographic.join(', ')})`);
-        }
-        if (categories.health.length > 0) {
-            output.push(`• Health-related variables (${categories.health.join(', ')})`);
+        switch (uploadType) {
+            case 'csv_shapefile':
+                proactiveMessage = "Data upload and analysis complete. Please proceed with comprehensive malaria risk analysis using both composite scoring and PCA methods for optimal results.";
+                break;
+            case 'tpr_only':
+                proactiveMessage = "TPR dataset uploaded successfully. Please initiate climate variable enhancement and spatial analysis pipeline for comprehensive risk assessment.";
+                break;
+            case 'csv_only':
+                proactiveMessage = "CSV dataset processed successfully. Please begin statistical analysis - note that geographic visualization will be limited without boundary data.";
+                break;
+            default:
+                proactiveMessage = "Dataset upload complete. Please specify your preferred analysis methodology for malaria risk assessment.";
         }
         
-        return output.join('\n');
-    }
-
-    /**
-     * Detect record type from column names
-     * @param {Array} columnNames - Column names
-     * @returns {string} Record type label
-     */
-    detectRecordType(columnNames) {
-        if (!columnNames) return 'records';
-        
-        const colsLower = columnNames.map(c => c.toLowerCase()).join(' ');
-        
-        if (colsLower.includes('ward')) return 'wards';
-        if (colsLower.includes('district')) return 'districts';
-        if (colsLower.includes('region')) return 'regions';
-        if (colsLower.includes('village')) return 'villages';
-        if (colsLower.includes('community')) return 'communities';
-        if (colsLower.includes('facility')) return 'facilities';
-        
-        return 'locations';
-    }
-
-    /**
-     * Generate professional data sample
-     * @param {Array} previewRows - Sample rows
-     * @param {Array} columnNames - Column names
-     * @returns {string} Formatted data sample
-     */
-    generateProfessionalDataSample(previewRows, columnNames) {
-        if (!previewRows || previewRows.length === 0) return '';
-        
-        const sampleSize = Math.min(previewRows.length, 5);
-        const rows = previewRows.slice(0, sampleSize);
-        
-        // Find identifier column
-        const idCol = this.findIdentifierColumn(columnNames);
-        const recordType = this.detectRecordType(columnNames);
-        
-        let sampleText = `**Data Sample** (showing ${sampleSize} of ${sampleSize} ${recordType}):\n\n`;
-        
-        rows.forEach((row, index) => {
-            const wardNum = index + 1;
-            const identifier = row[idCol] || `${recordType.slice(0, -1)} ${wardNum}`;
-            
-            // Get key data points
-            const keyData = this.extractKeyDataPoints(row, columnNames);
-            
-            sampleText += `**${recordType.slice(0, -1).charAt(0).toUpperCase() + recordType.slice(0, -1).slice(1)} ${wardNum}**: **${identifier}**`;
-            
-            if (keyData.length > 0) {
-                sampleText += ` • ${keyData.join(' • ')}`;
-            }
-            
-            sampleText += '\n';
-        });
-        
-        return sampleText;
-    }
-
-    /**
-     * Find the identifier column (ward name, etc)
-     * @param {Array} columnNames - Column names
-     * @returns {string} Identifier column name
-     */
-    findIdentifierColumn(columnNames) {
-        const patterns = ['wardname', 'ward_name', 'name', 'district', 'region', 'location'];
-        
-        for (const col of columnNames) {
-            const colLower = col.toLowerCase().replace(/[_\s-]/g, '');
-            for (const pattern of patterns) {
-                if (colLower.includes(pattern)) {
-                    return col;
-                }
-            }
-        }
-        
-        return columnNames[0]; // Fallback to first column
-    }
-
-    /**
-     * Extract key data points for display
-     * @param {Object} row - Data row
-     * @param {Array} columnNames - Column names
-     * @returns {Array} Key data points formatted
-     */
-    extractKeyDataPoints(row, columnNames) {
-        const keyData = [];
-        const seen = new Set();
-        
-        // Priority columns to show
-        const priorities = [
-            { pattern: 'lgacode', format: (val) => `LGACode: ${val}` },
-            { pattern: 'urban', format: (val) => `Urban: ${val}` },
-            { pattern: 'housing_quality', format: (val) => `housing_quality: ${this.formatNumber(val)}` },
-            { pattern: 'mean_rainfall', format: (val) => `mean_rainfall: ${this.formatNumber(val)}` },
-            { pattern: 'pfpr', format: (val) => `pfpr: ${this.formatNumber(val)}` },
-            { pattern: 'tpr', format: (val) => `tpr: ${this.formatNumber(val)}` },
-            { pattern: 'test_positivity', format: (val) => `test_positivity: ${this.formatNumber(val)}` }
-        ];
-        
-        // Match columns to priorities
-        for (const priority of priorities) {
-            for (const col of columnNames) {
-                const colLower = col.toLowerCase().replace(/[_\s-]/g, '');
-                if (colLower.includes(priority.pattern) && !seen.has(priority.pattern)) {
-                    const value = row[col];
-                    if (value !== null && value !== undefined && value !== '') {
-                        keyData.push(priority.format(value));
-                        seen.add(priority.pattern);
-                        break;
-                    }
-                }
-            }
-        }
-        
-        return keyData.slice(0, 4); // Show max 4 data points
-    }
-
-    /**
-     * Format numbers intelligently
-     * @param {*} value - Value to format
-     * @returns {string} Formatted value
-     */
-    formatNumber(value) {
-        if (typeof value !== 'number') return value;
-        
-        // Very small numbers (likely percentages as decimals)
-        if (value > 0 && value < 1) {
-            return value.toFixed(6).replace(/\.?0+$/, '');
-        }
-        
-        // Larger numbers
-        if (value > 1000) {
-            return value.toFixed(1);
-        }
-        
-        // Regular numbers
-        return value.toFixed(2).replace(/\.?0+$/, '');
+        // Send proactive message after a brief delay
+        setTimeout(() => {
+            window.chatManager.sendMessage(proactiveMessage);
+        }, 2000);
     }
 
     /**
@@ -830,6 +764,273 @@ May I proceed with the comprehensive risk analysis?`;
         });
         
         this.updateSessionStatus();
+    }
+
+    /**
+     * Upload TPR file for processing
+     */
+    async uploadTprFile() {
+        console.log('📊 Starting TPR upload...');
+        
+        const tprFileInput = DOMHelpers.getElementById('tpr-file-upload');
+        console.log('🔍 TPR Debug - tprFileInput element:', tprFileInput);
+        console.log('🔍 TPR Debug - tprFileInput exists:', !!tprFileInput);
+        console.log('🔍 TPR Debug - files length:', tprFileInput?.files?.length || 0);
+        
+        if (!tprFileInput || !tprFileInput.files || tprFileInput.files.length === 0) {
+            this.setTprUploadStatus('Please select a TPR file to upload', 'error');
+            return;
+        }
+        
+        const file = tprFileInput.files[0];
+        console.log('🔍 TPR Debug - Selected file:', file);
+        console.log('🔍 TPR Debug - File name:', file.name);
+        console.log('🔍 TPR Debug - File size:', file.size);
+        console.log('🔍 TPR Debug - File type:', file.type);
+        
+        // Validate file type
+        const allowedExtensions = ['.csv', '.xlsx', '.xls'];
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        
+        if (!allowedExtensions.includes(fileExtension)) {
+            this.setTprUploadStatus('Invalid file format. Please upload a CSV or Excel file', 'error');
+            return;
+        }
+        
+        try {
+            this.setTprUploadStatus('Processing TPR data...', 'info');
+            this.disableTprUploadButton(true);
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            console.log('🔍 TPR Debug - FormData created with csv_file key');
+            console.log('🔍 TPR Debug - FormData entries:', [...formData.entries()]);
+            
+            const response = await apiClient.uploadFiles(formData, null);
+            
+            console.log('🔍 TPR Response:', response);
+            
+            // Handle different response statuses
+            if (response.status === 'success') {
+                this.handleTprUploadSuccess(response);
+            } else if (response.status === 'requires_state_selection') {
+                console.log('🗺️ Multiple states detected, handling state selection');
+                this.handleStateSelection(response);
+            } else {
+                this.handleTprUploadError(response.message || 'TPR upload failed');
+            }
+            
+        } catch (error) {
+            console.error('TPR upload error:', error);
+            this.handleTprUploadError(error.message || 'Failed to upload TPR file');
+        } finally {
+            this.disableTprUploadButton(false);
+        }
+    }
+    
+    /**
+     * Handle state selection when multiple states are detected
+     */
+    handleStateSelection(response) {
+        console.log('🗺️ Showing state selection interface');
+        
+        const tprUploadStatus = DOMHelpers.getElementById('tpr-upload-status');
+        if (!tprUploadStatus) return;
+        
+        const availableStates = response.available_states || [];
+        
+        const stateSelectionHTML = `
+            <div class="alert alert-info">
+                <h6><i class="fas fa-map-marked-alt me-2"></i>Multiple States Detected</h6>
+                <p class="mb-3">Your TPR file contains data for ${availableStates.length} states. Please select one state for analysis:</p>
+                <div class="d-grid gap-2">
+                    ${availableStates.map(state => `
+                        <button type="button" class="btn btn-outline-primary state-select-btn" data-state="${state}">
+                            <i class="fas fa-map-marker-alt me-2"></i>${state}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        tprUploadStatus.innerHTML = stateSelectionHTML;
+        
+        // Add event listeners for state selection buttons
+        const stateButtons = tprUploadStatus.querySelectorAll('.state-select-btn');
+        stateButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const selectedState = button.getAttribute('data-state');
+                this.processSelectedState(selectedState);
+            });
+        });
+    }
+    
+    /**
+     * Process the selected state
+     */
+    async processSelectedState(selectedState) {
+        console.log('🗺️ Processing TPR data for state:', selectedState);
+        
+        try {
+            this.setTprUploadStatus(`Processing TPR data for ${selectedState}...`, 'info');
+            
+            // Get the original file again
+            const tprFileInput = DOMHelpers.getElementById('tpr-file-upload');
+            const file = tprFileInput.files[0];
+            
+            // Create FormData with selected state
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            formData.append('selected_state', selectedState);
+            
+            const response = await apiClient.uploadFiles(formData, null);
+            
+            if (response.status === 'success') {
+                this.handleTprUploadSuccess(response, selectedState);
+            } else {
+                this.handleTprUploadError(response.message || 'State processing failed');
+            }
+            
+        } catch (error) {
+            console.error('State processing error:', error);
+            this.handleTprUploadError(error.message || 'Failed to process selected state');
+        }
+    }
+    
+    /**
+     * Handle successful TPR upload
+     */
+    handleTprUploadSuccess(response, selectedState = null) {
+        const stateName = selectedState || response.target_state || 'the selected state';
+        
+        this.setTprUploadStatus(`TPR data processed successfully for ${stateName}!`, 'success');
+        
+        // Update session data
+        SessionDataManager.updateSessionData({
+            csvLoaded: true,
+            shapefileLoaded: true,  // TPR processing includes boundaries
+            tprProcessed: true,
+            selectedState: stateName
+        });
+        
+        this.updateSessionStatus();
+        
+        // Show download options
+        this.showTprDownloadOptions(response);
+        
+        // Add success message to chat
+        this.addChatMessage(() => {
+            window.chatManager.addSystemMessage(`TPR data successfully processed for ${stateName}`);
+            
+            if (response.message) {
+                window.chatManager.addAssistantMessage(response.message);
+            }
+            
+            const convergenceResult = response.convergence_result || {};
+            const enhancedMessage = `🧬 **TPR Data Successfully Processed**
+
+📊 **Summary:**
+• Wards extracted: ${convergenceResult.extracted_wards || response.extracted_wards || 'N/A'}
+• Environmental variables: ${convergenceResult.variables_included || response.variables_included || 'N/A'}
+• State: ${convergenceResult.selected_state || stateName}
+• Shapefile included: ${convergenceResult.has_shapefile ? 'Yes' : 'No'}
+
+Your data is now ready for region-aware malaria risk analysis!`;
+            
+            window.chatManager.addAssistantMessage(enhancedMessage);
+        });
+        
+        // Close modal after delay
+        setTimeout(() => {
+            this.hideUploadModal();
+        }, 3000);
+    }
+    
+    /**
+     * Handle TPR upload error
+     */
+    handleTprUploadError(errorMessage) {
+        this.setTprUploadStatus(`Processing failed: ${errorMessage}`, 'error');
+        console.error('TPR upload error:', errorMessage);
+    }
+    
+    /**
+     * Show download options for processed TPR data
+     */
+    showTprDownloadOptions(response) {
+        const downloadContent = DOMHelpers.getElementById('download-content');
+        if (!downloadContent) return;
+        
+        // Get convergence result information
+        const convergenceResult = response.convergence_result || {};
+        const stateName = convergenceResult.state_name || convergenceResult.selected_state || 'processed state';
+        const wardCount = convergenceResult.extracted_wards || 0;
+        const hasShapefile = convergenceResult.has_shapefile || false;
+        const actualSelectedState = convergenceResult.selected_state || stateName;
+        
+        downloadContent.innerHTML = `
+            <div class="mt-3">
+                <h6><i class="fas fa-download me-2"></i>Download Your Convergence Data:</h6>
+                <p class="text-muted small">Ready for main workflow: ${wardCount} wards from ${actualSelectedState}</p>
+                <div class="d-grid gap-2">
+                    <a href="/api/download/convergence-csv/${stateName}" class="btn btn-success btn-sm">
+                        <i class="fas fa-table me-2"></i>Download ${stateName}_plus.csv
+                    </a>
+                    <a href="/api/download/convergence-shapefile/${stateName}" class="btn btn-info btn-sm">
+                        <i class="fas fa-map me-2"></i>Download ${stateName}_state.zip
+                    </a>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        These files are ready for the main ChatMRPT analysis workflow.
+                    </small>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Set TPR upload status
+     */
+    setTprUploadStatus(message, type = 'info') {
+        const statusElement = DOMHelpers.getElementById('tpr-upload-status');
+        if (!statusElement) return;
+        
+        const iconMap = {
+            'info': 'fas fa-info-circle text-info',
+            'success': 'fas fa-check-circle text-success', 
+            'error': 'fas fa-exclamation-circle text-danger',
+            'pending': 'fas fa-spinner fa-spin text-primary'
+        };
+        
+        const alertClass = {
+            'info': 'alert-info',
+            'success': 'alert-success',
+            'error': 'alert-danger', 
+            'pending': 'alert-primary'
+        };
+        
+        statusElement.innerHTML = `
+            <div class="alert ${alertClass[type]} mb-0">
+                <i class="${iconMap[type]} me-2"></i>${message}
+            </div>
+        `;
+    }
+    
+    /**
+     * Disable/enable TPR upload button
+     */
+    disableTprUploadButton(disabled) {
+        if (this.uploadTprBtn) {
+            this.uploadTprBtn.disabled = disabled;
+            if (disabled) {
+                this.uploadTprBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+            } else {
+                this.uploadTprBtn.innerHTML = '<i class="fas fa-magic me-2"></i>Process TPR Data';
+            }
+        }
     }
 }
 
