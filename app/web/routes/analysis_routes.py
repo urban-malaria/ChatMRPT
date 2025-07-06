@@ -10,6 +10,8 @@ This module contains the analysis-related routes for the ChatMRPT web applicatio
 """
 
 import logging
+import time
+import traceback
 from datetime import datetime
 from flask import Blueprint, session, request, current_app, jsonify
 
@@ -210,6 +212,42 @@ def send_message():
         # Get session ID
         session_id = session.get('session_id')
         
+        # 🎯 COMPREHENSIVE RESPONSE TIME TRACKING - CRITICAL FOR DEMO ANALYTICS
+        request_start_time = time.time()
+        message_start_time = time.time()
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            
+            # Log incoming user message with metadata
+            interaction_logger.log_message(
+                session_id=session_id,
+                sender='user',
+                content=user_message,
+                intent=None,  # Will be filled after request interpretation
+                entities={
+                    'message_length': len(user_message),
+                    'timestamp': message_start_time,
+                    'session_message_count': session.get('message_count', 0) + 1,
+                    'request_endpoint': '/send_message'
+                }
+            )
+            
+            # Track user journey milestone
+            interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='user_interaction',
+                details={
+                    'action': 'message_sent',
+                    'message_type': 'chat_request',
+                    'session_duration': time.time() - session.get('session_start_time', time.time()),
+                    'is_follow_up': session.get('message_count', 0) > 0
+                },
+                success=True
+            )
+            
+            # Update session message counter
+            session['message_count'] = session.get('message_count', 0) + 1
+        
         # Get Request Interpreter service
         try:
             request_interpreter = current_app.services.request_interpreter
@@ -228,7 +266,75 @@ def send_message():
         
         # Process message with Request Interpreter
         logger.info(f"Processing message with Request Interpreter: '{user_message[:100]}...'")
+        processing_start_time = time.time()
         response = request_interpreter.process_message(user_message, session_id)
+        processing_duration = time.time() - processing_start_time
+        
+        # 🎯 LOG AI RESPONSE - CRITICAL FOR DEMO ANALYTICS
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            
+            # Calculate comprehensive response timing
+            total_response_time = time.time() - request_start_time
+            overhead_time = total_response_time - processing_duration
+            
+            # Log AI response with comprehensive timing metadata
+            ai_response_content = response.get('response', 'Request processed successfully')
+            interaction_logger.log_message(
+                session_id=session_id,
+                sender='assistant',
+                content=ai_response_content,
+                intent=response.get('intent_type'),
+                entities={
+                    'response_length': len(ai_response_content),
+                    'processing_time_seconds': processing_duration,
+                    'total_response_time_seconds': total_response_time,
+                    'overhead_time_seconds': overhead_time,
+                    'response_efficiency': round(processing_duration / total_response_time * 100, 1) if total_response_time > 0 else 100,
+                    'tools_used': response.get('tools_used', []),
+                    'tools_count': len(response.get('tools_used', [])),
+                    'visualizations_created': len(response.get('visualizations', [])),
+                    'status': response.get('status', 'success'),
+                    'timestamp': time.time(),
+                    'performance_category': 'fast' if total_response_time < 5 else 'medium' if total_response_time < 15 else 'slow'
+                }
+            )
+            
+            # Log comprehensive response timing for demo analytics
+            interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='response_timing',
+                details={
+                    'total_response_time_seconds': total_response_time,
+                    'processing_time_seconds': processing_duration,
+                    'overhead_time_seconds': overhead_time,
+                    'response_efficiency_percent': round(processing_duration / total_response_time * 100, 1) if total_response_time > 0 else 100,
+                    'performance_category': 'fast' if total_response_time < 5 else 'medium' if total_response_time < 15 else 'slow',
+                    'message_length': len(user_message),
+                    'response_length': len(ai_response_content),
+                    'complexity_score': len(response.get('tools_used', [])) * 2 + len(response.get('visualizations', [])),
+                    'endpoint': '/send_message'
+                },
+                success=True
+            )
+            
+            # Log tools usage for analytics
+            tools_used = response.get('tools_used', [])
+            if tools_used:
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='tools_execution',
+                    details={
+                        'tools_used': tools_used,
+                        'execution_time_seconds': processing_duration,
+                        'total_response_time_seconds': total_response_time,
+                        'request_type': response.get('intent_type', 'unknown'),
+                        'success_rate': 1.0 if response.get('status') == 'success' else 0.0,
+                        'user_message_trigger': user_message[:100] + '...' if len(user_message) > 100 else user_message,
+                        'performance_impact': round((processing_duration / total_response_time) * 100, 1) if total_response_time > 0 else 0
+                    },
+                    success=response.get('status') == 'success'
+                )
         
         # Format response for frontend
         formatted_response = {
@@ -240,7 +346,9 @@ def send_message():
             'data_summary': response.get('data_summary'),
             'tools_used': response.get('tools_used', []),
             'intent_type': response.get('intent_type'),
-            'processing_time': 'success'
+            'processing_time': f"{processing_duration:.2f}s",
+            'total_response_time': f"{total_response_time:.2f}s",
+            'response_efficiency': f"{round(processing_duration / total_response_time * 100, 1) if total_response_time > 0 else 100}%"
         }
         
         # Update session state based on tools used
@@ -268,11 +376,49 @@ def send_message():
         return jsonify(formatted_response)
     
     except ValidationError as e:
+        # 🎯 LOG VALIDATION ERRORS - DEMO INSIGHTS
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            interaction_logger.log_error(
+                session_id=session.get('session_id'),
+                error_type='ValidationError',
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+        
         return jsonify({
             'status': 'error',
             'message': str(e)
         }), 400
     except Exception as e:
+        # 🎯 LOG SYSTEM ERRORS - CRITICAL FOR DEMO MONITORING
+        session_id = session.get('session_id')
+        error_details = {
+            'error_type': type(e).__name__,
+            'error_message': str(e),
+            'endpoint': '/send_message',
+            'user_message': locals().get('user_message', 'Unknown')[:100],
+            'processing_stage': 'request_interpreter_processing',
+            'timestamp': time.time()
+        }
+        
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            interaction_logger.log_error(
+                session_id=session_id,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+            
+            # Log error as analysis event for demo monitoring
+            interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='system_error',
+                details=error_details,
+                success=False
+            )
+        
         logger.error(f"Error processing message with Request Interpreter: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',

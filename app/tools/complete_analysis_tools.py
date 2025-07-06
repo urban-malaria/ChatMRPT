@@ -6,8 +6,11 @@ settlement integration, as per the updated post-permission workflow overhaul.
 """
 
 import logging
+import time
+import traceback
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
+from flask import current_app
 
 from .base import BaseTool, ToolCategory, ToolExecutionResult, DataAnalysisTool
 
@@ -57,8 +60,35 @@ class RunCompleteAnalysis(DataAnalysisTool):
     
     def _execute(self, **kwargs) -> ToolExecutionResult:
         """Execute complete dual-method analysis workflow with custom variable support"""
+        session_id = kwargs.get('session_id')
+        tool_start_time = time.time()
+        
+        # 🎯 LOG TOOL EXECUTION START - CRITICAL FOR DEMO ANALYTICS
+        interaction_logger = None
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            
+            # Log tool execution start with comprehensive parameters
+            interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='tool_execution_start',
+                details={
+                    'tool_name': self.name,
+                    'tool_description': self.description,
+                    'parameters': {
+                        'composite_variables': kwargs.get('composite_variables'),
+                        'pca_variables': kwargs.get('pca_variables'),
+                        'include_visualizations': kwargs.get('include_visualizations', True),
+                        'create_unified_dataset': kwargs.get('create_unified_dataset', True),
+                        'validate_variables': kwargs.get('validate_variables', True)
+                    },
+                    'start_timestamp': tool_start_time,
+                    'execution_method': 'parallel_dual_method'
+                },
+                success=True
+            )
+        
         try:
-            session_id = kwargs.get('session_id')
             composite_variables = kwargs.get('composite_variables')
             pca_variables = kwargs.get('pca_variables')
             include_visualizations = kwargs.get('include_visualizations', True)
@@ -90,11 +120,24 @@ class RunCompleteAnalysis(DataAnalysisTool):
                     final_composite_vars = None
                     final_pca_vars = None
             
+            # 🎯 LOG VARIABLE VALIDATION - DEMO ANALYTICS
+            if interaction_logger:
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='variable_validation',
+                    details={
+                        'original_composite_variables': composite_variables,
+                        'original_pca_variables': pca_variables,
+                        'validation_enabled': validate_variables,
+                        'validation_message': validation_message
+                    },
+                    success=True
+                )
+            
             # Run both analyses simultaneously using threading
             import threading
-            import time
             
-            start_time = time.time()
+            analysis_start_time = time.time()
             
             # Results containers
             composite_result = {'success': False}
@@ -132,11 +175,36 @@ class RunCompleteAnalysis(DataAnalysisTool):
             composite_thread.join()
             pca_thread.join()
             
-            execution_time = time.time() - start_time
-            logger.info(f"🔄 Both analyses completed in {execution_time:.2f} seconds")
+            analysis_execution_time = time.time() - analysis_start_time
+            logger.info(f"🔄 Both analyses completed in {analysis_execution_time:.2f} seconds")
+            
+            # 🎯 LOG ANALYSIS COMPLETION - CRITICAL FOR DEMO ANALYTICS
+            if interaction_logger:
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='parallel_analysis_complete',
+                    details={
+                        'composite_success': composite_result['success'],
+                        'pca_success': pca_result['success'],
+                        'analysis_time_seconds': analysis_execution_time,
+                        'composite_error': composite_result.get('error_details') if not composite_result['success'] else None,
+                        'pca_error': pca_result.get('error_details') if not pca_result['success'] else None,
+                        'execution_method': 'parallel_threading'
+                    },
+                    success=composite_result['success'] and pca_result['success']
+                )
             
             # Check if either analysis failed
             if not composite_result['success']:
+                # 🎯 LOG COMPOSITE ANALYSIS FAILURE - DEMO ERROR TRACKING
+                if interaction_logger:
+                    interaction_logger.log_error(
+                        session_id=session_id,
+                        error_type='CompositeAnalysisFailure',
+                        error_message=composite_result['message'],
+                        stack_trace=composite_result.get('error_details', 'No stack trace available')
+                    )
+                
                 return ToolExecutionResult(
                     success=False,
                     message=f"Composite analysis failed: {composite_result['message']}",
@@ -144,6 +212,15 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 )
             
             if not pca_result['success']:
+                # 🎯 LOG PCA ANALYSIS FAILURE - DEMO ERROR TRACKING
+                if interaction_logger:
+                    interaction_logger.log_error(
+                        session_id=session_id,
+                        error_type='PCAAnalysisFailure',
+                        error_message=pca_result['message'],
+                        stack_trace=pca_result.get('error_details', 'No stack trace available')
+                    )
+                
                 return ToolExecutionResult(
                     success=False,
                     message=f"PCA analysis failed: {pca_result['message']}",
@@ -184,7 +261,7 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 'comparison_summary': comparison_summary,
                 'analyses_completed': ['composite_score', 'pca'],
                 'unified_dataset_created': create_unified_dataset and unified_result.get('success', False),
-                'execution_time_seconds': execution_time,
+                'execution_time_seconds': analysis_execution_time,
                 'execution_method': 'parallel',
                 'settlement_integration_logic': 'excluded',
                 'original_settlement_data': 'preserved'
@@ -204,8 +281,37 @@ class RunCompleteAnalysis(DataAnalysisTool):
             
             # Generate comprehensive user-friendly summary
             success_message = self._generate_comprehensive_summary(
-                composite_result, pca_result, comparison_summary, execution_time, session_id
+                composite_result, pca_result, comparison_summary, analysis_execution_time, session_id
             )
+            
+            total_execution_time = time.time() - tool_start_time
+            
+            # 🎯 LOG TOOL EXECUTION SUCCESS - CRITICAL FOR DEMO ANALYTICS
+            if interaction_logger:
+                # Log successful tool completion with comprehensive metrics
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='tool_execution_complete',
+                    details={
+                        'tool_name': self.name,
+                        'total_execution_time_seconds': total_execution_time,
+                        'analysis_time_seconds': analysis_execution_time,
+                        'overhead_time_seconds': total_execution_time - analysis_execution_time,
+                        'wards_analyzed': composite_result.get('data', {}).get('wards_analyzed', 'N/A'),
+                        'visualizations_created': len(result_data.get('visualizations', {})),
+                        'unified_dataset_created': result_data['unified_dataset_created'],
+                        'methods_completed': ['composite_score', 'pca'],
+                        'variable_selection_methods': {
+                            'composite': composite_result.get('data', {}).get('variable_selection_method', 'auto'),
+                            'pca': pca_result.get('data', {}).get('variable_selection_method', 'auto')
+                        },
+                        'performance_metrics': {
+                            'parallel_execution': True,
+                            'threading_efficiency': round(analysis_execution_time / total_execution_time * 100, 1)
+                        }
+                    },
+                    success=True
+                )
             
             return ToolExecutionResult(
                 success=True,
@@ -214,7 +320,8 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 metadata={
                     'analyses_run': ['composite_score', 'pca'],
                     'execution_method': 'parallel',
-                    'execution_time_seconds': execution_time,
+                    'execution_time_seconds': analysis_execution_time,
+                    'total_execution_time_seconds': total_execution_time,
                     'unified_dataset_status': 'created' if result_data['unified_dataset_created'] else 'failed',
                     'settlement_integration_logic': 'excluded',
                     'original_settlement_data': 'preserved',
@@ -225,6 +332,36 @@ class RunCompleteAnalysis(DataAnalysisTool):
             )
             
         except Exception as e:
+            total_execution_time = time.time() - tool_start_time
+            
+            # 🎯 LOG TOOL EXECUTION FAILURE - CRITICAL FOR DEMO ERROR TRACKING
+            if interaction_logger:
+                interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type=f'ToolExecutionError:{type(e).__name__}',
+                    error_message=str(e),
+                    stack_trace=traceback.format_exc()
+                )
+                
+                # Log detailed failure analysis event
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='tool_execution_failed',
+                    details={
+                        'tool_name': self.name,
+                        'failure_time_seconds': total_execution_time,
+                        'error_type': type(e).__name__,
+                        'error_message': str(e),
+                        'failure_stage': 'tool_execution',
+                        'parameters': {
+                            'composite_variables': kwargs.get('composite_variables'),
+                            'pca_variables': kwargs.get('pca_variables'),
+                            'validate_variables': kwargs.get('validate_variables', True)
+                        }
+                    },
+                    success=False
+                )
+            
             logger.error(f"Complete analysis failed: {e}", exc_info=True)
             return ToolExecutionResult(
                 success=False,
@@ -234,6 +371,22 @@ class RunCompleteAnalysis(DataAnalysisTool):
     
     def _run_composite_analysis(self, session_id: str, custom_variables: Optional[List[str]] = None) -> Dict[str, Any]:
         """Run composite score analysis with optional custom variable selection"""
+        composite_start_time = time.time()
+        
+        # 🎯 LOG COMPOSITE ANALYSIS START - DEMO ANALYTICS
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='composite_analysis_start',
+                details={
+                    'custom_variables': custom_variables,
+                    'variable_count': len(custom_variables) if custom_variables else 0,
+                    'selection_method': 'user_specified' if custom_variables else 'region_aware_auto'
+                },
+                success=True
+            )
+        
         try:
             from ..analysis.engine import AnalysisEngine
             from ..data import DataHandler
@@ -256,6 +409,24 @@ class RunCompleteAnalysis(DataAnalysisTool):
             else:
                 result_data['variable_selection_method'] = 'region_aware_auto'
             
+            composite_execution_time = time.time() - composite_start_time
+            
+            # 🎯 LOG COMPOSITE ANALYSIS SUCCESS - DEMO ANALYTICS
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                interaction_logger = current_app.services.interaction_logger
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='composite_analysis_complete',
+                    details={
+                        'execution_time_seconds': composite_execution_time,
+                        'wards_analyzed': result_data.get('wards_analyzed', 'N/A'),
+                        'variables_used': result_data.get('variables_used', []),
+                        'selection_method': result_data.get('variable_selection_method'),
+                        'visualizations_created': len(result_data.get('visualizations', {}))
+                    },
+                    success=result.get('status') == 'success'
+                )
+            
             return {
                 'success': result.get('status') == 'success',
                 'message': result.get('message', 'Composite analysis completed'),
@@ -264,6 +435,30 @@ class RunCompleteAnalysis(DataAnalysisTool):
             }
             
         except Exception as e:
+            composite_execution_time = time.time() - composite_start_time
+            
+            # 🎯 LOG COMPOSITE ANALYSIS FAILURE - DEMO ERROR TRACKING
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                interaction_logger = current_app.services.interaction_logger
+                interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type=f'CompositeAnalysisError:{type(e).__name__}',
+                    error_message=str(e),
+                    stack_trace=traceback.format_exc()
+                )
+                
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='composite_analysis_failed',
+                    details={
+                        'execution_time_seconds': composite_execution_time,
+                        'error_type': type(e).__name__,
+                        'custom_variables': custom_variables,
+                        'failure_stage': 'composite_analysis'
+                    },
+                    success=False
+                )
+            
             logger.error(f"Composite analysis error: {e}")
             return {
                 'success': False,
@@ -273,6 +468,22 @@ class RunCompleteAnalysis(DataAnalysisTool):
     
     def _run_pca_analysis(self, session_id: str, custom_variables: Optional[List[str]] = None) -> Dict[str, Any]:
         """Run PCA analysis with optional custom variable selection"""
+        pca_start_time = time.time()
+        
+        # 🎯 LOG PCA ANALYSIS START - DEMO ANALYTICS
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            interaction_logger = current_app.services.interaction_logger
+            interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='pca_analysis_start',
+                details={
+                    'custom_variables': custom_variables,
+                    'variable_count': len(custom_variables) if custom_variables else 0,
+                    'selection_method': 'user_specified' if custom_variables else 'region_aware_auto'
+                },
+                success=True
+            )
+        
         try:
             from ..analysis.pca_pipeline import run_independent_pca_analysis
             from ..data import DataHandler
@@ -298,6 +509,25 @@ class RunCompleteAnalysis(DataAnalysisTool):
             else:
                 result_data['variable_selection_method'] = 'region_aware_auto'
             
+            pca_execution_time = time.time() - pca_start_time
+            
+            # 🎯 LOG PCA ANALYSIS SUCCESS - DEMO ANALYTICS
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                interaction_logger = current_app.services.interaction_logger
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='pca_analysis_complete',
+                    details={
+                        'execution_time_seconds': pca_execution_time,
+                        'components_found': result_data.get('components_found', 'N/A'),
+                        'variance_explained': result_data.get('variance_explained', 'N/A'),
+                        'variables_used': result_data.get('variables_used', []),
+                        'selection_method': result_data.get('variable_selection_method'),
+                        'visualizations_created': len(result_data.get('visualizations', {}))
+                    },
+                    success=result.get('status') == 'success'
+                )
+            
             return {
                 'success': result.get('status') == 'success',
                 'message': result.get('message', 'PCA analysis completed'),
@@ -306,6 +536,30 @@ class RunCompleteAnalysis(DataAnalysisTool):
             }
             
         except Exception as e:
+            pca_execution_time = time.time() - pca_start_time
+            
+            # 🎯 LOG PCA ANALYSIS FAILURE - DEMO ERROR TRACKING
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                interaction_logger = current_app.services.interaction_logger
+                interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type=f'PCAAnalysisError:{type(e).__name__}',
+                    error_message=str(e),
+                    stack_trace=traceback.format_exc()
+                )
+                
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='pca_analysis_failed',
+                    details={
+                        'execution_time_seconds': pca_execution_time,
+                        'error_type': type(e).__name__,
+                        'custom_variables': custom_variables,
+                        'failure_stage': 'pca_analysis'
+                    },
+                    success=False
+                )
+            
             logger.error(f"PCA analysis error: {e}")
             return {
                 'success': False,

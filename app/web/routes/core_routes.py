@@ -12,6 +12,8 @@ This module contains the core routes for the ChatMRPT web application:
 import os
 import uuid
 import logging
+import time
+import traceback
 from flask import Blueprint, render_template, session, request, current_app, jsonify
 from datetime import datetime
 
@@ -27,8 +29,11 @@ core_bp = Blueprint('core', __name__)
 
 @core_bp.before_request
 def log_session_activity():
-    """Log session activity for non-static requests."""
+    """Log session activity and start response timing for non-static requests."""
     if request.endpoint and not request.endpoint.startswith('static'):
+        # 🎯 START RESPONSE TIME TRACKING - CRITICAL FOR DEMO ANALYTICS
+        request.start_time = time.time()
+        
         session_id = session.get('session_id')
         if session_id and hasattr(current_app, 'services'):
             # Get browser and IP info
@@ -42,6 +47,64 @@ def log_session_activity():
                     interaction_logger.log_session_start(session_id, browser_info, ip_address)
                 except Exception as e:
                     logger.warning(f"Failed to log session activity: {e}")
+                    
+                    # 🎯 LOG SESSION ACTIVITY ERRORS - DEMO MONITORING
+                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                        current_app.services.interaction_logger.log_error(
+                            session_id=session_id,
+                            error_type=f'SessionActivityError:{type(e).__name__}',
+                            error_message=str(e),
+                            stack_trace=traceback.format_exc()
+                        )
+
+
+@core_bp.after_request
+def log_response_timing(response):
+    """Log comprehensive response timing for demo analytics."""
+    if hasattr(request, 'start_time') and request.endpoint and not request.endpoint.startswith('static'):
+        response_time = time.time() - request.start_time
+        session_id = session.get('session_id')
+        
+        # 🎯 LOG RESPONSE TIMING - CRITICAL FOR DEMO ANALYTICS
+        if (hasattr(current_app, 'services') and current_app.services.interaction_logger and 
+            response_time > 0.05):  # Only log requests > 50ms to avoid noise
+            
+            interaction_logger = current_app.services.interaction_logger
+            
+            try:
+                # Categorize performance
+                if response_time < 0.5:
+                    performance_category = 'excellent'
+                elif response_time < 2.0:
+                    performance_category = 'good'
+                elif response_time < 5.0:
+                    performance_category = 'acceptable'
+                else:
+                    performance_category = 'slow'
+                
+                # Log comprehensive timing event
+                interaction_logger.log_analysis_event(
+                    session_id=session_id,
+                    event_type='endpoint_response_timing',
+                    details={
+                        'endpoint': request.endpoint,
+                        'method': request.method,
+                        'response_time_seconds': response_time,
+                        'response_time_ms': round(response_time * 1000, 1),
+                        'status_code': response.status_code,
+                        'performance_category': performance_category,
+                        'url_path': request.path,
+                        'is_success': response.status_code < 400,
+                        'content_length': response.content_length or 0,
+                        'timestamp': time.time()
+                    },
+                    success=response.status_code < 400
+                )
+                
+            except Exception as e:
+                logger.warning(f"Failed to log response timing: {e}")
+    
+    return response
 
 
 @core_bp.route('/')
@@ -82,6 +145,15 @@ def index():
                     )
                 except Exception as e:
                     logger.warning(f"Failed to log new session: {e}")
+                    
+                    # 🎯 LOG NEW SESSION ERRORS - DEMO MONITORING
+                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                        current_app.services.interaction_logger.log_error(
+                            session_id=session['session_id'],
+                            error_type=f'NewSessionError:{type(e).__name__}',
+                            error_message=str(e),
+                            stack_trace=traceback.format_exc()
+                        )
     
     # Preload knowledge tools in background for fast user interaction
     if hasattr(current_app, 'services'):
@@ -101,6 +173,15 @@ def index():
             threading.Thread(target=background_load_knowledge_tools, daemon=True).start()
         except Exception as e:
             logger.warning(f"Failed to start background knowledge tools loading: {e}")
+            
+            # 🎯 LOG BACKGROUND LOADING ERRORS - DEMO MONITORING
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                current_app.services.interaction_logger.log_error(
+                    session_id=session.get('session_id'),
+                    error_type=f'BackgroundLoadingError:{type(e).__name__}',
+                    error_message=str(e),
+                    stack_trace=traceback.format_exc()
+                )
     
     # Check for UI preference
     use_tailwind = request.args.get('use_tailwind', 'false').lower() == 'true'
@@ -157,6 +238,15 @@ def session_info():
         except Exception as e:
             logger.error(f"Error getting available variables: {e}")
             info['available_variables'] = []
+            
+            # 🎯 LOG VARIABLE RETRIEVAL ERRORS - DEMO MONITORING
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                current_app.services.interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type=f'VariableRetrievalError:{type(e).__name__}',
+                    error_message=str(e),
+                    stack_trace=traceback.format_exc()
+                )
     
     # Make sure the response is JSON serializable
     info = convert_to_json_serializable(info)
@@ -203,6 +293,15 @@ def clear_session():
                 data_service.clear_session_data(session_id)
             except Exception as e:
                 logger.warning(f"Error clearing data service session: {e}")
+                
+                # 🎯 LOG SESSION CLEARING ERRORS - DEMO MONITORING
+                if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                    current_app.services.interaction_logger.log_error(
+                        session_id=session_id,
+                        error_type=f'SessionClearingError:{type(e).__name__}',
+                        error_message=str(e),
+                        stack_trace=traceback.format_exc()
+                    )
         
         # Log session clearing
         if hasattr(current_app, 'services'):
@@ -212,6 +311,15 @@ def clear_session():
                     interaction_logger.log_message(session_id, 'system', 'Session cleared')
                 except Exception as e:
                     logger.warning(f"Failed to log session clearing: {e}")
+                    
+                    # 🎯 LOG SESSION CLEARING LOG ERRORS - DEMO MONITORING
+                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                        current_app.services.interaction_logger.log_error(
+                            session_id=session_id,
+                            error_type=f'SessionClearingLogError:{type(e).__name__}',
+                            error_message=str(e),
+                            stack_trace=traceback.format_exc()
+                        )
         
         logger.info(f"Session {session_id} cleared successfully")
         
@@ -222,6 +330,29 @@ def clear_session():
         
     except Exception as e:
         logger.error(f"Error clearing session {session_id}: {str(e)}", exc_info=True)
+        
+        # 🎯 LOG SESSION CLEARING CRITICAL ERRORS - DEMO MONITORING
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            current_app.services.interaction_logger.log_error(
+                session_id=session_id,
+                error_type=f'CriticalSessionClearingError:{type(e).__name__}',
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+            
+            # Log as analysis event for demo monitoring
+            current_app.services.interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='session_clearing_failed',
+                details={
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'endpoint': '/clear_session',
+                    'severity': 'critical'
+                },
+                success=False
+            )
+        
         return jsonify({
             'status': 'error',
             'message': f'Error clearing session: {str(e)}'
@@ -260,6 +391,15 @@ def app_status():
                     status_info['services']['data_service'] = 'available'
                 except Exception as e:
                     status_info['services']['data_service'] = f'error: {str(e)}'
+                    
+                    # 🎯 LOG DATA SERVICE HEALTH CHECK ERRORS - DEMO MONITORING
+                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                        current_app.services.interaction_logger.log_error(
+                            session_id=session.get('session_id'),
+                            error_type=f'DataServiceHealthCheckError:{type(e).__name__}',
+                            error_message=str(e),
+                            stack_trace=traceback.format_exc()
+                        )
             else:
                 status_info['services']['data_service'] = 'not_configured'
             
@@ -270,6 +410,9 @@ def app_status():
                     status_info['services']['interaction_logger'] = 'available'
                 except Exception as e:
                     status_info['services']['interaction_logger'] = f'error: {str(e)}'
+                    
+                    # 🎯 LOG INTERACTION LOGGER HEALTH CHECK ERRORS - DEMO MONITORING
+                    logger.warning(f"Interaction logger health check failed: {e}")
             else:
                 status_info['services']['interaction_logger'] = 'not_configured'
             
@@ -286,6 +429,15 @@ def app_status():
                     status_info['services']['conversational_epidemiologist'] = 'available'
                 except Exception as e:
                     status_info['services']['conversational_epidemiologist'] = f'error: {str(e)}'
+                    
+                    # 🎯 LOG CONVERSATIONAL EPIDEMIOLOGIST HEALTH CHECK ERRORS - DEMO MONITORING
+                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                        current_app.services.interaction_logger.log_error(
+                            session_id=session.get('session_id'),
+                            error_type=f'ConversationalEpidemiologistHealthCheckError:{type(e).__name__}',
+                            error_message=str(e),
+                            stack_trace=traceback.format_exc()
+                        )
             else:
                 status_info['services']['conversational_epidemiologist'] = 'not_configured'
         
@@ -306,6 +458,15 @@ def app_status():
             status_info['system']['note'] = 'System monitoring not available'
         except Exception as e:
             status_info['system']['error'] = str(e)
+            
+            # 🎯 LOG SYSTEM MONITORING ERRORS - DEMO MONITORING
+            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                current_app.services.interaction_logger.log_error(
+                    session_id=session.get('session_id'),
+                    error_type=f'SystemMonitoringError:{type(e).__name__}',
+                    error_message=str(e),
+                    stack_trace=traceback.format_exc()
+                )
         
         # Check overall health
         service_errors = [v for v in status_info['services'].values() if isinstance(v, str) and v.startswith('error:')]
@@ -317,6 +478,29 @@ def app_status():
         
     except Exception as e:
         logger.error(f"Error getting app status: {str(e)}", exc_info=True)
+        
+        # 🎯 LOG APP STATUS CRITICAL ERRORS - DEMO MONITORING
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            current_app.services.interaction_logger.log_error(
+                session_id=session.get('session_id'),
+                error_type=f'CriticalAppStatusError:{type(e).__name__}',
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+            
+            # Log as analysis event for demo monitoring
+            current_app.services.interaction_logger.log_analysis_event(
+                session_id=session.get('session_id'),
+                event_type='app_status_failed',
+                details={
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'endpoint': '/app_status',
+                    'severity': 'critical'
+                },
+                success=False
+            )
+        
         return jsonify({
             'status': 'error',
             'message': f'Error getting status: {str(e)}',
@@ -374,6 +558,15 @@ def reload_session_data():
                     session['available_variables'] = available_variables
                 except Exception as e:
                     logger.warning(f"Could not reload available variables: {e}")
+                    
+                    # 🎯 LOG VARIABLE RELOAD ERRORS - DEMO MONITORING
+                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+                        current_app.services.interaction_logger.log_error(
+                            session_id=session_id,
+                            error_type=f'VariableReloadError:{type(e).__name__}',
+                            error_message=str(e),
+                            stack_trace=traceback.format_exc()
+                        )
             
             logger.info(f"Session {session_id} data reloaded successfully")
             
@@ -396,6 +589,29 @@ def reload_session_data():
             
     except Exception as e:
         logger.error(f"Error reloading session data for {session_id}: {str(e)}", exc_info=True)
+        
+        # 🎯 LOG SESSION RELOAD CRITICAL ERRORS - DEMO MONITORING
+        if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+            current_app.services.interaction_logger.log_error(
+                session_id=session_id,
+                error_type=f'CriticalSessionReloadError:{type(e).__name__}',
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+            
+            # Log as analysis event for demo monitoring
+            current_app.services.interaction_logger.log_analysis_event(
+                session_id=session_id,
+                event_type='session_reload_failed',
+                details={
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'endpoint': '/reload_session_data',
+                    'severity': 'critical'
+                },
+                success=False
+            )
+        
         return jsonify({
             'status': 'error',
             'message': f'Error reloading session data: {str(e)}'

@@ -12,6 +12,8 @@ This module contains the file upload routes for the ChatMRPT web application:
 import os
 import uuid
 import logging
+import time
+import traceback
 from flask import Blueprint, session, request, current_app, jsonify
 from werkzeug.utils import secure_filename
 
@@ -349,11 +351,73 @@ def handle_full_dataset_path(session_id: str, csv_file, shapefile, upload_summar
     Level 4A: Store Raw Data (raw_data.csv, shapefile.zip, NO cleaning yet)
     Level 5A: Generate Dynamic Summary
     """
+    upload_start_time = time.time()
+    
     # Create session folder for file storage
     session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
     os.makedirs(session_folder, exist_ok=True)
     
     logger.info(f"📁 Starting Full Dataset Path for session {session_id}")
+    
+    # 🎯 LOG FILE UPLOAD START - CRITICAL FOR DEMO ANALYTICS
+    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+        interaction_logger = current_app.services.interaction_logger
+        
+        # Log CSV file upload
+        if csv_file:
+            csv_size = csv_file.content_length if csv_file.content_length else 0
+            # If content_length not available, read and reset
+            if csv_size == 0:
+                csv_content = csv_file.read()
+                csv_size = len(csv_content)
+                csv_file.seek(0)  # Reset file pointer
+            
+            interaction_logger.log_file_upload(
+                session_id=session_id,
+                file_type='csv',
+                file_name=csv_file.filename,
+                file_size=csv_size,
+                metadata={
+                    'upload_type': 'csv_shapefile',
+                    'upload_path': 'full_dataset',
+                    'storage_path': 'raw_data.csv',
+                    'start_timestamp': upload_start_time
+                }
+            )
+        
+        # Log shapefile upload
+        if shapefile:
+            shapefile_size = shapefile.content_length if shapefile.content_length else 0
+            if shapefile_size == 0:
+                shapefile_content = shapefile.read()
+                shapefile_size = len(shapefile_content)
+                shapefile.seek(0)  # Reset file pointer
+            
+            interaction_logger.log_file_upload(
+                session_id=session_id,
+                file_type='shapefile',
+                file_name=shapefile.filename,
+                file_size=shapefile_size,
+                metadata={
+                    'upload_type': 'csv_shapefile',
+                    'upload_path': 'full_dataset',
+                    'storage_path': 'raw_shapefile.zip',
+                    'start_timestamp': upload_start_time
+                }
+            )
+        
+        # Log upload milestone
+        interaction_logger.log_analysis_event(
+            session_id=session_id,
+            event_type='user_journey',
+            details={
+                'milestone': 'file_upload_started',
+                'upload_type': 'csv_shapefile',
+                'files_count': 2,
+                'total_size_bytes': (csv_size if csv_file else 0) + (shapefile_size if shapefile else 0)
+            },
+            success=True
+        )
     
     # Level 4A: Store Raw Data (Following Diagram - NO cleaning yet)
     raw_storage_result = store_raw_data_files(session_folder, csv_file, shapefile)
@@ -363,6 +427,39 @@ def handle_full_dataset_path(session_id: str, csv_file, shapefile, upload_summar
     
     # Level 5A: Generate Dynamic Summary (Following Diagram)
     summary_result = generate_dynamic_data_summary(session_id, session_folder, 'csv_shapefile')
+    
+    # 🎯 LOG UPLOAD COMPLETION - CRITICAL FOR DEMO ANALYTICS
+    upload_duration = time.time() - upload_start_time
+    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
+        interaction_logger = current_app.services.interaction_logger
+        
+        # Log upload completion
+        interaction_logger.log_analysis_event(
+            session_id=session_id,
+            event_type='file_upload_completed',
+            details={
+                'upload_type': 'csv_shapefile',
+                'files_stored': raw_storage_result.get('files_stored', 0),
+                'upload_duration_seconds': upload_duration,
+                'storage_success': raw_storage_result['status'] == 'success',
+                'summary_generated': summary_result['status'] == 'success' if summary_result else False,
+                'next_milestone': 'analysis_permission'
+            },
+            success=True
+        )
+        
+        # Log user journey milestone
+        interaction_logger.log_analysis_event(
+            session_id=session_id,
+            event_type='user_journey',
+            details={
+                'milestone': 'file_upload_completed',
+                'time_to_complete': upload_duration,
+                'workflow_stage': 'data_preparation',
+                'success_indicators': ['files_stored', 'summary_generated']
+            },
+            success=True
+        )
     
     # Set session flags for next steps
     session['upload_type'] = 'csv_shapefile'
@@ -378,7 +475,8 @@ def handle_full_dataset_path(session_id: str, csv_file, shapefile, upload_summar
         'raw_storage': raw_storage_result,
         'data_summary': summary_result,
         'message': f"Full dataset uploaded successfully. {raw_storage_result['files_stored']} files stored as raw data.",
-        'next_step': 'Data summary will be presented for your review and permission.'
+        'next_step': 'Data summary will be presented for your review and permission.',
+        'upload_duration': f"{upload_duration:.2f}s"
     })
 
 
