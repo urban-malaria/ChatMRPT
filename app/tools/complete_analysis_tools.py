@@ -6,7 +6,7 @@ settlement integration, as per the updated post-permission workflow overhaul.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 
 from .base import BaseTool, ToolCategory, ToolExecutionResult, DataAnalysisTool
@@ -15,10 +15,19 @@ logger = logging.getLogger(__name__)
 
 
 class RunCompleteAnalysisInput(BaseModel):
-    """Input for complete analysis workflow"""
+    """Input for complete analysis workflow with custom variable selection support"""
     session_id: str = Field(..., description="Session identifier for data access")
+    composite_variables: Optional[List[str]] = Field(
+        None, 
+        description="Custom variables for composite analysis. If None, uses region-aware auto-selection"
+    )
+    pca_variables: Optional[List[str]] = Field(
+        None, 
+        description="Custom variables for PCA analysis. If None, uses region-aware auto-selection"
+    )
     include_visualizations: bool = Field(True, description="Whether to generate visualizations")
     create_unified_dataset: bool = Field(True, description="Whether to create/update unified dataset")
+    validate_variables: bool = Field(True, description="Whether to validate custom variables against available data")
 
 
 class RunCompleteAnalysis(DataAnalysisTool):
@@ -37,7 +46,7 @@ class RunCompleteAnalysis(DataAnalysisTool):
     """
     
     name: str = "run_complete_analysis"
-    description: str = "Run complete dual-method malaria risk analysis (Composite Score + PCA) without settlement integration logic"
+    description: str = "Run complete dual-method malaria risk analysis (Composite Score + PCA) with support for custom variable selection. Allows different variables for each method or auto-selection based on region."
     include_visualizations: bool = Field(True, description="Whether to generate visualizations")
     create_unified_dataset: bool = Field(True, description="Whether to create/update unified dataset")
     
@@ -47,19 +56,44 @@ class RunCompleteAnalysis(DataAnalysisTool):
         return self._execute(**kwargs)
     
     def _execute(self, **kwargs) -> ToolExecutionResult:
-        """Execute complete dual-method analysis workflow without settlement integration"""
+        """Execute complete dual-method analysis workflow with custom variable support"""
         try:
             session_id = kwargs.get('session_id')
+            composite_variables = kwargs.get('composite_variables')
+            pca_variables = kwargs.get('pca_variables')
             include_visualizations = kwargs.get('include_visualizations', True)
             create_unified_dataset = kwargs.get('create_unified_dataset', True)
+            validate_variables = kwargs.get('validate_variables', True)
             
-            logger.info(f"Starting complete dual-method analysis (excluding settlement integration logic) for session {session_id}")
+            logger.info(f"Starting complete dual-method analysis for session {session_id}")
+            logger.info(f"Custom variables - Composite: {composite_variables}, PCA: {pca_variables}")
+            
+            # Variable validation and fallback logic
+            validation_message = ""
+            final_composite_vars = composite_variables
+            final_pca_vars = pca_variables
+            
+            if validate_variables and (composite_variables or pca_variables):
+                from ..analysis.variable_validator import apply_variable_validation_with_fallback
+                
+                try:
+                    final_composite_vars, final_pca_vars, validation_message = apply_variable_validation_with_fallback(
+                        session_id=session_id,
+                        composite_variables=composite_variables,
+                        pca_variables=pca_variables
+                    )
+                    logger.info(f"Variable validation complete. Final variables - Composite: {len(final_composite_vars or [])}, PCA: {len(final_pca_vars or [])}")
+                except Exception as e:
+                    logger.error(f"Variable validation failed: {e}")
+                    validation_message = f"⚠️ Variable validation failed: {str(e)}. Using auto-selection."
+                    # Fall back to None to trigger auto-selection
+                    final_composite_vars = None
+                    final_pca_vars = None
             
             # Run both analyses simultaneously using threading
             import threading
             import time
             
-            logger.info("Running Composite Score and PCA analyses simultaneously with consistent variables...")
             start_time = time.time()
             
             # Results containers
@@ -70,7 +104,7 @@ class RunCompleteAnalysis(DataAnalysisTool):
             def run_composite():
                 try:
                     nonlocal composite_result
-                    composite_result = self._run_composite_analysis(session_id)
+                    composite_result = self._run_composite_analysis(session_id, final_composite_vars)
                     logger.info("✅ Composite analysis completed in parallel")
                 except Exception as e:
                     logger.error(f"❌ Composite analysis failed in parallel: {e}")
@@ -80,7 +114,7 @@ class RunCompleteAnalysis(DataAnalysisTool):
             def run_pca():
                 try:
                     nonlocal pca_result
-                    pca_result = self._run_pca_analysis(session_id)
+                    pca_result = self._run_pca_analysis(session_id, final_pca_vars)
                     logger.info("✅ PCA analysis completed in parallel")
                 except Exception as e:
                     logger.error(f"❌ PCA analysis failed in parallel: {e}")
@@ -198,8 +232,8 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 error_details=str(e)
             )
     
-    def _run_composite_analysis(self, session_id: str) -> Dict[str, Any]:
-        """Run composite score analysis using existing engine without settlement integration"""
+    def _run_composite_analysis(self, session_id: str, custom_variables: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Run composite score analysis with optional custom variable selection"""
         try:
             from ..analysis.engine import AnalysisEngine
             from ..data import DataHandler
@@ -211,13 +245,21 @@ class RunCompleteAnalysis(DataAnalysisTool):
             data_handler = DataHandler(session_folder)
             analysis_engine = AnalysisEngine(data_handler)
             
-            # Run composite analysis without settlement integration
-            result = analysis_engine.run_composite_analysis(session_id)
+            # Run composite analysis with custom variables (or auto-selection if None)
+            result = analysis_engine.run_composite_analysis(session_id, variables=custom_variables)
+            
+            # Add custom variable information to result
+            result_data = result.get('data', {})
+            if custom_variables:
+                result_data['custom_variables_used'] = custom_variables
+                result_data['variable_selection_method'] = 'user_specified'
+            else:
+                result_data['variable_selection_method'] = 'region_aware_auto'
             
             return {
                 'success': result.get('status') == 'success',
                 'message': result.get('message', 'Composite analysis completed'),
-                'data': result.get('data', {}),
+                'data': result_data,
                 'error_details': result.get('error_details')
             }
             
@@ -229,8 +271,8 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 'error_details': str(e)
             }
     
-    def _run_pca_analysis(self, session_id: str) -> Dict[str, Any]:
-        """Run PCA analysis using existing pipeline without settlement integration"""
+    def _run_pca_analysis(self, session_id: str, custom_variables: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Run PCA analysis with optional custom variable selection"""
         try:
             from ..analysis.pca_pipeline import run_independent_pca_analysis
             from ..data import DataHandler
@@ -241,17 +283,25 @@ class RunCompleteAnalysis(DataAnalysisTool):
             # Initialize data handler for the session
             data_handler = DataHandler(session_folder)
             
-            # Run PCA analysis without settlement integration
+            # Run PCA analysis with custom variables (or auto-selection if None)
             result = run_independent_pca_analysis(
                 data_handler=data_handler,
                 session_id=session_id,
-                selected_variables=None  # Use region-aware selection
+                selected_variables=custom_variables
             )
+            
+            # Add custom variable information to result
+            result_data = result.get('data', {})
+            if custom_variables:
+                result_data['custom_variables_used'] = custom_variables
+                result_data['variable_selection_method'] = 'user_specified'
+            else:
+                result_data['variable_selection_method'] = 'region_aware_auto'
             
             return {
                 'success': result.get('status') == 'success',
                 'message': result.get('message', 'PCA analysis completed'),
-                'data': result.get('data', {}),
+                'data': result_data,
                 'error_details': result.get('error_details')
             }
             
@@ -338,17 +388,20 @@ class RunCompleteAnalysis(DataAnalysisTool):
             pca_top5 = gdf.nlargest(5, 'pca_score')[['WardName', 'pca_score', 'vulnerability_category']].to_dict('records')
             pca_bottom5 = gdf.nsmallest(5, 'pca_score')[['WardName', 'pca_score', 'vulnerability_category']].to_dict('records')
             
-            # Get variables used for each method
-            # For composite analysis, get the actual variables used (excluding metadata columns)
-            composite_vars = ['nets per capita', 'distance to waterbodies', 'dumpsites', 'rainfall']
+            # Get variables used for each method (including custom variable info)
+            composite_data = composite_result.get('data', {})
+            pca_data = pca_result.get('data', {})
             
-            # For PCA, get from result but exclude WardName if present
-            pca_vars_raw = pca_result.get('data', {}).get('variables_used', [])
-            # Filter out ward identification columns
+            # Extract variables for composite analysis
+            composite_vars = composite_data.get('custom_variables_used') or composite_data.get('variables_used', [])
+            composite_selection_method = composite_data.get('variable_selection_method', 'auto')
+            
+            # Extract variables for PCA analysis
+            pca_vars_raw = pca_data.get('custom_variables_used') or pca_data.get('variables_used', [])
+            pca_selection_method = pca_data.get('variable_selection_method', 'auto')
+            
+            # Filter out ward identification columns from PCA variables
             pca_vars = [v for v in pca_vars_raw if v.lower() not in ['wardname', 'ward_name', 'ward', 'lga', 'state']]
-            if not pca_vars and pca_vars_raw:  # Fallback to hardcoded if filtering removes everything
-                pca_vars = ['total population', 'nets per capita', 'settlement type', 'distance to waterbodies', 
-                           'test positivity rate', 'enhance vegetation index', 'housing quality', 'dumpsites', 'rainfall']
             
             # Calculate method agreement
             agreement_rate = comparison_summary.get('agreement_rate', 0)
@@ -375,7 +428,14 @@ class RunCompleteAnalysis(DataAnalysisTool):
             # Composite Score Results with better spacing
             summary_parts.append("## 🏆 **Composite Score Method**")
             summary_parts.append("")
-            summary_parts.append(f"**Variables used ({len(composite_vars)}):** {', '.join(composite_vars)}")
+            
+            # Variable selection information
+            if composite_selection_method == 'user_specified':
+                summary_parts.append(f"**Custom variables used ({len(composite_vars)}):** {', '.join(composite_vars)}")
+                summary_parts.append("*🎛️ User-specified variable selection*")
+            else:
+                summary_parts.append(f"**Auto-selected variables ({len(composite_vars)}):** {', '.join(composite_vars)}")
+                summary_parts.append("*🤖 Region-aware automatic selection*")
             summary_parts.append("")
             summary_parts.append("### 🚨 **Top 5 Most Vulnerable Wards:**")
             summary_parts.append("")
@@ -393,7 +453,14 @@ class RunCompleteAnalysis(DataAnalysisTool):
             # PCA Results with better spacing
             summary_parts.append("## 🔬 **PCA (Principal Component Analysis) Method**")
             summary_parts.append("")
-            summary_parts.append(f"**Variables used ({len(pca_vars)}):** {', '.join(pca_vars[:5])}{'...' if len(pca_vars) > 5 else ''}")
+            
+            # Variable selection information
+            if pca_selection_method == 'user_specified':
+                summary_parts.append(f"**Custom variables used ({len(pca_vars)}):** {', '.join(pca_vars[:5])}{'...' if len(pca_vars) > 5 else ''}")
+                summary_parts.append("*🎛️ User-specified variable selection*")
+            else:
+                summary_parts.append(f"**Auto-selected variables ({len(pca_vars)}):** {', '.join(pca_vars[:5])}{'...' if len(pca_vars) > 5 else ''}")
+                summary_parts.append("*🤖 Region-aware automatic selection*")
             summary_parts.append("")
             summary_parts.append("### 🚨 **Top 5 Most Vulnerable Wards:**")
             summary_parts.append("")
@@ -923,3 +990,300 @@ class GenerateComprehensiveAnalysisSummary(DataAnalysisTool):
         summary_parts.append("")
         
         return summary_parts
+
+
+# ================= INDIVIDUAL CUSTOM ANALYSIS TOOLS =================
+
+class RunCustomCompositeAnalysisInput(BaseModel):
+    """Input for custom composite analysis with variable selection"""
+    session_id: str = Field(..., description="Session identifier for data access")
+    variables: List[str] = Field(..., description="Custom variables to use for composite analysis")
+    include_visualizations: bool = Field(True, description="Whether to generate visualizations")
+    validate_variables: bool = Field(True, description="Whether to validate custom variables against available data")
+
+
+class RunCustomCompositeAnalysis(DataAnalysisTool):
+    """
+    Run composite analysis with custom variable selection only.
+    
+    This tool allows users to specify exactly which variables to use for
+    composite scoring analysis, with validation and fallback options.
+    """
+    
+    name: str = "run_custom_composite_analysis"
+    description: str = "Run composite score analysis with custom variable selection only"
+    
+    def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
+        """Execute custom composite analysis"""
+        kwargs['session_id'] = session_id
+        return self._execute(**kwargs)
+    
+    def _execute(self, **kwargs) -> ToolExecutionResult:
+        """Execute custom composite analysis with variable validation"""
+        try:
+            session_id = kwargs.get('session_id')
+            custom_variables = kwargs.get('variables', [])
+            include_visualizations = kwargs.get('include_visualizations', True)
+            validate_variables = kwargs.get('validate_variables', True)
+            
+            if not custom_variables:
+                return ToolExecutionResult(
+                    success=False,
+                    message="No custom variables specified for composite analysis",
+                    error_details="variables parameter is required"
+                )
+            
+            logger.info(f"Starting custom composite analysis with variables: {custom_variables}")
+            
+            # Variable validation if requested
+            validation_message = ""
+            final_variables = custom_variables
+            
+            if validate_variables:
+                from ..analysis.variable_validator import apply_variable_validation_with_fallback
+                
+                try:
+                    final_composite_vars, _, validation_message = apply_variable_validation_with_fallback(
+                        session_id=session_id,
+                        composite_variables=custom_variables,
+                        pca_variables=None
+                    )
+                    final_variables = final_composite_vars
+                    logger.info(f"Variable validation complete. Using {len(final_variables)} variables")
+                except Exception as e:
+                    logger.error(f"Variable validation failed: {e}")
+                    validation_message = f"⚠️ Variable validation failed: {str(e)}. Using original variables."
+            
+            # Run composite analysis
+            result = self._run_composite_analysis(session_id, final_variables)
+            
+            if result['success']:
+                # Generate summary with validation info
+                summary_parts = []
+                summary_parts.append("# 🎯 **Custom Composite Analysis Complete**")
+                summary_parts.append("")
+                
+                if validation_message:
+                    summary_parts.append("## 🔍 **Variable Validation**")
+                    summary_parts.append(validation_message)
+                    summary_parts.append("")
+                
+                summary_parts.append(f"**Variables used:** {', '.join(final_variables)}")
+                summary_parts.append(f"**Analysis method:** Composite scoring only")
+                summary_parts.append("")
+                
+                # Add basic results summary
+                data = result.get('data', {})
+                if 'wards_analyzed' in data:
+                    summary_parts.append(f"**Wards analyzed:** {data['wards_analyzed']}")
+                if 'vulnerability_rankings' in data:
+                    summary_parts.append(f"**Rankings generated:** Available")
+                
+                success_message = "\n".join(summary_parts)
+                
+                return ToolExecutionResult(
+                    success=True,
+                    message=success_message,
+                    data=result.get('data', {}),
+                    metadata={
+                        'analysis_type': 'custom_composite',
+                        'variables_used': final_variables,
+                        'validation_performed': validate_variables,
+                        'visualizations_included': include_visualizations
+                    }
+                )
+            else:
+                return ToolExecutionResult(
+                    success=False,
+                    message=f"Custom composite analysis failed: {result.get('message')}",
+                    error_details=result.get('error_details')
+                )
+            
+        except Exception as e:
+            logger.error(f"Custom composite analysis failed: {e}")
+            return ToolExecutionResult(
+                success=False,
+                message=f"Custom composite analysis failed: {str(e)}",
+                error_details=str(e)
+            )
+    
+    def _run_composite_analysis(self, session_id: str, custom_variables: List[str]) -> Dict[str, Any]:
+        """Run composite analysis with custom variables"""
+        try:
+            from ..analysis.engine import AnalysisEngine
+            from ..data import DataHandler
+            
+            session_folder = f"instance/uploads/{session_id}"
+            data_handler = DataHandler(session_folder)
+            analysis_engine = AnalysisEngine(data_handler)
+            
+            result = analysis_engine.run_composite_analysis(session_id, variables=custom_variables)
+            
+            # Add custom variable information
+            result_data = result.get('data', {})
+            result_data['custom_variables_used'] = custom_variables
+            result_data['variable_selection_method'] = 'user_specified'
+            
+            return {
+                'success': result.get('status') == 'success',
+                'message': result.get('message', 'Custom composite analysis completed'),
+                'data': result_data,
+                'error_details': result.get('error_details')
+            }
+            
+        except Exception as e:
+            logger.error(f"Composite analysis error: {e}")
+            return {
+                'success': False,
+                'message': f"Composite analysis failed: {str(e)}",
+                'error_details': str(e)
+            }
+
+
+class RunCustomPCAAnalysisInput(BaseModel):
+    """Input for custom PCA analysis with variable selection"""
+    session_id: str = Field(..., description="Session identifier for data access")
+    variables: List[str] = Field(..., description="Custom variables to use for PCA analysis")
+    include_visualizations: bool = Field(True, description="Whether to generate visualizations")
+    validate_variables: bool = Field(True, description="Whether to validate custom variables against available data")
+
+
+class RunCustomPCAAnalysis(DataAnalysisTool):
+    """
+    Run PCA analysis with custom variable selection only.
+    
+    This tool allows users to specify exactly which variables to use for
+    PCA analysis, with validation and fallback options.
+    """
+    
+    name: str = "run_custom_pca_analysis"
+    description: str = "Run PCA analysis with custom variable selection only"
+    
+    def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
+        """Execute custom PCA analysis"""
+        kwargs['session_id'] = session_id
+        return self._execute(**kwargs)
+    
+    def _execute(self, **kwargs) -> ToolExecutionResult:
+        """Execute custom PCA analysis with variable validation"""
+        try:
+            session_id = kwargs.get('session_id')
+            custom_variables = kwargs.get('variables', [])
+            include_visualizations = kwargs.get('include_visualizations', True)
+            validate_variables = kwargs.get('validate_variables', True)
+            
+            if not custom_variables:
+                return ToolExecutionResult(
+                    success=False,
+                    message="No custom variables specified for PCA analysis",
+                    error_details="variables parameter is required"
+                )
+            
+            logger.info(f"Starting custom PCA analysis with variables: {custom_variables}")
+            
+            # Variable validation if requested
+            validation_message = ""
+            final_variables = custom_variables
+            
+            if validate_variables:
+                from ..analysis.variable_validator import apply_variable_validation_with_fallback
+                
+                try:
+                    _, final_pca_vars, validation_message = apply_variable_validation_with_fallback(
+                        session_id=session_id,
+                        composite_variables=None,
+                        pca_variables=custom_variables
+                    )
+                    final_variables = final_pca_vars
+                    logger.info(f"Variable validation complete. Using {len(final_variables)} variables")
+                except Exception as e:
+                    logger.error(f"Variable validation failed: {e}")
+                    validation_message = f"⚠️ Variable validation failed: {str(e)}. Using original variables."
+            
+            # Run PCA analysis
+            result = self._run_pca_analysis(session_id, final_variables)
+            
+            if result['success']:
+                # Generate summary with validation info
+                summary_parts = []
+                summary_parts.append("# 🔬 **Custom PCA Analysis Complete**")
+                summary_parts.append("")
+                
+                if validation_message:
+                    summary_parts.append("## 🔍 **Variable Validation**")
+                    summary_parts.append(validation_message)
+                    summary_parts.append("")
+                
+                summary_parts.append(f"**Variables used:** {', '.join(final_variables)}")
+                summary_parts.append(f"**Analysis method:** PCA only")
+                summary_parts.append("")
+                
+                # Add basic results summary
+                data = result.get('data', {})
+                if 'components_found' in data:
+                    summary_parts.append(f"**Components found:** {data['components_found']}")
+                if 'variance_explained' in data:
+                    summary_parts.append(f"**Variance explained:** {data['variance_explained']:.1%}")
+                
+                success_message = "\n".join(summary_parts)
+                
+                return ToolExecutionResult(
+                    success=True,
+                    message=success_message,
+                    data=result.get('data', {}),
+                    metadata={
+                        'analysis_type': 'custom_pca',
+                        'variables_used': final_variables,
+                        'validation_performed': validate_variables,
+                        'visualizations_included': include_visualizations
+                    }
+                )
+            else:
+                return ToolExecutionResult(
+                    success=False,
+                    message=f"Custom PCA analysis failed: {result.get('message')}",
+                    error_details=result.get('error_details')
+                )
+            
+        except Exception as e:
+            logger.error(f"Custom PCA analysis failed: {e}")
+            return ToolExecutionResult(
+                success=False,
+                message=f"Custom PCA analysis failed: {str(e)}",
+                error_details=str(e)
+            )
+    
+    def _run_pca_analysis(self, session_id: str, custom_variables: List[str]) -> Dict[str, Any]:
+        """Run PCA analysis with custom variables"""
+        try:
+            from ..analysis.pca_pipeline import run_independent_pca_analysis
+            from ..data import DataHandler
+            
+            session_folder = f"instance/uploads/{session_id}"
+            data_handler = DataHandler(session_folder)
+            
+            result = run_independent_pca_analysis(
+                data_handler=data_handler,
+                session_id=session_id,
+                selected_variables=custom_variables
+            )
+            
+            # Add custom variable information
+            result_data = result.get('data', {})
+            result_data['custom_variables_used'] = custom_variables
+            result_data['variable_selection_method'] = 'user_specified'
+            
+            return {
+                'success': result.get('status') == 'success',
+                'message': result.get('message', 'Custom PCA analysis completed'),
+                'data': result_data,
+                'error_details': result.get('error_details')
+            }
+            
+        except Exception as e:
+            logger.error(f"PCA analysis error: {e}")
+            return {
+                'success': False,
+                'message': f"PCA analysis failed: {str(e)}",
+                'error_details': str(e)
+            }

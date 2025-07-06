@@ -189,10 +189,21 @@ class RequestInterpreter:
             CRITICAL: Questions starting with "What are", "What is the", "Which", "How", "Where", "When", "Why" 
             that contain data terms (wards, risk, ranking, score, malaria, vulnerability) are DATA QUERIES, NOT greetings!
 
+            CUSTOM VARIABLE SELECTION PARSING:
+            - Extract custom variables from natural language patterns
+            - "run composite with pfpr, elevation, housing" -> composite_variables=["pfpr", "elevation", "housing"]
+            - "use these variables for PCA: rainfall, population" -> pca_variables=["rainfall", "population"]
+            - "analyze using pfpr and elevation for composite, rainfall for PCA" -> both parameters
+            - "run analysis with custom variables x, y, z" -> depends on context (composite or PCA)
+            - Look for keywords: "with", "using", "variables", "include", "custom"
+            - Variable names can be separated by: commas, "and", "plus", semicolons
+            - Clean variable names: strip whitespace, remove quotes, handle common variations
+
             PARAMETER VALIDATION:
             - Ward queries: Extract top_n from user request or default to 10
             - Scatter plots: Use x_variable and y_variable, suggest actual column names like "composite_score", "pca_score", "population_density", "elevation"
             - Maps: Use method="composite" or "pca" or "auto"
+            - Custom variables: Parse from natural language patterns and clean variable names
 
             AMBIGUOUS REQUEST HANDLING:
             When user request is vague or could mean multiple things:
@@ -291,7 +302,46 @@ class RequestInterpreter:
                 "routing": "data_agent"
             }}
 
-            Example 3:
+            Example 4: Custom Variable Selection
+            User: "Run composite analysis using pfpr, elevation, and housing_quality"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Run composite analysis with custom variables",
+                "tool_calls": [
+                    {{
+                        "tool_name": "run_complete_analysis",
+                        "parameters": {{
+                            "composite_variables": ["pfpr", "elevation", "housing_quality"],
+                            "include_visualizations": true
+                        }},
+                        "reasoning": "User specified custom variables for composite analysis"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+
+            Example 5: Custom Variables for Both Methods
+            User: "Do PCA with rainfall, population_density and composite with pfpr, elevation"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Run dual analysis with different custom variables",
+                "tool_calls": [
+                    {{
+                        "tool_name": "run_complete_analysis",
+                        "parameters": {{
+                            "composite_variables": ["pfpr", "elevation"],
+                            "pca_variables": ["rainfall", "population_density"],
+                            "include_visualizations": true
+                        }},
+                        "reasoning": "User specified different custom variables for each method"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+
+            Example 6: Knowledge Query
             User: "What is malaria transmission?"
             Response: {{
                 "intent_type": "knowledge",
@@ -307,7 +357,7 @@ class RequestInterpreter:
                 "routing": "knowledge_agent"
             }}
 
-            Example 4:
+            Example 7:
             User: "Hello"
             Response: {{
                 "intent_type": "system",
@@ -323,7 +373,7 @@ class RequestInterpreter:
                 "routing": "knowledge_agent"
             }}
 
-            Example 5:
+            Example 8:
             User: "run analysis"
             Response: {{
                 "intent_type": "clarification_needed",
