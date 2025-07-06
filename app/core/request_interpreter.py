@@ -766,10 +766,20 @@ class RequestInterpreter:
                     # Use LLM to combine multiple explanations with smooth transitions
                     return self._combine_explanations_intelligently(knowledge_explanations, user_message, session_id)
             
-            # FOURTH PRIORITY: Use detailed message from upload analysis tools (already LLM-generated)
+            # FOURTH PRIORITY: Use detailed message from analysis tools (already generated)
             for result in successful_results:
                 tool_name = result.get('tool_name', '')
+                # Check for complete analysis results
+                if tool_name in ['runcompleteanalysis', 'runcompositeanalysis', 'runpcaanalysis'] and 'message' in result:
+                    return result['message']
+                # Check for upload analysis
                 if tool_name == 'analyze_uploaded_data_and_recommend' and 'message' in result:
+                    return result['message']
+            
+            # FIFTH PRIORITY: Check for any tool with a detailed message
+            for result in successful_results:
+                if 'message' in result and len(result.get('message', '')) > 100:
+                    # If the tool provided a detailed message, use it directly
                     return result['message']
             
             # FOR ALL OTHER TOOLS: Use LLM to generate conversational response

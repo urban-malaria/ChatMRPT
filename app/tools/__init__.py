@@ -86,7 +86,6 @@ Updated to use Pydantic-based tools with the new ToolRegistry system.
 # )
 
 # KEEPING SETTLEMENT TOOLS - These are working correctly
-from .settlement_tools import *
 from .settlement_validation_tools import *
 from .settlement_visualization_tools import *
 

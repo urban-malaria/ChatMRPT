@@ -742,10 +742,7 @@ Would you like me to proceed with the composite score and PCA analysis? *(This w
                 proactiveMessage = "Dataset upload complete. Please specify your preferred analysis methodology for malaria risk assessment.";
         }
         
-        // Send proactive message after a brief delay
-        setTimeout(() => {
-            window.chatManager.sendMessage(proactiveMessage);
-        }, 2000);
+        // Proactive message removed - let user initiate analysis themselves
     }
 
     /**

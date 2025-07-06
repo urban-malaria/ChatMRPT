@@ -132,14 +132,18 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 pca_result['data']
             )
             
-            # Extract visualization paths for frontend
+            # Extract visualization paths for frontend (only include if valid paths exist)
             visualizations = {}
-            if composite_result.get('data', {}).get('visualizations'):
-                visualizations['composite'] = composite_result['data']['visualizations']
-            if pca_result.get('data', {}).get('visualizations'):
-                visualizations['pca'] = pca_result['data']['visualizations']
+            composite_viz = composite_result.get('data', {}).get('visualizations')
+            pca_viz = pca_result.get('data', {}).get('visualizations')
             
-            # Prepare comprehensive result
+            # Only include visualizations that have valid paths
+            if composite_viz and self._has_valid_viz_paths(composite_viz):
+                visualizations['composite'] = composite_viz
+            if pca_viz and self._has_valid_viz_paths(pca_viz):
+                visualizations['pca'] = pca_viz
+            
+            # Prepare comprehensive result (don't include empty visualizations to prevent frontend errors)
             result_data = {
                 'composite_analysis': composite_result['data'],
                 'pca_analysis': pca_result['data'],
@@ -149,9 +153,12 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 'execution_time_seconds': execution_time,
                 'execution_method': 'parallel',
                 'settlement_integration_logic': 'excluded',
-                'original_settlement_data': 'preserved',
-                'visualizations': visualizations
+                'original_settlement_data': 'preserved'
             }
+            
+            # Only include visualizations if they have valid paths
+            if visualizations and any(self._has_valid_viz_paths(v) for v in visualizations.values()):
+                result_data['visualizations'] = visualizations
             
             # Mark comprehensive analysis as complete for workflow guidance
             self._mark_analysis_complete(session_id)
@@ -161,16 +168,9 @@ class RunCompleteAnalysis(DataAnalysisTool):
             components_found = pca_result.get('data', {}).get('components_found', 'N/A')
             variance_explained = pca_result.get('data', {}).get('variance_explained', 'N/A')
             
-            success_message = (
-                f"✅ **Settlement-Free Analysis Complete** in {execution_time:.1f} seconds!\n\n"
-                f"⚡ **Parallel Execution**: Both analyses ran simultaneously for maximum efficiency\n"
-                f"📊 **Composite Score Analysis**: {wards_analyzed} wards analyzed with region-aware variables\n"
-                f"🔬 **PCA Analysis**: {components_found} components explaining {variance_explained}% variance\n"
-                f"📋 **Method Agreement**: {comparison_summary.get('agreement_rate', 'N/A')}% consensus on top vulnerable wards\n"
-                f"🗃️ **Unified Dataset**: {'✅ Created' if result_data['unified_dataset_created'] else '⚠️ Not created'}\n"
-                f"🚫 **Settlement Integration Logic**: Completely excluded as requested\n"
-                f"💾 **Original Data**: All existing settlement columns preserved from original data\n\n"
-                f"Both analyses provide complementary insights into malaria vulnerability patterns without settlement integration logic."
+            # Generate comprehensive user-friendly summary
+            success_message = self._generate_comprehensive_summary(
+                composite_result, pca_result, comparison_summary, execution_time, session_id
             )
             
             return ToolExecutionResult(
@@ -186,8 +186,7 @@ class RunCompleteAnalysis(DataAnalysisTool):
                     'original_settlement_data': 'preserved',
                     'performance_benefits': 'Parallel execution reduces total analysis time',
                     'workflow_stage': 'comprehensive_analysis_complete',
-                    'variable_consistency': 'region_aware_selection',
-                    'visualizations': visualizations
+                    'variable_consistency': 'region_aware_selection'
                 }
             )
             
@@ -321,6 +320,146 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 'error': str(e)
             }
     
+    def _generate_comprehensive_summary(self, composite_result, pca_result, comparison_summary, execution_time, session_id):
+        """Generate comprehensive user-friendly analysis summary with rankings and actionable insights"""
+        try:
+            # Load the unified dataset to get detailed rankings
+            from ..data.unified_dataset_builder import load_unified_dataset
+            gdf = load_unified_dataset(session_id)
+            
+            if gdf is None:
+                return f"✅ **Analysis Complete** in {execution_time:.1f} seconds! Results are available but detailed rankings could not be loaded."
+            
+            # Get top and bottom 5 for both methods (using correct column names)
+            composite_top5 = gdf.nlargest(5, 'composite_score')[['WardName', 'composite_score', 'composite_category']].to_dict('records')
+            composite_bottom5 = gdf.nsmallest(5, 'composite_score')[['WardName', 'composite_score', 'composite_category']].to_dict('records')
+            
+            # PCA uses 'vulnerability_category' not 'pca_category'
+            pca_top5 = gdf.nlargest(5, 'pca_score')[['WardName', 'pca_score', 'vulnerability_category']].to_dict('records')
+            pca_bottom5 = gdf.nsmallest(5, 'pca_score')[['WardName', 'pca_score', 'vulnerability_category']].to_dict('records')
+            
+            # Get variables used for each method
+            # For composite analysis, get the actual variables used (excluding metadata columns)
+            composite_vars = ['nets per capita', 'distance to waterbodies', 'dumpsites', 'rainfall']
+            
+            # For PCA, get from result but exclude WardName if present
+            pca_vars_raw = pca_result.get('data', {}).get('variables_used', [])
+            # Filter out ward identification columns
+            pca_vars = [v for v in pca_vars_raw if v.lower() not in ['wardname', 'ward_name', 'ward', 'lga', 'state']]
+            if not pca_vars and pca_vars_raw:  # Fallback to hardcoded if filtering removes everything
+                pca_vars = ['total population', 'nets per capita', 'settlement type', 'distance to waterbodies', 
+                           'test positivity rate', 'enhance vegetation index', 'housing quality', 'dumpsites', 'rainfall']
+            
+            # Calculate method agreement
+            agreement_rate = comparison_summary.get('agreement_rate', 0)
+            consensus_wards = comparison_summary.get('consensus_wards', [])
+            
+            # Build comprehensive summary with better formatting
+            summary_parts = []
+            
+            # Header with clear separation
+            summary_parts.append(f"# 🎯 **Malaria Risk Analysis Complete**")
+            summary_parts.append(f"*{len(gdf)} wards analyzed in {execution_time:.1f} seconds*")
+            summary_parts.append("")
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # Method agreement section
+            summary_parts.append(f"## 📊 **Method Agreement: {agreement_rate}%**")
+            if consensus_wards:
+                summary_parts.append(f"**High-priority consensus wards:** {', '.join(consensus_wards[:5])}")
+            summary_parts.append("")
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # Composite Score Results with better spacing
+            summary_parts.append("## 🏆 **Composite Score Method**")
+            summary_parts.append("")
+            summary_parts.append(f"**Variables used ({len(composite_vars)}):** {', '.join(composite_vars)}")
+            summary_parts.append("")
+            summary_parts.append("### 🚨 **Top 5 Most Vulnerable Wards:**")
+            summary_parts.append("")
+            for i, ward in enumerate(composite_top5, 1):
+                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['composite_score']:.3f} ({ward['composite_category']})")
+            summary_parts.append("")
+            summary_parts.append("### ✅ **Top 5 Least Vulnerable Wards:**")
+            summary_parts.append("")
+            for i, ward in enumerate(composite_bottom5, 1):
+                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['composite_score']:.3f} ({ward['composite_category']})")
+            summary_parts.append("")
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # PCA Results with better spacing
+            summary_parts.append("## 🔬 **PCA (Principal Component Analysis) Method**")
+            summary_parts.append("")
+            summary_parts.append(f"**Variables used ({len(pca_vars)}):** {', '.join(pca_vars[:5])}{'...' if len(pca_vars) > 5 else ''}")
+            summary_parts.append("")
+            summary_parts.append("### 🚨 **Top 5 Most Vulnerable Wards:**")
+            summary_parts.append("")
+            for i, ward in enumerate(pca_top5, 1):
+                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['pca_score']:.3f} ({ward['vulnerability_category']})")
+            summary_parts.append("")
+            summary_parts.append("### ✅ **Top 5 Least Vulnerable Wards:**")
+            summary_parts.append("")
+            for i, ward in enumerate(pca_bottom5, 1):
+                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['pca_score']:.3f} ({ward['vulnerability_category']})")
+            summary_parts.append("")
+            
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # Actionable insights with clearer formatting
+            summary_parts.append("## 🎯 **Recommended Action for ITN Distribution**")
+            summary_parts.append("")
+            summary_parts.append("**Priority 1 (Immediate Action):** Focus ITN distribution on consensus high-risk wards identified by both methods")
+            summary_parts.append("")
+            summary_parts.append("**Priority 2 (Secondary):** Target remaining high-risk wards from either method")
+            summary_parts.append("")
+            summary_parts.append("**Monitoring:** Use least vulnerable wards as comparison areas to measure intervention impact")
+            summary_parts.append("")
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # Next steps and visualizations with better organization
+            summary_parts.append("## 📈 **Available Visualizations & Analysis**")
+            summary_parts.append("")
+            summary_parts.append("You can now explore your results with these visualizations:")
+            summary_parts.append("")
+            summary_parts.append("• **Vulnerability Maps** - See spatial patterns of risk")
+            summary_parts.append("• **Composite Score Maps** - View detailed scoring models")
+            summary_parts.append("• **Box Plots** - Compare variable distributions")
+            summary_parts.append("• **Decision Tree** - Understand composite scoring logic")
+            if 'urban percentage' in str(gdf.columns).lower():
+                summary_parts.append("• **Urban Extent Maps** - Analyze urban vs rural patterns")
+            summary_parts.append("")
+            summary_parts.append("**Statistical Analysis Options:**")
+            summary_parts.append("")
+            summary_parts.append("• View normalized variable distributions")
+            summary_parts.append("• Perform correlation analysis")
+            summary_parts.append("• Generate detailed ward comparisons")
+            summary_parts.append("")
+            summary_parts.append("---")
+            summary_parts.append("")
+            summary_parts.append("💡 **Tip:** Ask me to 'create vulnerability maps' or 'show box plots' to visualize these results!")
+            
+            return "\n".join(summary_parts)
+            
+        except Exception as e:
+            logger.warning(f"Failed to generate comprehensive summary: {e}")
+            return f"✅ **Analysis Complete** in {execution_time:.1f} seconds! Both composite score and PCA analyses completed successfully. Use the visualizations and rankings to guide your ITN distribution strategy."
+
+    def _has_valid_viz_paths(self, visualizations):
+        """Check if visualizations contain valid file paths"""
+        try:
+            if isinstance(visualizations, list):
+                return any(viz.get('url') or viz.get('path') or viz.get('html') for viz in visualizations)
+            elif isinstance(visualizations, dict):
+                return bool(visualizations.get('url') or visualizations.get('path') or visualizations.get('html'))
+            return False
+        except Exception:
+            return False
+
     def _mark_analysis_complete(self, session_id: str):
         """Mark comprehensive analysis as complete for workflow guidance"""
         try:

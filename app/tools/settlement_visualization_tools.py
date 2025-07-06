@@ -166,17 +166,11 @@ def integrate_settlement_data_with_analysis(session_id: str) -> Dict[str, Any]:
                 'ai_response': 'Please upload and analyze your data first before integrating settlement data.'
             }
         
-        from .settlement_tools import integrate_settlement_data_unified
-        
-        # Integrate settlement data
-        result = integrate_settlement_data_unified(session_id, data_handler)
-        
-        if result['status'] == 'success':
-            # Enhance with AI explanation
-            result['ai_response'] = generate_settlement_integration_explanation(result)
-            result['tool_used'] = 'integrate_settlement_data_with_analysis'
-            
-        return result
+        return {
+            'status': 'error',
+            'message': 'Settlement data integration feature has been removed',
+            'ai_response': 'Settlement data integration is not available in this version.'
+        }
         
     except Exception as e:
         logger.error(f"Error integrating settlement data: {e}")
