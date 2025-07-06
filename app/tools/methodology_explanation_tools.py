@@ -7,7 +7,9 @@ data-driven way rather than generic template responses.
 
 import json
 import logging
-from typing import Dict, List, Optional, Any, Literal
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Any, Literal, Tuple
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from dataclasses import dataclass
@@ -15,6 +17,19 @@ from dataclasses import dataclass
 from .base import DataAnalysisTool, ToolExecutionResult
 from app.data import DataHandler
 from app.data.unified_dataset_builder import UnifiedDatasetBuilder
+from .enhanced_methodology_helpers import (
+    generate_pre_analysis_composite_explanation,
+    generate_pre_analysis_pca_explanation,
+    generate_pre_analysis_comparison_explanation,
+    generate_pre_analysis_variable_explanation,
+    generate_data_driven_explanations,
+    generate_basic_post_analysis_explanations,
+    generate_correlation_analysis,
+    get_score_statistics,
+    analyze_method_agreement,
+    find_strong_correlations,
+    get_score_correlations
+)
 
 
 @dataclass
@@ -41,6 +56,26 @@ class MethodInfo:
     mathematical_steps: Dict[str, str]
     
     
+# Enhanced variable configuration with relationship information
+@dataclass
+class VariableRelationship:
+    """Information about how a variable relates to malaria risk"""
+    relationship_type: str  # "direct", "inverse", "complex"
+    strength: str  # "strong", "moderate", "weak"
+    explanation: str
+    examples: List[str]
+
+@dataclass
+class AnalysisContext:
+    """Context information about the current analysis state"""
+    has_data: bool
+    analysis_completed: bool
+    methods_run: List[str]
+    variables_used: List[str]
+    ward_count: int
+    region: str
+    unified_dataset_available: bool
+
 # Configuration data - externalized for scalability
 VARIABLE_CONFIG = {
     'pfpr': VariableInfo(
@@ -108,24 +143,26 @@ VARIABLE_CONFIG = {
 METHOD_CONFIG = {
     'composite': MethodInfo(
         display_name='Composite Scoring',
-        description='Multi-factor risk scoring system combining multiple indicators',
+        description='Multi-factor risk scoring system using multiple model combinations',
         icon='🎯',
         strengths=[
             'Intuitive and interpretable',
             'Equal weighting of all variables',
-            'Direct risk scoring',
-            'Easy to understand results'
+            'Multiple model combinations for robustness',
+            'Robust median aggregation approach'
         ],
         limitations=[
             'Assumes equal importance of variables',
-            'Sensitive to outliers',
-            'May not capture complex interactions',
-            'Linear combination only'
+            'Simple arithmetic mean approach',
+            'May not capture complex variable interactions',
+            'Rank-based risk categorization'
         ],
         mathematical_steps={
-            'standardization': 'z_i = (x_i - μ) / σ',
-            'composite_score': 'CS = Σ(w_i × z_i) / n',
-            'normalization': 'Risk_Score = (CS - CS_min) / (CS_max - CS_min)'
+            'normalization': 'normalized = (value - min) / (max - min)',
+            'inverse_handling': 'inv_normalized = (1/value - 1/min) / (1/max - 1/min)',
+            'model_scoring': 'model_score = Σ(normalized_vars) / n_vars',
+            'median_aggregation': 'final_score = median(all_model_scores)',
+            'risk_categorization': 'thirds_division: top 33% = High Risk'
         }
     ),
     'pca': MethodInfo(
@@ -193,6 +230,21 @@ class MethodologyExplanationInput(BaseModel):
         description="Specific aspect to focus on (e.g., 'variable_selection', 'scoring', 'ranking')"
     )
     
+    user_question: Optional[str] = Field(
+        default=None,
+        description="Specific user question about methodology (enables LLM-powered responses)"
+    )
+    
+    target_ward: Optional[str] = Field(
+        default=None,
+        description="Specific ward name for ward-focused explanations"
+    )
+    
+    use_llm: bool = Field(
+        default=True,
+        description="Whether to use LLM for dynamic, conversational responses"
+    )
+    
     @validator('methods')
     def validate_methods(cls, v):
         """Ensure methods list is valid and not empty"""
@@ -223,6 +275,14 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
     include_examples: bool = True
     include_comparison: bool = True
     focus_area: Optional[str] = None
+    
+    def __init__(self):
+        super().__init__()
+        self.llm_manager = None  # Will be set by container if available
+        
+    def set_llm_manager(self, llm_manager):
+        """Set LLM manager for dynamic response generation"""
+        self.llm_manager = llm_manager
         
     def get_examples(self) -> List[str]:
         """Get example usage patterns"""
@@ -251,13 +311,13 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
     def execute(self, session_id: str, methods: List[str] = None, 
                 explanation_depth: str = "detailed", **kwargs) -> ToolExecutionResult:
         """
-        Execute methodology explanation with dynamic, tailored content
+        Execute enhanced methodology explanation with context-aware approach and LLM integration
         
         Args:
             session_id: Session identifier
             methods: Methods to explain (defaults to ["both"])
             explanation_depth: Level of detail (overview/detailed/technical)
-            **kwargs: Additional parameters
+            **kwargs: Additional parameters including user_question for LLM responses
         """
         
         try:
@@ -269,48 +329,45 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
                 **kwargs
             )
             
-            # Get session data
-            data_handler = DataHandler(session_id=session_id)
-            if not data_handler.csv_data or not data_handler.shapefile_data:
+            # Detect analysis context
+            context = self._detect_analysis_context(session_id)
+            
+            if not context.has_data:
                 return ToolExecutionResult(
                     success=False,
                     message="❌ No data found for this session. Please upload data first.",
                     data={"error": "no_data_found"}
                 )
             
-            # Get region information from data
-            region_info = self._get_region_info(data_handler.csv_data)
-            
-            # Get analysis results if available
-            analysis_results = self._get_analysis_results(session_id)
-            
-            # Generate dynamic explanations
-            explanations = self._generate_dynamic_explanations(
-                input_data, data_handler, region_info, analysis_results
-            )
-            
-            # Format comprehensive response
-            formatted_response = self._format_methodology_response(
-                explanations, input_data, region_info
-            )
+            # Check if this is a specific user question requiring LLM response
+            if input_data.user_question and input_data.use_llm and self.llm_manager:
+                response = self._generate_llm_powered_response(input_data, context)
+            else:
+                # Route to appropriate explanation approach
+                if context.analysis_completed:
+                    response = self._generate_post_analysis_explanation(input_data, context)
+                else:
+                    response = self._generate_pre_analysis_explanation(input_data, context)
             
             return ToolExecutionResult(
                 success=True,
-                message=formatted_response,
+                message=response,
                 data={
                     "session_id": session_id,
+                    "context_type": "post_analysis" if context.analysis_completed else "pre_analysis",
                     "methods_explained": input_data.methods,
                     "explanation_depth": input_data.explanation_depth,
-                    "region": region_info.get('region', 'Unknown'),
-                    "wards_count": len(data_handler.csv_data),
-                    "variables_selected": region_info.get('variables', []),
-                    "has_analysis_results": analysis_results is not None,
-                    "explanations_generated": list(explanations.keys())
+                    "region": context.region,
+                    "wards_count": context.ward_count,
+                    "variables_available": context.variables_used,
+                    "analysis_completed": context.analysis_completed,
+                    "methods_run": context.methods_run,
+                    "llm_powered": bool(input_data.user_question and input_data.use_llm and self.llm_manager)
                 }
             )
             
         except Exception as e:
-            logging.error(f"Error in methodology explanation: {str(e)}")
+            logging.error(f"Error in enhanced methodology explanation: {str(e)}")
             return ToolExecutionResult(
                 success=False,
                 message=f"❌ Error generating methodology explanation: {str(e)}",
@@ -686,4 +743,224 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
         response += "- *'Show me technical implementation details'*\n"
         response += "- *'Compare methods for my specific results'*\n"
         
-        return response 
+        return response
+    
+    def _generate_pre_analysis_explanation(
+        self, 
+        input_data: MethodologyExplanationInput,
+        context: AnalysisContext
+    ) -> str:
+        """Generate pre-analysis explanations with theoretical focus"""
+        
+        explanations = []
+        
+        # Header
+        explanations.append(f"# 📚 **Methodology Guide - Pre-Analysis**")
+        explanations.append(f"**Your Data Context:** {context.region} region, {context.ward_count} wards")
+        explanations.append(f"**Status:** Ready for analysis")
+        explanations.append("")
+        explanations.append("---")
+        explanations.append("")
+        
+        # Method explanations based on request
+        if "composite" in input_data.methods or "both" in input_data.methods:
+            explanations.append(generate_pre_analysis_composite_explanation(input_data, context))
+        
+        if "pca" in input_data.methods or "both" in input_data.methods:
+            explanations.append(generate_pre_analysis_pca_explanation(input_data, context))
+        
+        if input_data.include_comparison and ("both" in input_data.methods or len(input_data.methods) > 1):
+            explanations.append(generate_pre_analysis_comparison_explanation(input_data, context))
+        
+        # Variable selection explanation
+        if input_data.include_variables:
+            explanations.append(generate_pre_analysis_variable_explanation(input_data, context))
+        
+        # Next steps
+        explanations.append("## 🚀 **Ready to Proceed**")
+        explanations.append("")
+        explanations.append("You can now run the analysis with: *'Run complete analysis'* or *'Start composite analysis'*")
+        explanations.append("")
+        explanations.append("After analysis completion, ask for detailed explanations of your specific results!")
+        
+        return "\n".join(explanations)
+    
+    def _generate_post_analysis_explanation(
+        self, 
+        input_data: MethodologyExplanationInput,
+        context: AnalysisContext
+    ) -> str:
+        """Generate post-analysis explanations with data-driven insights"""
+        
+        # Get actual analysis results
+        analysis_results = self._get_analysis_results(input_data.session_id)
+        
+        explanations = []
+        
+        # Header
+        explanations.append(f"# 📊 **Methodology Analysis - Your Results**")
+        explanations.append(f"**Your Data:** {context.region} region, {context.ward_count} wards")
+        explanations.append(f"**Methods Completed:** {', '.join(context.methods_run)}")
+        explanations.append("")
+        explanations.append("---")
+        explanations.append("")
+        
+        # Generate data-driven explanations
+        if context.unified_dataset_available:
+            # Enhanced explanations with actual data
+            explanations.append(generate_data_driven_explanations(input_data, context, analysis_results))
+        else:
+            # Basic explanations with available results
+            explanations.append(generate_basic_post_analysis_explanations(input_data, context, analysis_results))
+        
+        # Correlation analysis if available
+        if context.unified_dataset_available:
+            explanations.append(generate_correlation_analysis(input_data.session_id))
+        
+        return "\n".join(explanations)
+    
+    def _generate_llm_powered_response(
+        self, 
+        input_data: MethodologyExplanationInput,
+        context: AnalysisContext
+    ) -> str:
+        """Generate LLM-powered responses to specific user questions"""
+        
+        try:
+            # Build context-aware prompt based on analysis state
+            if context.analysis_completed:
+                prompt = self._build_post_analysis_prompt(input_data, context)
+            else:
+                prompt = self._build_pre_analysis_prompt(input_data, context)
+            
+            # Get LLM response
+            if self.llm_manager:
+                llm_response = self.llm_manager.get_completion(
+                    prompt=prompt,
+                    temperature=0.3,  # Lower temperature for more focused responses
+                    max_tokens=2000
+                )
+                
+                # Add header and footer for context
+                response_parts = []
+                response_parts.append(f"# 🤖 **AI-Powered Methodology Explanation**")
+                response_parts.append(f"**Your Question:** {input_data.user_question}")
+                response_parts.append(f"**Context:** {context.region} region, {'Post-Analysis' if context.analysis_completed else 'Pre-Analysis'}")
+                response_parts.append("")
+                response_parts.append("---")
+                response_parts.append("")
+                response_parts.append(llm_response)
+                response_parts.append("")
+                response_parts.append("---")
+                response_parts.append("")
+                response_parts.append("💡 **Need more details?** Ask follow-up questions about specific aspects!")
+                
+                return "\n".join(response_parts)
+            else:
+                return "❌ LLM not available for dynamic responses. Using structured explanations instead."
+                
+        except Exception as e:
+            logging.error(f"Error generating LLM response: {e}")
+            return f"❌ Error generating AI response: {str(e)}. Please try a more specific question."
+    
+    def _build_pre_analysis_prompt(
+        self, 
+        input_data: MethodologyExplanationInput,
+        context: AnalysisContext
+    ) -> str:
+        """Build context-aware prompt for pre-analysis questions"""
+        
+        prompt_parts = []
+        prompt_parts.append("You are an expert malaria epidemiologist explaining analysis methodologies.")
+        prompt_parts.append(f"The user has uploaded data for {context.ward_count} wards in {context.region} region but has not run analysis yet.")
+        prompt_parts.append("")
+        prompt_parts.append("CONTEXT - Analysis Methods Available:")
+        prompt_parts.append("1. COMPOSITE SCORE METHOD:")
+        prompt_parts.append("   - Uses min-max normalization (0-1 scaling)")
+        prompt_parts.append("   - Creates multiple model combinations of variables")
+        prompt_parts.append("   - Equal weighting through arithmetic means")
+        prompt_parts.append("   - Final score = median across all models")
+        prompt_parts.append("   - Risk categories: top 33% = High, middle 33% = Medium, bottom 33% = Low")
+        prompt_parts.append("")
+        prompt_parts.append("2. PCA METHOD:")
+        prompt_parts.append("   - Uses z-score standardization")
+        prompt_parts.append("   - Eigenvalue decomposition for component extraction")
+        prompt_parts.append("   - Data-driven variable weighting")
+        prompt_parts.append("   - Kaiser criterion (eigenvalue > 1) for component selection")
+        prompt_parts.append("")
+        prompt_parts.append("CONTEXT - Variable Selection Process:")
+        prompt_parts.append("- Variables scored based on malaria-related keywords")
+        prompt_parts.append("- Regional relevance considered for selection")
+        prompt_parts.append("- Direct vs inverse relationships automatically detected")
+        prompt_parts.append("- Expected 4-5 variables for composite, 8-10 for PCA")
+        prompt_parts.append("")
+        prompt_parts.append(f"USER QUESTION: {input_data.user_question}")
+        prompt_parts.append("")
+        prompt_parts.append("Provide a detailed, educational explanation that:")
+        prompt_parts.append("1. Directly answers their question")
+        prompt_parts.append("2. Uses the correct methodology details above")
+        prompt_parts.append("3. Explains what they can expect when they run the analysis")
+        prompt_parts.append("4. Uses simple, clear language suitable for public health practitioners")
+        prompt_parts.append("5. Focuses on practical implications for malaria intervention planning")
+        
+        return "\n".join(prompt_parts)
+    
+    def _build_post_analysis_prompt(
+        self, 
+        input_data: MethodologyExplanationInput,
+        context: AnalysisContext
+    ) -> str:
+        """Build context-aware prompt for post-analysis questions"""
+        
+        prompt_parts = []
+        prompt_parts.append("You are an expert malaria epidemiologist explaining analysis results.")
+        prompt_parts.append(f"The user has completed analysis on {context.ward_count} wards in {context.region} region.")
+        prompt_parts.append(f"Methods completed: {', '.join(context.methods_run)}")
+        prompt_parts.append("")
+        
+        # Add actual data context if available
+        try:
+            from app.data.unified_dataset_builder import load_unified_dataset
+            unified_data = load_unified_dataset(input_data.session_id)
+            
+            if unified_data is not None:
+                prompt_parts.append("ACTUAL RESULTS CONTEXT:")
+                
+                if 'composite_score' in unified_data.columns:
+                    comp_stats = get_score_statistics(unified_data, 'composite_score')
+                    prompt_parts.append(f"- Composite scores range: {comp_stats['min']:.3f} to {comp_stats['max']:.3f}")
+                    prompt_parts.append(f"- Top ward: {comp_stats['top_ward']} ({comp_stats['top_score']:.3f})")
+                    prompt_parts.append(f"- Bottom ward: {comp_stats['bottom_ward']} ({comp_stats['bottom_score']:.3f})")
+                
+                if 'pca_score' in unified_data.columns:
+                    pca_stats = get_score_statistics(unified_data, 'pca_score')
+                    prompt_parts.append(f"- PCA scores range: {pca_stats['min']:.3f} to {pca_stats['max']:.3f}")
+                    prompt_parts.append(f"- PCA top ward: {pca_stats['top_ward']} ({pca_stats['top_score']:.3f})")
+                    prompt_parts.append(f"- PCA bottom ward: {pca_stats['bottom_ward']} ({pca_stats['bottom_score']:.3f})")
+                
+                if 'composite_score' in unified_data.columns and 'pca_score' in unified_data.columns:
+                    agreement_stats = analyze_method_agreement(unified_data)
+                    prompt_parts.append(f"- Method correlation: {agreement_stats['correlation']:.3f}")
+                    prompt_parts.append(f"- Top 10 consensus: {agreement_stats['top_consensus']:.0f}% agreement")
+                
+                # Add variable information
+                numeric_cols = unified_data.select_dtypes(include=[np.number]).columns
+                analysis_cols = [col for col in numeric_cols if col not in ['WardCode', 'LGACode', 'StateCode']]
+                if len(analysis_cols) > 2:
+                    prompt_parts.append(f"- Variables in dataset: {', '.join(analysis_cols[:10])}")
+                
+        except Exception as e:
+            prompt_parts.append("- Could not load detailed results data")
+        
+        prompt_parts.append("")
+        prompt_parts.append(f"USER QUESTION: {input_data.user_question}")
+        prompt_parts.append("")
+        prompt_parts.append("Provide a detailed, data-driven explanation that:")
+        prompt_parts.append("1. Directly answers their question using their actual results")
+        prompt_parts.append("2. References specific ward names and scores when relevant")
+        prompt_parts.append("3. Explains correlations and patterns in their specific data")
+        prompt_parts.append("4. Provides actionable insights for malaria intervention planning")
+        prompt_parts.append("5. Uses the actual methodology details (equal weighting for composite, data-driven for PCA)")
+        prompt_parts.append("6. Explains why certain wards ranked as they did based on variable values")
+        
+        return "\n".join(prompt_parts) 
