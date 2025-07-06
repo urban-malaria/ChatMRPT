@@ -275,11 +275,8 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
     include_examples: bool = True
     include_comparison: bool = True
     focus_area: Optional[str] = None
+    llm_manager: Optional[Any] = None  # LLM manager for dynamic responses
     
-    def __init__(self):
-        super().__init__()
-        self.llm_manager = None  # Will be set by container if available
-        
     def set_llm_manager(self, llm_manager):
         """Set LLM manager for dynamic response generation"""
         self.llm_manager = llm_manager
