@@ -13,6 +13,9 @@ from typing import Dict, Any, List, Optional
 from flask import current_app
 from difflib import get_close_matches
 
+# Import unified memory system
+from app.core.unified_memory import get_unified_memory, MemoryType, MemoryPriority
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,6 +32,9 @@ class RequestInterpreter:
         self.data_service = data_service
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
+        
+        # Initialize unified memory system
+        self.memory = get_unified_memory()
         
         # Initialize tiered tool loading system (ONLY system needed)
         from .tiered_tool_loader import get_tiered_tool_loader
@@ -656,9 +662,21 @@ class RequestInterpreter:
 
 
     def process_message(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Main entry point - processes user message end-to-end - NO FALLBACKS."""
+        """Main entry point - processes user message end-to-end with unified memory integration."""
+        start_time = time.time()
+        tools_used = []
+        
         try:
             logger.info(f"Processing message for session {session_id}: {user_message[:100]}...")
+            
+            # Get conversation context from unified memory
+            context = self.memory.get_context(session_id)
+            relevant_memories = self.memory.recall(
+                query=user_message,
+                memory_types=[MemoryType.CONVERSATION, MemoryType.ANALYSIS_CONTEXT],
+                limit=3,
+                session_only=True
+            )
             
             # Check for automatic data description workflow
             from flask import session
@@ -667,40 +685,80 @@ class RequestInterpreter:
                 session['should_describe_data'] = False
                 
                 # Generate automatic data description
-                return self._generate_automatic_data_description(session_id)
+                result = self._generate_automatic_data_description(session_id)
+                tools_used.append('automatic_data_description')
+                
+                # Store in memory before returning
+                self._store_conversation_in_memory(
+                    user_message, result.get('response', ''), 
+                    tools_used, time.time() - start_time, True
+                )
+                return result
             
             # Step 1: Parse request - WITH CLARIFICATION
             parse_result = self.parse_request(user_message, session_id)
             
             # Handle clarification responses
             if parse_result.get('status') == 'clarification_needed':
+                self._store_conversation_in_memory(
+                    user_message, parse_result.get('response', ''), 
+                    [], time.time() - start_time, True
+                )
                 return parse_result
             
             if parse_result['status'] == 'error':
                 # Instead of showing technical error, ask for clarification
-                return self._generate_clarification_response(
+                result = self._generate_clarification_response(
                     user_message,
                     "I'm having trouble understanding what you'd like me to do. Could you please provide more details or rephrase your request?",
                     session_id
                 )
+                self._store_conversation_in_memory(
+                    user_message, result.get('response', ''), 
+                    [], time.time() - start_time, False
+                )
+                return result
             
             # Check for direct response from parsing (knowledge questions)
             parsed_intent = parse_result['parsed_intent']
             if 'direct_response' in parsed_intent and parsed_intent['direct_response']:
                 logger.info("🚀 Using direct response from parsing - no tool execution needed")
-                return {
+                result = {
                     'status': 'success',
                     'response': parsed_intent['direct_response'],
                     'visualizations': [],
                     'intent_type': parsed_intent.get('intent_type', 'knowledge'),
                     'method': 'direct_parsing_response'
                 }
+                
+                self._store_conversation_in_memory(
+                    user_message, result['response'], 
+                    ['knowledge_response'], time.time() - start_time, True
+                )
+                return result
+            
+            # Track tools that will be used
+            if 'tool_calls' in parsed_intent:
+                tools_used = [tool.get('tool_name') for tool in parsed_intent['tool_calls']]
             
             # Step 2: Execute intent - NO FALLBACKS
             execution_results = self.execute_intent(parse_result['parsed_intent'], session_id)
             
             # Step 3: Format response - NO FALLBACKS
             formatted_response = self.format_response(execution_results, user_message, session_id)
+            
+            # Store conversation in unified memory
+            success = formatted_response.get('status') == 'success'
+            response_text = formatted_response.get('response', '')
+            
+            self._store_conversation_in_memory(
+                user_message, response_text, tools_used, 
+                time.time() - start_time, success
+            )
+            
+            # Store analysis results if any
+            if success and execution_results.get('successful_results'):
+                self._store_analysis_results_in_memory(execution_results['successful_results'])
             
             return formatted_response
             
@@ -1056,6 +1114,118 @@ Keep it natural and conversational, not rigid or template-like."""
             logger.error(f"Error combining explanations intelligently: {e}")
             # Fallback to simple combination with dividers
             return '\n\n---\n\n'.join(explanations)
+
+    # ========================================================================
+    # UNIFIED MEMORY INTEGRATION METHODS
+    # ========================================================================
+    
+    def _store_conversation_in_memory(self, user_message: str, ai_response: str, 
+                                    tools_used: List[str], response_time: float, 
+                                    success: bool):
+        """Store conversation turn in unified memory."""
+        try:
+            self.memory.add_conversation_turn(
+                user_message=user_message,
+                ai_response=ai_response,
+                metadata={
+                    'tools_used': tools_used,
+                    'response_time': response_time,
+                    'success': success,
+                    'timestamp': time.time()
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to store conversation in memory: {e}")
+    
+    def _store_analysis_results_in_memory(self, successful_results: List[Dict[str, Any]]):
+        """Store analysis results in unified memory."""
+        try:
+            for result in successful_results:
+                tool_name = result.get('tool_name', 'unknown')
+                
+                # Extract meaningful results
+                analysis_data = {
+                    'tool': tool_name,
+                    'message': result.get('message', ''),
+                    'data': result.get('data', {}),
+                    'visualizations': result.get('web_path', ''),
+                    'success': result.get('status') == 'success'
+                }
+                
+                # Store in memory with high priority for analysis results
+                self.memory.store_analysis_results(
+                    analysis_type=tool_name,
+                    results=analysis_data,
+                    metadata={
+                        'execution_time': result.get('execution_time', 0),
+                        'tool_category': self._categorize_tool(tool_name)
+                    }
+                )
+        except Exception as e:
+            logger.error(f"Failed to store analysis results in memory: {e}")
+    
+    def _categorize_tool(self, tool_name: str) -> str:
+        """Categorize tool for better memory organization."""
+        if 'ranking' in tool_name.lower():
+            return 'ranking_analysis'
+        elif 'map' in tool_name.lower() or 'visualization' in tool_name.lower():
+            return 'visualization'
+        elif 'ward' in tool_name.lower():
+            return 'ward_analysis'
+        elif 'settlement' in tool_name.lower():
+            return 'settlement_analysis'
+        else:
+            return 'general_analysis'
+    
+    def _get_memory_enhanced_context(self, user_message: str, session_id: str) -> str:
+        """Get memory-enhanced context for better LLM responses."""
+        try:
+            # Get recent conversation context
+            context = self.memory.get_context(session_id)
+            
+            # Get relevant memories
+            relevant_memories = self.memory.recall(
+                query=user_message,
+                memory_types=[MemoryType.CONVERSATION, MemoryType.ANALYSIS_CONTEXT],
+                limit=3,
+                session_only=True
+            )
+            
+            context_parts = []
+            
+            # Add recent analysis context
+            if context.analysis_state:
+                context_parts.append(f"Recent Analysis: {context.analysis_state}")
+            
+            # Add entities mentioned
+            if context.entities_mentioned:
+                context_parts.append(f"Key Topics: {', '.join(context.entities_mentioned[:5])}")
+            
+            # Add tools used
+            if context.tools_used:
+                context_parts.append(f"Recent Tools: {', '.join(context.tools_used[-3:])}")
+            
+            # Add relevant memories
+            if relevant_memories:
+                memory_summaries = []
+                for memory in relevant_memories[:2]:  # Top 2 most relevant
+                    if memory.memory_item.type == MemoryType.CONVERSATION:
+                        content = memory.memory_item.content
+                        if 'message' in content:
+                            summary = content['message'].get('content', '')[:100]
+                            memory_summaries.append(f"Previous: {summary}...")
+                    elif memory.memory_item.type == MemoryType.ANALYSIS_CONTEXT:
+                        analysis_type = memory.memory_item.content.get('analysis_type', 'analysis')
+                        memory_summaries.append(f"Previous {analysis_type}")
+                
+                if memory_summaries:
+                    context_parts.append(f"Relevant History: {'; '.join(memory_summaries)}")
+            
+            return " | ".join(context_parts) if context_parts else ""
+            
+        except Exception as e:
+            logger.error(f"Failed to get memory-enhanced context: {e}")
+            return ""
 
     # Legacy methods removed - all responses now generated by LLM
     

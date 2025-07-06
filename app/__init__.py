@@ -111,6 +111,22 @@ def create_app(config_name=None):
     
     init_services(app)
     
+    # --- Initialize Unified Memory System ---
+    try:
+        from .core.unified_memory import init_unified_memory
+        memory_manager = init_unified_memory(app)
+        app.logger.info("✅ Unified memory system initialized successfully")
+        
+        # Log memory system status
+        if memory_manager.enabled:
+            app.logger.info("🧠 Memory features: Vector search, conversation tracking, analysis context")
+        else:
+            app.logger.warning("⚠️  Memory system disabled - falling back to basic mode")
+            
+    except Exception as e:
+        app.logger.error(f"❌ Failed to initialize unified memory system: {e}")
+        app.logger.warning("Continuing without advanced memory features")
+    
     # --- Register Blueprints ---
     from .web import admin_bp, register_all_blueprints
     
