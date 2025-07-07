@@ -34,17 +34,36 @@ class TPRDataExtractor:
             cache_dir=os.path.join(session_folder, 'shapefile_cache')
         )
         
+        # Add caching for parsed TPR data to prevent triple parsing
+        self._parsed_data_cache = {}
+        self._areas_cache = {}
+        
         # Create necessary directories
         os.makedirs(session_folder, exist_ok=True)
         
     def get_available_states(self, tpr_file_path: str) -> Dict[str, Any]:
-        """Get available states from TPR file for user selection"""
+        """Get available states from TPR file for user selection - WITH CACHING"""
         try:
-            parsed_data = self.tpr_parser.parse_tpr_file(tpr_file_path)
-            if parsed_data['status'] != 'success':
-                return parsed_data
+            # Check cache first to prevent re-parsing
+            cache_key = f"{tpr_file_path}_{os.path.getmtime(tpr_file_path)}"
             
-            areas = self.tpr_parser.extract_areas_for_variable_fetching(parsed_data)
+            if cache_key in self._parsed_data_cache:
+                logger.info("✅ Using cached TPR data (avoiding re-parse)")
+                parsed_data = self._parsed_data_cache[cache_key]
+                areas = self._areas_cache[cache_key]
+            else:
+                logger.info("🔄 Parsing TPR file for first time")
+                parsed_data = self.tpr_parser.parse_tpr_file(tpr_file_path)
+                if parsed_data['status'] != 'success':
+                    return parsed_data
+                
+                areas = self.tpr_parser.extract_areas_for_variable_fetching(parsed_data)
+                
+                # Cache the results to prevent triple parsing
+                self._parsed_data_cache[cache_key] = parsed_data
+                self._areas_cache[cache_key] = areas
+                logger.info(f"💾 Cached TPR data for {len(areas)} areas")
+            
             areas_df = pd.DataFrame(areas)
             available_states = sorted(areas_df['state'].unique().tolist())
             
@@ -101,17 +120,20 @@ class TPRDataExtractor:
             if progress_callback:
                 progress_callback(15, f"Processing {selected_state}")
             
-            # Step 3: Parse TPR file
-            self._update_progress(progress_callback, 20, "Parsing TPR file...")
-            parsed_data = self.tpr_parser.parse_tpr_file(tpr_file_path)
+            # Step 3: Use cached TPR data (already parsed in get_available_states)
+            self._update_progress(progress_callback, 20, "Using cached TPR data...")
+            cache_key = f"{tpr_file_path}_{os.path.getmtime(tpr_file_path)}"
             
-            if parsed_data['status'] != 'success':
-                return parsed_data
+            if cache_key not in self._parsed_data_cache:
+                logger.error("Cache miss - this should not happen")
+                return {'status': 'error', 'message': 'Internal caching error'}
             
-            # Step 4: Extract geographic areas
-            self._update_progress(progress_callback, 30, "Extracting geographic areas...")
-            areas = self.tpr_parser.extract_areas_for_variable_fetching(parsed_data)
-            logger.info(f"Identified {len(areas)} geographic areas")
+            parsed_data = self._parsed_data_cache[cache_key]
+            areas = self._areas_cache[cache_key]
+            
+            # Step 4: Use cached geographic areas  
+            self._update_progress(progress_callback, 30, "Using cached geographic areas...")
+            logger.info(f"✅ Using cached {len(areas)} geographic areas (avoiding re-extraction)")
             
             # Step 5: Fetch shapefiles
             self._update_progress(progress_callback, 40, "Fetching administrative boundaries...")

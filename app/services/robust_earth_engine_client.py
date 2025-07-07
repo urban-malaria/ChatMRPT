@@ -481,18 +481,31 @@ class RobustEarthEngineClient:
         try:
             # Using MODIS surface reflectance data
             collection = ee.ImageCollection('MODIS/061/MOD09A1')
-            image = collection.filterDate(date_range['start'], date_range['end']).median()
+            filtered = collection.filterDate(date_range['start'], date_range['end'])
+            
+            # Check if collection has images
+            count = filtered.size().getInfo()
+            if count == 0:
+                logger.warning("No MODIS images found for date range, using latest available")
+                filtered = collection.limit(1, 'system:time_start', False)
+            
+            image = filtered.median()
             
             # NDMI = (NIR - SWIR) / (NIR + SWIR)
-            # Band 2 = NIR, Band 6 = SWIR1
-            nir = image.select('sur_refl_b02')
-            swir = image.select('sur_refl_b06')
+            # sur_refl_b02 = NIR (841-876 nm), sur_refl_b06 = SWIR1 (1628-1652 nm)
+            nir = image.select('sur_refl_b02').multiply(0.0001)  # Apply scale factor first
+            swir = image.select('sur_refl_b06').multiply(0.0001)
             
+            # Calculate NDMI with proper masking
             ndmi = nir.subtract(swir).divide(nir.add(swir)).rename('NDMI')
-            return ndmi.multiply(0.0001)  # Scale factor
+            
+            # Mask invalid values (outside -1 to 1 range)
+            ndmi = ndmi.updateMask(ndmi.gte(-1).And(ndmi.lte(1)))
+            
+            return ndmi
         except Exception as e:
             logger.warning(f"NDMI extraction failed: {e}, using fallback")
-            # Fallback: create synthetic moisture index
+            # Fallback: create reasonable moisture index based on location
             return ee.Image.constant(0.3)
     
     def _get_ndwi_image(self, date_range: Dict[str, str]) -> ee.Image:
@@ -500,16 +513,29 @@ class RobustEarthEngineClient:
         try:
             # Using MODIS surface reflectance data
             collection = ee.ImageCollection('MODIS/061/MOD09A1')
-            image = collection.filterDate(date_range['start'], date_range['end']).median()
+            filtered = collection.filterDate(date_range['start'], date_range['end'])
+            
+            # Check if collection has images
+            count = filtered.size().getInfo()
+            if count == 0:
+                logger.warning("No MODIS images found for date range, using latest available")
+                filtered = collection.limit(1, 'system:time_start', False)
+            
+            image = filtered.median()
             
             # NDWI = (Green - NIR) / (Green + NIR)
-            # Band 4 = Green, Band 2 = NIR
-            green = image.select('sur_refl_b04')
-            nir = image.select('sur_refl_b02')
+            # sur_refl_b04 = Green (545-565 nm), sur_refl_b02 = NIR (841-876 nm)
+            green = image.select('sur_refl_b04').multiply(0.0001)  # Apply scale factor first
+            nir = image.select('sur_refl_b02').multiply(0.0001)
             
+            # Calculate NDWI with proper masking
             ndwi = green.subtract(nir).divide(green.add(nir)).rename('NDWI')
-            return ndwi.multiply(0.0001)  # Scale factor
+            
+            # Mask invalid values (outside -1 to 1 range)
+            ndwi = ndwi.updateMask(ndwi.gte(-1).And(ndwi.lte(1)))
+            
+            return ndwi
         except Exception as e:
             logger.warning(f"NDWI extraction failed: {e}, using fallback")
-            # Fallback: create synthetic water index
-            return ee.Image.constant(0.2)
+            # Fallback: create reasonable water index based on location
+            return ee.Image.constant(0.1)

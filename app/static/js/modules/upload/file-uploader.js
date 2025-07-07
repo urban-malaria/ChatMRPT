@@ -935,10 +935,7 @@ Would you like me to proceed with the composite score and PCA analysis? *(This w
         
         this.updateSessionStatus();
         
-        // Show download options
-        this.showTprDownloadOptions(response);
-        
-        // Update download tab
+        // Update download tab only (remove redundant TPR tab downloads)
         this.updateDownloadTab(response);
         
         // Add success message to chat
@@ -977,42 +974,7 @@ Your data is now ready for region-aware malaria risk analysis!`;
         console.error('TPR upload error:', errorMessage);
     }
     
-    /**
-     * Show download options for processed TPR data
-     */
-    showTprDownloadOptions(response) {
-        const downloadContent = DOMHelpers.getElementById('tpr-download-content');
-        if (!downloadContent) return;
-        
-        // Get convergence result information
-        const convergenceResult = response.convergence_result || {};
-        const stateName = convergenceResult.state_name || convergenceResult.selected_state || 'processed state';
-        const wardCount = convergenceResult.extracted_wards || 0;
-        const hasShapefile = convergenceResult.has_shapefile || false;
-        const actualSelectedState = convergenceResult.selected_state || stateName;
-        
-        downloadContent.style.display = 'block';
-        downloadContent.innerHTML = `
-            <div class="mt-3">
-                <h6><i class="fas fa-download me-2"></i>Download Your Convergence Data:</h6>
-                <p class="text-muted small">Ready for main workflow: ${wardCount} wards from ${actualSelectedState}</p>
-                <div class="d-grid gap-2">
-                    <a href="/api/download/convergence-csv/${stateName}" class="btn btn-success btn-sm">
-                        <i class="fas fa-table me-2"></i>Download ${stateName}_plus.csv
-                    </a>
-                    <a href="/api/download/convergence-shapefile/${stateName}" class="btn btn-info btn-sm">
-                        <i class="fas fa-map me-2"></i>Download ${stateName}_state.zip
-                    </a>
-                </div>
-                <div class="mt-2">
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        These files are ready for the main ChatMRPT analysis workflow.
-                    </small>
-                </div>
-            </div>
-        `;
-    }
+    // Removed showTprDownloadOptions - downloads now handled only in dedicated download tab
     
     /**
      * Update download tab with processed data info

@@ -934,12 +934,15 @@ def store_raw_csv_only(session_folder: str, csv_file):
 
 # === TPR UPLOAD ROUTES ===
 
+# Global cache to prevent duplicate requests
+_active_requests = {}
+
 @upload_bp.route('/api/tpr/detect-states', methods=['POST'])
 @validate_session
 @handle_errors
 @log_execution_time
 def detect_tpr_states():
-    """Detect available states in uploaded TPR file"""
+    """Detect available states in uploaded TPR file - WITH REQUEST DEDUPLICATION"""
     try:
         if 'file' not in request.files:
             return jsonify({
@@ -954,39 +957,59 @@ def detect_tpr_states():
                 'error': 'No file selected'
             }), 400
         
-        # Save file temporarily
+        # Check for duplicate requests
         session_id = session.get('session_id')
-        session_folder = create_session_upload_folder(session_id)
+        request_key = f"detect_{session_id}_{file.filename}"
         
-        filename = f"tpr_temp_{file.filename}"
-        file_path = os.path.join(session_folder, filename)
-        file.save(file_path)
-        
-        # Import TPR data extractor
-        from app.services.tpr_data_extractor import TPRDataExtractor
-        
-        # Detect states in the file
-        extractor = TPRDataExtractor(session_folder)
-        result = extractor.get_available_states(file_path)
-        
-        # Clean up temp file
-        os.remove(file_path)
-        
-        if result['status'] == 'success':
-            return jsonify({
-                'success': True,
-                'states': result['available_states'],
-                'total_states': result['total_states'],
-                'message': result['message']
-            })
-        else:
+        if request_key in _active_requests:
+            logger.info(f"🔄 Duplicate detect request blocked for {file.filename}")
             return jsonify({
                 'success': False,
-                'error': result['message']
-            }), 400
+                'error': 'Request already in progress. Please wait.'
+            }), 429
+        
+        # Mark request as active
+        _active_requests[request_key] = True
+        
+        try:
+            # Save file temporarily
+            session_folder = create_session_upload_folder(session_id)
+            
+            filename = f"tpr_temp_{file.filename}"
+            file_path = os.path.join(session_folder, filename)
+            file.save(file_path)
+        
+            # Import TPR data extractor
+            from app.services.tpr_data_extractor import TPRDataExtractor
+            
+            # Detect states in the file
+            extractor = TPRDataExtractor(session_folder)
+            result = extractor.get_available_states(file_path)
+            
+            # Clean up temp file
+            os.remove(file_path)
+            
+            if result['status'] == 'success':
+                return jsonify({
+                    'success': True,
+                    'states': result['available_states'],
+                    'total_states': result['total_states'],
+                    'message': result['message']
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result['message']
+                }), 400
+                
+        finally:
+            # Always remove from active requests
+            _active_requests.pop(request_key, None)
         
     except Exception as e:
         logger.error(f"Error detecting TPR states: {e}")
+        # Clean up on error
+        _active_requests.pop(f"detect_{session.get('session_id')}_{request.files['file'].filename}", None)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1015,39 +1038,60 @@ def process_tpr_file():
                 'error': 'No state selected'
             }), 400
         
-        # Save file
+        # Check for duplicate processing requests  
         session_id = session.get('session_id')
-        session_folder = create_session_upload_folder(session_id)
+        process_key = f"process_{session_id}_{selected_state}_{file.filename}"
         
-        filename = f"tpr_{selected_state}_{file.filename}"
-        file_path = os.path.join(session_folder, filename)
-        file.save(file_path)
+        if process_key in _active_requests:
+            logger.info(f"🔄 Duplicate process request blocked for {selected_state}")
+            return jsonify({
+                'success': False,
+                'error': f'Processing already in progress for {selected_state}. Please wait.'
+            }), 429
         
-        # Import TPR data extractor
-        from app.services.tpr_data_extractor import TPRDataExtractor
+        # Mark request as active
+        _active_requests[process_key] = True
         
-        # Process TPR file
-        extractor = TPRDataExtractor(session_folder)
-        result = extractor.extract_raw_data_for_convergence(
-            tpr_file_path=file_path,
-            selected_state=selected_state
-        )
+        try:
+            # Save file
+            session_folder = create_session_upload_folder(session_id)
+            
+            filename = f"tpr_{selected_state}_{file.filename}"
+            file_path = os.path.join(session_folder, filename)
+            file.save(file_path)
         
-        # The extractor should create:
-        # - {state_name}_plus.csv (convergence data)
-        # - {state_name}_state.zip (shapefile)
-        
-        return jsonify({
-            'success': True,
-            'message': f'TPR data processed successfully for {selected_state}',
-            'convergence_result': result,
-            'target_state': selected_state,
-            'extracted_wards': result.get('extracted_wards', 0),
-            'variables_included': result.get('variables_included', [])
-        })
+            # Import TPR data extractor
+            from app.services.tpr_data_extractor import TPRDataExtractor
+            
+            # Process TPR file
+            extractor = TPRDataExtractor(session_folder)
+            result = extractor.extract_raw_data_for_convergence(
+                tpr_file_path=file_path,
+                selected_state=selected_state
+            )
+            
+            # The extractor should create:
+            # - {state_name}_plus.csv (convergence data)
+            # - {state_name}_state.zip (shapefile)
+            
+            return jsonify({
+                'success': True,
+                'message': f'TPR data processed successfully for {selected_state}',
+                'convergence_result': result,
+                'target_state': selected_state,
+                'extracted_wards': result.get('extracted_wards', 0),
+                'variables_included': result.get('variables_included', [])
+            })
+            
+        finally:
+            # Always remove from active requests
+            _active_requests.pop(process_key, None)
         
     except Exception as e:
         logger.error(f"Error processing TPR file: {e}")
+        # Clean up on error
+        if 'process_key' in locals():
+            _active_requests.pop(process_key, None)
         return jsonify({
             'success': False,
             'error': str(e)
