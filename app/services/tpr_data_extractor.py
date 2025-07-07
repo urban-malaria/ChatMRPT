@@ -457,9 +457,18 @@ class TPRDataExtractor:
                 logger.info(f"   - Identifiers: {[col for col in identifier_columns if col in final_columns]}")
                 logger.info(f"   - Environmental vars: {len(all_env_columns)}")
                 
-                # Step 6: Save convergence files
+                # Step 6: Save convergence files with NaN protection
                 state_name_clean = selected_state.replace(' ', '_').lower()
                 convergence_csv_path = os.path.join(self.session_folder, f'{state_name_clean}_plus.csv')
+                
+                # Fill NaN values with "NA" string (prevents JSON parsing errors)
+                nan_columns = convergence_final.columns[convergence_final.isna().any()].tolist()
+                if nan_columns:
+                    logger.warning(f"🚨 Found NaN values in columns: {nan_columns}")
+                    for col in nan_columns:
+                        convergence_final[col] = convergence_final[col].fillna("NA")
+                    logger.info(f"🔧 Filled NaN values with 'NA' in {len(nan_columns)} columns")
+                
                 convergence_final.to_csv(convergence_csv_path, index=False)
                 
                 logger.info(f"✅ Created {state_name_clean}_plus.csv: {len(convergence_final)} wards, {len(convergence_final.columns)} columns")

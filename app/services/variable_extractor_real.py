@@ -104,6 +104,20 @@ class RealVariableExtractor:
                 'description': 'Nighttime light intensity',
                 'unit': 'nanoWatts/cm²/sr',
                 'typical_range': [0, 50]
+            },
+            'mean_NDMI': {
+                'name': 'Normalized Difference Moisture Index',
+                'source': 'MODIS/061/MOD09A1',
+                'description': 'Vegetation moisture content indicator',
+                'unit': 'index',
+                'typical_range': [-1, 1]
+            },
+            'mean_NDWI': {
+                'name': 'Normalized Difference Water Index',
+                'source': 'MODIS/061/MOD09A1',
+                'description': 'Water content indicator',
+                'unit': 'index',
+                'typical_range': [-1, 1]
             }
         }
         

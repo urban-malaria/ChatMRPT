@@ -550,7 +550,7 @@ def generate_dynamic_data_summary(session_id: str, session_folder: str, upload_t
                 'total_rows': len(raw_data),
                 'total_columns': len(raw_data.columns),
                 'column_names': raw_data.columns.tolist(),
-                'preview_rows': raw_data.head(5).to_dict('records'),
+                'preview_rows': raw_data.head(5).fillna('N/A').to_dict('records'),
                 'column_types': detect_column_types(raw_data),
                 'data_completeness': calculate_data_completeness(raw_data),
                 'data_quality_assessment': assess_data_quality(raw_data)
