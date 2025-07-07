@@ -58,6 +58,12 @@ class AnalysisEngine:
                 'message': 'Composite analysis completed successfully.',
                 'variables_used': result.get('variables_used', []),
                 'analysis_type': 'composite_scoring',
+                'data': {
+                    'variables_used': result.get('variables_used', []),
+                    'variable_selection_method': result.get('selection_method', 'auto'),
+                    'wards_analyzed': len(result.get('vulnerability_rankings', [])) if result.get('vulnerability_rankings') is not None else 0,
+                    'results': result
+                },
                 'results': result
             }
             
@@ -67,7 +73,12 @@ class AnalysisEngine:
                 'status': 'error',
                 'message': f'Composite analysis failed: {str(e)}',
                 'variables_used': variables or [],
-                'analysis_type': 'composite_scoring'
+                'analysis_type': 'composite_scoring',
+                'data': {
+                    'variables_used': variables or [],
+                    'variable_selection_method': 'failed',
+                    'error': str(e)
+                }
             }
     
     def run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None) -> Dict[str, Any]:

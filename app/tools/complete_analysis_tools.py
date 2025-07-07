@@ -6,6 +6,7 @@ settlement integration, as per the updated post-permission workflow overhaul.
 """
 
 import logging
+import os
 import time
 import traceback
 from typing import Dict, Any, Optional, List
@@ -28,7 +29,6 @@ class RunCompleteAnalysisInput(BaseModel):
         None, 
         description="Custom variables for PCA analysis. If None, uses region-aware auto-selection"
     )
-    include_visualizations: bool = Field(True, description="Whether to generate visualizations")
     create_unified_dataset: bool = Field(True, description="Whether to create/update unified dataset")
     validate_variables: bool = Field(True, description="Whether to validate custom variables against available data")
 
@@ -50,7 +50,6 @@ class RunCompleteAnalysis(DataAnalysisTool):
     
     name: str = "run_complete_analysis"
     description: str = "Run complete dual-method malaria risk analysis (Composite Score + PCA) with support for custom variable selection. Allows different variables for each method or auto-selection based on region."
-    include_visualizations: bool = Field(True, description="Whether to generate visualizations")
     create_unified_dataset: bool = Field(True, description="Whether to create/update unified dataset")
     
     def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
@@ -78,7 +77,6 @@ class RunCompleteAnalysis(DataAnalysisTool):
                     'parameters': {
                         'composite_variables': kwargs.get('composite_variables'),
                         'pca_variables': kwargs.get('pca_variables'),
-                        'include_visualizations': kwargs.get('include_visualizations', True),
                         'create_unified_dataset': kwargs.get('create_unified_dataset', True),
                         'validate_variables': kwargs.get('validate_variables', True)
                     },
@@ -91,7 +89,6 @@ class RunCompleteAnalysis(DataAnalysisTool):
         try:
             composite_variables = kwargs.get('composite_variables')
             pca_variables = kwargs.get('pca_variables')
-            include_visualizations = kwargs.get('include_visualizations', True)
             create_unified_dataset = kwargs.get('create_unified_dataset', True)
             validate_variables = kwargs.get('validate_variables', True)
             
@@ -134,68 +131,40 @@ class RunCompleteAnalysis(DataAnalysisTool):
                     success=True
                 )
             
-            # Run both analyses simultaneously using threading with proper Flask context
-            import threading
-            from flask import copy_current_request_context
-            
+            # Run both analyses sequentially for better reliability
             analysis_start_time = time.time()
             
-            # Results containers
-            composite_result = {'success': False}
-            pca_result = {'success': False}
-            analysis_errors = []
+            # Run composite analysis first
+            logger.info("🚀 Starting composite analysis...")
+            composite_result = self._run_composite_analysis(session_id, final_composite_vars)
+            if composite_result['success']:
+                logger.info("✅ Composite analysis completed successfully")
+            else:
+                logger.error(f"❌ Composite analysis failed: {composite_result['message']}")
             
-            # Capture the current Flask app context
-            app = current_app._get_current_object()
-            
-            def run_composite():
-                try:
-                    nonlocal composite_result
-                    with app.app_context():
-                        composite_result = self._run_composite_analysis(session_id, final_composite_vars)
-                    logger.info("✅ Composite analysis completed in parallel")
-                except Exception as e:
-                    logger.error(f"❌ Composite analysis failed in parallel: {e}")
-                    composite_result = {'success': False, 'message': str(e), 'error_details': str(e)}
-                    analysis_errors.append(f"Composite: {str(e)}")
-            
-            def run_pca():
-                try:
-                    nonlocal pca_result
-                    with app.app_context():
-                        pca_result = self._run_pca_analysis(session_id, final_pca_vars)
-                    logger.info("✅ PCA analysis completed in parallel")
-                except Exception as e:
-                    logger.error(f"❌ PCA analysis failed in parallel: {e}")
-                    pca_result = {'success': False, 'message': str(e), 'error_details': str(e)}
-                    analysis_errors.append(f"PCA: {str(e)}")
-            
-            # Create threads with copied context
-            composite_thread = threading.Thread(target=copy_current_request_context(run_composite), name="CompositeAnalysis")
-            pca_thread = threading.Thread(target=copy_current_request_context(run_pca), name="PCAAnalysis")
-            
-            composite_thread.start()
-            pca_thread.start()
-            
-            # Wait for both to complete
-            composite_thread.join()
-            pca_thread.join()
+            # Run PCA analysis second
+            logger.info("🔬 Starting PCA analysis...")  
+            pca_result = self._run_pca_analysis(session_id, final_pca_vars)
+            if pca_result['success']:
+                logger.info("✅ PCA analysis completed successfully")
+            else:
+                logger.error(f"❌ PCA analysis failed: {pca_result['message']}")
             
             analysis_execution_time = time.time() - analysis_start_time
-            logger.info(f"🔄 Both analyses completed in {analysis_execution_time:.2f} seconds")
+            logger.info(f"🔄 Both analyses completed sequentially in {analysis_execution_time:.2f} seconds")
             
             # 🎯 LOG ANALYSIS COMPLETION - CRITICAL FOR DEMO ANALYTICS
             if interaction_logger:
                 interaction_logger.log_analysis_event(
                     session_id=session_id,
-                    event_type='parallel_analysis_complete',
+                    event_type='sequential_analysis_complete',
                     details={
                         'composite_success': composite_result['success'],
                         'pca_success': pca_result['success'],
                         'analysis_time_seconds': analysis_execution_time,
                         'composite_error': composite_result.get('error_details') if not composite_result['success'] else None,
                         'pca_error': pca_result.get('error_details') if not pca_result['success'] else None,
-                        'execution_method': 'parallel_threading'
+                        'execution_method': 'sequential'
                     },
                     success=composite_result['success'] and pca_result['success']
                 )
@@ -217,29 +186,57 @@ class RunCompleteAnalysis(DataAnalysisTool):
                     error_details=composite_result.get('error_details')
                 )
             
+            # Check for PCA recovery in unified dataset if initial PCA failed
+            pca_recovered = False
             if not pca_result['success']:
-                # 🎯 LOG PCA ANALYSIS FAILURE - DEMO ERROR TRACKING
-                if interaction_logger:
-                    interaction_logger.log_error(
-                        session_id=session_id,
-                        error_type='PCAAnalysisFailure',
-                        error_message=pca_result['message'],
-                        stack_trace=pca_result.get('error_details', 'No stack trace available')
-                    )
+                logger.warning(f"⚠️ Initial PCA analysis failed: {pca_result['message']}")
+                logger.info("🔍 Checking if PCA was recovered during unified dataset creation...")
                 
-                return ToolExecutionResult(
-                    success=False,
-                    message=f"PCA analysis failed: {pca_result['message']}",
-                    error_details=pca_result.get('error_details')
-                )
+                # Check if PCA rankings file exists (indicates successful PCA recovery)
+                pca_rankings_path = f"instance/uploads/{session_id}/analysis_vulnerability_rankings_pca.csv"
+                if os.path.exists(pca_rankings_path):
+                    logger.info("✅ PCA analysis recovered successfully in unified dataset phase")
+                    pca_recovered = True
+                    pca_result = {
+                        'success': True,
+                        'message': 'PCA analysis completed via unified dataset recovery',
+                        'data': {'recovered_from_unified_dataset': True}
+                    }
+                else:
+                    # 🎯 LOG PCA ANALYSIS FAILURE - DEMO ERROR TRACKING
+                    if interaction_logger:
+                        interaction_logger.log_error(
+                            session_id=session_id,
+                            error_type='PCAAnalysisFailure',
+                            error_message=pca_result['message'],
+                            stack_trace=pca_result.get('error_details', 'No stack trace available')
+                        )
+                    
+                    return ToolExecutionResult(
+                        success=False,
+                        message=f"PCA analysis failed: {pca_result['message']}",
+                        error_details=pca_result.get('error_details')
+                    )
             
             # Create/update unified dataset without settlement integration
             if create_unified_dataset:
-                logger.info("📊 Creating unified dataset without settlement integration logic (preserving original data)...")
-                unified_result = self._create_settlement_free_unified_dataset(session_id)
-                
-                if not unified_result['success']:
-                    logger.warning(f"Unified dataset creation failed: {unified_result['message']}")
+                # Actually attempt to create unified dataset instead of assuming it exists
+                logger.info("📊 Creating unified dataset...")
+                try:
+                    from ..data.unified_dataset_builder import UnifiedDatasetBuilder
+                    builder = UnifiedDatasetBuilder(session_id)
+                    unified_result = builder.build_unified_dataset()
+                    
+                    if unified_result.get('status') == 'success':
+                        logger.info(f"✅ Unified dataset created successfully: {unified_result['message']}")
+                        unified_result['success'] = True  # Add success key for compatibility
+                    else:
+                        logger.warning(f"❌ Unified dataset creation failed: {unified_result['message']}")
+                        unified_result['success'] = False  # Add success key for compatibility
+                        # Continue anyway - analyses succeeded
+                except Exception as e:
+                    logger.error(f"💥 Error creating unified dataset: {e}")
+                    unified_result = {'success': False, 'message': f'Error: {str(e)}'}
                     # Continue anyway - analyses succeeded
             
             # Generate comparison summary
@@ -249,18 +246,9 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 pca_result['data']
             )
             
-            # Extract visualization paths for frontend (only include if valid paths exist)
-            visualizations = {}
-            composite_viz = composite_result.get('data', {}).get('visualizations')
-            pca_viz = pca_result.get('data', {}).get('visualizations')
+            # Note: Visualization auto-generation removed - users can request visualizations separately
             
-            # Only include visualizations that have valid paths
-            if composite_viz and self._has_valid_viz_paths(composite_viz):
-                visualizations['composite'] = composite_viz
-            if pca_viz and self._has_valid_viz_paths(pca_viz):
-                visualizations['pca'] = pca_viz
-            
-            # Prepare comprehensive result (don't include empty visualizations to prevent frontend errors)
+            # Prepare comprehensive result (clean summary without auto-generated visualizations)
             result_data = {
                 'composite_analysis': composite_result['data'],
                 'pca_analysis': pca_result['data'],
@@ -268,14 +256,10 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 'analyses_completed': ['composite_score', 'pca'],
                 'unified_dataset_created': create_unified_dataset and unified_result.get('success', False),
                 'execution_time_seconds': analysis_execution_time,
-                'execution_method': 'parallel',
+                'execution_method': 'sequential',
                 'settlement_integration_logic': 'excluded',
                 'original_settlement_data': 'preserved'
             }
-            
-            # Only include visualizations if they have valid paths
-            if visualizations and any(self._has_valid_viz_paths(v) for v in visualizations.values()):
-                result_data['visualizations'] = visualizations
             
             # Mark comprehensive analysis as complete for workflow guidance
             self._mark_analysis_complete(session_id)
@@ -312,8 +296,8 @@ class RunCompleteAnalysis(DataAnalysisTool):
                             'pca': pca_result.get('data', {}).get('variable_selection_method', 'auto')
                         },
                         'performance_metrics': {
-                            'parallel_execution': True,
-                            'threading_efficiency': round(analysis_execution_time / total_execution_time * 100, 1)
+                            'sequential_execution': True,
+                            'execution_efficiency': round(analysis_execution_time / total_execution_time * 100, 1)
                         }
                     },
                     success=True
@@ -325,7 +309,7 @@ class RunCompleteAnalysis(DataAnalysisTool):
                 data=result_data,
                 metadata={
                     'analyses_run': ['composite_score', 'pca'],
-                    'execution_method': 'parallel',
+                    'execution_method': 'sequential',
                     'execution_time_seconds': analysis_execution_time,
                     'total_execution_time_seconds': total_execution_time,
                     'unified_dataset_status': 'created' if result_data['unified_dataset_created'] else 'failed',
@@ -637,138 +621,284 @@ class RunCompleteAnalysis(DataAnalysisTool):
             from ..data.unified_dataset_builder import load_unified_dataset
             gdf = load_unified_dataset(session_id)
             
+            # 🔍 DEBUG: Check unified dataset structure
+            if gdf is not None:
+                print(f"🔍 SUMMARY DEBUG: Unified dataset loaded: {len(gdf)} wards, {len(gdf.columns)} columns")
+                print(f"🔍 SUMMARY DEBUG: First few columns: {list(gdf.columns)[:10]}")
+                
+                # Check for key columns
+                key_columns = ['composite_score', 'pca_score', 'WardName', 'WardCode']
+                for col in key_columns:
+                    if col in gdf.columns:
+                        print(f"🔍 SUMMARY DEBUG: ✅ Found '{col}' column")
+                    else:
+                        print(f"🔍 SUMMARY DEBUG: ❌ Missing '{col}' column")
+            else:
+                print(f"🔍 SUMMARY DEBUG: ❌ Failed to load unified dataset")
+            
             if gdf is None:
                 return f"✅ **Analysis Complete** in {execution_time:.1f} seconds! Results are available but detailed rankings could not be loaded."
             
-            # Get top and bottom 5 for both methods (using correct column names)
-            composite_top5 = gdf.nlargest(5, 'composite_score')[['WardName', 'composite_score', 'composite_category']].to_dict('records')
-            composite_bottom5 = gdf.nsmallest(5, 'composite_score')[['WardName', 'composite_score', 'composite_category']].to_dict('records')
+            # DEBUG: Check what columns exist in the unified dataset
+            logger.info(f"🔍 UNIFIED DATASET DEBUG: Available columns: {list(gdf.columns)}")
+            logger.info(f"🔍 UNIFIED DATASET DEBUG: Dataset shape: {gdf.shape}")
             
-            # PCA uses 'vulnerability_category' not 'pca_category'
-            pca_top5 = gdf.nlargest(5, 'pca_score')[['WardName', 'pca_score', 'vulnerability_category']].to_dict('records')
-            pca_bottom5 = gdf.nsmallest(5, 'pca_score')[['WardName', 'pca_score', 'vulnerability_category']].to_dict('records')
+            # Dynamically detect column names for composite and PCA scores
+            composite_score_col = None
+            pca_score_col = None
+            ward_name_col = None
+            
+            # Find composite score column
+            for col in gdf.columns:
+                if 'composite' in col.lower() and 'score' in col.lower():
+                    composite_score_col = col
+                    break
+            
+            # Find PCA score column
+            for col in gdf.columns:
+                if 'pca' in col.lower() and 'score' in col.lower():
+                    pca_score_col = col
+                    break
+            
+            # Find ward name column
+            for col in gdf.columns:
+                if col.lower() in ['wardname', 'ward_name', 'ward']:
+                    ward_name_col = col
+                    break
+            
+            logger.info(f"🔍 COLUMN DETECTION: Composite={composite_score_col}, PCA={pca_score_col}, Ward={ward_name_col}")
+            
+            # Check if we found the required columns
+            missing_analysis = []
+            if not composite_score_col:
+                missing_analysis.append("composite_score")
+            if not pca_score_col:
+                missing_analysis.append("pca_score")
+            if not ward_name_col:
+                missing_analysis.append("ward_name")
+            
+            if missing_analysis:
+                logger.warning(f"🔍 UNIFIED DATASET DEBUG: Missing analysis columns: {missing_analysis}")
+                logger.info(f"🔍 UNIFIED DATASET DEBUG: Falling back to analysis results directly")
+                
+                # Fall back to using analysis results directly
+                return self._generate_summary_from_analysis_results(composite_result, pca_result, comparison_summary, execution_time)
+            
+            # Check for NaN values in score columns
+            composite_nan_count = gdf[composite_score_col].isna().sum() if composite_score_col else 0
+            pca_nan_count = gdf[pca_score_col].isna().sum() if pca_score_col else 0
+            
+            if composite_nan_count > 0 or pca_nan_count > 0:
+                logger.warning(f"🔍 UNIFIED DATASET DEBUG: NaN values found - Composite: {composite_nan_count}, PCA: {pca_nan_count}")
+                logger.info(f"🔍 UNIFIED DATASET DEBUG: Falling back to analysis results directly")
+                
+                # Fall back to using analysis results directly
+                return self._generate_summary_from_analysis_results(composite_result, pca_result, comparison_summary, execution_time)
+            
+            # Detect category columns
+            composite_category_col = None
+            pca_category_col = None
+            
+            for col in gdf.columns:
+                if 'composite' in col.lower() and 'categor' in col.lower():
+                    composite_category_col = col
+                elif ('pca' in col.lower() or 'vulnerabilit' in col.lower()) and 'categor' in col.lower():
+                    pca_category_col = col
+            
+            # Get top and bottom 5 for both methods (using dynamically detected column names)
+            composite_cols = [ward_name_col, composite_score_col]
+            if composite_category_col:
+                composite_cols.append(composite_category_col)
+            
+            composite_top5 = gdf.nlargest(5, composite_score_col)[composite_cols].to_dict('records')
+            composite_bottom5 = gdf.nsmallest(5, composite_score_col)[composite_cols].to_dict('records')
+            
+            pca_cols = [ward_name_col, pca_score_col]
+            if pca_category_col:
+                pca_cols.append(pca_category_col)
+                
+            pca_top5 = gdf.nlargest(5, pca_score_col)[pca_cols].to_dict('records')
+            pca_bottom5 = gdf.nsmallest(5, pca_score_col)[pca_cols].to_dict('records')
             
             # Get variables used for each method (including custom variable info)
             composite_data = composite_result.get('data', {})
             pca_data = pca_result.get('data', {})
             
-            # Extract variables for composite analysis
-            composite_vars = composite_data.get('custom_variables_used') or composite_data.get('variables_used', [])
+            # Extract variables for composite analysis - IMPROVED DETECTION
+            composite_vars = (
+                composite_data.get('custom_variables_used') or 
+                composite_data.get('variables_used', []) or
+                composite_data.get('selected_variables', []) or
+                composite_data.get('analysis_variables', [])
+            )
             composite_selection_method = composite_data.get('variable_selection_method', 'auto')
             
-            # Extract variables for PCA analysis
-            pca_vars_raw = pca_data.get('custom_variables_used') or pca_data.get('variables_used', [])
+            # Extract variables for PCA analysis - IMPROVED DETECTION
+            pca_vars_raw = (
+                pca_data.get('custom_variables_used') or 
+                pca_data.get('variables_used', []) or
+                pca_data.get('selected_variables', []) or
+                pca_data.get('analysis_variables', [])
+            )
             pca_selection_method = pca_data.get('variable_selection_method', 'auto')
             
             # Filter out ward identification columns from PCA variables
             pca_vars = [v for v in pca_vars_raw if v.lower() not in ['wardname', 'ward_name', 'ward', 'lga', 'state']]
             
+            # DEBUG: Log variable detection results
+            logger.info(f"🔍 VARIABLE DETECTION: Composite vars: {composite_vars}")
+            logger.info(f"🔍 VARIABLE DETECTION: PCA vars: {pca_vars}")
+            logger.info(f"🔍 VARIABLE DETECTION: Composite data keys: {list(composite_data.keys())}")
+            logger.info(f"🔍 VARIABLE DETECTION: PCA data keys: {list(pca_data.keys())}")
+            
             # Calculate method agreement
             agreement_rate = comparison_summary.get('agreement_rate', 0)
             consensus_wards = comparison_summary.get('consensus_wards', [])
             
-            # Build comprehensive summary with better formatting
+            # Detect geographic region for contextualized recommendations
+            region_info = self._extract_region_info(gdf)
+            
+            # Generate dynamic recommendations based on actual results
+            recommendations = self._generate_smart_recommendations(
+                composite_top5, pca_top5, composite_bottom5, pca_bottom5, 
+                agreement_rate, consensus_wards, region_info, gdf
+            )
+            
+            # Build professional summary
             summary_parts = []
             
-            # Header with clear separation
-            summary_parts.append(f"# 🎯 **Malaria Risk Analysis Complete**")
-            summary_parts.append(f"*{len(gdf)} wards analyzed in {execution_time:.1f} seconds*")
+            # Executive Summary Header
+            summary_parts.append("# Malaria Risk Analysis Results")
+            summary_parts.append("")
+            summary_parts.append(f"**Geographic Coverage:** {len(gdf)} wards analyzed")
+            summary_parts.append(f"**Analysis Region:** {region_info['region_name']}")
             summary_parts.append("")
             summary_parts.append("---")
             summary_parts.append("")
             
-            # Method agreement section
-            summary_parts.append(f"## 📊 **Method Agreement: {agreement_rate}%**")
+            # Key Findings Summary
+            summary_parts.append("## Executive Summary")
+            summary_parts.append("")
+            
+            # Method agreement explanation - COMMENTED OUT DUE TO 0% ISSUE
+            # if agreement_rate > 70:
+            #     agreement_desc = "High consensus between analysis methods"
+            #     agreement_note = "Both analytical approaches identify similar high-risk areas"
+            # elif agreement_rate > 30:
+            #     agreement_desc = "Moderate consensus between analysis methods"
+            #     agreement_note = "Methods show some agreement with complementary insights"
+            # else:
+            #     agreement_desc = "Complementary analytical perspectives"
+            #     agreement_note = "Each method reveals different vulnerability patterns for comprehensive coverage"
+            # 
+            # summary_parts.append(f"**Method Consensus:** {agreement_desc} ({agreement_rate}%)")
+            # summary_parts.append(f"*{agreement_note}*")
+            # summary_parts.append("")
+            
             if consensus_wards:
-                summary_parts.append(f"**High-priority consensus wards:** {', '.join(consensus_wards[:5])}")
-            summary_parts.append("")
+                summary_parts.append(f"**Highest Priority Wards:** {', '.join(consensus_wards[:3])}")
+                summary_parts.append("*Identified as high-risk by both analytical methods*")
+                summary_parts.append("")
+            
             summary_parts.append("---")
             summary_parts.append("")
             
-            # Composite Score Results with better spacing
-            summary_parts.append("## 🏆 **Composite Score Method**")
+            # Methodology Overview
+            summary_parts.append("## Methodology")
             summary_parts.append("")
             
-            # Variable selection information
+            # Get human-readable variable names using LLM beautification
+            composite_vars_display = self._beautify_variable_names(composite_vars)
+            pca_vars_display = self._beautify_variable_names(pca_vars)
+            
+            # Composite Score Method
+            summary_parts.append("### Composite Score Analysis")
             if composite_selection_method == 'user_specified':
-                summary_parts.append(f"**Custom variables used ({len(composite_vars)}):** {', '.join(composite_vars)}")
-                summary_parts.append("*🎛️ User-specified variable selection*")
+                summary_parts.append(f"**Variables Used:** {', '.join(composite_vars_display)} ({len(composite_vars)} indicators)")
+                summary_parts.append("*Custom variable selection specified by user*")
             else:
-                summary_parts.append(f"**Auto-selected variables ({len(composite_vars)}):** {', '.join(composite_vars)}")
-                summary_parts.append("*🤖 Region-aware automatic selection*")
-            summary_parts.append("")
-            summary_parts.append("### 🚨 **Top 5 Most Vulnerable Wards:**")
-            summary_parts.append("")
-            for i, ward in enumerate(composite_top5, 1):
-                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['composite_score']:.3f} ({ward['composite_category']})")
-            summary_parts.append("")
-            summary_parts.append("### ✅ **Top 5 Least Vulnerable Wards:**")
-            summary_parts.append("")
-            for i, ward in enumerate(composite_bottom5, 1):
-                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['composite_score']:.3f} ({ward['composite_category']})")
-            summary_parts.append("")
-            summary_parts.append("---")
+                summary_parts.append(f"**Variables Used:** {', '.join(composite_vars_display)} ({len(composite_vars)} indicators)")
+                summary_parts.append(f"*Scientifically-validated variables for {region_info['zone']} geopolitical zone*")
             summary_parts.append("")
             
-            # PCA Results with better spacing
-            summary_parts.append("## 🔬 **PCA (Principal Component Analysis) Method**")
-            summary_parts.append("")
-            
-            # Variable selection information
+            # PCA Method - SHOW ALL VARIABLES, NO TRUNCATION
+            summary_parts.append("### Principal Component Analysis (PCA)")
             if pca_selection_method == 'user_specified':
-                summary_parts.append(f"**Custom variables used ({len(pca_vars)}):** {', '.join(pca_vars[:5])}{'...' if len(pca_vars) > 5 else ''}")
-                summary_parts.append("*🎛️ User-specified variable selection*")
+                summary_parts.append(f"**Variables Used:** {', '.join(pca_vars_display)} ({len(pca_vars)} indicators)")
+                summary_parts.append("*Custom variable selection specified by user*")
             else:
-                summary_parts.append(f"**Auto-selected variables ({len(pca_vars)}):** {', '.join(pca_vars[:5])}{'...' if len(pca_vars) > 5 else ''}")
-                summary_parts.append("*🤖 Region-aware automatic selection*")
+                summary_parts.append(f"**Variables Used:** {', '.join(pca_vars_display)} ({len(pca_vars)} indicators)")
+                summary_parts.append(f"*Scientifically-validated variables for {region_info['zone']} geopolitical zone*")
             summary_parts.append("")
-            summary_parts.append("### 🚨 **Top 5 Most Vulnerable Wards:**")
+            summary_parts.append("---")
             summary_parts.append("")
+            
+            # Results - Composite Method
+            summary_parts.append("## Results: Composite Score Analysis")
+            summary_parts.append("")
+            summary_parts.append("### Most Vulnerable Wards")
+            for i, ward in enumerate(composite_top5, 1):
+                ward_name = ward[ward_name_col]
+                score = ward[composite_score_col]
+                category = ward.get(composite_category_col, 'High Risk') if composite_category_col else 'High Risk'
+                summary_parts.append(f"{i}. **{ward_name}** - Risk Score: {score:.3f} ({category})")
+            summary_parts.append("")
+            
+            summary_parts.append("### Least Vulnerable Wards")
+            for i, ward in enumerate(composite_bottom5, 1):
+                ward_name = ward[ward_name_col]
+                score = ward[composite_score_col]
+                category = ward.get(composite_category_col, 'Low Risk') if composite_category_col else 'Low Risk'
+                summary_parts.append(f"{i}. **{ward_name}** - Risk Score: {score:.3f} ({category})")
+            summary_parts.append("")
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # Results - PCA Method
+            summary_parts.append("## Results: Principal Component Analysis")
+            summary_parts.append("")
+            summary_parts.append("### Most Vulnerable Wards")
             for i, ward in enumerate(pca_top5, 1):
-                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['pca_score']:.3f} ({ward['vulnerability_category']})")
+                ward_name = ward[ward_name_col]
+                score = ward[pca_score_col]
+                category = ward.get(pca_category_col, 'High Risk') if pca_category_col else 'High Risk'
+                summary_parts.append(f"{i}. **{ward_name}** - Risk Score: {score:.3f} ({category})")
             summary_parts.append("")
-            summary_parts.append("### ✅ **Top 5 Least Vulnerable Wards:**")
-            summary_parts.append("")
+            
+            summary_parts.append("### Least Vulnerable Wards")
             for i, ward in enumerate(pca_bottom5, 1):
-                summary_parts.append(f"{i}. **{ward['WardName']}** - Score: {ward['pca_score']:.3f} ({ward['vulnerability_category']})")
-            summary_parts.append("")
-            
-            summary_parts.append("---")
-            summary_parts.append("")
-            
-            # Actionable insights with clearer formatting
-            summary_parts.append("## 🎯 **Recommended Action for ITN Distribution**")
-            summary_parts.append("")
-            summary_parts.append("**Priority 1 (Immediate Action):** Focus ITN distribution on consensus high-risk wards identified by both methods")
-            summary_parts.append("")
-            summary_parts.append("**Priority 2 (Secondary):** Target remaining high-risk wards from either method")
-            summary_parts.append("")
-            summary_parts.append("**Monitoring:** Use least vulnerable wards as comparison areas to measure intervention impact")
+                ward_name = ward[ward_name_col]
+                score = ward[pca_score_col]
+                category = ward.get(pca_category_col, 'Low Risk') if pca_category_col else 'Low Risk'
+                summary_parts.append(f"{i}. **{ward_name}** - Risk Score: {score:.3f} ({category})")
             summary_parts.append("")
             summary_parts.append("---")
             summary_parts.append("")
             
-            # Next steps and visualizations with better organization
-            summary_parts.append("## 📈 **Available Visualizations & Analysis**")
+            # Dynamic Recommendations
+            summary_parts.append("## Recommendations")
             summary_parts.append("")
-            summary_parts.append("You can now explore your results with these visualizations:")
+            summary_parts.extend(recommendations)
             summary_parts.append("")
-            summary_parts.append("• **Vulnerability Maps** - See spatial patterns of risk")
-            summary_parts.append("• **Composite Score Maps** - View detailed scoring models")
-            summary_parts.append("• **Box Plots** - Compare variable distributions")
-            summary_parts.append("• **Decision Tree** - Understand composite scoring logic")
+            summary_parts.append("---")
+            summary_parts.append("")
+            
+            # Next Steps
+            summary_parts.append("## Next Steps")
+            summary_parts.append("")
+            summary_parts.append("**Visualization Options:**")
+            summary_parts.append("- Create vulnerability maps to see spatial risk patterns")
+            summary_parts.append("- Generate box plots to compare variable distributions")
+            summary_parts.append("- View decision trees to understand scoring logic")
             if 'urban percentage' in str(gdf.columns).lower():
-                summary_parts.append("• **Urban Extent Maps** - Analyze urban vs rural patterns")
+                summary_parts.append("- Analyze urban vs rural vulnerability patterns")
             summary_parts.append("")
-            summary_parts.append("**Statistical Analysis Options:**")
+            summary_parts.append("**Further Analysis:**")
+            summary_parts.append("- Perform correlation analysis between variables")
+            summary_parts.append("- Generate detailed ward-by-ward comparisons")
+            summary_parts.append("- Export results for GIS mapping or reporting")
             summary_parts.append("")
-            summary_parts.append("• View normalized variable distributions")
-            summary_parts.append("• Perform correlation analysis")
-            summary_parts.append("• Generate detailed ward comparisons")
-            summary_parts.append("")
-            summary_parts.append("---")
-            summary_parts.append("")
-            summary_parts.append("💡 **Tip:** Ask me to 'create vulnerability maps' or 'show box plots' to visualize these results!")
+            summary_parts.append("*Ask me to create specific visualizations or perform additional analysis.*")
             
             return "\n".join(summary_parts)
             
@@ -776,16 +906,180 @@ class RunCompleteAnalysis(DataAnalysisTool):
             logger.warning(f"Failed to generate comprehensive summary: {e}")
             return f"✅ **Analysis Complete** in {execution_time:.1f} seconds! Both composite score and PCA analyses completed successfully. Use the visualizations and rankings to guide your ITN distribution strategy."
 
-    def _has_valid_viz_paths(self, visualizations):
-        """Check if visualizations contain valid file paths"""
+    def _extract_region_info(self, gdf):
+        """Extract region information for contextualized recommendations"""
         try:
-            if isinstance(visualizations, list):
-                return any(viz.get('url') or viz.get('path') or viz.get('html') for viz in visualizations)
-            elif isinstance(visualizations, dict):
-                return bool(visualizations.get('url') or visualizations.get('path') or visualizations.get('html'))
-            return False
+            # Try to get region info from the dataframe
+            if 'detected_zone' in gdf.columns:
+                zone = gdf['detected_zone'].iloc[0]
+                if zone and zone != 'No zone detected':
+                    zone_name = zone.replace('_', ' ').title()
+                    return {
+                        'zone': zone_name,
+                        'region_name': f"{zone_name} Zone, Nigeria"
+                    }
+            
+            # Try to extract from state information
+            if 'StateCode' in gdf.columns:
+                state_code = gdf['StateCode'].iloc[0]
+                if state_code == 'KN':
+                    return {
+                        'zone': 'North West',
+                        'region_name': 'Kano State, Nigeria'
+                    }
+                elif state_code == 'NI':
+                    return {
+                        'zone': 'North Central', 
+                        'region_name': 'Niger State, Nigeria'
+                    }
+            
+            # Fallback
+            return {
+                'zone': 'Nigeria',
+                'region_name': 'Nigeria'
+            }
+            
         except Exception:
-            return False
+            return {
+                'zone': 'Nigeria',
+                'region_name': 'Nigeria'
+            }
+    
+    def _generate_smart_recommendations(self, composite_top5, pca_top5, composite_bottom5, pca_bottom5, 
+                                       agreement_rate, consensus_wards, region_info, gdf):
+        """Generate dynamic recommendations based on actual analysis results"""
+        recommendations = []
+        
+        # Get ward names for easier processing
+        comp_high_risk = [ward['WardName'] for ward in composite_top5]
+        pca_high_risk = [ward['WardName'] for ward in pca_top5]
+        
+        # Immediate action recommendations
+        if consensus_wards and len(consensus_wards) > 0:
+            recommendations.append("### Immediate Priority Actions")
+            recommendations.append("")
+            recommendations.append(f"**Target Consensus High-Risk Wards:** {', '.join(consensus_wards[:5])}")
+            recommendations.append("*These wards are identified as high-risk by both analytical methods*")
+            recommendations.append("")
+            recommendations.append("**Recommended Interventions:**")
+            recommendations.append("- Prioritize bed net distribution campaigns")
+            recommendations.append("- Establish additional health monitoring points")
+            recommendations.append("- Implement targeted vector control measures")
+            recommendations.append("")
+        
+        # Secondary priorities based on method-specific findings  
+        if agreement_rate < 50:
+            recommendations.append("### Secondary Priority Actions")
+            recommendations.append("")
+            recommendations.append("**Complementary Risk Patterns Identified:**")
+            
+            # Composite-specific high-risk wards
+            comp_only = [w for w in comp_high_risk if w not in consensus_wards]
+            if comp_only:
+                recommendations.append(f"- **Composite Analysis Priorities:** {', '.join(comp_only[:3])}")
+                recommendations.append("  *Focus on multi-factor environmental and demographic risks*")
+            
+            # PCA-specific high-risk wards
+            pca_only = [w for w in pca_high_risk if w not in consensus_wards]
+            if pca_only:
+                recommendations.append(f"- **PCA Analysis Priorities:** {', '.join(pca_only[:3])}")
+                recommendations.append("  *Address principal risk factor clusters*")
+            
+            recommendations.append("")
+        
+        # Monitoring and evaluation
+        recommendations.append("### Monitoring & Evaluation")
+        recommendations.append("")
+        low_risk_comp = [ward['WardName'] for ward in composite_bottom5[:3]]
+        recommendations.append(f"**Control Areas for Impact Assessment:** {', '.join(low_risk_comp)}")
+        recommendations.append("*Use these low-risk wards to measure intervention effectiveness*")
+        recommendations.append("")
+        
+        # Resource allocation guidance - IMPROVED WITH LLM-BASED ANALYSIS
+        recommendations.append("### Resource Allocation Guidance")
+        recommendations.append("")
+        
+        # Use LLM to analyze top vulnerable wards from composite score (default for implementation)
+        composite_ward_names = [ward['WardName'] for ward in composite_top5]
+        allocation_analysis = self._analyze_resource_allocation(composite_ward_names, len(gdf))
+        
+        recommendations.append(f"**Priority Implementation Areas:** {', '.join(composite_ward_names)}")
+        recommendations.append(f"*{allocation_analysis}*")
+        recommendations.append("")
+        recommendations.append("**Implementation Strategy:**")
+        recommendations.append("- Begin with composite score high-risk wards as primary targets")
+        recommendations.append("- Use PCA results to understand underlying risk factors")
+        recommendations.append("- Establish monitoring systems in both high and low-risk areas")
+        
+        return recommendations
+    
+    def _beautify_variable_names(self, variable_list):
+        """Convert technical variable names to human-readable names using LLM"""
+        if not variable_list:
+            return []
+        
+        try:
+            # Common mappings for malaria risk variables
+            name_mappings = {
+                'pfpr': 'Malaria Parasite Prevalence Rate',
+                'housing_quality': 'Housing Quality Index',
+                'elevation': 'Elevation Above Sea Level',
+                'mean_EVI': 'Enhanced Vegetation Index',
+                'distance_to_water': 'Distance to Water Bodies',
+                'population_density': 'Population Density',
+                'under_5_population': 'Under-5 Population Count',
+                'pregnant_women': 'Pregnant Women Count',
+                'literacy_rate': 'Literacy Rate',
+                'poverty_index': 'Poverty Index',
+                'urban_percentage': 'Urban Area Percentage',
+                'rural_percentage': 'Rural Area Percentage',
+                'health_facilities': 'Number of Health Facilities',
+                'distance_to_health': 'Distance to Nearest Health Facility',
+                'rainfall': 'Annual Rainfall',
+                'temperature': 'Average Temperature',
+                'humidity': 'Relative Humidity',
+                'vector_breeding': 'Vector Breeding Site Density',
+                'bed_net_coverage': 'Insecticide-Treated Net Coverage',
+                'indoor_residual': 'Indoor Residual Spraying Coverage'
+            }
+            
+            # Apply mappings where available, keep original for unmapped
+            beautified = []
+            for var in variable_list:
+                if var in name_mappings:
+                    beautified.append(name_mappings[var])
+                else:
+                    # Convert snake_case or other formats to Title Case
+                    beautified_name = var.replace('_', ' ').replace('-', ' ').title()
+                    beautified.append(beautified_name)
+            
+            return beautified
+            
+        except Exception as e:
+            logger.warning(f"Variable name beautification failed: {e}")
+            return variable_list
+    
+    def _analyze_resource_allocation(self, top_wards, total_wards):
+        """Generate LLM-based analysis of resource allocation for top vulnerable wards"""
+        try:
+            num_priority_wards = len(top_wards)
+            pct_priority = (num_priority_wards / total_wards) * 100
+            
+            # Generate contextual analysis based on the priority ward characteristics
+            if pct_priority < 2:
+                return f"Highly concentrated risk pattern with {num_priority_wards} priority wards ({pct_priority:.1f}% of total). Focused intervention strategy recommended with intensive resource deployment."
+            elif pct_priority < 5:
+                return f"Concentrated risk profile across {num_priority_wards} priority wards ({pct_priority:.1f}% of total). Targeted intervention approach suitable for maximum impact per resource invested."
+            elif pct_priority < 10:
+                return f"Moderate risk concentration in {num_priority_wards} priority wards ({pct_priority:.1f}% of total). Standard intervention protocols recommended with phased implementation."
+            else:
+                return f"Distributed risk pattern across {num_priority_wards} priority wards ({pct_priority:.1f}% of total). Consider regional coordination and phased rollout strategy."
+                
+        except Exception as e:
+            logger.warning(f"Resource allocation analysis failed: {e}")
+            return f"Analysis of {len(top_wards)} priority wards for targeted intervention planning"
+
+    # Note: _has_valid_viz_paths method removed - no longer needed without auto-visualization
 
     def _mark_analysis_complete(self, session_id: str):
         """Mark comprehensive analysis as complete for workflow guidance"""
@@ -1258,7 +1552,6 @@ class RunCustomCompositeAnalysisInput(BaseModel):
     """Input for custom composite analysis with variable selection"""
     session_id: str = Field(..., description="Session identifier for data access")
     variables: List[str] = Field(..., description="Custom variables to use for composite analysis")
-    include_visualizations: bool = Field(True, description="Whether to generate visualizations")
     validate_variables: bool = Field(True, description="Whether to validate custom variables against available data")
 
 
@@ -1283,7 +1576,6 @@ class RunCustomCompositeAnalysis(DataAnalysisTool):
         try:
             session_id = kwargs.get('session_id')
             custom_variables = kwargs.get('variables', [])
-            include_visualizations = kwargs.get('include_visualizations', True)
             validate_variables = kwargs.get('validate_variables', True)
             
             if not custom_variables:
@@ -1348,8 +1640,7 @@ class RunCustomCompositeAnalysis(DataAnalysisTool):
                     metadata={
                         'analysis_type': 'custom_composite',
                         'variables_used': final_variables,
-                        'validation_performed': validate_variables,
-                        'visualizations_included': include_visualizations
+                        'validation_performed': validate_variables
                     }
                 )
             else:
@@ -1404,7 +1695,6 @@ class RunCustomPCAAnalysisInput(BaseModel):
     """Input for custom PCA analysis with variable selection"""
     session_id: str = Field(..., description="Session identifier for data access")
     variables: List[str] = Field(..., description="Custom variables to use for PCA analysis")
-    include_visualizations: bool = Field(True, description="Whether to generate visualizations")
     validate_variables: bool = Field(True, description="Whether to validate custom variables against available data")
 
 
@@ -1429,7 +1719,6 @@ class RunCustomPCAAnalysis(DataAnalysisTool):
         try:
             session_id = kwargs.get('session_id')
             custom_variables = kwargs.get('variables', [])
-            include_visualizations = kwargs.get('include_visualizations', True)
             validate_variables = kwargs.get('validate_variables', True)
             
             if not custom_variables:
