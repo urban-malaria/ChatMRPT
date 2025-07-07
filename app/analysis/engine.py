@@ -46,7 +46,8 @@ class AnalysisEngine:
             # Run composite analysis without settlement integration
             result = run_full_analysis_pipeline(
                 data_handler=self.data_handler,
-                selected_variables=variables
+                selected_variables=variables,
+                session_id=session_id
             )
             
             if result.get('status') == 'error':

@@ -442,7 +442,7 @@ def handle_full_dataset_path(session_id: str, csv_file, shapefile, upload_summar
                 'files_stored': raw_storage_result.get('files_stored', 0),
                 'upload_duration_seconds': upload_duration,
                 'storage_success': raw_storage_result['status'] == 'success',
-                'summary_generated': summary_result['status'] == 'success' if summary_result else False,
+                'summary_generated': summary_result and 'status' not in summary_result,
                 'next_milestone': 'analysis_permission'
             },
             success=True

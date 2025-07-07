@@ -33,8 +33,12 @@ class RequestInterpreter:
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
         
-        # Initialize unified memory system
-        self.memory = get_unified_memory()
+        # Initialize unified memory system (only in production)
+        if current_app.config.get('ENV') == 'production':
+            self.memory = get_unified_memory()
+        else:
+            self.memory = None
+            logger.info("🚀 Memory system disabled in development mode")
         
         # Initialize tiered tool loading system (ONLY system needed)
         from .tiered_tool_loader import get_tiered_tool_loader
@@ -669,14 +673,18 @@ class RequestInterpreter:
         try:
             logger.info(f"Processing message for session {session_id}: {user_message[:100]}...")
             
-            # Get conversation context from unified memory
-            context = self.memory.get_context(session_id)
-            relevant_memories = self.memory.recall(
-                query=user_message,
-                memory_types=[MemoryType.CONVERSATION, MemoryType.ANALYSIS_CONTEXT],
-                limit=3,
-                session_only=True
-            )
+            # Get conversation context from unified memory (if available)
+            if self.memory:
+                context = self.memory.get_context(session_id)
+                relevant_memories = self.memory.recall(
+                    query=user_message,
+                    memory_types=[MemoryType.CONVERSATION, MemoryType.ANALYSIS_CONTEXT],
+                    limit=3,
+                    session_only=True
+                )
+            else:
+                context = {}
+                relevant_memories = []
             
             # Check for automatic data description workflow
             from flask import session
@@ -1123,6 +1131,9 @@ Keep it natural and conversational, not rigid or template-like."""
                                     tools_used: List[str], response_time: float, 
                                     success: bool):
         """Store conversation turn in unified memory."""
+        if not self.memory:
+            return
+            
         try:
             self.memory.add_conversation_turn(
                 user_message=user_message,
@@ -1153,7 +1164,8 @@ Keep it natural and conversational, not rigid or template-like."""
                 }
                 
                 # Store in memory with high priority for analysis results
-                self.memory.store_analysis_results(
+                if self.memory:
+                    self.memory.store_analysis_results(
                     analysis_type=tool_name,
                     results=analysis_data,
                     metadata={
@@ -1179,6 +1191,9 @@ Keep it natural and conversational, not rigid or template-like."""
     
     def _get_memory_enhanced_context(self, user_message: str, session_id: str) -> str:
         """Get memory-enhanced context for better LLM responses."""
+        if not self.memory:
+            return ""
+            
         try:
             # Get recent conversation context
             context = self.memory.get_context(session_id)

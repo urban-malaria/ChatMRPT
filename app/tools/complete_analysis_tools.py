@@ -134,8 +134,9 @@ class RunCompleteAnalysis(DataAnalysisTool):
                     success=True
                 )
             
-            # Run both analyses simultaneously using threading
+            # Run both analyses simultaneously using threading with proper Flask context
             import threading
+            from flask import copy_current_request_context
             
             analysis_start_time = time.time()
             
@@ -144,10 +145,14 @@ class RunCompleteAnalysis(DataAnalysisTool):
             pca_result = {'success': False}
             analysis_errors = []
             
+            # Capture the current Flask app context
+            app = current_app._get_current_object()
+            
             def run_composite():
                 try:
                     nonlocal composite_result
-                    composite_result = self._run_composite_analysis(session_id, final_composite_vars)
+                    with app.app_context():
+                        composite_result = self._run_composite_analysis(session_id, final_composite_vars)
                     logger.info("✅ Composite analysis completed in parallel")
                 except Exception as e:
                     logger.error(f"❌ Composite analysis failed in parallel: {e}")
@@ -157,16 +162,17 @@ class RunCompleteAnalysis(DataAnalysisTool):
             def run_pca():
                 try:
                     nonlocal pca_result
-                    pca_result = self._run_pca_analysis(session_id, final_pca_vars)
+                    with app.app_context():
+                        pca_result = self._run_pca_analysis(session_id, final_pca_vars)
                     logger.info("✅ PCA analysis completed in parallel")
                 except Exception as e:
                     logger.error(f"❌ PCA analysis failed in parallel: {e}")
                     pca_result = {'success': False, 'message': str(e), 'error_details': str(e)}
                     analysis_errors.append(f"PCA: {str(e)}")
             
-            # Start both analyses simultaneously
-            composite_thread = threading.Thread(target=run_composite, name="CompositeAnalysis")
-            pca_thread = threading.Thread(target=run_pca, name="PCAAnalysis")
+            # Create threads with copied context
+            composite_thread = threading.Thread(target=copy_current_request_context(run_composite), name="CompositeAnalysis")
+            pca_thread = threading.Thread(target=copy_current_request_context(run_pca), name="PCAAnalysis")
             
             composite_thread.start()
             pca_thread.start()
