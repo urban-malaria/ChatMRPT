@@ -210,7 +210,7 @@ class TPRDataExtractor:
         return [
             'EVI', 'NDVI', 'rainfall', 'temperature', 'elevation',
             'distance_to_water', 'mean_NDMI', 'mean_NDWI', 'nighttime_lights'
-            # Excluded: 'urban_extent', 'population_density', 'relative_humidity', 'soil_wetness' - not supported
+            # Explicitly excluded per user request: 'population_density', 'urban_extent', 'soil_wetness'
         ]
     
     def _extract_nigeria_shapefile_for_state(self, state_name: str) -> Dict[str, Any]:

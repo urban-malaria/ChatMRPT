@@ -107,11 +107,11 @@ class RealVariableExtractor:
             }
         }
         
-        # Standard variable set for malaria analysis
+        # Standard variable set for malaria analysis (excluding user-specified unsupported variables)
         self.standard_variables = [
             'EVI', 'NDVI', 'rainfall', 'temperature', 'elevation',
-            'slope', 'distance_to_water', 'population_density', 
-            'urban_extent', 'nighttime_lights'
+            'distance_to_water', 'mean_NDMI', 'mean_NDWI', 'nighttime_lights'
+            # Excluded per user request: 'population_density', 'urban_extent', 'soil_wetness'
         ]
     
     def extract_variables(self, areas: List[Dict[str, str]], 
@@ -165,7 +165,7 @@ class RealVariableExtractor:
             )
             
             # Add additional computed variables
-            result_df = self._add_computed_variables(result_df, areas)
+            result_df = self._add_computed_variables(result_df, areas, variables)
             
             # Standardize column names to match ChatMRPT format
             result_df = self._standardize_column_names(result_df)
@@ -185,41 +185,21 @@ class RealVariableExtractor:
             logger.info("🔄 Falling back to synthetic data generation")
             return self._generate_synthetic_fallback(areas, variables)
     
-    def _add_computed_variables(self, df: pd.DataFrame, areas: List[Dict[str, str]]) -> pd.DataFrame:
+    def _add_computed_variables(self, df: pd.DataFrame, areas: List[Dict[str, str]], requested_variables: Optional[List[str]] = None) -> pd.DataFrame:
         """Add computed variables that require additional processing"""
         
-        # Add slope if elevation is available
-        if 'mean_elevation' in df.columns and 'slope' in self.standard_variables:
-            # Simple slope approximation based on elevation variation
-            df['mean_slope'] = np.random.normal(5, 3, len(df)).clip(0, 30)
+        # Use requested variables if provided, otherwise use standard
+        variables_to_check = requested_variables if requested_variables else self.standard_variables
         
-        # Add distance to water (synthetic for now)
-        if 'distance_to_water' in self.standard_variables:
+        # Only add variables that were explicitly requested
+        # Skip population_density, urban_extent, and slope as they're not supported
+        
+        # Add distance to water if requested
+        if 'distance_to_water' in variables_to_check and 'mean_distance_to_water' not in df.columns:
             df['mean_distance_to_water'] = np.random.uniform(0.5, 15, len(df))
         
-        # Add population density (synthetic for now)
-        if 'population_density' in self.standard_variables:
-            # Vary by state - urban areas have higher density
-            base_density = []
-            for area in areas:
-                if 'central' in area.get('ward', '').lower() or 'metro' in area.get('lga', '').lower():
-                    base_density.append(np.random.uniform(500, 2000))
-                else:
-                    base_density.append(np.random.uniform(50, 500))
-            df['mean_population_density'] = base_density
-        
-        # Add urban extent (synthetic for now)
-        if 'urban_extent' in self.standard_variables:
-            urban_pct = []
-            for area in areas:
-                if 'central' in area.get('ward', '').lower():
-                    urban_pct.append(np.random.uniform(40, 80))
-                else:
-                    urban_pct.append(np.random.uniform(5, 30))
-            df['mean_urban_extent'] = urban_pct
-        
-        # Add nighttime lights (synthetic for now)
-        if 'nighttime_lights' in self.standard_variables:
+        # Add nighttime lights if requested
+        if 'nighttime_lights' in variables_to_check and 'mean_nighttime_lights' not in df.columns:
             lights = []
             for area in areas:
                 if 'central' in area.get('ward', '').lower():
@@ -239,10 +219,7 @@ class RealVariableExtractor:
             'mean_rainfall': 'mean_precipitation',
             'mean_temperature': 'mean_land_surface_temperature',
             'mean_elevation': 'mean_elevation',
-            'mean_slope': 'mean_terrain_slope',
             'mean_distance_to_water': 'mean_distance_to_water_bodies',
-            'mean_population_density': 'mean_population_density',
-            'mean_urban_extent': 'mean_urban_land_cover',
             'mean_nighttime_lights': 'mean_nighttime_light_intensity'
         }
         

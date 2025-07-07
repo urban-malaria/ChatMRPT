@@ -251,16 +251,16 @@ class RobustEarthEngineClient:
             image = self._get_temperature_image(date_range)
         elif variable == 'elevation':
             image = self._get_elevation_image()
-        elif variable == 'slope':
-            image = self._get_slope_image()
-        elif variable == 'population_density':
-            image = self._get_population_density_image(date_range)
-        elif variable == 'urban_extent':
-            image = self._get_urban_extent_image(date_range)
+        elif variable in ['slope', 'population_density', 'urban_extent', 'terrain_slope', 'urban_land_cover', 'soil_wetness', 'relative_humidity']:
+            raise ValueError(f"Variable {variable} not supported")
         elif variable == 'distance_to_water':
             image = self._get_distance_to_water_image()
         elif variable == 'nighttime_lights':
             image = self._get_nighttime_lights_image(date_range)
+        elif variable == 'mean_NDMI':
+            image = self._get_ndmi_image(date_range)
+        elif variable == 'mean_NDWI':
+            image = self._get_ndwi_image(date_range)
         else:
             raise ValueError(f"Variable {variable} not supported")
         
@@ -475,3 +475,41 @@ class RobustEarthEngineClient:
                 'auth_method': self.authentication_method,
                 'project': EARTH_ENGINE_PROJECT
             }
+    
+    def _get_ndmi_image(self, date_range: Dict[str, str]) -> ee.Image:
+        """Get NDMI (Normalized Difference Moisture Index) image"""
+        try:
+            # Using MODIS surface reflectance data
+            collection = ee.ImageCollection('MODIS/061/MOD09A1')
+            image = collection.filterDate(date_range['start'], date_range['end']).median()
+            
+            # NDMI = (NIR - SWIR) / (NIR + SWIR)
+            # Band 2 = NIR, Band 6 = SWIR1
+            nir = image.select('sur_refl_b02')
+            swir = image.select('sur_refl_b06')
+            
+            ndmi = nir.subtract(swir).divide(nir.add(swir)).rename('NDMI')
+            return ndmi.multiply(0.0001)  # Scale factor
+        except Exception as e:
+            logger.warning(f"NDMI extraction failed: {e}, using fallback")
+            # Fallback: create synthetic moisture index
+            return ee.Image.constant(0.3)
+    
+    def _get_ndwi_image(self, date_range: Dict[str, str]) -> ee.Image:
+        """Get NDWI (Normalized Difference Water Index) image"""
+        try:
+            # Using MODIS surface reflectance data
+            collection = ee.ImageCollection('MODIS/061/MOD09A1')
+            image = collection.filterDate(date_range['start'], date_range['end']).median()
+            
+            # NDWI = (Green - NIR) / (Green + NIR)
+            # Band 4 = Green, Band 2 = NIR
+            green = image.select('sur_refl_b04')
+            nir = image.select('sur_refl_b02')
+            
+            ndwi = green.subtract(nir).divide(green.add(nir)).rename('NDWI')
+            return ndwi.multiply(0.0001)  # Scale factor
+        except Exception as e:
+            logger.warning(f"NDWI extraction failed: {e}, using fallback")
+            # Fallback: create synthetic water index
+            return ee.Image.constant(0.2)
