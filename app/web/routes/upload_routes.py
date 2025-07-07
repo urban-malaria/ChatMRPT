@@ -932,7 +932,279 @@ def store_raw_csv_only(session_folder: str, csv_file):
 # Next Phase: Level 6-7 Summary Presentation & Permission System
 # ================================================================
 
-# === LEGACY ROUTES (kept for backward compatibility) ===@upload_bp.route('/upload', methods=['POST'])  @handle_errors@validate_session@log_execution_timedef upload():    """    Legacy upload route for backwards compatibility.    Redirects to upload_both_files function.    """    return upload_both_files()@upload_bp.route('/load_sample_data', methods=['POST'])@validate_session@handle_errors@log_execution_timedef load_sample_data():    """Load sample data for demonstration purposes."""    try:        session_id = session.get('session_id')        logger.info(f"Loading sample data for session {session_id}")                return jsonify({            'status': 'success',            'message': 'Sample data loading will be implemented in Phase 2'        })            except Exception as e:        logger.error(f"Error loading sample data: {e}")        return jsonify({            'status': 'error',            'message': f'Failed to load sample data: {str(e)}'        })def validate_csv_file(file_obj):    """    Validate CSV file structure and content.    """    try:        import pandas as pd        import io                # Read file content        content = file_obj.read().decode('utf-8')        file_obj.seek(0)  # Reset file pointer                # Try to parse as CSV        csv_io = io.StringIO(content)        df = pd.read_csv(csv_io, nrows=5)  # Read first 5 rows for validation                return {            'status': 'success',            'message': 'CSV file is valid',            'rows_sample': len(df),            'columns': len(df.columns)        }            except Exception as e:        return {            'status': 'error',            'message': f'Invalid CSV file: {str(e)}'        }def validate_shapefile(file_obj):    """    Validate shapefile ZIP structure.    """    try:        import zipfile                # Check if it's a valid ZIP file        if not zipfile.is_zipfile(file_obj):            return {                'status': 'error',                'message': 'File is not a valid ZIP archive'            }                return {            'status': 'success',            'message': 'Shapefile ZIP is valid'        }            except Exception as e:        return {            'status': 'error',            'message': f'Invalid shapefile: {str(e)}'        }def create_session_upload_folder(session_id):    """Create upload folder for session if it doesn't exist."""    try:        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)        os.makedirs(session_folder, exist_ok=True)        return session_folder    except Exception as e:        logger.error(f"Error creating session folder: {e}")        raisedef cleanup_session_files(session_id, file_types=None):    """    Clean up uploaded files for a session.        Args:        session_id: Session identifier        file_types: List of file types to clean up (optional)            Returns:        dict: Cleanup result with status and message    """    try:        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)                if not os.path.exists(session_folder):            return {'status': 'success', 'message': 'No files to clean up'}                files_removed = 0                if file_types:            # Remove specific file types            for filename in os.listdir(session_folder):                file_ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''                if file_ext in file_types:                    file_path = os.path.join(session_folder, filename)                    os.remove(file_path)                    files_removed += 1                    logger.info(f"Removed file: {filename}")        else:            # Remove all files in session folder            for filename in os.listdir(session_folder):                file_path = os.path.join(session_folder, filename)                if os.path.isfile(file_path):                    os.remove(file_path)                    files_removed += 1                    logger.info(f"Removed file: {filename}")                        # Remove empty directory            if not os.listdir(session_folder):                os.rmdir(session_folder)                logger.info(f"Removed empty session folder: {session_folder}")                return {'status': 'success', 'message': f'Cleaned up {files_removed} files'}            except Exception as e:        logger.error(f"Error cleaning up files for session {session_id}: {e}")        return {'status': 'error', 'message': f'File cleanup failed: {str(e)}'}
+# === TPR UPLOAD ROUTES ===
+
+@upload_bp.route('/api/tpr/detect-states', methods=['POST'])
+@validate_session
+@handle_errors
+@log_execution_time
+def detect_tpr_states():
+    """Detect available states in uploaded TPR file"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Save file temporarily
+        session_id = session.get('session_id')
+        session_folder = create_session_upload_folder(session_id)
+        
+        filename = f"tpr_temp_{file.filename}"
+        file_path = os.path.join(session_folder, filename)
+        file.save(file_path)
+        
+        # Import TPR data extractor
+        from app.services.tpr_data_extractor import TPRDataExtractor
+        
+        # Detect states in the file
+        extractor = TPRDataExtractor(session_folder)
+        result = extractor.get_available_states(file_path)
+        
+        # Clean up temp file
+        os.remove(file_path)
+        
+        if result['status'] == 'success':
+            return jsonify({
+                'success': True,
+                'states': result['available_states'],
+                'total_states': result['total_states'],
+                'message': result['message']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['message']
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Error detecting TPR states: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@upload_bp.route('/api/tpr/process', methods=['POST'])
+@validate_session
+@handle_errors
+@log_execution_time
+def process_tpr_file():
+    """Process TPR file and create convergence output"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        selected_state = request.form.get('selected_state')
+        
+        if not selected_state:
+            return jsonify({
+                'success': False,
+                'error': 'No state selected'
+            }), 400
+        
+        # Save file
+        session_id = session.get('session_id')
+        session_folder = create_session_upload_folder(session_id)
+        
+        filename = f"tpr_{selected_state}_{file.filename}"
+        file_path = os.path.join(session_folder, filename)
+        file.save(file_path)
+        
+        # Import TPR data extractor
+        from app.services.tpr_data_extractor import TPRDataExtractor
+        
+        # Process TPR file
+        extractor = TPRDataExtractor(session_folder)
+        result = extractor.extract_raw_data_for_convergence(
+            tpr_file_path=file_path,
+            selected_state=selected_state
+        )
+        
+        # The extractor should create:
+        # - {state_name}_plus.csv (convergence data)
+        # - {state_name}_state.zip (shapefile)
+        
+        return jsonify({
+            'success': True,
+            'message': f'TPR data processed successfully for {selected_state}',
+            'convergence_result': result,
+            'target_state': selected_state,
+            'extracted_wards': result.get('extracted_wards', 0),
+            'variables_included': result.get('variables_included', [])
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing TPR file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# === LEGACY ROUTES (kept for backward compatibility) ===
+
+@upload_bp.route('/upload', methods=['POST'])
+@handle_errors
+@validate_session
+@log_execution_time
+def upload():
+    """
+    Legacy upload route for backwards compatibility.
+    Redirects to upload_both_files function.
+    """
+    return upload_both_files()
+
+
+@upload_bp.route('/load_sample_data', methods=['POST'])
+@validate_session
+@handle_errors
+@log_execution_time
+def load_sample_data():
+    """Load sample data for demonstration purposes."""
+    try:
+        session_id = session.get('session_id')
+        logger.info(f"Loading sample data for session {session_id}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Sample data loading will be implemented in Phase 2'
+        })
+    
+    except Exception as e:
+        logger.error(f"Error loading sample data: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to load sample data: {str(e)}'
+        })
+
+
+def validate_csv_file(file_obj):
+    """
+    Validate CSV file structure and content.
+    """
+    try:
+        import pandas as pd
+        import io
+        
+        # Read file content
+        content = file_obj.read().decode('utf-8')
+        file_obj.seek(0)  # Reset file pointer
+        
+        # Try to parse as CSV
+        csv_io = io.StringIO(content)
+        df = pd.read_csv(csv_io, nrows=5)  # Read first 5 rows for validation
+        
+        return {
+            'status': 'success',
+            'message': 'CSV file is valid',
+            'rows_sample': len(df),
+            'columns': len(df.columns)
+        }
+    
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Invalid CSV file: {str(e)}'
+        }
+
+
+def validate_shapefile(file_obj):
+    """
+    Validate shapefile ZIP structure.
+    """
+    try:
+        import zipfile
+        
+        # Check if it's a valid ZIP file
+        if not zipfile.is_zipfile(file_obj):
+            return {
+                'status': 'error',
+                'message': 'File is not a valid ZIP archive'
+            }
+        
+        return {
+            'status': 'success',
+            'message': 'Shapefile ZIP is valid'
+        }
+    
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Invalid shapefile: {str(e)}'
+        }
+
+
+def create_session_upload_folder(session_id):
+    """Create upload folder for session if it doesn't exist."""
+    try:
+        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
+        os.makedirs(session_folder, exist_ok=True)
+        return session_folder
+    except Exception as e:
+        logger.error(f"Error creating session folder: {e}")
+        raise
+
+
+def cleanup_session_files(session_id, file_types=None):
+    """
+    Clean up uploaded files for a session.
+    
+    Args:
+        session_id: Session identifier
+        file_types: List of file types to clean up (optional)
+    
+    Returns:
+        dict: Cleanup result with status and message
+    """
+    try:
+        session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
+        
+        if not os.path.exists(session_folder):
+            return {'status': 'success', 'message': 'No files to clean up'}
+        
+        files_removed = 0
+        
+        if file_types:
+            # Remove specific file types
+            for filename in os.listdir(session_folder):
+                file_ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+                if file_ext in file_types:
+                    file_path = os.path.join(session_folder, filename)
+                    os.remove(file_path)
+                    files_removed += 1
+                    logger.info(f"Removed file: {filename}")
+        else:
+            # Remove all files in session folder
+            for filename in os.listdir(session_folder):
+                file_path = os.path.join(session_folder, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+                    files_removed += 1
+                    logger.info(f"Removed file: {filename}")
+        
+        # Remove empty directory
+        if not os.listdir(session_folder):
+            os.rmdir(session_folder)
+            logger.info(f"Removed empty session folder: {session_folder}")
+        
+        return {'status': 'success', 'message': f'Cleaned up {files_removed} files'}
+    
+    except Exception as e:
+        logger.error(f"Error cleaning up files for session {session_id}: {e}")
+        return {'status': 'error', 'message': f'File cleanup failed: {str(e)}'}
 
 
 @upload_bp.route('/api/download/processed-csv', methods=['GET'])

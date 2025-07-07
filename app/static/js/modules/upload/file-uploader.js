@@ -795,27 +795,38 @@ Would you like me to proceed with the composite score and PCA analysis? *(This w
         }
         
         try {
-            this.setTprUploadStatus('Processing TPR data...', 'info');
+            this.setTprUploadStatus('Detecting states in TPR data...', 'info');
             this.disableTprUploadButton(true);
             
-            // Create FormData
+            // First, detect states in the TPR file
             const formData = new FormData();
-            formData.append('csv_file', file);
-            console.log('🔍 TPR Debug - FormData created with csv_file key');
-            console.log('🔍 TPR Debug - FormData entries:', [...formData.entries()]);
+            formData.append('file', file);
+            console.log('🔍 TPR Debug - FormData created for state detection');
             
-            const response = await apiClient.uploadFiles(formData, null);
+            const stateResponse = await fetch('/api/tpr/detect-states', {
+                method: 'POST',
+                body: formData
+            });
             
-            console.log('🔍 TPR Response:', response);
+            if (!stateResponse.ok) {
+                throw new Error(`State detection failed: ${stateResponse.status}`);
+            }
             
-            // Handle different response statuses
-            if (response.status === 'success') {
-                this.handleTprUploadSuccess(response);
-            } else if (response.status === 'requires_state_selection') {
-                console.log('🗺️ Multiple states detected, handling state selection');
-                this.handleStateSelection(response);
+            const stateData = await stateResponse.json();
+            console.log('🔍 TPR State Detection Response:', stateData);
+            
+            // Handle state detection response
+            if (stateData.success && stateData.states && stateData.states.length > 1) {
+                // Multiple states detected - show selection interface
+                console.log('🗺️ Multiple states detected, showing selection interface');
+                this.handleStateSelection({ available_states: stateData.states });
+            } else if (stateData.success && stateData.states && stateData.states.length === 1) {
+                // Single state detected - process directly
+                console.log('🗺️ Single state detected, processing directly');
+                this.processSelectedState(stateData.states[0]);
             } else {
-                this.handleTprUploadError(response.message || 'TPR upload failed');
+                // Error in state detection
+                this.handleTprUploadError(stateData.error || 'Failed to detect states in TPR file');
             }
             
         } catch (error) {
@@ -876,17 +887,28 @@ Would you like me to proceed with the composite score and PCA analysis? *(This w
             const tprFileInput = DOMHelpers.getElementById('tpr-file-upload');
             const file = tprFileInput.files[0];
             
-            // Create FormData with selected state
+            // Create FormData with selected state for TPR processing
             const formData = new FormData();
-            formData.append('csv_file', file);
+            formData.append('file', file);
             formData.append('selected_state', selectedState);
             
-            const response = await apiClient.uploadFiles(formData, null);
+            // Call the TPR processing endpoint
+            const response = await fetch('/api/tpr/process', {
+                method: 'POST',
+                body: formData
+            });
             
-            if (response.status === 'success') {
-                this.handleTprUploadSuccess(response, selectedState);
+            if (!response.ok) {
+                throw new Error(`TPR processing failed: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('🔍 TPR Processing Response:', data);
+            
+            if (data.success) {
+                this.handleTprUploadSuccess(data, selectedState);
             } else {
-                this.handleTprUploadError(response.message || 'State processing failed');
+                this.handleTprUploadError(data.error || 'State processing failed');
             }
             
         } catch (error) {
@@ -915,6 +937,9 @@ Would you like me to proceed with the composite score and PCA analysis? *(This w
         
         // Show download options
         this.showTprDownloadOptions(response);
+        
+        // Update download tab
+        this.updateDownloadTab(response);
         
         // Add success message to chat
         this.addChatMessage(() => {
@@ -956,7 +981,7 @@ Your data is now ready for region-aware malaria risk analysis!`;
      * Show download options for processed TPR data
      */
     showTprDownloadOptions(response) {
-        const downloadContent = DOMHelpers.getElementById('download-content');
+        const downloadContent = DOMHelpers.getElementById('tpr-download-content');
         if (!downloadContent) return;
         
         // Get convergence result information
@@ -966,6 +991,7 @@ Your data is now ready for region-aware malaria risk analysis!`;
         const hasShapefile = convergenceResult.has_shapefile || false;
         const actualSelectedState = convergenceResult.selected_state || stateName;
         
+        downloadContent.style.display = 'block';
         downloadContent.innerHTML = `
             <div class="mt-3">
                 <h6><i class="fas fa-download me-2"></i>Download Your Convergence Data:</h6>
@@ -986,6 +1012,50 @@ Your data is now ready for region-aware malaria risk analysis!`;
                 </div>
             </div>
         `;
+    }
+    
+    /**
+     * Update download tab with processed data info
+     */
+    updateDownloadTab(response) {
+        const convergenceResult = response.convergence_result || {};
+        const stateName = convergenceResult.state_name || convergenceResult.selected_state || 'processed state';
+        const wardCount = convergenceResult.extracted_wards || response.extracted_wards || 0;
+        const actualSelectedState = convergenceResult.selected_state || stateName;
+        
+        // Update download tab info
+        const wardCountElem = document.getElementById('ward-count');
+        const stateNameElem = document.getElementById('state-name');
+        const csvFilenameElem = document.getElementById('csv-filename');
+        const shapefileFilenameElem = document.getElementById('shapefile-filename');
+        const downloadCsvBtn = document.getElementById('download-csv-btn');
+        const downloadShapefileBtn = document.getElementById('download-shapefile-btn');
+        const downloadInfo = document.getElementById('download-info');
+        
+        if (wardCountElem) wardCountElem.textContent = wardCount;
+        if (stateNameElem) stateNameElem.textContent = actualSelectedState;
+        if (csvFilenameElem) csvFilenameElem.textContent = `${stateName}_plus.csv`;
+        if (shapefileFilenameElem) shapefileFilenameElem.textContent = `${stateName}_state.zip`;
+        
+        // Enable download buttons and set onclick handlers
+        if (downloadCsvBtn) {
+            downloadCsvBtn.disabled = false;
+            downloadCsvBtn.onclick = () => {
+                window.location.href = `/api/download/convergence-csv/${stateName}`;
+            };
+        }
+        
+        if (downloadShapefileBtn) {
+            downloadShapefileBtn.disabled = false;
+            downloadShapefileBtn.onclick = () => {
+                window.location.href = `/api/download/convergence-shapefile/${stateName}`;
+            };
+        }
+        
+        // Show info alert
+        if (downloadInfo) {
+            downloadInfo.style.display = 'block';
+        }
     }
     
     /**

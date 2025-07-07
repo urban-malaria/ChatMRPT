@@ -121,7 +121,31 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted mb-3">Please provide both your CSV/Excel data and the corresponding Shapefile (ZIP).</p>
+                    <!-- Tab Navigation -->
+                    <ul class="nav nav-tabs mb-4" id="uploadTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="standard-tab" data-bs-toggle="tab" data-bs-target="#standard-upload" type="button" role="tab">
+                                <i class="fas fa-file-csv me-2"></i>Standard Upload
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tpr-tab" data-bs-toggle="tab" data-bs-target="#tpr-upload" type="button" role="tab">
+                                <i class="fas fa-chart-line me-2"></i>TPR Data Upload
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-data" type="button" role="tab">
+                                <i class="fas fa-download me-2"></i>Download Processed Data
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="uploadTabContent">
+                        
+                        <!-- Standard Upload Tab -->
+                        <div class="tab-pane fade show active" id="standard-upload" role="tabpanel">
+                            <p class="text-muted mb-3">Please provide both your CSV/Excel data and the corresponding Shapefile (ZIP).</p>
                     <div class="row">
                         <div class="col-md-6 mb-3 mb-md-0">
                             <div class="file-upload-option">
@@ -143,17 +167,162 @@
                         </div>
                     </div>
                     <div class="mt-3 text-center">
-                        <button class="btn btn-primary mt-2 w-100" type="button" id="upload-files-btn">
-                            <i class="fas fa-upload me-2"></i>Upload Files
-                        </button>
-                        <div id="files-upload-status" class="upload-status mt-2"></div>
-                    </div>
-                    <hr class="my-4">
-                    <div class="text-center">
-                        <p class="mb-2">Alternatively, explore the tool's capabilities with our sample dataset:</p>
-                        <button type="button" class="btn btn-info" id="use-sample-data-btn-modal">
-                            <i class="fas fa-database me-2"></i>Load Sample Data
-                        </button>
+                            <button class="btn btn-primary mt-2 w-100" type="button" id="upload-files-btn">
+                                <i class="fas fa-upload me-2"></i>Upload Files
+                            </button>
+                            <div id="files-upload-status" class="upload-status mt-2"></div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <div class="text-center">
+                            <p class="mb-2">Alternatively, explore the tool's capabilities with our sample dataset:</p>
+                            <button type="button" class="btn btn-info" id="use-sample-data-btn-modal">
+                                <i class="fas fa-database me-2"></i>Load Sample Data
+                            </button>
+                        </div>
+                        </div>
+                        
+                        <!-- TPR Upload Tab -->
+                        <div class="tab-pane fade" id="tpr-upload" role="tabpanel">
+                            <div class="alert alert-info mb-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Upload your Test Positivity Rate (TPR) Excel file. The system will automatically extract environmental data and create analysis-ready datasets.
+                            </div>
+                            
+                            <div class="mb-4">
+                                <h5><i class="fas fa-vial me-2 text-warning"></i>TPR Data File</h5>
+                                <p class="text-muted mb-3">Upload your TPR data file containing facility data and test positivity rates.</p>
+                                
+                                <div class="mb-3">
+                                    <input type="file" class="form-control" id="tpr-file-upload" accept=".csv,.xlsx,.xls">
+                                    <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+                                </div>
+                                
+                                <!-- State Selection Dropdown -->
+                                <div id="tpr-state-selection" class="mb-3" style="display: none;">
+                                    <label for="tpr-state-select" class="form-label">Select State:</label>
+                                    <select id="tpr-state-select" class="form-select">
+                                        <option value="">Choose a state...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        
+                        <!-- Automatic Data Enhancement Section -->
+                        <div class="enhancement-section mb-4">
+                            <h5><i class="fas fa-magic me-2 text-success"></i>Automatic Data Enhancement</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Enhanced Vegetation Index (EVI)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Normalized Difference Vegetation Index (NDVI)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Rainfall Data</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Temperature Data</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Elevation</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Distance to Water Bodies</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Relative Humidity</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Soil Wetness</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>NDMI (Moisture Index)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>NDWI (Water Index)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Nighttime Lights</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Urban Extent</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Population Density</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Ward Boundaries (Nigeria Shapefile)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TPR Upload Button -->
+                        <div class="text-center mb-3">
+                            <button type="button" class="btn btn-warning w-100" id="upload-tpr-btn">
+                                <i class="fas fa-upload me-2"></i>Upload TPR Data
+                            </button>
+                        </div>
+                        
+                        <!-- TPR Status Display -->
+                        <div id="tpr-upload-status" class="upload-status"></div>
+                        
+                        <!-- TPR Download Content -->
+                        <div id="tpr-download-content" style="display: none;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Download Tab -->
+                        <div class="tab-pane fade" id="download-data" role="tabpanel">
+                            <div class="text-center mb-4">
+                                <p class="text-muted">Download your processed analysis-ready datasets.</p>
+                            </div>
+                            
+                            <div class="download-section" id="download-content">
+                                <h5><i class="fas fa-download me-2"></i>Download Your Convergence Data:</h5>
+                                <p class="text-muted mb-3" id="convergence-info">Ready for main workflow: <span id="ward-count">---</span> wards from <span id="state-name">---</span></p>
+                                
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-success btn-lg" id="download-csv-btn" disabled>
+                                        <i class="fas fa-file-csv me-2"></i>Download <span id="csv-filename">data_plus.csv</span>
+                                    </button>
+                                    <button type="button" class="btn btn-success btn-lg" id="download-shapefile-btn" disabled>
+                                        <i class="fas fa-map me-2"></i>Download <span id="shapefile-filename">state.zip</span>
+                                    </button>
+                                </div>
+                                
+                                <div class="alert alert-info mt-3" id="download-info" style="display: none;">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    These files are ready for the main ChatMRPT analysis workflow.
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            <div class="text-center">
+                                <p class="mb-2">Alternatively, explore the tool's capabilities with our sample dataset:</p>
+                                <button type="button" class="btn btn-info" id="use-sample-data-btn-modal">
+                                    <i class="fas fa-database me-2"></i>Load Sample Data
+                                </button>
+                            </div>
+                        </div>
+                        
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -265,7 +434,17 @@
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- TPR Integration Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎯 TPR Integration script loaded');
+            // The TPR functionality is handled by the existing file-uploader.js module
+            // This script just logs that the integration is ready
+        });
+    </script>
+    
     <!-- Custom JS - Modular Architecture -->
-    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1000, 9999) | random }}"></script>
 </body>
 </html>

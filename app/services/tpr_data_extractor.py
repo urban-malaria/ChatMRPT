@@ -209,9 +209,8 @@ class TPRDataExtractor:
         """Get complete list of variables for convergence (excluding problematic variables)"""
         return [
             'EVI', 'NDVI', 'rainfall', 'temperature', 'elevation',
-            'distance_to_water', 'relative_humidity', 'soil_wetness', 
-            'NDMI', 'NDWI', 'nighttime_lights'
-            # Excluded: 'urban_extent', 'population_density' - not supported by Earth Engine
+            'distance_to_water', 'mean_NDMI', 'mean_NDWI', 'nighttime_lights'
+            # Excluded: 'urban_extent', 'population_density', 'relative_humidity', 'soil_wetness' - not supported
         ]
     
     def _extract_nigeria_shapefile_for_state(self, state_name: str) -> Dict[str, Any]:
@@ -280,37 +279,23 @@ class TPRDataExtractor:
                 state_name_clean = state_name.replace(' ', '_').lower()
                 state_shapefile_path = os.path.join(self.session_folder, f'{state_name_clean}_state.zip')
                 
-                # Use safe temporary directory for shapefile creation
-                from app.core.safe_file_operations import SafeFileOperations
-                safe_ops = SafeFileOperations(session_id=os.path.basename(self.session_folder))
-                
-                temp_shapefile_dir = safe_ops.create_safe_temp_directory(
-                    prefix='chatmrpt_shapefile_',
-                    purpose=f'nigeria_shapefile_extraction_for_{state_name}'
-                )
-                
-                logger.info(f"🔒 Using safe temporary directory: {temp_shapefile_dir}")
-                
-                # Save state shapefile to temp directory
-                temp_shp_path = os.path.join(temp_shapefile_dir, f'{state_name_clean}_wards')
-                state_gdf.to_file(temp_shp_path + '.shp')
-                
-                # Create ZIP file
-                import zipfile
-                with zipfile.ZipFile(state_shapefile_path, 'w') as zipf:
-                    for ext in ['.shp', '.shx', '.dbf', '.prj']:
-                        file_path = temp_shp_path + ext
-                        if os.path.exists(file_path):
-                            zipf.write(file_path, f'{state_name_clean}_wards{ext}')
-                
-                logger.info(f"✅ Safely created {state_shapefile_path}")
-                
-                # Clean up temp directory
-                cleanup_result = safe_ops.safe_remove_directory(
-                    temp_shapefile_dir, 
-                    reason=f'nigeria_shapefile_cleanup_for_{state_name}'
-                )
-                logger.info(f"🔒 Temp directory cleanup: {cleanup_result['status']}")
+                # Use temporary directory for shapefile creation
+                with tempfile.TemporaryDirectory() as temp_shapefile_dir:
+                    logger.info(f"Using temporary directory: {temp_shapefile_dir}")
+                    
+                    # Save state shapefile to temp directory
+                    temp_shp_path = os.path.join(temp_shapefile_dir, f'{state_name_clean}_wards')
+                    state_gdf.to_file(temp_shp_path + '.shp')
+                    
+                    # Create ZIP file
+                    import zipfile
+                    with zipfile.ZipFile(state_shapefile_path, 'w') as zipf:
+                        for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
+                            file_path = temp_shp_path + ext
+                            if os.path.exists(file_path):
+                                zipf.write(file_path, f'{state_name_clean}_wards{ext}')
+                    
+                    logger.info(f"✅ Created {state_shapefile_path}")
                 
                 return {
                     'status': 'success',
