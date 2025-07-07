@@ -161,14 +161,14 @@ class PCAAnalysisPipeline:
             }
     
     def _load_raw_data(self, data_handler) -> bool:
-        """Load raw data from data handler."""
+        """Load cleaned data from data handler (updated for consistency)."""
         try:
-            if not hasattr(data_handler, 'csv_data') or data_handler.csv_data is None:
-                logger.error("No CSV data available in data handler")
+            if not hasattr(data_handler, 'cleaned_data') or data_handler.cleaned_data is None:
+                logger.error("No cleaned data available in data handler")
                 return False
             
-            self.raw_data = data_handler.csv_data.copy()
-            logger.info(f"📊 PCA DATA: Loaded raw data with shape {self.raw_data.shape}")
+            self.raw_data = data_handler.cleaned_data.copy()
+            logger.info(f"📊 PCA DATA: Loaded cleaned data with shape {self.raw_data.shape}")
             return True
             
         except Exception as e:
@@ -229,21 +229,28 @@ class PCAAnalysisPipeline:
         return None
     
     def _handle_ward_duplicates(self, ward_column: str):
-        """Handle duplicate ward names."""
+        """Handle duplicate ward names using WardCode system."""
         duplicates = self.raw_data[ward_column].duplicated()
         if duplicates.any():
             n_duplicates = duplicates.sum()
             logger.warning(f"⚠️ PCA DUPLICATES: Found {n_duplicates} duplicate ward names")
             
-            # Add suffix to duplicates
-            duplicate_names = self.raw_data[duplicates][ward_column].unique()
-            for name in duplicate_names:
-                mask = self.raw_data[ward_column] == name
-                indices = self.raw_data[mask].index
-                for i, idx in enumerate(indices[1:], 1):  # Start from second occurrence
-                    self.raw_data.loc[idx, ward_column] = f"{name}_{i}"
+            # Check if WardCode is available for proper duplicate handling
+            ward_code_col = None
+            for col in ['WardCode', 'ward_code', 'WardCode_x', 'WardCode_y']:
+                if col in self.raw_data.columns:
+                    ward_code_col = col
+                    break
             
-            logger.info(f"✅ PCA DUPLICATES: Fixed {n_duplicates} duplicate ward names")
+            if ward_code_col:
+                # Use WardCode system - keep original ward names, rely on WardCode for uniqueness
+                logger.info(f"✅ PCA DUPLICATES: Using {ward_code_col} for unique identification - preserving original ward names")
+                logger.info(f"📝 PCA WARD POLICY: Duplicate ward names preserved as per WardCode system design")
+            else:
+                # Fallback: Remove duplicates but warn about potential data loss
+                logger.warning(f"⚠️ PCA DUPLICATES: No WardCode found - removing {n_duplicates} duplicate entries")
+                self.raw_data = self.raw_data.drop_duplicates(subset=[ward_column], keep='first')
+                logger.info(f"✅ PCA DUPLICATES: Removed duplicates, {len(self.raw_data)} wards remaining")
     
     def _select_pca_variables(self, selected_variables: Optional[List[str]] = None) -> List[str]:
         """Select variables suitable for PCA analysis."""

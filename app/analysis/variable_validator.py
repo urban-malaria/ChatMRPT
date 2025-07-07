@@ -60,7 +60,7 @@ def validate_custom_variables(
         session_folder = f"instance/uploads/{session_id}"
         data_handler = DataHandler(session_folder)
     
-    if data_handler.csv_data is None or data_handler.csv_data.empty:
+    if data_handler.cleaned_data is None or data_handler.cleaned_data.empty:
         logger.error("No CSV data available for variable validation")
         return {
             'composite': VariableValidationResult([], [], {}, [], "No data available for validation"),
@@ -68,7 +68,7 @@ def validate_custom_variables(
         }
     
     # Get available columns from the dataset
-    available_columns = list(data_handler.csv_data.columns)
+    available_columns = list(data_handler.cleaned_data.columns)
     
     # Remove non-analysis columns (geographic identifiers, etc.)
     analysis_columns = _filter_analysis_columns(available_columns)
@@ -112,7 +112,7 @@ def _validate_variable_list(
         # No custom variables - use auto-selection as fallback
         try:
             auto_selection = apply_region_aware_selection(
-                data_handler.csv_data, 
+                data_handler.cleaned_data, 
                 data_handler.shapefile_data
             )
             fallback_vars = auto_selection.get('selected_variables', [])
@@ -160,7 +160,7 @@ def _validate_variable_list(
         try:
             # Get auto-selection as fallback for invalid variables
             auto_selection = apply_region_aware_selection(
-                data_handler.csv_data, 
+                data_handler.cleaned_data, 
                 data_handler.shapefile_data
             )
             auto_vars = auto_selection.get('selected_variables', [])
@@ -335,7 +335,7 @@ def apply_variable_validation_with_fallback(
             session_folder = f"instance/uploads/{session_id}"
             data_handler = DataHandler(session_folder)
             auto_selection = apply_region_aware_selection(
-                data_handler.csv_data, 
+                data_handler.cleaned_data, 
                 data_handler.shapefile_data
             )
             fallback_vars = auto_selection.get('selected_variables', [])

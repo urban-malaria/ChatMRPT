@@ -321,8 +321,7 @@ class RequestInterpreter:
                     {{
                         "tool_name": "run_complete_analysis",
                         "parameters": {{
-                            "composite_variables": ["pfpr", "elevation", "housing_quality"],
-                            "include_visualizations": true
+                            "composite_variables": ["pfpr", "elevation", "housing_quality"]
                         }},
                         "reasoning": "User specified custom variables for composite analysis"
                     }}
@@ -341,8 +340,7 @@ class RequestInterpreter:
                         "tool_name": "run_complete_analysis",
                         "parameters": {{
                             "composite_variables": ["pfpr", "elevation"],
-                            "pca_variables": ["rainfall", "population_density"],
-                            "include_visualizations": true
+                            "pca_variables": ["rainfall", "population_density"]
                         }},
                         "reasoning": "User specified different custom variables for each method"
                     }}
@@ -840,7 +838,6 @@ class RequestInterpreter:
                     {
                         'tool_name': 'runcompleteanalysis',
                         'parameters': {
-                            'include_visualizations': True,
                             'create_unified_dataset': True
                         },
                         'reasoning': 'User confirmed they want to run both composite and PCA analysis together with unified dataset creation'

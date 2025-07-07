@@ -42,7 +42,7 @@ def index_redirect():
 if __name__ == '__main__':
     # Development server settings
     debug_mode = app.config.get('DEBUG', False)
-    port = int(os.environ.get('PORT', 5200))
+    port = int(os.environ.get('PORT', 5610))
     host = os.environ.get('HOST', '127.0.0.1')
     
     print("Starting ChatMRPT v3.0")

@@ -26,21 +26,33 @@ export class VisualizationManager {
         }
 
         // Process auto-generated visualizations (for method switching)
-        if (response.visualizations && Array.isArray(response.visualizations)) {
+        if (response.visualizations && Array.isArray(response.visualizations) && response.visualizations.length > 0) {
             console.log('🎯 Processing visualizations:', response.visualizations);
-            response.visualizations.forEach((viz, index) => {
-                console.log(`🎯 Processing visualization ${index + 1}:`, viz);
-                setTimeout(() => {
-                    const vizPath = viz.url || viz.path || viz.html;
-                    console.log(`🎯 Using visualization path: ${vizPath}`);
-                    this.addVisualization(
-                        vizPath,
-                        viz.title,
-                        viz.type,
-                        viz.metadata || {}
-                    );
-                }, index * 500); // Stagger visualization loading
+            
+            // Filter for visualizations with valid paths before processing
+            const validVisualizations = response.visualizations.filter(viz => {
+                const vizPath = viz.url || viz.path || viz.html;
+                return vizPath && vizPath.trim() !== '';
             });
+            
+            if (validVisualizations.length > 0) {
+                console.log(`🎯 Found ${validVisualizations.length} valid visualizations to process`);
+                validVisualizations.forEach((viz, index) => {
+                    const vizPath = viz.url || viz.path || viz.html;
+                    console.log(`🎯 Processing visualization ${index + 1}: ${vizPath}`);
+                    
+                    setTimeout(() => {
+                        this.addVisualization(
+                            vizPath,
+                            viz.title,
+                            viz.type,
+                            viz.metadata || {}
+                        );
+                    }, index * 500); // Stagger visualization loading
+                });
+            } else {
+                console.log('⚠️ No valid visualizations found - all visualizations lack valid paths');
+            }
         }
     }
 

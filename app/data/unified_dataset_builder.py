@@ -115,18 +115,21 @@ class UnifiedDatasetBuilder:
             from app.data import DataHandler
             data_handler = DataHandler(self.session_folder)
             
-            if data_handler.csv_data is not None:
-                sources['csv_data'] = data_handler.csv_data
-                print(f"📊 CSV loaded: {data_handler.csv_data.shape[0]} rows, {data_handler.csv_data.shape[1]} columns")
+            if hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None:
+                if isinstance(data_handler.csv_data, pd.DataFrame) and len(data_handler.csv_data) > 0:
+                    sources['csv_data'] = data_handler.csv_data
+                    print(f"📊 CSV loaded: {data_handler.csv_data.shape[0]} rows, {data_handler.csv_data.shape[1]} columns")
             
             # Load shapefile data using the shapefile_loader
-            if hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None:
-                sources['shapefile_data'] = data_handler.shapefile_data
-                print(f"🗺️ Shapefile loaded: {data_handler.shapefile_data.shape[0]} features")
+            if hasattr(data_handler, 'shapefile_data'):
+                shp = data_handler.shapefile_data
+                if shp is not None and isinstance(shp, (pd.DataFrame, gpd.GeoDataFrame)) and len(shp) > 0:
+                    sources['shapefile_data'] = shp
+                    print(f"🗺️ Shapefile loaded: {shp.shape[0]} features")
             elif hasattr(data_handler, 'shapefile_loader'):
                 # Try to load via shapefile_loader
                 shp_data = getattr(data_handler.shapefile_loader, 'data', None)
-                if shp_data is not None:
+                if shp_data is not None and isinstance(shp_data, (pd.DataFrame, gpd.GeoDataFrame)) and len(shp_data) > 0:
                     sources['shapefile_data'] = shp_data
                     print(f"🗺️ Shapefile loaded via loader: {shp_data.shape[0]} features")
             
@@ -141,9 +144,11 @@ class UnifiedDatasetBuilder:
             for pattern in composite_patterns:
                 filepath = os.path.join(self.session_folder, pattern)
                 if os.path.exists(filepath):
-                    sources['composite_results'] = pd.read_csv(filepath)
-                    print(f"📈 Composite results loaded: {pattern}")
-                    break
+                    df = pd.read_csv(filepath)
+                    if not df.empty:
+                        sources['composite_results'] = df
+                        print(f"📈 Composite results loaded: {pattern}")
+                        break
             
             # Dynamically search for individual model scores
             model_score_patterns = [
@@ -157,12 +162,13 @@ class UnifiedDatasetBuilder:
                 filepath = os.path.join(self.session_folder, pattern)
                 if os.path.exists(filepath):
                     df = pd.read_csv(filepath)
-                    # Detect model columns dynamically
-                    model_cols = [col for col in df.columns if col.startswith('model_') or 'model' in col.lower()]
-                    if model_cols:  # Only load if it actually has model columns
-                        sources['composite_scores'] = df
-                        print(f"🎯 Model scores loaded: {len(model_cols)} individual models from {pattern}")
-                    break
+                    if not df.empty:
+                        # Detect model columns dynamically
+                        model_cols = [col for col in df.columns if col.startswith('model_') or 'model' in col.lower()]
+                        if model_cols:  # Only load if it actually has model columns
+                            sources['composite_scores'] = df
+                            print(f"🎯 Model scores loaded: {len(model_cols)} individual models from {pattern}")
+                        break
             
             # Dynamically search for model formulas/metadata
             formula_patterns = [
@@ -175,15 +181,18 @@ class UnifiedDatasetBuilder:
             for pattern in formula_patterns:
                 filepath = os.path.join(self.session_folder, pattern)
                 if os.path.exists(filepath):
-                    sources['model_formulas'] = pd.read_csv(filepath)
-                    print(f"📋 Model formulas loaded: {len(sources['model_formulas'])} model definitions from {pattern}")
-                    break
+                    df = pd.read_csv(filepath)
+                    if not df.empty:
+                        sources['model_formulas'] = df
+                        print(f"📋 Model formulas loaded: {len(df)} model definitions from {pattern}")
+                        break
             
             # Dynamically load comprehensive PCA results
             self._load_pca_results_dynamically(sources)
             
             # Validate minimum requirements
-            if sources['csv_data'] is None:
+            csv_data = sources['csv_data']
+            if csv_data is None or (isinstance(csv_data, pd.DataFrame) and len(csv_data) == 0):
                 return {'success': False, 'message': 'No CSV data available'}
             
             sources['success'] = True
@@ -198,6 +207,7 @@ class UnifiedDatasetBuilder:
         
         # Search for PCA rankings/results with flexible naming
         pca_ranking_patterns = [
+            'analysis_vulnerability_rankings_pca.csv',  # 🔧 FIXED: Actual file name
             'analysis_pca_rankings.csv',
             'pca_vulnerability_rankings.csv',
             'pca_analysis_results.csv',
@@ -208,12 +218,15 @@ class UnifiedDatasetBuilder:
         for pattern in pca_ranking_patterns:
             filepath = os.path.join(self.session_folder, pattern)
             if os.path.exists(filepath):
-                sources['pca_results'] = pd.read_csv(filepath)
-                print(f"🔍 PCA rankings loaded: {pattern}")
-                break
+                df = pd.read_csv(filepath)
+                if not df.empty:
+                    sources['pca_results'] = df
+                    print(f"🔍 PCA rankings loaded: {pattern}")
+                    break
         
         # Search for PCA components with flexible naming
         pca_component_patterns = [
+            'analysis_pca_scores.csv',  # 🔧 FIXED: Actual file name
             'pca_components.csv',
             'principal_components.csv',
             'analysis_pca_components.csv',
@@ -225,12 +238,13 @@ class UnifiedDatasetBuilder:
             filepath = os.path.join(self.session_folder, pattern)
             if os.path.exists(filepath):
                 df = pd.read_csv(filepath)
-                # Verify it has PC columns
-                pc_cols = [col for col in df.columns if col.startswith('PC') or 'component' in col.lower()]
-                if pc_cols:
-                    sources['pca_components'] = df
-                    print(f"🧮 PCA components loaded: {len(pc_cols)} components from {pattern}")
-                    break
+                if not df.empty:
+                    # Verify it has PC columns
+                    pc_cols = [col for col in df.columns if col.startswith('PC') or 'component' in col.lower()]
+                    if pc_cols:
+                        sources['pca_components'] = df
+                        print(f"🧮 PCA components loaded: {len(pc_cols)} components from {pattern}")
+                        break
         
         # Search for PCA loadings with flexible naming
         pca_loading_patterns = [
@@ -244,12 +258,18 @@ class UnifiedDatasetBuilder:
         for pattern in pca_loading_patterns:
             filepath = os.path.join(self.session_folder, pattern)
             if os.path.exists(filepath):
-                sources['pca_loadings'] = pd.read_csv(filepath)
-                print(f"📊 PCA loadings loaded: {pattern}")
-                break
+                df = pd.read_csv(filepath)
+                if not df.empty:
+                    sources['pca_loadings'] = df
+                    print(f"📊 PCA loadings loaded: {pattern}")
+                    break
         
         # If no PCA results found, try to generate them dynamically
-        if not any([sources.get('pca_results'), sources.get('pca_components')]):
+        pca_results_available = (
+            sources.get('pca_results') is not None or 
+            sources.get('pca_components') is not None
+        )
+        if not pca_results_available:
             print("🔬 No PCA results found - attempting dynamic PCA analysis...")
             self._run_dynamic_pca_analysis(sources)
     
@@ -278,10 +298,18 @@ class UnifiedDatasetBuilder:
                         session_id=self.session_id
                     )
                     
-                    if pca_result and pca_result.get('status') == 'success':
-                        self._extract_pca_results_dynamically(pca_result, sources)
-                        print(f"✅ Successfully ran PCA using {approach}")
-                        break
+                    # Check if pca_result is valid (handle both dict and DataFrame cases)
+                    if pca_result is not None:
+                        if isinstance(pca_result, dict) and pca_result.get('status') == 'success':
+                            self._extract_pca_results_dynamically(pca_result, sources)
+                            print(f"✅ Successfully ran PCA using {approach}")
+                            break
+                        elif isinstance(pca_result, pd.DataFrame) and len(pca_result) > 0:
+                            # Direct DataFrame result - wrap in expected structure
+                            wrapped_result = {'status': 'success', 'data': {'pca_results': pca_result}}
+                            self._extract_pca_results_dynamically(wrapped_result, sources)
+                            print(f"✅ Successfully ran PCA using {approach}")
+                            break
                         
                 except (ImportError, AttributeError, TypeError) as e:
                     print(f"⚠️ PCA approach {approach} not available: {e}")
@@ -317,7 +345,8 @@ class UnifiedDatasetBuilder:
                         else:
                             sources['pca_results'] = pd.DataFrame({'pca_score': pca_data[key]})
                     
-                    if sources['pca_results'] is not None:
+                    pca_results = sources['pca_results']
+                    if pca_results is not None and isinstance(pca_results, pd.DataFrame) and len(pca_results) > 0:
                         print(f"✅ Extracted PCA rankings from '{key}': {len(sources['pca_results'])} wards")
                         break
             
@@ -348,7 +377,8 @@ class UnifiedDatasetBuilder:
                             # 1D array or list
                             sources['pca_components'] = pd.DataFrame({'PC1': pca_data[key]})
                     
-                    if sources['pca_components'] is not None:
+                    pca_components = sources['pca_components']
+                    if pca_components is not None and isinstance(pca_components, pd.DataFrame) and len(pca_components) > 0:
                         print(f"✅ Extracted PCA components from '{key}'")
                         break
             
@@ -371,7 +401,8 @@ class UnifiedDatasetBuilder:
                     elif isinstance(pca_data[key], (list, tuple)):
                         sources['pca_loadings'] = pd.DataFrame({'loading': pca_data[key]})
                     
-                    if sources['pca_loadings'] is not None:
+                    pca_loadings = sources['pca_loadings']
+                    if pca_loadings is not None and isinstance(pca_loadings, pd.DataFrame) and len(pca_loadings) > 0:
                         print(f"✅ Extracted PCA loadings from '{key}'")
                         break
                         
@@ -380,26 +411,34 @@ class UnifiedDatasetBuilder:
             logger.warning(f"PCA extraction error: {e}")
     
     def _create_base_dataset(self, data_sources: Dict[str, Any]) -> gpd.GeoDataFrame:
-        """Create base unified geodataframe preserving original column names"""
+        """Create base unified geodataframe preserving original CSV ward count and names"""
         
         csv_df = data_sources['csv_data'].copy()
+        original_ward_count = len(csv_df)
         
         # Only minimal cleaning - preserve original names
         csv_df.columns = csv_df.columns.str.strip()  # Remove leading/trailing spaces only
         print(f"🔧 Preserved original column names: {list(csv_df.columns[:5])}...")
         
-        # Merge with shapefile if available
-        if data_sources['shapefile_data'] is not None:
+        # 🔧 FIX DUPLICATE WARD NAMES: Rename duplicates using "WardName (WardCode)" format
+        csv_df = self._fix_duplicate_ward_names(csv_df)
+        
+        # Merge with shapefile if available, but preserve CSV ward count
+        shapefile_data = data_sources['shapefile_data']
+        if shapefile_data is not None and isinstance(shapefile_data, (pd.DataFrame, gpd.GeoDataFrame)) and len(shapefile_data) > 0:
             shp_gdf = data_sources['shapefile_data'].copy()
+            
+            # Also fix duplicate ward names in shapefile
+            shp_gdf = self._fix_duplicate_ward_names(shp_gdf)
             
             # Find matching key columns
             csv_key = self._detect_ward_key_column(csv_df)
             shp_key = self._detect_ward_key_column(shp_gdf)
             
             if csv_key and shp_key:
-                # SMART MERGE: Handle duplicate ward name mismatches
-                unified_gdf = self._smart_merge_with_duplicates(shp_gdf, csv_df, shp_key, csv_key)
-                print(f"🔗 Smart merged CSV and shapefile: {unified_gdf.shape[0]} wards matched")
+                # PRESERVE CSV WARDS: Use left join to keep all CSV wards, add geometry where possible
+                unified_gdf = self._preserve_csv_wards_merge(csv_df, shp_gdf, csv_key, shp_key)
+                print(f"🔗 Preserved CSV wards with geometry: {unified_gdf.shape[0]} wards (maintaining original {original_ward_count})")
             else:
                 print("⚠️ Could not match CSV and shapefile - using CSV only")
                 unified_gdf = gpd.GeoDataFrame(csv_df)
@@ -408,6 +447,157 @@ class UnifiedDatasetBuilder:
             unified_gdf = gpd.GeoDataFrame(csv_df)
             print("📊 Using CSV data only (no shapefile)")
         
+        # Ensure we haven't inflated the ward count
+        if len(unified_gdf) != original_ward_count:
+            logger.warning(f"⚠️ Ward count changed from {original_ward_count} to {len(unified_gdf)} - this should not happen!")
+        
+        return unified_gdf
+    
+    def _fix_duplicate_ward_names(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Fix duplicate ward names by renaming them to 'WardName (WardCode)' format"""
+        
+        # Find ward name and ward code columns
+        ward_name_col = None
+        ward_code_col = None
+        
+        # Look for ward name column
+        for col in ['WardName', 'ward_name', 'Ward', 'ward']:
+            if col in df.columns:
+                ward_name_col = col
+                break
+        
+        # Look for ward code column
+        for col in ['WardCode', 'ward_code', 'wardcode']:
+            if col in df.columns:
+                ward_code_col = col
+                break
+        
+        if not ward_name_col:
+            print("⚠️ No ward name column found - skipping duplicate fix")
+            return df
+            
+        if not ward_code_col:
+            print("⚠️ No ward code column found - using numerical suffixes for duplicates")
+            return self._fix_duplicates_with_suffix(df, ward_name_col)
+        
+        df_fixed = df.copy()
+        
+        # Find duplicates in ward names
+        duplicate_mask = df_fixed[ward_name_col].duplicated(keep=False)
+        duplicate_count = duplicate_mask.sum()
+        
+        if duplicate_count == 0:
+            print(f"✅ No duplicate ward names found in {ward_name_col}")
+            return df_fixed
+        
+        print(f"🔧 Found {duplicate_count} duplicate ward names in {ward_name_col} - fixing with WardCode...")
+        
+        # For each duplicate ward name, rename using "WardName (WardCode)" format
+        for idx in df_fixed[duplicate_mask].index:
+            original_name = df_fixed.loc[idx, ward_name_col]
+            ward_code = df_fixed.loc[idx, ward_code_col]
+            
+            # Create unique name: "WardName (WardCode)"
+            new_name = f"{original_name} ({ward_code})"
+            df_fixed.loc[idx, ward_name_col] = new_name
+        
+        # Verify no duplicates remain
+        remaining_duplicates = df_fixed[ward_name_col].duplicated().sum()
+        if remaining_duplicates == 0:
+            print(f"✅ Fixed all duplicate ward names - all {len(df_fixed)} wards now have unique names")
+        else:
+            print(f"⚠️ Still have {remaining_duplicates} duplicate names after fix")
+        
+        return df_fixed
+    
+    def _fix_duplicates_with_suffix(self, df: pd.DataFrame, ward_name_col: str) -> pd.DataFrame:
+        """Fix duplicate ward names using numerical suffixes when WardCode is not available"""
+        df_fixed = df.copy()
+        
+        # Find duplicates
+        duplicate_mask = df_fixed[ward_name_col].duplicated(keep=False)
+        duplicate_count = duplicate_mask.sum()
+        
+        if duplicate_count == 0:
+            print(f"✅ No duplicate ward names found in {ward_name_col}")
+            return df_fixed
+        
+        print(f"🔧 Found {duplicate_count} duplicate ward names in {ward_name_col} - fixing with numerical suffixes...")
+        
+        # Group by ward name and add suffixes
+        name_counts = {}
+        for idx in df_fixed.index:
+            ward_name = df_fixed.loc[idx, ward_name_col]
+            
+            if ward_name in name_counts:
+                name_counts[ward_name] += 1
+                new_name = f"{ward_name} ({name_counts[ward_name]})"
+                df_fixed.loc[idx, ward_name_col] = new_name
+            else:
+                name_counts[ward_name] = 0
+                # First occurrence keeps original name, subsequent get numbered
+                duplicates_for_name = df_fixed[df_fixed[ward_name_col] == ward_name]
+                if len(duplicates_for_name) > 1:
+                    name_counts[ward_name] = 1
+                    new_name = f"{ward_name} (1)"
+                    df_fixed.loc[idx, ward_name_col] = new_name
+        
+        # Verify no duplicates remain
+        remaining_duplicates = df_fixed[ward_name_col].duplicated().sum()
+        if remaining_duplicates == 0:
+            print(f"✅ Fixed all duplicate ward names with suffixes - all {len(df_fixed)} wards now have unique names")
+        else:
+            print(f"⚠️ Still have {remaining_duplicates} duplicate names after suffix fix")
+        
+        return df_fixed
+    
+    def _preserve_csv_wards_merge(self, csv_df: pd.DataFrame, shp_gdf: gpd.GeoDataFrame,
+                                csv_key: str, shp_key: str) -> gpd.GeoDataFrame:
+        """
+        Merge CSV and shapefile while preserving all CSV wards and their original names.
+        Uses WardCode system for proper duplicate handling.
+        """
+        
+        # Start with CSV data as base (to preserve original ward count)
+        unified_gdf = gpd.GeoDataFrame(csv_df)
+        
+        # Check if WardCode is available for better matching
+        csv_wardcode_col = None
+        shp_wardcode_col = None
+        
+        for col in ['WardCode', 'ward_code', 'WardCode_x', 'WardCode_y']:
+            if col in csv_df.columns:
+                csv_wardcode_col = col
+            if col in shp_gdf.columns:
+                shp_wardcode_col = col
+        
+        if csv_wardcode_col and shp_wardcode_col:
+            # Use WardCode for precise matching
+            print(f"🔑 Using {csv_wardcode_col} and {shp_wardcode_col} for precise geometry matching")
+            geometry_match = shp_gdf.set_index(shp_wardcode_col)['geometry'].to_dict()
+            
+            # Add geometry based on WardCode match
+            unified_gdf['geometry'] = unified_gdf[csv_wardcode_col].map(geometry_match)
+            matched_count = unified_gdf['geometry'].notna().sum()
+            print(f"🎯 Matched geometry for {matched_count}/{len(unified_gdf)} wards using WardCode")
+            
+        else:
+            # Fallback to ward name matching, but use left join to preserve all CSV wards
+            print(f"🏘️ Using ward name matching as fallback (WardCode not available)")
+            
+            # Use left join to preserve all CSV wards
+            merged = csv_df.merge(
+                shp_gdf[[shp_key, 'geometry']], 
+                left_on=csv_key, 
+                right_on=shp_key, 
+                how='left'
+            )
+            
+            unified_gdf = gpd.GeoDataFrame(merged)
+            matched_count = unified_gdf['geometry'].notna().sum()
+            print(f"🎯 Matched geometry for {matched_count}/{len(unified_gdf)} wards using ward names")
+        
+        print(f"✅ Preserved all {len(unified_gdf)} CSV wards with geometry where possible")
         return unified_gdf
     
     def _smart_merge_with_duplicates(self, shp_gdf: gpd.GeoDataFrame, csv_df: pd.DataFrame, 
@@ -526,8 +716,20 @@ class UnifiedDatasetBuilder:
         return metadata
     
     def _detect_ward_key_column(self, df: pd.DataFrame) -> Optional[str]:
-        """Detect the ward identifier column"""
+        """Detect the ward identifier column (should be unique after duplicate fix)"""
         
+        # Look for standard ward name columns
+        name_candidates = ['WardName', 'ward_name', 'Ward', 'ward']
+        for candidate in name_candidates:
+            if candidate in df.columns:
+                duplicate_count = df[candidate].duplicated().sum()
+                if duplicate_count == 0:
+                    print(f"🔑 Using '{candidate}' for merge (unique names)")
+                else:
+                    print(f"⚠️ Using '{candidate}' for merge but found {duplicate_count} duplicates")
+                return candidate
+        
+        # Legacy detection for other ward-related columns
         possible_keys = []
         for col in df.columns:
             col_lower = col.lower()
@@ -535,13 +737,14 @@ class UnifiedDatasetBuilder:
                 if df[col].dtype == 'object' and df[col].nunique() > df.shape[0] * 0.8:
                     possible_keys.append(col)
         
-        # Return the best match
         if possible_keys:
-            # Prefer exact matches
-            for col in possible_keys:
-                if 'ward' in col.lower() and 'name' in col.lower():
-                    return col
-            return possible_keys[0]
+            candidate = possible_keys[0]
+            duplicate_count = df[candidate].duplicated().sum()
+            if duplicate_count == 0:
+                print(f"🔑 Using '{candidate}' for merge (unique names)")
+            else:
+                print(f"⚠️ Using '{candidate}' for merge but found {duplicate_count} duplicates")
+            return candidate
         
         return None
     
@@ -553,15 +756,28 @@ class UnifiedDatasetBuilder:
             print("⚠️ No ward key found - skipping analysis integration")
             return gdf
         
+        # 🔍 DEBUG: Track ward count at each step
+        original_count = len(gdf)
+        print(f"🔍 WARD COUNT DEBUG: Starting integration with {original_count} wards")
+        
         # Add region-aware metadata from analysis results
         gdf = self._integrate_region_metadata(gdf, data_sources)
+        print(f"🔍 WARD COUNT DEBUG: After region metadata: {len(gdf)} wards (change: {len(gdf) - original_count:+d})")
         
         # Integrate composite results
-        if data_sources['composite_results'] is not None:
-            comp_df = data_sources['composite_results']
+        composite_results = data_sources.get('composite_results')
+        if composite_results is not None and isinstance(composite_results, pd.DataFrame) and len(composite_results) > 0:
+            comp_df = composite_results.copy()
+            
+            # 🔧 FIX: Apply duplicate ward name fix to composite results too
+            comp_df = self._fix_duplicate_ward_names(comp_df)
+            
             comp_key = self._detect_ward_key_column(comp_df)
             
             if comp_key:
+                print(f"🔍 COMPOSITE DEBUG: Found composite data with {len(comp_df)} rows and key column '{comp_key}'")
+                print(f"🔍 COMPOSITE DEBUG: Available columns: {list(comp_df.columns)}")
+                
                 # Create properly mapped composite columns
                 comp_df_mapped = comp_df.copy()
                 
@@ -573,9 +789,12 @@ class UnifiedDatasetBuilder:
                 }
                 
                 # Apply column mappings (rename to standard names)
+                mapped_cols = []
                 for orig_col, std_col in column_mappings.items():
                     if orig_col in comp_df_mapped.columns:
                         comp_df_mapped = comp_df_mapped.rename(columns={orig_col: std_col})
+                        mapped_cols.append(f"{orig_col}→{std_col}")
+                        print(f"✅ Mapped column: {orig_col} → {std_col}")
                 
                 # BACKWARD COMPATIBILITY: Add aliases for visualization functions
                 # Visualization functions expect 'overall_rank', but we create 'composite_rank'
@@ -601,21 +820,60 @@ class UnifiedDatasetBuilder:
                         merge_cols.append(col)
                         analysis_cols.append(col)
                 
-                # Merge with standardized column names
+                # 🔍 DEBUG: Check for duplicates before merge
+                print(f"🔍 COMPOSITE MERGE DEBUG: Before merge - GDF: {len(gdf)} rows, Analysis: {len(comp_df_mapped)} rows")
+                print(f"🔍 COMPOSITE MERGE DEBUG: Ward key '{ward_key}' duplicates in GDF: {gdf[ward_key].duplicated().sum()}")
+                print(f"🔍 COMPOSITE MERGE DEBUG: Comp key '{comp_key}' duplicates in analysis: {comp_df_mapped[comp_key].duplicated().sum()}")
+                
+                # 🔧 FIX: Handle ward name mismatches for duplicates with codes
+                # Problem: GDF has "Zango (KN2113)" but analysis has "Zango"
+                comp_df_for_merge = comp_df_mapped[merge_cols].copy()
+                
+                # Create mapping for wards with codes in parentheses
+                unmatched_gdf_wards = gdf[~gdf[ward_key].isin(comp_df_for_merge[comp_key])][ward_key].tolist()
+                coded_wards = [w for w in unmatched_gdf_wards if '(' in w and ')' in w]
+                
+                if coded_wards:
+                    print(f"🔧 Fixing {len(coded_wards)} coded ward name mismatches...")
+                    
+                    # For each coded ward, find its base name in analysis results
+                    for coded_ward in coded_wards:
+                        # Extract base name: "Zango (KN2113)" -> "Zango"
+                        base_name = coded_ward.split(' (')[0].strip()
+                        
+                        # Find matching analysis rows with this base name
+                        matching_analysis = comp_df_for_merge[comp_df_for_merge[comp_key] == base_name]
+                        
+                        if len(matching_analysis) > 0:
+                            # For duplicates, we need to assign scores systematically
+                            # Use the first available unassigned score
+                            available_scores = matching_analysis[~matching_analysis[comp_key].isin(gdf[ward_key])]
+                            
+                            if len(available_scores) > 0:
+                                # Create a new row with the coded ward name
+                                score_row = available_scores.iloc[0].copy()
+                                score_row[comp_key] = coded_ward
+                                
+                                # Add this row to our merge dataframe
+                                comp_df_for_merge = pd.concat([comp_df_for_merge, score_row.to_frame().T], ignore_index=True)
+                                print(f"   📝 Mapped: '{base_name}' → '{coded_ward}'")
+                
+                # Now merge with the updated dataframe
                 gdf = gdf.merge(
-                    comp_df_mapped[merge_cols],
+                    comp_df_for_merge,
                     left_on=ward_key,
                     right_on=comp_key,
                     how='left',
                     suffixes=('', '_comp')
                 )
                 
+                print(f"🔍 COMPOSITE MERGE DEBUG: After merge - GDF: {len(gdf)} rows (change: {len(gdf) - original_count:+d})")
                 print(f"📈 Integrated composite analysis: {len(analysis_cols)} columns -> {', '.join(analysis_cols)}")
                 
                 # Add composite variables metadata if available in data handler
                 try:
-                    from app.data.data_handler import DataHandler
-                    handler = DataHandler(self.session_id)
+                    from app.data import DataHandler
+                    handler = DataHandler(f"instance/uploads/{self.session_id}")
                     if hasattr(handler, 'composite_variables') and handler.composite_variables:
                         gdf['composite_variables_used'] = ','.join(handler.composite_variables)
                         gdf['composite_variables_count'] = len(handler.composite_variables)
@@ -624,11 +882,19 @@ class UnifiedDatasetBuilder:
                     print(f"⚠️ Could not add composite variables metadata: {e}")
         
         # Integrate PCA results with proper column naming
-        if data_sources['pca_results'] is not None:
-            pca_df = data_sources['pca_results']
+        pca_results = data_sources.get('pca_results')
+        if pca_results is not None and isinstance(pca_results, pd.DataFrame) and len(pca_results) > 0:
+            pca_df = pca_results.copy()
+            
+            # 🔧 FIX: Apply duplicate ward name fix to PCA results too
+            pca_df = self._fix_duplicate_ward_names(pca_df)
+            
             pca_key = self._detect_ward_key_column(pca_df)
             
             if pca_key:
+                print(f"🔍 PCA DEBUG: Found PCA data with {len(pca_df)} rows and key column '{pca_key}'")
+                print(f"🔍 PCA DEBUG: Available columns: {list(pca_df.columns)}")
+                
                 # Create properly mapped PCA columns
                 pca_df_mapped = pca_df.copy()
                 
@@ -636,6 +902,7 @@ class UnifiedDatasetBuilder:
                 pca_column_mappings = {
                     'pca_score': 'pca_score',  # If already standardized
                     'score': 'pca_score',      # Generic score becomes pca_score
+                    'median_score': 'pca_score',  # Median score from PCA rankings
                     'rank': 'pca_rank',        # Generic rank becomes pca_rank
                     'overall_rank': 'pca_rank', # Overall rank becomes pca_rank
                     'category': 'pca_category', # Generic category becomes pca_category
@@ -643,9 +910,12 @@ class UnifiedDatasetBuilder:
                 }
                 
                 # Apply column mappings for PCA (rename to standard names)
+                mapped_pca_cols = []
                 for orig_col, std_col in pca_column_mappings.items():
                     if orig_col in pca_df_mapped.columns and std_col not in pca_df_mapped.columns:
                         pca_df_mapped = pca_df_mapped.rename(columns={orig_col: std_col})
+                        mapped_pca_cols.append(f"{orig_col}→{std_col}")
+                        print(f"✅ Mapped PCA column: {orig_col} → {std_col}")
                 
                 # Select columns to merge (key + mapped analysis columns)
                 merge_cols = [pca_key]
@@ -655,16 +925,58 @@ class UnifiedDatasetBuilder:
                         merge_cols.append(col)
                         analysis_cols.append(col)
                 
+                # 🔍 DEBUG: Check for duplicates before PCA merge
+                print(f"🔍 PCA MERGE DEBUG: Before merge - GDF: {len(gdf)} rows, PCA: {len(pca_df_mapped)} rows")
+                print(f"🔍 PCA MERGE DEBUG: Ward key '{ward_key}' duplicates in GDF: {gdf[ward_key].duplicated().sum()}")
+                print(f"🔍 PCA MERGE DEBUG: PCA key '{pca_key}' duplicates in analysis: {pca_df_mapped[pca_key].duplicated().sum()}")
+                
+                # 🔧 FIX: Handle ward name mismatches for duplicates with codes (same as composite)
+                pca_df_for_merge = pca_df_mapped[merge_cols].copy()
+                
+                # Create mapping for wards with codes in parentheses
+                unmatched_gdf_wards = gdf[~gdf[ward_key].isin(pca_df_for_merge[pca_key])][ward_key].tolist()
+                coded_wards = [w for w in unmatched_gdf_wards if '(' in w and ')' in w]
+                
+                if coded_wards:
+                    print(f"🔧 Fixing {len(coded_wards)} PCA coded ward name mismatches...")
+                    
+                    # For each coded ward, find its base name in analysis results
+                    for coded_ward in coded_wards:
+                        # Extract base name: "Zango (KN2113)" -> "Zango"
+                        base_name = coded_ward.split(' (')[0].strip()
+                        
+                        # Find matching analysis rows with this base name
+                        matching_analysis = pca_df_for_merge[pca_df_for_merge[pca_key] == base_name]
+                        
+                        if len(matching_analysis) > 0:
+                            # For duplicates, we need to assign scores systematically
+                            # Use the first available unassigned score
+                            available_scores = matching_analysis[~matching_analysis[pca_key].isin(gdf[ward_key])]
+                            
+                            if len(available_scores) > 0:
+                                # Create a new row with the coded ward name
+                                score_row = available_scores.iloc[0].copy()
+                                score_row[pca_key] = coded_ward
+                                
+                                # Add this row to our merge dataframe
+                                pca_df_for_merge = pd.concat([pca_df_for_merge, score_row.to_frame().T], ignore_index=True)
+                                print(f"   📝 PCA Mapped: '{base_name}' → '{coded_ward}'")
+                
                 # Merge with standardized column names
                 gdf = gdf.merge(
-                    pca_df_mapped[merge_cols],
+                    pca_df_for_merge,
                     left_on=ward_key,
                     right_on=pca_key,
                     how='left',
                     suffixes=('', '_pca_dup')
                 )
                 
+                print(f"🔍 PCA MERGE DEBUG: After merge - GDF: {len(gdf)} rows (change: {len(gdf) - original_count:+d})")
                 print(f"🔍 Integrated PCA analysis: {len(analysis_cols)} columns -> {', '.join(analysis_cols) if analysis_cols else 'none'}")
+        
+        # 🔍 DEBUG: Final ward count
+        final_count = len(gdf)
+        print(f"🔍 WARD COUNT DEBUG: Final integration result: {final_count} wards (total change: {final_count - original_count:+d})")
         
         return gdf
     
@@ -734,11 +1046,12 @@ class UnifiedDatasetBuilder:
             from ..data import DataHandler
             data_handler = DataHandler(self.session_folder)
             
-            if data_handler.csv_data is not None:
-                zone, detection_method = detect_geopolitical_zone(
-                    data_handler.csv_data, 
-                    data_handler.shapefile_data
-                )
+            if hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None:
+                if isinstance(data_handler.csv_data, pd.DataFrame) and len(data_handler.csv_data) > 0:
+                    zone, detection_method = detect_geopolitical_zone(
+                        data_handler.csv_data, 
+                        data_handler.shapefile_data
+                    )
                 
                 if zone:
                     gdf['detected_zone'] = zone
@@ -1226,12 +1539,23 @@ class UnifiedDatasetBuilder:
         
         file_paths = {}
         
-        # Save as GeoParquet (primary format)
+        # Save as GeoParquet (primary format) or regular parquet if no geometry
         geoparquet_path = os.path.join(self.session_folder, 'unified_dataset.geoparquet')
         try:
-            gdf.to_parquet(geoparquet_path, compression='snappy')
+            if isinstance(gdf, gpd.GeoDataFrame) and 'geometry' in gdf.columns:
+                # True GeoParquet with geometry
+                gdf.to_parquet(geoparquet_path, compression='snappy')
+                print(f"💾 Saved GeoParquet: {geoparquet_path}")
+            else:
+                # Regular parquet for CSV-only data
+                regular_path = os.path.join(self.session_folder, 'unified_dataset.parquet')
+                gdf.to_parquet(regular_path, compression='snappy')
+                file_paths['parquet'] = regular_path
+                print(f"💾 Saved Parquet (no geometry): {regular_path}")
+                # Still save with .geoparquet extension for compatibility but mark as regular
+                gdf.to_parquet(geoparquet_path, compression='snappy')
+                print(f"💾 Saved compatibility GeoParquet: {geoparquet_path}")
             file_paths['geoparquet'] = geoparquet_path
-            print(f"💾 Saved GeoParquet: {geoparquet_path}")
         except Exception as e:
             print(f"⚠️ Error saving GeoParquet: {e}")
             raise
@@ -1378,17 +1702,44 @@ def load_unified_dataset(session_id: str) -> Optional[gpd.GeoDataFrame]:
     
     # Try GeoParquet first
     geoparquet_path = os.path.join(session_folder, 'unified_dataset.geoparquet')
+    print(f"🔍 LOAD DEBUG: Looking for unified dataset at: {geoparquet_path}")
+    
     if os.path.exists(geoparquet_path):
+        print(f"🔍 LOAD DEBUG: GeoParquet file found, attempting to load...")
         try:
-            return gpd.read_parquet(geoparquet_path)
-        except Exception:
-            pass
+            # Try as GeoParquet first
+            gdf = gpd.read_parquet(geoparquet_path)
+            print(f"✅ LOAD DEBUG: Successfully loaded GeoParquet with {len(gdf)} rows, {len(gdf.columns)} columns")
+            return gdf
+        except Exception as e:
+            print(f"⚠️ LOAD DEBUG: Failed to load as GeoParquet: {e}")
+            # Try as regular parquet
+            try:
+                df = pd.read_parquet(geoparquet_path)
+                print(f"✅ LOAD DEBUG: Successfully loaded as regular Parquet with {len(df)} rows, {len(df.columns)} columns")
+                return df
+            except Exception as e2:
+                print(f"❌ LOAD DEBUG: Failed to load as regular Parquet: {e2}")
+                pass
+    else:
+        print(f"❌ LOAD DEBUG: GeoParquet file does not exist")
     
     # Try pickle fallback
     pickle_path = os.path.join(session_folder, 'unified_dataset.pkl')
-    if os.path.exists(pickle_path):
-        return pd.read_pickle(pickle_path)
+    print(f"🔍 LOAD DEBUG: Trying pickle fallback at: {pickle_path}")
     
+    if os.path.exists(pickle_path):
+        print(f"🔍 LOAD DEBUG: Pickle file found, attempting to load...")
+        try:
+            gdf = pd.read_pickle(pickle_path)
+            print(f"✅ LOAD DEBUG: Successfully loaded pickle with {len(gdf)} rows, {len(gdf.columns)} columns")
+            return gdf
+        except Exception as e:
+            print(f"❌ LOAD DEBUG: Failed to load pickle: {e}")
+    else:
+        print(f"❌ LOAD DEBUG: Pickle file does not exist")
+    
+    print(f"❌ LOAD DEBUG: No unified dataset found for session {session_id}")
     return None
 
 
@@ -1527,9 +1878,10 @@ def _load_settlement_free_data_sources(session_folder: str) -> Dict[str, Any]:
         from app.data import DataHandler
         data_handler = DataHandler(session_folder)
         
-        if data_handler.csv_data is not None:
-            sources['csv_data'] = data_handler.csv_data
-            print(f"📊 CSV loaded: {data_handler.csv_data.shape[0]} rows, {data_handler.csv_data.shape[1]} columns")
+        if hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None:
+            if isinstance(data_handler.csv_data, pd.DataFrame):
+                sources['csv_data'] = data_handler.csv_data
+                print(f"📊 CSV loaded: {data_handler.csv_data.shape[0]} rows, {data_handler.csv_data.shape[1]} columns")
         
         if hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None:
             sources['shapefile_data'] = data_handler.shapefile_data

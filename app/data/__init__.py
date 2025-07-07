@@ -101,9 +101,6 @@ class DataHandler:
         # Try to reload any existing data from the session folder
         self._attempt_data_reload()
         
-        # Try to reload any existing data from the session folder
-        self._attempt_data_reload()
-        
         self.logger.info(f"DataHandler initialized with modular architecture - Session: {session_folder}")
     
     # ===========================================
@@ -122,7 +119,10 @@ class DataHandler:
     
     @property
     def csv_data(self):
-        """Property for accessing CSV data"""
+        """Property for accessing CSV data - returns cleaned data if available"""
+        # 🔧 PHASE 1 FIX: Always prioritize cleaned data for analysis
+        if self.cleaned_data is not None:
+            return self.cleaned_data
         return self._csv_data
     
     @csv_data.setter
@@ -131,6 +131,11 @@ class DataHandler:
         self._csv_data = value
         if value is not None:
             self._data_loaded = True
+    
+    @property
+    def raw_csv_data(self):
+        """Property for accessing RAW CSV data (bypasses cleaned data priority)"""
+        return self._csv_data
     
     @property
     def shapefile_data(self):
@@ -633,27 +638,47 @@ class DataHandler:
             }
     
     def _attempt_data_reload(self):
-        """Attempt to reload data from session files"""
+        """Attempt to reload data from session files - PRIORITIZING CLEANED DATA"""
         try:
-            # Try to reload CSV data - prioritize RAW data for new workflow
-            raw_csv_path = os.path.join(self.session_folder, 'raw_data.csv')
-            if os.path.exists(raw_csv_path):
-                # Load raw data (new workflow - deferred cleaning)
-                self.csv_data = pd.read_csv(raw_csv_path)
-                self.logger.info("Reloaded CSV data from raw_data.csv (new workflow)")
-            else:
-                # Fallback to processed data for backward compatibility
-                processed_csv_path = os.path.join(self.session_folder, 'processed_data.csv')
-                if os.path.exists(processed_csv_path):
-                    self.csv_data = pd.read_csv(processed_csv_path)
-                    self.logger.info("Reloaded CSV data from processed_data.csv (legacy)")
+            # 🔧 PHASE 1 FIX: Check for cleaned data first (analysis-ready data)
+            cleaned_paths = [
+                'analysis_cleaned_data.csv',  # Analysis-specific cleaned data
+                'cleaned_data.csv'            # General cleaned data
+            ]
+            
+            cleaned_data_loaded = False
+            for cleaned_path in cleaned_paths:
+                full_path = os.path.join(self.session_folder, cleaned_path)
+                if os.path.exists(full_path):
+                    try:
+                        self.csv_data = pd.read_csv(full_path)
+                        self.cleaned_data = self.csv_data.copy()  # Store as both csv_data and cleaned_data
+                        cleaned_data_loaded = True
+                        self.logger.info(f"✅ PRIORITIZED: Loaded cleaned data from {cleaned_path} (analysis-ready)")
+                        break
+                    except Exception as e:
+                        self.logger.warning(f"Could not load cleaned data from {cleaned_path}: {e}")
+            
+            # Only load raw data if no cleaned data exists
+            if not cleaned_data_loaded:
+                raw_csv_path = os.path.join(self.session_folder, 'raw_data.csv')
+                if os.path.exists(raw_csv_path):
+                    # Load raw data (will need cleaning)
+                    self.csv_data = pd.read_csv(raw_csv_path)
+                    self.logger.info("⚠️ FALLBACK: Loaded raw data from raw_data.csv (will need cleaning)")
                 else:
-                    # Final fallback to any CSV file
-                    original_csv_files = [f for f in os.listdir(self.session_folder) if f.endswith('.csv')]
-                    if original_csv_files:
-                        csv_path = os.path.join(self.session_folder, original_csv_files[0])
-                        self.csv_data = pd.read_csv(csv_path)
-                        self.logger.info(f"Reloaded CSV data from {original_csv_files[0]} (fallback)")
+                    # Fallback to processed data for backward compatibility
+                    processed_csv_path = os.path.join(self.session_folder, 'processed_data.csv')
+                    if os.path.exists(processed_csv_path):
+                        self.csv_data = pd.read_csv(processed_csv_path)
+                        self.logger.info("⚠️ LEGACY: Loaded CSV data from processed_data.csv")
+                    else:
+                        # Final fallback to any CSV file
+                        original_csv_files = [f for f in os.listdir(self.session_folder) if f.endswith('.csv')]
+                        if original_csv_files:
+                            csv_path = os.path.join(self.session_folder, original_csv_files[0])
+                            self.csv_data = pd.read_csv(csv_path)
+                            self.logger.info(f"⚠️ ULTIMATE FALLBACK: Loaded CSV data from {original_csv_files[0]}")
             
             # Try to reload shapefile data - prioritize RAW shapefile for new workflow
             shapefile_folder = os.path.join(self.session_folder, 'shapefile')
@@ -984,6 +1009,63 @@ class DataHandler:
                 summary['pca_method']['top_risk_score'] = top_ward_data['median_score']
         
         return summary
+    
+    def validate_data_consistency(self) -> Dict[str, Any]:
+        """
+        🔧 PHASE 1 FIX: Validate data consistency for debugging
+        
+        Returns:
+            Dict with validation results and debugging info
+        """
+        validation = {
+            'has_raw_data': self._csv_data is not None,
+            'has_cleaned_data': self.cleaned_data is not None,
+            'data_source_used': 'unknown',
+            'ward_count_raw': 0,
+            'ward_count_cleaned': 0,
+            'ward_name_consistency': False,
+            'issues': []
+        }
+        
+        try:
+            # Check what data source is actually being used
+            if self.cleaned_data is not None:
+                validation['data_source_used'] = 'cleaned_data'
+                validation['ward_count_cleaned'] = len(self.cleaned_data)
+                
+                # Check if csv_data property returns cleaned data
+                if self.csv_data is self.cleaned_data:
+                    validation['csv_data_properly_redirected'] = True
+                else:
+                    validation['csv_data_properly_redirected'] = False
+                    validation['issues'].append('csv_data property not returning cleaned_data')
+            elif self._csv_data is not None:
+                validation['data_source_used'] = 'raw_data'
+                validation['ward_count_raw'] = len(self._csv_data)
+                validation['issues'].append('Using raw data - cleaning needed')
+            else:
+                validation['data_source_used'] = 'no_data'
+                validation['issues'].append('No data loaded')
+            
+            # Check ward name patterns if data exists
+            current_data = self.csv_data
+            if current_data is not None and 'WardName' in current_data.columns:
+                ward_names = current_data['WardName'].tolist()
+                coded_wards = [name for name in ward_names if '(' in str(name) and ')' in str(name)]
+                validation['coded_wards_count'] = len(coded_wards)
+                validation['total_wards'] = len(ward_names)
+                validation['duplicates_handled'] = len(coded_wards) > 0
+                
+                if len(coded_wards) > 0:
+                    validation['sample_coded_wards'] = coded_wards[:3]
+                    validation['issues'].append(f'{len(coded_wards)} wards have coded names (duplicates handled)')
+            
+            self.logger.info(f"Data consistency validation: {validation['data_source_used']} with {validation.get('total_wards', 0)} wards")
+            
+        except Exception as e:
+            validation['issues'].append(f'Validation error: {str(e)}')
+            
+        return validation
 
 
 # Package-level convenience functions for direct import

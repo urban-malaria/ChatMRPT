@@ -2,11 +2,88 @@
 
 import logging
 import time
+import pandas as pd
 from ..utils import is_numeric_column
 from ..normalization import normalize_data, determine_variable_relationships
 from ..imputation import handle_missing_values
 
 logger = logging.getLogger(__name__)
+
+
+def _fix_duplicate_ward_names(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Fix duplicate ward names by appending WardCode in format: WardName (WardCode)
+    
+    Args:
+        data: DataFrame with potential duplicate ward names
+        
+    Returns:
+        DataFrame with fixed ward names
+    """
+    try:
+        # Find ward name column
+        ward_col = None
+        for col in ['WardName', 'ward_name', 'Ward_Name', 'Ward']:
+            if col in data.columns:
+                ward_col = col
+                break
+        
+        if not ward_col:
+            logger.warning("No ward column found - skipping duplicate fixing")
+            return data
+        
+        # Find ward code column
+        code_col = None
+        for col in ['WardCode', 'ward_code', 'Ward_Code']:
+            if col in data.columns:
+                code_col = col
+                break
+        
+        if not code_col:
+            logger.warning("No ward code column found - skipping duplicate fixing")
+            return data
+        
+        # Make a copy to avoid modifying original
+        fixed_data = data.copy()
+        
+        # Find duplicates
+        duplicates = fixed_data[ward_col].duplicated(keep=False)
+        n_duplicates = duplicates.sum()
+        
+        if n_duplicates == 0:
+            logger.info("✅ No duplicate ward names found")
+            return fixed_data
+        
+        logger.info(f"🔧 Found {n_duplicates} duplicate ward names - fixing with WardCode format")
+        
+        # Get unique ward names that have duplicates
+        duplicate_ward_names = fixed_data[duplicates][ward_col].unique()
+        
+        # Fix each duplicate group
+        for ward_name in duplicate_ward_names:
+            # Get all rows with this ward name
+            ward_mask = fixed_data[ward_col] == ward_name
+            ward_rows = fixed_data[ward_mask]
+            
+            # Apply format: WardName (WardCode) for all instances
+            for idx in ward_rows.index:
+                ward_code = fixed_data.loc[idx, code_col]
+                fixed_name = f"{ward_name} ({ward_code})"
+                fixed_data.loc[idx, ward_col] = fixed_name
+        
+        # Verify fix
+        remaining_duplicates = fixed_data[ward_col].duplicated().sum()
+        if remaining_duplicates == 0:
+            logger.info(f"✅ Successfully fixed all duplicate ward names using WardCode format")
+            logger.info(f"📝 Fixed {len(duplicate_ward_names)} ward groups: {', '.join(duplicate_ward_names)}")
+        else:
+            logger.warning(f"⚠️ Still have {remaining_duplicates} duplicates after fixing")
+        
+        return fixed_data
+        
+    except Exception as e:
+        logger.error(f"Error fixing duplicate ward names: {str(e)}")
+        return data
 
 
 def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stages, na_methods=None):
@@ -46,6 +123,10 @@ def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stag
                 else:
                     logger.info("No ward name mismatches detected")
             
+            # Step 1.5: Handle duplicate ward names using WardCode format
+            logger.info("Checking for duplicate ward names...")
+            data_handler.csv_data = _fix_duplicate_ward_names(data_handler.csv_data)
+            
             # Step 2: Handle missing values with spatial neighbor imputation
             logger.info("Applying spatial neighbor imputation for missing values...")
             cleaned_data = handle_missing_values(
@@ -80,6 +161,13 @@ def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stag
                     cleaning_performed.append(f"Fixed {len(ward_mismatches)} ward name mismatches")
                 else:
                     cleaning_performed.append("No ward name mismatches")
+            
+            # Check duplicate handling results
+            duplicate_count = cleaned_data['WardName'].duplicated().sum() if 'WardName' in cleaned_data.columns else 0
+            if duplicate_count == 0:
+                cleaning_performed.append("Fixed duplicate ward names with WardCode format")
+            else:
+                cleaning_performed.append(f"Warning: {duplicate_count} duplicate ward names remain")
             
             cleaning_performed.append("Applied spatial neighbor imputation for missing values")
             

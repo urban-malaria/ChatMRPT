@@ -341,7 +341,6 @@ def send_message():
             'status': response.get('status', 'success'),
             'message': response.get('response', 'Request processed successfully'),
             'response': response.get('response', 'Request processed successfully'),  # Frontend expects this field
-            'visualizations': response.get('visualizations', []),
             'explanations': response.get('explanations', []),
             'data_summary': response.get('data_summary'),
             'tools_used': response.get('tools_used', []),
@@ -350,6 +349,17 @@ def send_message():
             'total_response_time': f"{total_response_time:.2f}s",
             'response_efficiency': f"{round(processing_duration / total_response_time * 100, 1) if total_response_time > 0 else 100}%"
         }
+        
+        # Only include visualizations if they actually exist and have valid content
+        visualizations = response.get('visualizations', [])
+        if visualizations and len(visualizations) > 0:
+            # Filter out empty or invalid visualizations
+            valid_visualizations = [
+                viz for viz in visualizations 
+                if isinstance(viz, dict) and (viz.get('url') or viz.get('path') or viz.get('html'))
+            ]
+            if valid_visualizations:
+                formatted_response['visualizations'] = valid_visualizations
         
         # Update session state based on tools used
         tools_used = response.get('tools_used', [])

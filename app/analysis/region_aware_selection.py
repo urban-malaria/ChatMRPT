@@ -14,6 +14,8 @@ import logging
 import pandas as pd
 import geopandas as gpd
 from typing import Dict, List, Optional, Tuple, Any
+from difflib import SequenceMatcher
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +58,120 @@ CORE_VARIABLES = ['pfpr', 'u5_tpr_rdt']
 # Identifier columns (not analysis variables)
 IDENTIFIER_COLUMNS = ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
 
-def detect_geopolitical_zone(csv_data: pd.DataFrame, shapefile_data: Optional[gpd.GeoDataFrame] = None) -> Tuple[Optional[str], str]:
+def find_fuzzy_match(target_var: str, available_vars: List[str], threshold: float = 0.75) -> Optional[str]:
+    """
+    Find a fuzzy match for a target variable in the list of available variables.
+    
+    Args:
+        target_var: The variable name to match
+        available_vars: List of available variable names
+        threshold: Minimum similarity score (0-1) to accept a match
+        
+    Returns:
+        Best matching variable name or None if no good match found
+    """
+    best_match = None
+    best_score = 0
+    
+    # Normalize target variable for comparison
+    target_lower = target_var.lower()
+    target_parts = re.split(r'[_\s-]+', target_lower)
+    
+    for available_var in available_vars:
+        # Skip identifier columns
+        if available_var in IDENTIFIER_COLUMNS:
+            continue
+            
+        available_lower = available_var.lower()
+        
+        # Calculate various similarity scores
+        scores = []
+        
+        # 1. Direct string similarity
+        direct_score = SequenceMatcher(None, target_lower, available_lower).ratio()
+        scores.append(direct_score)
+        
+        # 2. Check if target is substring or vice versa
+        if target_lower in available_lower or available_lower in target_lower:
+            scores.append(0.9)
+        
+        # 3. Check word overlap
+        available_parts = re.split(r'[_\s-]+', available_lower)
+        common_parts = set(target_parts) & set(available_parts)
+        if common_parts:
+            overlap_score = len(common_parts) / max(len(target_parts), len(available_parts))
+            scores.append(overlap_score)
+        
+        # 4. Special cases for common variations
+        if _check_special_variations(target_var, available_var):
+            scores.append(0.95)
+        
+        # Use the highest score
+        max_score = max(scores) if scores else 0
+        
+        if max_score > best_score and max_score >= threshold:
+            best_score = max_score
+            best_match = available_var
+    
+    return best_match
+
+def _check_special_variations(var1: str, var2: str) -> bool:
+    """
+    Check for common variable name variations in malaria/health data.
+    """
+    variations = [
+        # Temperature variations
+        ('temp', 'temperature'),
+        ('tmp', 'temperature'),
+        ('temp', 'tmp'),
+        # Rainfall variations
+        ('rain', 'rainfall'),
+        ('precip', 'precipitation'),
+        ('rainfall', 'precipitation'),
+        # Elevation variations
+        ('elev', 'elevation'),
+        ('alt', 'altitude'),
+        ('elevation', 'altitude'),
+        # Test positivity rate variations
+        ('tpr', 'test_positivity_rate'),
+        ('u5_tpr', 'under5_tpr'),
+        ('u5_tpr_rdt', 'under5_test_positivity'),
+        # Parasite prevalence variations
+        ('pfpr', 'parasite_prevalence'),
+        ('pfpr', 'p_falciparum_pr'),
+        # Vegetation index variations
+        ('evi', 'enhanced_vegetation_index'),
+        ('ndvi', 'normalized_difference_vegetation_index'),
+        # Water index variations
+        ('ndwi', 'normalized_difference_water_index'),
+        ('ndmi', 'normalized_difference_moisture_index'),
+        # Housing variations
+        ('housing_quality', 'housing_q'),
+        ('housing_quality', 'hq'),
+        # Distance variations
+        ('distance_to_waterbodies', 'dist_water'),
+        ('distance_to_waterbodies', 'water_distance'),
+        # Nighttime lights variations
+        ('nighttime_lights', 'night_lights'),
+        ('nighttime_lights', 'ntl'),
+        ('nighttime_lights', 'lights')
+    ]
+    
+    var1_lower = var1.lower()
+    var2_lower = var2.lower()
+    
+    for v1, v2 in variations:
+        if (v1 in var1_lower and v2 in var2_lower) or (v2 in var1_lower and v1 in var2_lower):
+            return True
+    
+    return False
+
+def detect_geopolitical_zone(cleaned_data: pd.DataFrame, shapefile_data: Optional[gpd.GeoDataFrame] = None) -> Tuple[Optional[str], str]:
     """
     Detect the geopolitical zone from uploaded data.
     
     Args:
-        csv_data: CSV DataFrame with ward data
+        cleaned_data: Cleaned CSV DataFrame with ward data
         shapefile_data: Optional shapefile GeoDataFrame
         
     Returns:
@@ -69,8 +179,8 @@ def detect_geopolitical_zone(csv_data: pd.DataFrame, shapefile_data: Optional[gp
     """
     try:
         # Method 1: Look for StateCode column
-        if 'StateCode' in csv_data.columns:
-            state_codes = csv_data['StateCode'].dropna().unique()
+        if 'StateCode' in cleaned_data.columns:
+            state_codes = cleaned_data['StateCode'].dropna().unique()
             if len(state_codes) > 0:
                 # Use first non-null state code
                 state_code = str(state_codes[0]).strip()
@@ -80,8 +190,8 @@ def detect_geopolitical_zone(csv_data: pd.DataFrame, shapefile_data: Optional[gp
                     return zone, f"StateCode: {state_code}"
         
         # Method 2: Look for State column
-        if 'State' in csv_data.columns:
-            states = csv_data['State'].dropna().unique()
+        if 'State' in cleaned_data.columns:
+            states = cleaned_data['State'].dropna().unique()
             if len(states) > 0:
                 state_name = str(states[0]).strip()
                 zone = get_zone_from_state_name(state_name)
@@ -90,8 +200,8 @@ def detect_geopolitical_zone(csv_data: pd.DataFrame, shapefile_data: Optional[gp
                     return zone, f"State: {state_name}"
         
         # Method 3: Try to infer from WardName patterns
-        if 'WardName' in csv_data.columns:
-            ward_names = csv_data['WardName'].dropna().unique()
+        if 'WardName' in cleaned_data.columns:
+            ward_names = cleaned_data['WardName'].dropna().unique()
             zone = infer_zone_from_ward_names(ward_names)
             if zone:
                 logger.info(f"Inferred zone '{zone}' from ward name patterns")
@@ -171,7 +281,7 @@ def infer_zone_from_ward_names(ward_names: List[str]) -> Optional[str]:
     return None
 
 def select_variables_by_zone(zone: str, available_variables: List[str], 
-                           llm_manager=None, csv_data=None) -> List[str]:
+                           llm_manager=None, cleaned_data=None) -> List[str]:
     """
     Select the exact scientifically-validated variables for the detected zone.
     Falls back to LLM selection if too many variables are missing.
@@ -180,7 +290,7 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
         zone: Geopolitical zone name
         available_variables: List of available variables in the data
         llm_manager: Optional LLM manager for fallback selection
-        csv_data: Optional CSV data for LLM context
+        cleaned_data: Optional cleaned data for LLM context
         
     Returns:
         List of zone-specific variables that are available in the data
@@ -188,11 +298,17 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
     if zone not in ZONE_VARIABLES:
         logger.warning(f"No variable mapping for zone: {zone}")
         # Fallback to LLM selection if available, otherwise use all variables
-        if llm_manager and csv_data is not None:
+        if llm_manager and cleaned_data is not None:
             logger.info("Attempting LLM fallback for unknown zone")
-            return _fallback_to_llm_selection(available_variables, llm_manager, csv_data, zone)
+            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone)
         else:
+            # Use conservative filtering for unknown zones
             fallback_vars = [var for var in available_variables if var not in IDENTIFIER_COLUMNS]
+            # If still empty, use numeric columns as emergency fallback
+            if len(fallback_vars) == 0:
+                numeric_cols = cleaned_data.select_dtypes(include=['number']).columns.tolist()
+                fallback_vars = [col for col in numeric_cols if 'name' not in col.lower() and 'code' not in col.lower()]
+                logger.warning(f"🚨 Emergency fallback for unknown zone: using {len(fallback_vars)} numeric variables")
             logger.info(f"Using basic fallback: {len(fallback_vars)} available variables")
             return fallback_vars
     
@@ -201,12 +317,19 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
     selected_variables = []
     missing_variables = []
     
-    # Select only the variables that are available in the uploaded data
+    # Select variables using fuzzy matching for flexibility
     for var in zone_variable_list:
+        # First try exact match
         if var in available_variables:
             selected_variables.append(var)
         else:
-            missing_variables.append(var)
+            # Try fuzzy matching
+            matched_var = find_fuzzy_match(var, available_variables)
+            if matched_var:
+                selected_variables.append(matched_var)
+                logger.info(f"🔍 Fuzzy matched '{var}' to '{matched_var}'")
+            else:
+                missing_variables.append(var)
     
     # Check if we have enough variables from the region-specific list
     missing_percentage = len(missing_variables) / len(zone_variable_list) if zone_variable_list else 0
@@ -215,19 +338,29 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
         logger.warning(f"Zone {zone}: Missing {len(missing_variables)} expected variables: {missing_variables}")
         
         # If more than 50% of expected variables are missing, fallback to LLM
-        if missing_percentage > 0.5 and llm_manager and csv_data is not None:
+        if missing_percentage > 0.5 and llm_manager and cleaned_data is not None:
             logger.info(f"Zone {zone}: {missing_percentage*100:.1f}% variables missing, falling back to LLM selection")
-            return _fallback_to_llm_selection(available_variables, llm_manager, csv_data, zone)
+            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone)
     
     # Ensure we have at least the core malaria variables if available
     if len(selected_variables) < 3:
-        core_available = [var for var in CORE_VARIABLES if var in available_variables and var not in selected_variables]
-        selected_variables.extend(core_available)
+        # Try to find core variables using fuzzy matching
+        for core_var in CORE_VARIABLES:
+            if core_var not in selected_variables:
+                # First try exact match
+                if core_var in available_variables:
+                    selected_variables.append(core_var)
+                else:
+                    # Try fuzzy match
+                    matched_var = find_fuzzy_match(core_var, available_variables)
+                    if matched_var and matched_var not in selected_variables:
+                        selected_variables.append(matched_var)
+                        logger.info(f"🎯 Core variable fuzzy matched '{core_var}' to '{matched_var}'")
         
         # If still too few variables, fallback to LLM
-        if len(selected_variables) < 3 and llm_manager and csv_data is not None:
+        if len(selected_variables) < 3 and llm_manager and cleaned_data is not None:
             logger.info(f"Zone {zone}: Only {len(selected_variables)} variables available, falling back to LLM selection")
-            return _fallback_to_llm_selection(available_variables, llm_manager, csv_data, zone)
+            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone)
     
     logger.info(f"Zone {zone}: Selected {len(selected_variables)}/{len(zone_variable_list)} scientifically-validated variables")
     return selected_variables
@@ -276,7 +409,7 @@ def get_zone_metadata(zone: str) -> Dict[str, Any]:
     return zone_metadata.get(zone, {})
 
 
-def _fallback_to_llm_selection(available_variables: List[str], llm_manager, csv_data: pd.DataFrame, 
+def _fallback_to_llm_selection(available_variables: List[str], llm_manager, cleaned_data: pd.DataFrame, 
                               zone: str, min_vars: int = 3, max_vars: int = 7) -> List[str]:
     """
     Fallback to LLM-based variable selection when region-specific variables aren't available.
@@ -284,7 +417,7 @@ def _fallback_to_llm_selection(available_variables: List[str], llm_manager, csv_
     Args:
         available_variables: List of available variables in the data
         llm_manager: LLM manager instance
-        csv_data: CSV data for context
+        cleaned_data: Cleaned data for context
         zone: Detected zone (for context)
         min_vars: Minimum number of variables to select
         max_vars: Maximum number of variables to select
@@ -308,16 +441,23 @@ def _fallback_to_llm_selection(available_variables: List[str], llm_manager, csv_
         selected_vars, explanation = select_optimal_variables_with_llm(
             llm_manager=llm_manager,
             available_vars=analysis_variables,
-            csv_data=csv_data,
+            csv_data=cleaned_data,
             min_vars=min_vars,
             max_vars=max_vars
         )
         
-        # Ensure core malaria variables are included if available
-        core_vars_available = [var for var in CORE_VARIABLES if var in analysis_variables]
-        for core_var in core_vars_available:
+        # Ensure core malaria variables are included using fuzzy matching
+        for core_var in CORE_VARIABLES:
             if core_var not in selected_vars and len(selected_vars) < max_vars:
-                selected_vars.append(core_var)
+                # First try exact match
+                if core_var in analysis_variables:
+                    selected_vars.append(core_var)
+                else:
+                    # Try fuzzy match
+                    matched_var = find_fuzzy_match(core_var, analysis_variables)
+                    if matched_var and matched_var not in selected_vars:
+                        selected_vars.append(matched_var)
+                        logger.info(f"🎯 LLM selection: Core variable fuzzy matched '{core_var}' to '{matched_var}'")
         
         logger.info(f"✅ LLM SELECTION: Selected {len(selected_vars)} variables: {selected_vars}")
         logger.info(f"📝 LLM REASONING: {explanation}")
@@ -326,22 +466,33 @@ def _fallback_to_llm_selection(available_variables: List[str], llm_manager, csv_
         
     except Exception as e:
         logger.error(f"Error in LLM fallback selection: {e}")
-        # Final fallback: return first available variables with core variables prioritized
+        # Final fallback: return first available variables with core variables prioritized using fuzzy matching
         analysis_variables = [var for var in available_variables if var not in IDENTIFIER_COLUMNS]
-        core_vars = [var for var in CORE_VARIABLES if var in analysis_variables]
-        other_vars = [var for var in analysis_variables if var not in CORE_VARIABLES]
+        fallback_selection = []
         
-        fallback_selection = core_vars + other_vars
+        # First add core variables using fuzzy matching
+        for core_var in CORE_VARIABLES:
+            if core_var in analysis_variables:
+                fallback_selection.append(core_var)
+            else:
+                matched_var = find_fuzzy_match(core_var, analysis_variables)
+                if matched_var and matched_var not in fallback_selection:
+                    fallback_selection.append(matched_var)
+        
+        # Then add other variables
+        other_vars = [var for var in analysis_variables if var not in fallback_selection]
+        fallback_selection.extend(other_vars)
+        
         return fallback_selection[:max_vars]
 
-def apply_region_aware_selection(csv_data: pd.DataFrame, 
+def apply_region_aware_selection(cleaned_data: pd.DataFrame, 
                                 shapefile_data: Optional[gpd.GeoDataFrame] = None,
                                 llm_manager=None) -> Dict[str, Any]:
     """
     Apply complete region-aware variable selection workflow with LLM fallback.
     
     Args:
-        csv_data: CSV DataFrame with ward data
+        cleaned_data: Cleaned CSV DataFrame with ward data
         shapefile_data: Optional shapefile GeoDataFrame
         llm_manager: Optional LLM manager for fallback selection
         
@@ -350,15 +501,28 @@ def apply_region_aware_selection(csv_data: pd.DataFrame,
     """
     try:
         # Step 1: Detect geopolitical zone
-        zone, detection_method = detect_geopolitical_zone(csv_data, shapefile_data)
+        zone, detection_method = detect_geopolitical_zone(cleaned_data, shapefile_data)
         
         # Step 2: Get available analysis variables (exclude identifiers)
-        available_variables = [col for col in csv_data.columns if col not in IDENTIFIER_COLUMNS]
+        available_variables = [col for col in cleaned_data.columns if col not in IDENTIFIER_COLUMNS]
+        
+        # DEBUG: Log column filtering process
+        logger.info(f"📊 COLUMN ANALYSIS: Total columns in data: {len(cleaned_data.columns)}")
+        logger.info(f"🔍 IDENTIFIER COLUMNS: {IDENTIFIER_COLUMNS}")
+        logger.info(f"✅ ANALYSIS VARIABLES: {len(available_variables)} available - {available_variables[:10]}{'...' if len(available_variables) > 10 else ''}")
+        
+        # Safety check: If no variables after filtering, use a more conservative approach
+        if len(available_variables) == 0:
+            logger.warning("❌ No variables found after identifier filtering - using conservative filtering")
+            # Only exclude obvious identifier columns
+            conservative_identifiers = ['WardName', 'ward_name', 'WardCode', 'ward_code']
+            available_variables = [col for col in cleaned_data.columns if col not in conservative_identifiers]
+            logger.info(f"🔄 CONSERVATIVE FILTER: {len(available_variables)} variables available")
         
         # Step 3: Select variables based on zone with LLM fallback
         selection_method = 'region_specific'
         if zone:
-            selected_variables = select_variables_by_zone(zone, available_variables, llm_manager, csv_data)
+            selected_variables = select_variables_by_zone(zone, available_variables, llm_manager, cleaned_data)
             zone_metadata = get_zone_metadata(zone)
             
             # Check if LLM fallback was used
@@ -371,13 +535,46 @@ def apply_region_aware_selection(csv_data: pd.DataFrame,
             # No zone detected - try LLM selection
             if llm_manager:
                 logger.info("No zone detected, attempting LLM variable selection")
-                selected_variables = _fallback_to_llm_selection(available_variables, llm_manager, csv_data, 'unknown')
+                selected_variables = _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, 'unknown')
                 selection_method = 'llm_fallback'
             else:
                 # Final fallback: use all available analysis variables
                 selected_variables = available_variables
                 selection_method = 'all_available'
             zone_metadata = {}
+        
+        # CRITICAL SAFETY CHECK: Never return empty variable list
+        if len(selected_variables) == 0:
+            logger.error("🚨 CRITICAL: Variable selection returned 0 variables - applying emergency fallback")
+            # Emergency fallback: use any numeric columns that aren't obviously identifiers
+            numeric_cols = cleaned_data.select_dtypes(include=['number']).columns.tolist()
+            emergency_variables = [col for col in numeric_cols if 'name' not in col.lower() and 'code' not in col.lower()]
+            
+            if len(emergency_variables) >= 2:
+                selected_variables = emergency_variables[:7]  # Limit to 7 variables max
+                selection_method = 'emergency_numeric_fallback'
+                logger.info(f"🆘 EMERGENCY FALLBACK: Using {len(selected_variables)} numeric variables: {selected_variables}")
+            else:
+                # Ultimate last resort - use any non-identifier columns
+                all_non_id_cols = [col for col in cleaned_data.columns if 'name' not in col.lower() and 'code' not in col.lower()]
+                if len(all_non_id_cols) >= 2:
+                    selected_variables = all_non_id_cols[:7]
+                    selection_method = 'ultimate_fallback'
+                    logger.warning(f"🔥 ULTIMATE FALLBACK: Using {len(selected_variables)} columns: {selected_variables}")
+                else:
+                    # This should never happen but prevents complete failure
+                    logger.critical("💥 CRITICAL ERROR: Cannot find any suitable variables for analysis")
+                    return {
+                        'status': 'error',
+                        'message': 'No suitable variables found for analysis in the uploaded data',
+                        'zone_detected': zone,
+                        'detection_method': detection_method,
+                        'selected_variables': [],
+                        'selection_method': 'failed',
+                        'zone_metadata': {},
+                        'total_available_variables': len(available_variables),
+                        'variables_selected': 0
+                    }
         
         return {
             'status': 'success',
@@ -396,6 +593,6 @@ def apply_region_aware_selection(csv_data: pd.DataFrame,
             'status': 'error',
             'message': str(e),
             'zone_detected': None,
-            'selected_variables': [col for col in csv_data.columns if col not in IDENTIFIER_COLUMNS],
+            'selected_variables': [col for col in cleaned_data.columns if col not in IDENTIFIER_COLUMNS],
             'selection_method': 'error_fallback'
         }
