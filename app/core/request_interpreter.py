@@ -56,12 +56,12 @@ class RequestInterpreter:
         # Intelligent defaults for common ambiguous requests (simplified)
         self.intelligent_defaults = {
             ('analysis', 'ranking', 'top wards', 'risk assessment'): {
-                'default_tools': ['getcompositerankings'],  # Use tiered loader tool
+                'default_tools': ['gettopriskwards'],  # Use tiered loader tool
                 'default_params': {'top_n': 10},
                 'message': "Running vulnerability analysis by default"
             },
             ('vulnerable areas',): {
-                'default_tools': ['getcompositerankings'], 
+                'default_tools': ['gettopriskwards'], 
                 'default_params': {'top_n': 15},
                 'message': "Showing top vulnerable areas by default"
             }
@@ -145,6 +145,14 @@ class RequestInterpreter:
 
             INTELLIGENT CLASSIFICATION RULES:
             
+            CRITICAL PRIORITY: METHODOLOGY EXPLANATIONS always take precedence over analysis execution!
+            
+            🚨 METHODOLOGY EXPLANATION DETECTION (HIGHEST PRIORITY):
+            If user asks about "explain", "how does X work", "methodology", "methods", "composite", "PCA":
+            → ALWAYS use explainanalysismethodology tool first
+            → NEVER trigger analysis when user wants explanations
+            → Examples: "explain the methods", "how does composite work", "what is PCA"
+            
             1. GREETINGS: Simple hello/hi responses
                - Basic greetings like "hello", "hi" -> simple_greeting
             
@@ -152,11 +160,16 @@ class RequestInterpreter:
                - "who are you", "what can you do", "tell me about yourself" -> explain_concept with concept="ChatMRPT"
                - "help", "help me", "I need help", "what do I do" -> show_help_options
             
-            3. KNOWLEDGE/EDUCATIONAL: Any question about malaria, health, epidemiology, etc.
-               - Provide direct explanations without using tools
-               - Return explanation directly in the response text
-               - Set intent_type="knowledge" with empty tool_calls array
-               - Include comprehensive malaria expertise in response
+            3. KNOWLEDGE/EDUCATIONAL: Questions about malaria, health, epidemiology
+               - METHODOLOGY EXPLANATIONS: When users ask about composite score, PCA, or analysis methods
+                 * "explain composite score analysis" -> explainanalysismethodology with methods=["composite"]
+                 * "how does PCA work" -> explainanalysismethodology with methods=["pca"] 
+                 * "explain both methods" -> explainanalysismethodology with methods=["composite", "pca"]
+                 * "methodology explanation" -> explainanalysismethodology with methods=["composite", "pca"]
+                 * Always use explainanalysismethodology for dataset-specific methodology questions
+               - GENERAL MALARIA KNOWLEDGE: For other malaria topics, use explain_concept
+                 * "what is malaria transmission" -> explain_concept with concept="transmission"
+                 * "malaria prevention" -> explain_concept with concept="prevention"
             
             4. DATA ANALYSIS: Questions involving uploaded data, rankings, maps, comparisons
                - Use appropriate data analysis tools
@@ -349,7 +362,23 @@ class RequestInterpreter:
                 "routing": "data_agent"
             }}
 
-            Example 6: Knowledge Query
+            Example 6: Methodology Explanation Query
+            User: "Can you explain the composite and pca methods you speak about?"
+            Response: {{
+                "intent_type": "knowledge",
+                "primary_goal": "Explain both composite score and PCA methods",
+                "tool_calls": [
+                    {{
+                        "tool_name": "explainanalysismethodology", 
+                        "parameters": {{"methods": ["composite", "pca"]}},
+                        "reasoning": "User specifically asks for methodology explanation, NOT analysis execution"
+                    }}
+                ],
+                "requires_session_data": false,
+                "routing": "knowledge_agent"
+            }}
+
+            Example 6b: General Knowledge Query
             User: "What is malaria transmission?"
             Response: {{
                 "intent_type": "knowledge",
@@ -1013,14 +1042,14 @@ Keep it natural and conversational, not rigid or template-like."""
             if data['message']:
                 message = data['message']
                 # Only truncate non-ranking tool messages
-                if tool_name not in ['get_composite_rankings', 'get_pca_rankings', 'get_ward_information'] and len(message) > 500:
+                if tool_name not in ['gettopriskwards', 'getwardriskscore', 'getwardinformation'] and len(message) > 500:
                     message = message[:500] + "... [truncated]"
                 parts.append(f"Message: {message}")
             
             # Enhanced data extraction for ranking tools
             tool_data_dict = data.get('data', {})
             
-            if tool_name == 'get_composite_rankings':
+            if tool_name == 'gettopriskwards':
                 # Show full ward lists with scores for ranking queries
                 if 'top_wards' in tool_data_dict:
                     parts.append(f"Top Wards: {tool_data_dict['top_wards']}")
@@ -1031,8 +1060,8 @@ Keep it natural and conversational, not rigid or template-like."""
                 if 'score_column' in tool_data_dict:
                     parts.append(f"Score Column: {tool_data_dict['score_column']}")
                     
-            elif tool_name == 'get_pca_rankings':
-                # Show full PCA ranking data
+            elif tool_name == 'getwardriskscore':
+                # Show risk score data
                 if 'high_risk_wards' in tool_data_dict:
                     parts.append(f"High Risk Wards: {tool_data_dict['high_risk_wards']}")
                 if 'medium_risk_wards' in tool_data_dict:
@@ -1044,7 +1073,7 @@ Keep it natural and conversational, not rigid or template-like."""
                 if 'total_wards' in tool_data_dict:
                     parts.append(f"Total Wards: {tool_data_dict['total_wards']}")
                     
-            elif tool_name == 'get_ward_information':
+            elif tool_name == 'getwardinformation':
                 # Show comprehensive ward details
                 if 'ward_found' in tool_data_dict:
                     parts.append(f"Ward Found: {tool_data_dict['ward_found']}")
@@ -1300,7 +1329,7 @@ Please generate a friendly, helpful clarification response that guides the user.
         
         # Check for common patterns
         if any(word in message_lower for word in ['rank', 'top', 'vulnerable', 'highest']):
-            suggestions.extend(['get_composite_rankings', 'get_pca_rankings'])
+            suggestions.extend(['gettopriskwards', 'getwardriskscore'])
         
         if any(word in message_lower for word in ['map', 'visualize', 'show']):
             suggestions.append('create_vulnerability_map')
@@ -1312,7 +1341,7 @@ Please generate a friendly, helpful clarification response that guides the user.
             suggestions.append('explain_concept')
             
         if any(word in message_lower for word in ['ward', 'specific area']):
-            suggestions.append('get_ward_information')
+            suggestions.append('getwardinformation')
         
         # Filter to only include available tools
         valid_suggestions = [s for s in suggestions if s in available_tools][:3]
@@ -1699,7 +1728,7 @@ Generate a helpful, conversational clarification response."""
             explanation = self.llm_manager.generate_response(
                 prompt=explanation_prompt + context_info,
                 temperature=0.7,
-                max_tokens=400,  # Reduced for faster response
+                max_tokens=200,  # Further reduced for faster response
                 session_id=session_id
             )
             
@@ -1794,7 +1823,7 @@ Generate a helpful, conversational clarification response."""
                 logger.info(f"🤖 Applying intelligent default with extracted number: {top_n}")
                 
                 tool_calls = [{
-                    'tool_name': 'getcompositerankings',
+                    'tool_name': 'gettopriskwards',
                     'parameters': {'top_n': top_n},
                     'reasoning': f"Extracted top_n={top_n} from user request"
                 }]
@@ -1841,11 +1870,11 @@ Generate a helpful, conversational clarification response."""
             'createvulnerabilitymap', 'createpcamap', 'createscatterplot', 'createboxplot',
             'getinterventionpriorities', 'simulatecoverageincrease',
             # Add missing analysis tools
-            'run_composite_analysis', 'run_pca_analysis', 'create_unified_dataset',
+            'runcompositeanalysis', 'runpcaanalysis', 'create_unified_dataset',
             'runcompositeanalysis', 'runpcaanalysis', 'createunifieddataset',
             'composite_analysis', 'pca_analysis', 'unified_dataset',
             # Complete analysis tools
-            'runcompleteanalysis', 'run_complete_analysis', 'complete_analysis'
+            'runcompleteanalysis', 'complete_analysis'
         }
         return tool_name.lower() in data_dependent_tools
     

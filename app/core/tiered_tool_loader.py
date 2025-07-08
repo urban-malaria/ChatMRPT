@@ -82,14 +82,16 @@ class TieredToolLoader:
             ToolGroup.CORE: ToolGroupDefinition(
                 name="Core Tools",
                 modules=[
-                    'app.tools.knowledge_tools',          # greetings, explanations (truly lightweight)
+                    'app.tools.knowledge_tools',          # greetings, explanations, methodology (truly lightweight)
                     'app.tools.variable_distribution',    # variable distribution maps (eager loaded)
                 ],
                 tools=[
                     'simplegreeting',
+                    'explainconcept',
+                    'explainanalysismethodology',
                     'variable_distribution'
                 ],
-                description="Essential tools for immediate startup including variable visualization",
+                description="Essential tools for immediate startup including variable visualization and methodology explanations",
                 dependencies=['plotly', 'geopandas']  # Needed for variable distribution
             ),
             
@@ -142,6 +144,8 @@ class TieredToolLoader:
                 ],
                 tools=[
                     'runcompleteanalysis', 'runcompositeanalysis', 'runpcaanalysis',  # Complete analysis tools
+                    'runcustomcompositeanalysis', 'runcustompcaanalysis',  # Custom variable analysis tools
+                    'generatecomprehensiveanalysissummary',  # Analysis summary tool
                     'settlement_validation_tools', 'settlement_intervention_tools',
                     'scenario_simulation_tools', 'intervention_targeting_tools'
                 ],

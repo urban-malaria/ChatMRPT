@@ -308,3 +308,23 @@ def explain_concept(session_id: str, concept: str, include_context: bool = True)
         'message': result.message,
         **(result.data or {})
     }
+
+
+# Import methodology explanation tool from its dedicated module
+from .methodology_explanation_tools import ExplainAnalysisMethodology
+
+# Add legacy wrapper for methodology explanations
+def explain_analysis_methodology(session_id: str, methods: List[str] = None, 
+                                explanation_depth: str = "detailed", **kwargs) -> Dict[str, Any]:
+    """Legacy wrapper for methodology explanation tool"""
+    tool = ExplainAnalysisMethodology(
+        methods=methods or ["both"], 
+        explanation_depth=explanation_depth,
+        **kwargs
+    )
+    result = tool.execute(session_id)
+    return {
+        'status': 'success' if result.success else 'error',
+        'message': result.message,
+        **(result.data or {})
+    }

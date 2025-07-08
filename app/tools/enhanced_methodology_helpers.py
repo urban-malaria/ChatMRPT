@@ -181,35 +181,83 @@ def generate_data_driven_explanations(input_data, context, analysis_results) -> 
         
         explanations = []
         
-        # Actual results summary
-        explanations.append("## 📈 **Your Actual Results**")
+        # GENERIC METHODOLOGY EXPLANATIONS FIRST
+        explanations.append("## 📚 **Analysis Methods Explained**")
         explanations.append("")
         
+        # Detect what variables were actually used
+        variable_columns = [col for col in unified_data.columns if not col.startswith(('Ward', 'composite', 'pca', 'overall', 'vulnerability', 'rank', 'median', 'value', 'pc1', 'X.', 'X'))]
+        risk_variables = [col for col in variable_columns if any(keyword in col.lower() for keyword in ['pfpr', 'housing', 'elevation', 'tpr', 'malaria', 'population', 'poverty', 'education', 'water', 'sanitation'])]
+        
         if 'composite_score' in unified_data.columns:
+            explanations.append("### 🎯 **Composite Score Method**")
+            explanations.append("")
+            explanations.append("**What it is:** A straightforward approach that combines multiple risk indicators using equal weighting to create an overall malaria risk score.")
+            explanations.append("")
+            explanations.append("**How it works:**")
+            explanations.append("1. **Variable Selection** - Choose the most relevant malaria risk indicators")
+            explanations.append("2. **Normalization** - Scale all variables to 0-1 range for fair comparison")
+            explanations.append("3. **Model Creation** - Generate multiple combinations of variables")
+            explanations.append("4. **Equal Weighting** - Each variable contributes equally (arithmetic mean)")
+            explanations.append("5. **Robust Aggregation** - Take median across all models for final score")
+            explanations.append("")
+            explanations.append("**Strengths:** Simple, transparent, gives equal voice to all indicators")
+            explanations.append("**Best for:** When you want democratic weighting and easy interpretation")
+            explanations.append("")
+            
+            explanations.append("### 🔬 **Applied to Your Kano State Data:**")
+            explanations.append("")
             comp_stats = get_score_statistics(unified_data, 'composite_score')
-            explanations.append(f"**Composite Score Results:**")
-            explanations.append(f"- Range: {comp_stats['min']:.3f} to {comp_stats['max']:.3f}")
-            explanations.append(f"- Average: {comp_stats['mean']:.3f} (±{comp_stats['std']:.3f})")
-            explanations.append(f"- Top ward: **{comp_stats['top_ward']}** ({comp_stats['top_score']:.3f})")
-            explanations.append(f"- Bottom ward: **{comp_stats['bottom_ward']}** ({comp_stats['bottom_score']:.3f})")
+            explanations.append(f"- **Dataset:** {len(unified_data)} wards with {len(risk_variables)} malaria indicators")
+            if risk_variables:
+                explanations.append(f"- **Variables used:** {', '.join(risk_variables[:5])}")
+            explanations.append(f"- **Process:** Created multiple models, took median score for each ward")
+            explanations.append(f"- **Results:** Scores from {comp_stats['min']:.3f} to {comp_stats['max']:.3f}")
+            explanations.append(f"- **Highest risk:** {comp_stats['top_ward']} ({comp_stats['top_score']:.3f})")
+            explanations.append(f"- **Lowest risk:** {comp_stats['bottom_ward']} ({comp_stats['bottom_score']:.3f})")
             explanations.append("")
         
         if 'pca_score' in unified_data.columns:
+            explanations.append("### 📊 **Principal Component Analysis (PCA) Method**")
+            explanations.append("")
+            explanations.append("**What it is:** A statistical technique that finds the most important patterns in your data and creates new variables (components) that capture maximum information with fewer dimensions.")
+            explanations.append("")
+            explanations.append("**How it works:**")
+            explanations.append("1. **Standardization** - Convert variables to z-scores (mean=0, std=1)")
+            explanations.append("2. **Correlation Analysis** - Find relationships between variables")
+            explanations.append("3. **Component Extraction** - Create new variables that explain maximum variance")
+            explanations.append("4. **Dimensionality Reduction** - Keep only significant components (eigenvalue > 1)")
+            explanations.append("5. **Risk Scoring** - Project wards onto first component for risk scores")
+            explanations.append("")
+            explanations.append("**Strengths:** Data-driven weighting, reduces redundancy, captures complex relationships")
+            explanations.append("**Best for:** When variables are correlated and you want optimal statistical weighting")
+            explanations.append("")
+            
+            explanations.append("### 🔬 **Applied to Your Kano State Data:**")
+            explanations.append("")
             pca_stats = get_score_statistics(unified_data, 'pca_score')
-            explanations.append(f"**PCA Results:**")
-            explanations.append(f"- Range: {pca_stats['min']:.3f} to {pca_stats['max']:.3f}")
-            explanations.append(f"- Average: {pca_stats['mean']:.3f} (±{pca_stats['std']:.3f})")
-            explanations.append(f"- Top ward: **{pca_stats['top_ward']}** ({pca_stats['top_score']:.3f})")
-            explanations.append(f"- Bottom ward: **{pca_stats['bottom_ward']}** ({pca_stats['bottom_score']:.3f})")
+            explanations.append(f"- **Dataset:** {len(unified_data)} wards with {len(risk_variables)} malaria indicators")
+            explanations.append(f"- **Process:** Found principal components, used PC1 for risk ranking")
+            explanations.append(f"- **Variable weighting:** Determined by correlation patterns in your data")
+            explanations.append(f"- **Results:** Scores from {pca_stats['min']:.3f} to {pca_stats['max']:.3f}")
+            explanations.append(f"- **Highest risk:** {pca_stats['top_ward']} ({pca_stats['top_score']:.3f})")
+            explanations.append(f"- **Lowest risk:** {pca_stats['bottom_ward']} ({pca_stats['bottom_score']:.3f})")
             explanations.append("")
         
-        # Method agreement analysis
+        # Method comparison if both exist
         if 'composite_score' in unified_data.columns and 'pca_score' in unified_data.columns:
             agreement_stats = analyze_method_agreement(unified_data)
-            explanations.append(f"**Method Agreement:**")
-            explanations.append(f"- Correlation: {agreement_stats['correlation']:.3f}")
-            explanations.append(f"- Top 10 consensus: {agreement_stats['top_consensus']:.0f}% agreement")
-            explanations.append(f"- Consensus wards: {', '.join(agreement_stats['consensus_wards'][:3])}...")
+            explanations.append("### ⚖️ **Method Comparison on Your Data:**")
+            explanations.append("")
+            explanations.append("**Different Approaches, Different Results:**")
+            explanations.append("- **Composite:** Equal weighting of all variables (democratic approach)")
+            explanations.append("- **PCA:** Data-driven weighting based on variable relationships")
+            explanations.append("")
+            explanations.append("**Agreement Analysis:**")
+            explanations.append(f"- **Correlation:** {agreement_stats['correlation']:.3f} ({'strong negative' if agreement_stats['correlation'] < -0.7 else 'moderate negative' if agreement_stats['correlation'] < -0.3 else 'weak' if abs(agreement_stats['correlation']) < 0.3 else 'moderate positive' if agreement_stats['correlation'] < 0.7 else 'strong positive'})")
+            explanations.append(f"- **Top 10 consensus:** {agreement_stats['top_consensus']:.0f}% of wards ranked similarly")
+            if agreement_stats.get('consensus_wards'):
+                explanations.append(f"- **High-risk consensus:** {', '.join(agreement_stats['consensus_wards'][:3])}...")
             explanations.append("")
         
         explanations.append("---")

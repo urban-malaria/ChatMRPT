@@ -270,6 +270,7 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
         "Explains analysis methodologies (composite scoring and PCA) using your actual data "
         "for tailored, specific explanations rather than generic descriptions."
     )
+    methods: List[str] = ["both"]  # Methods to explain: composite, pca, or both
     explanation_depth: str = "detailed"
     include_variables: bool = True
     include_examples: bool = True
@@ -960,4 +961,94 @@ class ExplainAnalysisMethodology(DataAnalysisTool):
         prompt_parts.append("5. Uses the actual methodology details (equal weighting for composite, data-driven for PCA)")
         prompt_parts.append("6. Explains why certain wards ranked as they did based on variable values")
         
-        return "\n".join(prompt_parts) 
+        return "\n".join(prompt_parts)
+    
+    def _detect_analysis_context(self, session_id: str) -> AnalysisContext:
+        """Detect the current analysis context for the session"""
+        try:
+            import os
+            import pandas as pd
+            import json
+            
+            # Build session directory path
+            session_dir = f"instance/uploads/{session_id}"
+            
+            # Check if analysis files exist
+            cleaned_data_path = os.path.join(session_dir, 'analysis_cleaned_data.csv')
+            vulnerability_rankings_path = os.path.join(session_dir, 'analysis_vulnerability_rankings.csv')
+            vulnerability_rankings_pca_path = os.path.join(session_dir, 'analysis_vulnerability_rankings_pca.csv')
+            
+            has_data = os.path.exists(cleaned_data_path)
+            
+            if not has_data:
+                return AnalysisContext(
+                    has_data=False,
+                    analysis_completed=False,
+                    methods_run=[],
+                    variables_used=[],
+                    ward_count=0,
+                    region="Unknown",
+                    unified_dataset_available=False
+                )
+            
+            # Load basic info from the cleaned data
+            cleaned_data = pd.read_csv(cleaned_data_path)
+            
+            # Detect ward count and region
+            ward_count = len(cleaned_data)
+            region = "Unknown"
+            
+            # Try to detect region from StateCode
+            if 'StateCode' in cleaned_data.columns:
+                state_code = cleaned_data['StateCode'].iloc[0]
+                if state_code == 'KN':
+                    region = "Kano State (North West Nigeria)"
+                else:
+                    region = f"State {state_code}"
+            
+            # Check if analysis has been completed
+            analysis_completed = os.path.exists(vulnerability_rankings_path)
+            
+            # Detect which methods have been run
+            methods_run = []
+            if os.path.exists(vulnerability_rankings_path):
+                methods_run.append("composite")
+            if os.path.exists(vulnerability_rankings_pca_path):
+                methods_run.append("pca")
+                
+            # Detect variables used from region metadata
+            variables_used = []
+            region_metadata_path = os.path.join(session_dir, 'region_metadata.json')
+            if os.path.exists(region_metadata_path):
+                try:
+                    with open(region_metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                        variables_used = metadata.get('variables_used', [])
+                except Exception:
+                    pass
+                    
+            # Check for unified dataset
+            unified_dataset_path = os.path.join(session_dir, 'unified_dataset.parquet')
+            unified_dataset_available = os.path.exists(unified_dataset_path)
+            
+            return AnalysisContext(
+                has_data=has_data,
+                analysis_completed=analysis_completed,
+                methods_run=methods_run,
+                variables_used=variables_used,
+                ward_count=ward_count,
+                region=region,
+                unified_dataset_available=unified_dataset_available
+            )
+            
+        except Exception as e:
+            logging.error(f"Error detecting analysis context: {e}")
+            return AnalysisContext(
+                has_data=False,
+                analysis_completed=False,
+                methods_run=[],
+                variables_used=[],
+                ward_count=0,
+                region="Unknown",
+                unified_dataset_available=False
+            ) 
