@@ -120,18 +120,84 @@ class UnifiedDatasetBuilder:
                     sources['csv_data'] = data_handler.csv_data
                     print(f"📊 CSV loaded: {data_handler.csv_data.shape[0]} rows, {data_handler.csv_data.shape[1]} columns")
             
-            # Load shapefile data using the shapefile_loader
+            # Load shapefile data using multiple strategies
+            shapefile_loaded = False
+            
+            # Strategy 1: Check DataHandler
             if hasattr(data_handler, 'shapefile_data'):
                 shp = data_handler.shapefile_data
                 if shp is not None and isinstance(shp, (pd.DataFrame, gpd.GeoDataFrame)) and len(shp) > 0:
                     sources['shapefile_data'] = shp
-                    print(f"🗺️ Shapefile loaded: {shp.shape[0]} features")
-            elif hasattr(data_handler, 'shapefile_loader'):
-                # Try to load via shapefile_loader
+                    shapefile_loaded = True
+                    print(f"🗺️ Shapefile loaded from DataHandler: {shp.shape[0]} features")
+            
+            # Strategy 2: Check shapefile_loader
+            if not shapefile_loaded and hasattr(data_handler, 'shapefile_loader'):
                 shp_data = getattr(data_handler.shapefile_loader, 'data', None)
                 if shp_data is not None and isinstance(shp_data, (pd.DataFrame, gpd.GeoDataFrame)) and len(shp_data) > 0:
                     sources['shapefile_data'] = shp_data
+                    shapefile_loaded = True
                     print(f"🗺️ Shapefile loaded via loader: {shp_data.shape[0]} features")
+            
+            # Strategy 3: Direct shapefile search in session folder
+            if not shapefile_loaded:
+                shapefile_patterns = [
+                    'shapefile/*.shp',
+                    '*.shp',
+                    'boundaries/*.shp',
+                    'ward_boundaries.shp'
+                ]
+                
+                import glob
+                for pattern in shapefile_patterns:
+                    shapefile_path = os.path.join(self.session_folder, pattern)
+                    shp_files = glob.glob(shapefile_path)
+                    if shp_files:
+                        try:
+                            shp_data = gpd.read_file(shp_files[0])
+                            if len(shp_data) > 0:
+                                sources['shapefile_data'] = shp_data
+                                shapefile_loaded = True
+                                print(f"🗺️ Shapefile loaded directly: {shp_data.shape[0]} features from {shp_files[0]}")
+                                break
+                        except Exception as e:
+                            print(f"⚠️ Failed to load shapefile {shp_files[0]}: {e}")
+                            continue
+            
+            # Strategy 4: Extract shapefile from ZIP if directory is empty
+            if not shapefile_loaded:
+                zip_path = os.path.join(self.session_folder, 'raw_shapefile.zip')
+                if os.path.exists(zip_path):
+                    try:
+                        print(f"🔧 Found shapefile ZIP, extracting to get geometry...")
+                        import zipfile
+                        
+                        # Extract to shapefile directory
+                        shapefile_dir = os.path.join(self.session_folder, 'shapefile')
+                        os.makedirs(shapefile_dir, exist_ok=True)
+                        
+                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                            zip_ref.extractall(shapefile_dir)
+                        
+                        # Find and load the extracted shapefile
+                        import glob
+                        shp_pattern = os.path.join(shapefile_dir, '*.shp')
+                        shp_files = glob.glob(shp_pattern)
+                        
+                        if shp_files:
+                            shp_data = gpd.read_file(shp_files[0])
+                            if len(shp_data) > 0:
+                                sources['shapefile_data'] = shp_data
+                                shapefile_loaded = True
+                                print(f"🗺️ Shapefile extracted and loaded: {shp_data.shape[0]} features from ZIP")
+                        else:
+                            print("⚠️ No .shp files found in extracted ZIP")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Failed to extract shapefile ZIP: {e}")
+            
+            if not shapefile_loaded:
+                print("📍 No shapefile data found - unified dataset will be CSV-only")
             
             # Dynamically search for composite analysis results
             composite_patterns = [

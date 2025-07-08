@@ -40,6 +40,8 @@ logger = logging.getLogger(__name__)
 def _save_plotly_chart(fig: go.Figure, session_id: str, chart_name: str) -> Dict[str, str]:
     """Save a Plotly figure as HTML and return paths."""
     try:
+        # Create unique filename with timestamp - ensures multiple visualizations coexist
+        # Files persist until session closure (browser closed or session expired)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{chart_name}_{timestamp}.html"
         

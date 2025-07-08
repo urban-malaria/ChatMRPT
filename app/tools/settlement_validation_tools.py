@@ -490,7 +490,8 @@ def create_building_classification_map(
             width=1200
         )
         
-        # Save the map
+        # Create unique filename with timestamp - ensures multiple visualizations coexist
+        # Files persist until session closure (browser closed or session expired)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         map_name = f"building_classification_map_{ward_name or 'full'}_{timestamp}"
         

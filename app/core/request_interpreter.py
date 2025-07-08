@@ -193,6 +193,19 @@ class RequestInterpreter:
             - Comparison questions -> call both relevant ranking tools with same top_n
             - Visualization requests -> map to available visualization tools only
             
+            INDIVIDUAL VULNERABILITY MAP REQUESTS:
+            - "vulnerability map for composite method/score" -> createvulnerabilitymap (individual composite map)
+            - "vulnerability map for PCA method" -> createpcamap (individual PCA map)  
+            - "show me composite vulnerability map" -> createvulnerabilitymap
+            - "show me PCA vulnerability map" -> createpcamap
+            - "composite risk map" -> createvulnerabilitymap
+            - "PCA risk map" -> createpcamap
+            
+            COMPARISON MAP REQUESTS (only when explicitly asking for comparison):
+            - "compare composite vs PCA maps" -> createmultilayerriskmap
+            - "show both methods side by side" -> createmultilayerriskmap
+            - "comparison of composite and PCA" -> createmultilayerriskmap
+            
             SETTLEMENT ANALYSIS QUERIES:
             - "Which settlement types..." -> Use createsettlementanalysismap or getdescriptivestatistics with settlement variables
             - "Settlement vulnerability/risk" -> Use ward data tools and settlement analysis (createsettlementanalysismap)

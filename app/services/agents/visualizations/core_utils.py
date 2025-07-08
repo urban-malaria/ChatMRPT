@@ -9,6 +9,7 @@ import json
 import logging
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Union
 import geopandas as gpd
@@ -262,7 +263,8 @@ def save_agent_visualization(fig_or_html: Union[go.Figure, str],
         Dictionary with file paths and metadata
     """
     try:
-        # Create unique filename with timestamp
+        # Create unique filename with timestamp - ensures multiple visualizations coexist
+        # Files persist until session closure (browser closed or session expired)
         timestamp = int(time.time())
         unique_id = str(uuid.uuid4())[:8]
         safe_filename = f"{filename}_{timestamp}_{unique_id}.html"
@@ -301,7 +303,7 @@ def save_agent_visualization(fig_or_html: Union[go.Figure, str],
             'session_id': session_id,
             'plotly_json': plotly_data.get('plotly_json'),
             'interactive': plotly_data.get('interactive', True),
-            'created_at': timestamp
+            'created_at': datetime.now().isoformat()
         }
         
     except Exception as e:

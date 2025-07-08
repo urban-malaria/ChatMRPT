@@ -38,59 +38,39 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
             
             # Variable selection logic
             if selected_variables:
-                # User provided specific variables - filter for valid ones
+                # User provided specific variables - trust the data preparation stage validation
+                # and directly use variables that are available in normalized data
                 norm_cols = [col for col in data_handler.normalized_data.columns if col.startswith('normalization_')]
                 all_variables = [col.replace('normalization_', '') for col in norm_cols]
                 
-                print(f"🔍 VARIABLE FILTERING:")
-                print(f"   📊 All normalized columns: {len(all_variables)} - {all_variables}")
+                print(f"🔍 CUSTOM VARIABLE SELECTION:")
+                print(f"   📊 Available normalized variables: {len(all_variables)} - {all_variables}")
+                print(f"   👤 User requested: {selected_variables}")
                 
-                # Apply metadata filtering to all variables
-                analysis_vars = get_analysis_variables(data_handler.csv_data, exclude_metadata=True)
-                print(f"   🔍 Analysis vars from CSV: {len(analysis_vars)} - {analysis_vars}")
-                
-                # Filter out metadata columns from all variables (case-insensitive)
-                filtered_all_vars = []
-                for var in all_variables:
-                    # Case-insensitive matching with analysis_vars from CSV
-                    is_analysis_var = any(var.lower() == analysis_var.lower() for analysis_var in analysis_vars)
-                    if is_analysis_var:
-                        filtered_all_vars.append(var)
-                print(f"   🧹 After excluding metadata: {len(filtered_all_vars)} - {filtered_all_vars}")
-                
-                # Debug: Check if mean_evi is in analysis_vars
-                if 'mean_evi' in all_variables:
-                    print(f"   🔍 DEBUG: 'mean_evi' in all_variables: True")
-                    print(f"   🔍 DEBUG: 'mean_evi' in analysis_vars: {'mean_evi' in analysis_vars}")
-                    print(f"   🔍 DEBUG: 'mean_EVI' in analysis_vars: {'mean_EVI' in analysis_vars}")
-                else:
-                    print(f"   🔍 DEBUG: 'mean_evi' NOT in all_variables")
-                
-                # Filter user selection to only include valid analysis variables (case-insensitive)
-                clean_selected_vars = []
+                # Direct matching - if data preparation stage passed these variables through,
+                # they're already validated. Just match them to available normalized variables.
+                final_variables = []
                 for var in selected_variables:
-                    # Case-insensitive matching
+                    # Case-insensitive matching against available normalized variables
                     matched_var = None
-                    for filtered_var in filtered_all_vars:
-                        if var.lower() == filtered_var.lower():
-                            matched_var = filtered_var
+                    for norm_var in all_variables:
+                        if var.lower() == norm_var.lower():
+                            matched_var = norm_var
                             break
+                    
                     if matched_var:
-                        clean_selected_vars.append(matched_var)
-                        print(f"   ✅ Matched: '{var}' → '{matched_var}'")
+                        final_variables.append(matched_var)
+                        print(f"   ✅ Found: '{var}' → '{matched_var}'")
                     else:
-                        print(f"   ❌ No match for: '{var}'")
-                        
-                print(f"   👤 User selected (filtered): {clean_selected_vars}")
+                        print(f"   ❌ Not normalized: '{var}' (may have been excluded during data preparation)")
                 
-                if clean_selected_vars:
-                    final_variables = clean_selected_vars
-                    print(f"✅ COMPOSITE METHOD: Using {len(final_variables)} selected variables")
+                if final_variables:
+                    print(f"✅ COMPOSITE METHOD: Using {len(final_variables)} user-selected variables: {final_variables}")
                 else:
-                    # For custom analysis, do not fall back - return error if no valid variables
+                    # Provide helpful error message
                     return {
                         'status': 'error',
-                        'message': f'None of the specified variables {selected_variables} are valid for analysis. Available variables: {filtered_all_vars}'
+                        'message': f'None of the variables {selected_variables} are available in normalized data. This usually means they were identified as metadata columns or failed validation. Available variables: {all_variables[:10]}{"..." if len(all_variables) > 10 else ""}'
                     }
             else:
                 # Auto-select variables using smart selection

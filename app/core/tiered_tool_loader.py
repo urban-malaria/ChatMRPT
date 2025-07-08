@@ -14,6 +14,7 @@ Strategy:
 
 import logging
 import importlib
+import inspect
 import time
 from typing import Dict, List, Type, Set, Optional, Any
 from dataclasses import dataclass
@@ -104,6 +105,7 @@ class TieredToolLoader:
                 ],
                 tools=[
                     'createvulnerabilitymap', 'createpcamap', 'createurbanextentmap',
+                    'createdecisiontree', 'createboxplot', 'createcompositescoremaps',
                     'createhistogram', 'createscatterplot', 'createcorrelationheatmap',
                     'createsettlementanalysismap', 'createinterventionmap'
                 ],
@@ -259,12 +261,12 @@ class TieredToolLoader:
         return list(all_tools)
     
     def get_basic_tool_schemas(self) -> List[Dict[str, Any]]:
-        """Get basic schemas for currently loaded tools without heavy registry initialization"""
+        """Get basic schemas for ALL available tools, loading classes as needed for schema generation"""
         schemas = []
         
+        # Get schemas for currently loaded tools
         for tool_name, tool_class in self._tools.items():
             try:
-                # Get basic schema from the tool class
                 schema = {
                     "name": tool_name,
                     "description": tool_class.get_description(),
@@ -276,15 +278,58 @@ class TieredToolLoader:
                 }
                 schemas.append(schema)
             except Exception as e:
-                logger.warning(f"Could not get schema for {tool_name}: {e}")
-                # Add minimal schema
+                logger.warning(f"Could not get schema for loaded tool {tool_name}: {e}")
                 schemas.append({
                     "name": tool_name,
                     "description": f"Execute {tool_name}",
                     "parameters": {"type": "object", "properties": {}}
                 })
         
+        # Get schemas for unloaded tools by temporarily loading just the class
+        loaded_tool_names = set(self._tools.keys())
+        for group, group_def in self._group_definitions.items():
+            for tool_name in group_def.tools:
+                if tool_name not in loaded_tool_names:
+                    # Try to load just the tool class for schema without full group loading
+                    tool_class = self._load_individual_tool_class(tool_name, group_def.modules)
+                    if tool_class:
+                        try:
+                            schema = {
+                                "name": tool_name,
+                                "description": tool_class.get_description(),
+                                "parameters": tool_class.schema() if hasattr(tool_class, 'schema') else {
+                                    "type": "object",
+                                    "properties": {},
+                                    "required": []
+                                }
+                            }
+                            schemas.append(schema)
+                        except Exception as e:
+                            logger.warning(f"Could not get schema for unloaded tool {tool_name}: {e}")
+                            schemas.append({
+                                "name": tool_name,
+                                "description": f"Execute {tool_name}",
+                                "parameters": {"type": "object", "properties": {}}
+                            })
+        
         return schemas
+    
+    def _load_individual_tool_class(self, tool_name: str, modules: List[str]) -> Optional[Type[BaseTool]]:
+        """Load individual tool class without loading the entire group"""
+        for module_path in modules:
+            try:
+                module = importlib.import_module(module_path)
+                for name, obj in inspect.getmembers(module):
+                    if (inspect.isclass(obj) and 
+                        issubclass(obj, BaseTool) and 
+                        obj != BaseTool and
+                        not inspect.isabstract(obj) and
+                        obj.get_tool_name() == tool_name):
+                        return obj
+            except Exception as e:
+                logger.debug(f"Could not load tool class {tool_name} from {module_path}: {e}")
+                continue
+        return None
     
     def preload_group(self, group: ToolGroup):
         """Preload a specific tool group"""

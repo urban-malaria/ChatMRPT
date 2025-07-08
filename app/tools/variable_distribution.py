@@ -249,6 +249,8 @@ class VariableDistribution(BaseTool):
             from datetime import datetime
             from flask import current_app
             
+            # Create unique filename with timestamp - ensures multiple visualizations coexist
+            # Files persist until session closure (browser closed or session expired)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{variable}_distribution_map_{timestamp}.html"
             

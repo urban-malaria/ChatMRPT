@@ -22,6 +22,7 @@ from plotly.subplots import make_subplots
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 import time
+from datetime import datetime
 
 from .core_utils import (
     prepare_unified_dataset,
@@ -277,8 +278,10 @@ def create_agent_composite_score_maps(unified_dataset: gpd.GeoDataFrame,
                 align="center"
             )
         
-        # ORIGINAL: Save with session-aware HTML creation
-        timestamp = int(time.time())
+        # Save without timestamp to prevent URL instability
+        # Create unique filename with timestamp - ensures multiple visualizations coexist
+        # Files persist until session closure (browser closed or session expired)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"composite_map_page_{page}_{timestamp}.html"
         save_result = save_agent_visualization(
             fig, filename, session_id, 'composite_maps'
@@ -473,9 +476,11 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             autosize=True
         )
         
-        # Generate HTML file with unique filename that includes method
-        timestamp = int(time.time())
+        # Generate HTML file with fixed filename to prevent URL instability
         method_suffix = 'composite'
+        # Create unique filename with timestamp - ensures multiple visualizations coexist
+        # Files persist until session closure (browser closed or session expired)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"vulnerability_map_{method_suffix}_{timestamp}.html"
         
         save_result = save_agent_visualization(
@@ -1350,8 +1355,10 @@ def create_agent_decision_tree(unified_dataset: gpd.GeoDataFrame,
 </html>
         """
         
-        # ORIGINAL: Save as HTML file with session-aware creation
-        timestamp = int(time.time())
+        # Save as HTML file with fixed filename to prevent URL instability
+        # Create unique filename with timestamp - ensures multiple visualizations coexist
+        # Files persist until session closure (browser closed or session expired)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"decision_tree_{timestamp}.html"
         
         save_result = save_agent_visualization(

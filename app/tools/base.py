@@ -373,8 +373,21 @@ def validate_session_data_exists(session_id: str) -> bool:
     try:
         import os
         session_folder = f"instance/uploads/{session_id}"
-        return (os.path.exists(session_folder) and 
-                os.path.exists(os.path.join(session_folder, "processed_data.csv")))
+        
+        # Check if session folder exists
+        if not os.path.exists(session_folder):
+            return False
+        
+        # Check for unified dataset (preferred) or fallback to raw data
+        unified_geoparquet = os.path.join(session_folder, "unified_dataset.geoparquet")
+        unified_csv = os.path.join(session_folder, "unified_dataset.csv")
+        raw_data = os.path.join(session_folder, "raw_data.csv")
+        processed_data = os.path.join(session_folder, "processed_data.csv")  # Legacy support
+        
+        return (os.path.exists(unified_geoparquet) or 
+                os.path.exists(unified_csv) or 
+                os.path.exists(raw_data) or 
+                os.path.exists(processed_data))
     except Exception:
         return False
 
@@ -390,10 +403,13 @@ def get_session_unified_dataset(session_id: str):
         if gdf is not None:
             return gdf
         
-        # If unified dataset doesn't exist, check if we can create it
+        # If unified dataset doesn't exist, check if we can create it from raw or cleaned data
         session_folder = f"instance/uploads/{session_id}"
-        csv_exists = os.path.exists(os.path.join(session_folder, "processed_data.csv"))
-        shapefile_exists = os.path.exists(os.path.join(session_folder, "shapefile", "processed.shp"))
+        csv_exists = (os.path.exists(os.path.join(session_folder, "processed_data.csv")) or
+                     os.path.exists(os.path.join(session_folder, "analysis_cleaned_data.csv")) or
+                     os.path.exists(os.path.join(session_folder, "raw_data.csv")))
+        shapefile_exists = (os.path.exists(os.path.join(session_folder, "shapefile", "processed.shp")) or
+                           os.path.exists(os.path.join(session_folder, "raw_shapefile.zip")))
         
         if csv_exists and shapefile_exists:
             logger.info(f"Unified dataset not found for session {session_id}, attempting to create it...")

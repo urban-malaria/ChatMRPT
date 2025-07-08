@@ -623,7 +623,8 @@ class VisualizationService:
             if not hasattr(data_handler, 'session_id') or not data_handler.session_id:
                 data_handler.session_id = session_id
             
-            # Create unique filename for this page
+            # Create unique filename with timestamp - ensures multiple visualizations coexist
+            # Files persist until session closure (browser closed or session expired)
             import time
             timestamp = int(time.time())
             filename = f"vulnerability_plot_page{page}_{timestamp}.html"
