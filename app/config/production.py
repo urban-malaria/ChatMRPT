@@ -1,85 +1,69 @@
-"""
-Production configuration with enhanced security and performance settings.
-"""
-
+"""Production configuration with enhanced security."""
 import os
-from .base import BaseConfig
-from flask import request
+from app.config.base import BaseConfig
 
 
 class ProductionConfig(BaseConfig):
-    """Configuration for production environment."""
+    """Production configuration."""
     
-    # Production settings
+    # CRITICAL: Always disable debug in production
     DEBUG = False
     TESTING = False
     
-    # Enhanced security
-    SECRET_KEY = os.environ.get('SECRET_KEY') or None
+    # Security settings
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if not SECRET_KEY:
+        raise ValueError("SECRET_KEY environment variable is not set!")
     
-    # Strict CORS settings
-    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('CORS_ORIGINS') else []
+    # Secure session cookies
+    SESSION_COOKIE_SECURE = True  # HTTPS only
+    SESSION_COOKIE_HTTPONLY = True  # No JS access
+    SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+    PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
     
-    # Production logging
-    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'WARNING')
+    # Database configuration
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        'DATABASE_URL',
+        'sqlite:///instance/interactions.db'
+    )
+    if SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
+        # Fix for SQLAlchemy compatibility
+        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace(
+            'postgres://', 'postgresql://', 1
+        )
     
-    # Full security headers
+    # CORS settings - restrict to specific domains
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',')
+    
+    # File upload settings
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
+    
+    # API Keys (from environment only)
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    if not OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY environment variable is not set!")
+    
+    # Admin key (from environment only)
+    ADMIN_KEY = os.environ.get('ADMIN_KEY')
+    if not ADMIN_KEY:
+        raise ValueError("ADMIN_KEY environment variable is not set!")
+    
+    # Logging
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+    LOG_FILE = os.environ.get('LOG_FILE', 'instance/app.log')
+    
+    # Security headers additions
     SECURITY_HEADERS = {
+        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
         'X-XSS-Protection': '1; mode=block',
-        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self'"
+        'Content-Security-Policy': (
+            "default-src 'self'; "
+            "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "img-src 'self' data: https:; "
+            "font-src 'self'; "
+            "connect-src 'self' https://tile.openstreetmap.org"
+        )
     }
-    
-    # Performance optimizations
-    SEND_FILE_MAX_AGE_DEFAULT = 31536000  # 1 year
-    JSONIFY_PRETTYPRINT_REGULAR = False
-    
-    # Session security
-    SESSION_COOKIE_SECURE = True
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
-    
-    # Disable debug features
-    DEBUG_TB_ENABLED = False
-    USE_RELOADER = False
-    
-    @classmethod
-    def init_app(cls, app):
-        """Initialize production-specific settings."""
-        super().init_app(app)
-        
-        # Validate required environment variables
-        if not cls.SECRET_KEY:
-            raise ValueError("SECRET_KEY environment variable is required for production")
-        
-        if not cls.OPENAI_API_KEY:
-            app.logger.warning("OPENAI_API_KEY not set - AI features will be disabled")
-        
-        # Production-specific error handlers
-        @app.errorhandler(404)
-        def not_found_error(error):
-            app.logger.warning(f"404 Not Found: {request.url}")
-            return {"error": "Resource not found"}, 404
-
-        @app.errorhandler(500)
-        def internal_error(error):
-            app.logger.error(f"Internal server error", exc_info=True)
-            return {"error": "Internal server error"}, 500
-        
-        @app.errorhandler(403)
-        def forbidden_error(error):
-            app.logger.warning(f"403 Forbidden: {request.url}")
-            return {"error": "Access forbidden"}, 403
-        
-        # Security middleware
-        @app.before_request
-        def security_checks():
-            # Add any production security checks here
-            pass
-        
-        app.logger.info("🚀 ChatMRPT Production Mode Initialized")
-        app.logger.info(f"📊 Debug Mode: {app.config.get('DEBUG', False)}")
-        app.logger.info(f"🔒 Security Headers: Enabled")
-        app.logger.info(f"🤖 AI Features: {'Enabled' if cls.OPENAI_API_KEY else 'Disabled'}") 

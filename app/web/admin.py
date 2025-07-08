@@ -8,7 +8,8 @@ logs viewing, and system management.
 import json
 import logging
 from datetime import datetime
-from flask import Blueprint, request, current_app, send_file
+from flask import Blueprint, request, current_app, send_file, redirect, url_for
+from flask_login import login_required, current_user
 from io import StringIO
 
 from ..core.decorators import handle_errors, log_execution_time
@@ -19,7 +20,26 @@ logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
+@admin_bp.route('/', methods=['GET'])
+@admin_bp.route('/dashboard', methods=['GET'])
+@login_required
+@handle_errors
+def dashboard():
+    """Admin dashboard homepage."""
+    return {
+        'message': 'Welcome to ChatMRPT Admin Dashboard',
+        'user': current_user.username,
+        'available_endpoints': [
+            '/admin/logs - View system logs',
+            '/admin/stats - System statistics',
+            '/admin/export - Export data',
+            '/admin/health - Health check'
+        ]
+    }
+
+
 @admin_bp.route('/logs', methods=['GET'])
+@login_required
 @handle_errors
 def logs():
     """
@@ -79,6 +99,7 @@ def logs():
 
 
 @admin_bp.route('/session/<session_id>', methods=['GET'])
+@login_required
 @handle_errors
 def session_detail(session_id):
     """
@@ -130,6 +151,7 @@ def session_detail(session_id):
 
 
 @admin_bp.route('/export', methods=['GET'])
+@login_required
 @handle_errors
 def export_logs():
     """
@@ -207,6 +229,7 @@ def export_logs():
 
 
 @admin_bp.route('/training_data', methods=['GET'])
+@login_required
 @handle_errors
 def export_training_data():
     """
@@ -239,6 +262,7 @@ def export_training_data():
 
 
 @admin_bp.route('/stats', methods=['GET'])
+@login_required
 @handle_errors
 def system_stats():
     """
@@ -280,6 +304,7 @@ def system_stats():
 
 
 @admin_bp.route('/health', methods=['GET'])
+@login_required
 @handle_errors
 def health_check():
     """

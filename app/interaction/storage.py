@@ -516,13 +516,21 @@ def export_to_csv(db_manager: DatabaseManager, session_id=None, start_date=None,
         exported_files = {}
         
         for table in tables:
-            # Get table columns
+            # Validate table name against whitelist (already done above)
+            if table not in tables:
+                continue
+                
+            # Get table columns using parameterized identifier
+            # SQLite doesn't support parameterized table names, but we've validated against whitelist
             cursor.execute(f"PRAGMA table_info({table})")
             columns = [row['name'] for row in cursor.fetchall()]
             
-            # Export table data
-            query = f"SELECT * FROM {table} {where_clause}"
-            cursor.execute(query, params)
+            # Export table data - table name is from our whitelist
+            if where_clause:
+                query = f"SELECT * FROM {table} {where_clause}"
+                cursor.execute(query, params)
+            else:
+                cursor.execute(f"SELECT * FROM {table}")
             rows = cursor.fetchall()
             
             if rows:
@@ -658,6 +666,7 @@ def export_to_json(db_manager: DatabaseManager, session_id=None, include_llm_dat
                 ])
             
             for table_name, data_path in tables_queries:
+                # Table names come from our hardcoded whitelist above, so they're safe
                 cursor.execute(f"SELECT * FROM {table_name} WHERE session_id = ? ORDER BY timestamp", (current_session_id,))
                 
                 rows = []

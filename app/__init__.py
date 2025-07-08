@@ -5,6 +5,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask, session as flask_session, request
 from flask_session import Session
+from flask_login import LoginManager
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -92,6 +93,18 @@ def create_app(config_name=None):
     # --- Initialize Extensions ---
     Session(app)
     
+    # Initialize Flask-Login
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Please log in to access this page.'
+    
+    # User loader callback
+    @login_manager.user_loader
+    def load_user(user_id):
+        from .auth.models import User
+        return User.get(user_id)
+    
     # --- Initialize Database ---
     # NOTE: Database initialization handled by interaction logging system
     # from .utils.database import init_db
@@ -133,6 +146,10 @@ def create_app(config_name=None):
     
     # --- Register Blueprints ---
     from .web import admin_bp, register_all_blueprints
+    from .auth.routes import auth
+    
+    # Register auth blueprint
+    app.register_blueprint(auth)
     
     # Register admin blueprint separately
     app.register_blueprint(admin_bp)
