@@ -47,22 +47,51 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
                 
                 # Apply metadata filtering to all variables
                 analysis_vars = get_analysis_variables(data_handler.csv_data, exclude_metadata=True)
+                print(f"   🔍 Analysis vars from CSV: {len(analysis_vars)} - {analysis_vars}")
                 
-                # Filter out metadata columns from all variables
-                filtered_all_vars = [var for var in all_variables if var in analysis_vars]
+                # Filter out metadata columns from all variables (case-insensitive)
+                filtered_all_vars = []
+                for var in all_variables:
+                    # Case-insensitive matching with analysis_vars from CSV
+                    is_analysis_var = any(var.lower() == analysis_var.lower() for analysis_var in analysis_vars)
+                    if is_analysis_var:
+                        filtered_all_vars.append(var)
                 print(f"   🧹 After excluding metadata: {len(filtered_all_vars)} - {filtered_all_vars}")
                 
-                # Filter user selection to only include valid analysis variables
-                clean_selected_vars = [var for var in selected_variables if var in filtered_all_vars]
+                # Debug: Check if mean_evi is in analysis_vars
+                if 'mean_evi' in all_variables:
+                    print(f"   🔍 DEBUG: 'mean_evi' in all_variables: True")
+                    print(f"   🔍 DEBUG: 'mean_evi' in analysis_vars: {'mean_evi' in analysis_vars}")
+                    print(f"   🔍 DEBUG: 'mean_EVI' in analysis_vars: {'mean_EVI' in analysis_vars}")
+                else:
+                    print(f"   🔍 DEBUG: 'mean_evi' NOT in all_variables")
+                
+                # Filter user selection to only include valid analysis variables (case-insensitive)
+                clean_selected_vars = []
+                for var in selected_variables:
+                    # Case-insensitive matching
+                    matched_var = None
+                    for filtered_var in filtered_all_vars:
+                        if var.lower() == filtered_var.lower():
+                            matched_var = filtered_var
+                            break
+                    if matched_var:
+                        clean_selected_vars.append(matched_var)
+                        print(f"   ✅ Matched: '{var}' → '{matched_var}'")
+                    else:
+                        print(f"   ❌ No match for: '{var}'")
+                        
                 print(f"   👤 User selected (filtered): {clean_selected_vars}")
                 
                 if clean_selected_vars:
                     final_variables = clean_selected_vars
                     print(f"✅ COMPOSITE METHOD: Using {len(final_variables)} selected variables")
                 else:
-                    # Fallback to smart selection
-                    final_variables = select_composite_variables(filtered_all_vars, target_count=5)
-                    print(f"⚠️ FALLBACK: User selection invalid, using smart selection: {final_variables}")
+                    # For custom analysis, do not fall back - return error if no valid variables
+                    return {
+                        'status': 'error',
+                        'message': f'None of the specified variables {selected_variables} are valid for analysis. Available variables: {filtered_all_vars}'
+                    }
             else:
                 # Auto-select variables using smart selection
                 norm_cols = [col for col in data_handler.normalized_data.columns if col.startswith('normalization_')]

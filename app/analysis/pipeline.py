@@ -106,23 +106,39 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
             )
         
         # If we already have variable relationships and no custom relationships, skip relationship determination
+        # BUT: if selected_variables is provided, ensure existing relationships cover those variables
         if data_handler.variable_relationships and not custom_relationships:
-            rerun_stages['relationships'] = False
-            logger.info("Reusing existing variable relationships (no custom relationships specified)")
-            metadata.record_decision(
-                pipeline_step_id,
-                'reuse_existing_relationships',
-                options=['redetermine_relationships', 'use_existing_relationships'],
-                criteria='no custom relationships specified',
-                selected_option='use_existing_relationships'
-            )
+            if selected_variables:
+                # Check if existing relationships cover all selected variables
+                existing_vars = set(data_handler.variable_relationships.keys())
+                selected_vars_set = set(selected_variables)
+                if selected_vars_set.issubset(existing_vars):
+                    rerun_stages['relationships'] = False
+                    logger.info(f"Reusing existing variable relationships (cover all {len(selected_variables)} selected variables)")
+                else:
+                    missing_vars = selected_vars_set - existing_vars
+                    logger.info(f"Rerunning relationships - existing relationships missing {len(missing_vars)} selected variables: {list(missing_vars)}")
+                    rerun_stages['relationships'] = True
+            else:
+                rerun_stages['relationships'] = False
+                logger.info("Reusing existing variable relationships (no custom relationships specified)")
+            
+            if not rerun_stages['relationships']:
+                metadata.record_decision(
+                    pipeline_step_id,
+                    'reuse_existing_relationships',
+                    options=['redetermine_relationships', 'use_existing_relationships'],
+                    criteria='no custom relationships specified and existing relationships cover selected variables',
+                    selected_option='use_existing_relationships'
+                )
         
         # If selected_variables is provided but no other customizations,
         # reuse everything up to composite score calculation
+        # BUT: ensure relationships were already handled above for selected variables
         if (selected_variables and not custom_relationships and not na_methods and 
             data_handler.normalized_data is not None):
             rerun_stages['clean'] = False
-            rerun_stages['relationships'] = False
+            # relationships already handled above - don't override
             rerun_stages['normalize'] = False
             logger.info("Only rerunning composite score calculation with selected variables")
             metadata.record_decision(
@@ -230,12 +246,12 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
                     logger.warning(f"Could not save fallback region metadata: {save_error}")
         
         # 2. Determine variable relationships if needed
-        relationship_result = run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stages, custom_relationships)
+        relationship_result = run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stages, custom_relationships, selected_variables)
         if relationship_result['status'] == 'error':
             return relationship_result
         
         # 3. Normalize data if needed
-        normalization_result = run_normalization_stage(data_handler, metadata, pipeline_step_id, rerun_stages)
+        normalization_result = run_normalization_stage(data_handler, metadata, pipeline_step_id, rerun_stages, selected_variables)
         if normalization_result['status'] == 'error':
             return normalization_result
         

@@ -55,8 +55,20 @@ ZONE_VARIABLES = {
 # Core malaria analysis variables that should always be included
 CORE_VARIABLES = ['pfpr', 'u5_tpr_rdt']
 
-# Identifier columns (not analysis variables)
-IDENTIFIER_COLUMNS = ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
+# Identifier columns (not analysis variables) - expanded to catch common identifier patterns
+IDENTIFIER_COLUMNS = [
+    # Ward identifiers
+    'WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code',
+    # Row/index identifiers 
+    'X', 'X.1', 'X.2', 'X.3', 'X.4', 'X.5', 'index', 'Unnamed: 0',
+    # Geographic identifiers
+    'country_na', 'country_co', 'country_name', 'country_code',
+    'state_name', 'state_code', 'lga_name', 'lga_code',
+    # Metadata identifiers
+    'global_id', 'source', 'source_dat', 'properties',
+    # Other common non-analytical columns
+    'geometry', 'Shape_Area', 'Shape_Leng'
+]
 
 def find_fuzzy_match(target_var: str, available_vars: List[str], threshold: float = 0.75) -> Optional[str]:
     """
@@ -253,10 +265,18 @@ def get_zone_from_state_name(state_name: str) -> Optional[str]:
     """Get zone from state name."""
     state_name = state_name.strip()
     
+    # Direct exact matches first (case-insensitive)
+    for zone, states in GEOPOLITICAL_ZONES.items():
+        for state in states:
+            if state_name.lower() == state.lower():
+                return zone
+    
+    # Fuzzy matching for partial matches
     for zone, states in GEOPOLITICAL_ZONES.items():
         for state in states:
             if state.lower() in state_name.lower() or state_name.lower() in state.lower():
                 return zone
+    
     return None
 
 def infer_zone_from_ward_names(ward_names: List[str]) -> Optional[str]:

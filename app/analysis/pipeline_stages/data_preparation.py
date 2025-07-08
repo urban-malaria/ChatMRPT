@@ -10,6 +10,8 @@ from ..imputation import handle_missing_values
 logger = logging.getLogger(__name__)
 
 
+
+
 def _fix_duplicate_ward_names(data: pd.DataFrame) -> pd.DataFrame:
     """
     Fix duplicate ward names by appending WardCode in format: WardName (WardCode)
@@ -201,7 +203,7 @@ def run_data_cleaning_stage(data_handler, metadata, pipeline_step_id, rerun_stag
             }
 
 
-def run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stages, custom_relationships=None):
+def run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stages, custom_relationships=None, selected_variables=None):
     """Run the variable relationships determination stage"""
     logger.info("Step 2: Determining variable relationships")
     
@@ -217,8 +219,90 @@ def run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stage
         
         try:
             # Get variables from cleaned data
-            variables = [col for col in data_handler.cleaned_data.columns 
-                       if col != 'WardName' and is_numeric_column(data_handler.cleaned_data, col)]
+            if selected_variables is not None:
+                # For custom analysis: use intelligent variable matching
+                logger.info(f"🔧 CUSTOM ANALYSIS: Looking for variables {selected_variables} in cleaned data")
+                
+                available_columns = list(data_handler.cleaned_data.columns)
+                logger.info(f"🔧 Available columns: {available_columns}")
+                
+                variables = []
+                for var in selected_variables:
+                    if var in available_columns and is_numeric_column(data_handler.cleaned_data, var):
+                        variables.append(var)
+                        logger.info(f"✅ Exact match: {var}")
+                    else:
+                        # Enhanced fuzzy matching with multiple strategies
+                        matched_var = None
+                        
+                        # Strategy 1: Check if user variable is contained in any column name
+                        for col in available_columns:
+                            if var.lower() in col.lower() or col.lower() in var.lower():
+                                if is_numeric_column(data_handler.cleaned_data, col):
+                                    matched_var = col
+                                    logger.info(f"🔍 Substring match: '{var}' → '{matched_var}'")
+                                    break
+                        
+                        # Strategy 2: Difflib fuzzy matching with lower cutoff
+                        if not matched_var:
+                            from difflib import get_close_matches
+                            close_matches = get_close_matches(var.lower(), [col.lower() for col in available_columns], n=1, cutoff=0.4)
+                            if close_matches:
+                                # Find the original column name
+                                matched_var = next((col for col in available_columns if col.lower() == close_matches[0]), None)
+                                if matched_var and is_numeric_column(data_handler.cleaned_data, matched_var):
+                                    logger.info(f"🔍 Fuzzy match: '{var}' → '{matched_var}'")
+                                else:
+                                    matched_var = None
+                        
+                        # Strategy 3: Common malaria variable patterns
+                        if not matched_var:
+                            var_patterns = {
+                                'evi': ['mean_EVI', 'enhanced_vegetation_index', 'EVI'],
+                                'ndvi': ['mean_NDVI', 'normalized_difference_vegetation_index', 'NDVI'],
+                                'rainfall': ['mean_rainfall', 'precipitation', 'rain'],
+                                'temp': ['temp_mean', 'temperature', 'temp'],
+                                'elevation': ['elevation', 'altitude', 'elev'],
+                                'flood': ['flood', 'flooding'],
+                                'pfpr': ['pfpr', 'parasite_prevalence'],
+                                'tpr': ['u5_tpr_rdt', 'test_positivity_rate', 'tpr']
+                            }
+                            
+                            if var.lower() in var_patterns:
+                                for pattern in var_patterns[var.lower()]:
+                                    for col in available_columns:
+                                        if pattern.lower() == col.lower():
+                                            if is_numeric_column(data_handler.cleaned_data, col):
+                                                matched_var = col
+                                                logger.info(f"🎯 Pattern match: '{var}' → '{matched_var}'")
+                                                break
+                                    if matched_var:
+                                        break
+                        
+                        if matched_var:
+                            variables.append(matched_var)
+                        else:
+                            logger.warning(f"❌ No match found for variable: {var}")
+                
+                logger.info(f"Using {len(variables)} selected variables for relationships: {variables}")
+            else:
+                # For standard analysis: use all available variables
+                variables = [col for col in data_handler.cleaned_data.columns 
+                           if col != 'WardName' and is_numeric_column(data_handler.cleaned_data, col)]
+                logger.info(f"Using {len(variables)} available variables for relationships")
+            
+            # Check if we have any valid variables
+            if not variables:
+                if selected_variables is not None:
+                    return {
+                        'status': 'error',
+                        'message': f'None of the selected variables {selected_variables} were found as numeric columns in the data. Available columns: {list(data_handler.cleaned_data.columns)}'
+                    }
+                else:
+                    return {
+                        'status': 'error', 
+                        'message': 'No numeric variables found in the data for relationship determination'
+                    }
             
             # Determine relationships
             relationships = determine_variable_relationships(variables, None, metadata)
@@ -302,7 +386,7 @@ def run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stage
             }
 
 
-def run_normalization_stage(data_handler, metadata, pipeline_step_id, rerun_stages):
+def run_normalization_stage(data_handler, metadata, pipeline_step_id, rerun_stages, selected_variables=None):
     """Run the data normalization stage of the pipeline"""
     logger.info("Step 3: Normalizing data")
     
@@ -331,11 +415,23 @@ def run_normalization_stage(data_handler, metadata, pipeline_step_id, rerun_stag
                     'message': 'No variable relationships determined for normalization'
                 }
             
+            # Determine which columns to exclude from normalization
+            exclude_cols = None
+            if selected_variables is not None:
+                # For custom analysis: exclude all variables NOT in selected_variables
+                all_vars = [col for col in data_handler.cleaned_data.columns 
+                           if col != 'WardName' and is_numeric_column(data_handler.cleaned_data, col)]
+                exclude_cols = [var for var in all_vars if var not in selected_variables]
+                logger.info(f"Custom analysis: normalizing only selected variables {selected_variables}, excluding {len(exclude_cols)} others")
+            else:
+                # For standard analysis: normalize all available variables
+                logger.info("Standard analysis: normalizing all available variables")
+            
             # Normalize the data using the original pipeline logic
             normalized_data = normalize_data(
                 data_handler.cleaned_data,
                 data_handler.variable_relationships,
-                None,  # No columns to exclude
+                exclude_cols,  # Exclude non-selected variables for custom analysis
                 -1,  # Use all available cores
                 metadata
             )

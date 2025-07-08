@@ -144,10 +144,9 @@ class TieredToolLoader:
                 ],
                 tools=[
                     'runcompleteanalysis', 'runcompositeanalysis', 'runpcaanalysis',  # Complete analysis tools
-                    'runcustomcompositeanalysis', 'runcustompcaanalysis',  # Custom variable analysis tools
                     'generatecomprehensiveanalysissummary',  # Analysis summary tool
                     'settlement_validation_tools', 'settlement_intervention_tools',
-                    'scenario_simulation_tools', 'intervention_targeting_tools'
+                    'scenario_simulation_tools', 'createinterventiontargetingmap'
                 ],
                 description="Low-frequency specialized tools and heavy analysis workflows",
                 dependencies=['geopandas', 'shapely', 'rasterio']

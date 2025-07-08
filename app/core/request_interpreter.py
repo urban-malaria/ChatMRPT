@@ -160,19 +160,20 @@ class RequestInterpreter:
                - "who are you", "what can you do", "tell me about yourself" -> explain_concept with concept="ChatMRPT"
                - "help", "help me", "I need help", "what do I do" -> show_help_options
             
-            3. KNOWLEDGE/EDUCATIONAL: Questions about malaria, health, epidemiology
-               - METHODOLOGY EXPLANATIONS: When users ask about composite score, PCA, or analysis methods
-                 * "explain composite score analysis" -> explainanalysismethodology with methods=["composite"]
-                 * "how does PCA work" -> explainanalysismethodology with methods=["pca"] 
-                 * "explain both methods" -> explainanalysismethodology with methods=["composite", "pca"]
-                 * "methodology explanation" -> explainanalysismethodology with methods=["composite", "pca"]
-                 * Always use explainanalysismethodology for dataset-specific methodology questions
-               - GENERAL MALARIA KNOWLEDGE: For other malaria topics, use explain_concept
-                 * "what is malaria transmission" -> explain_concept with concept="transmission"
-                 * "malaria prevention" -> explain_concept with concept="prevention"
+            3. KNOWLEDGE/EDUCATIONAL: Questions about malaria, health, epidemiology, statistics
+               - METHODOLOGY EXPLANATIONS: ONLY when users ask about how YOUR analysis methods worked
+                 * "explain the composite/PCA methods you used" -> explainanalysismethodology
+                 * "how did you calculate the scores" -> explainanalysismethodology
+                 * Questions about YOUR specific analysis results and methods
+               - GENERAL CONCEPTS: For statistical/epidemiological concepts, use explain_concept
+                 * "what is multicollinearity" -> explain_concept with concept="multicollinearity"
+                 * "nonlinear relationships" -> explain_concept with concept="nonlinear relationships"
+                 * "how to handle multicollinearity" -> explain_concept
+                 * General malaria knowledge -> explain_concept
             
             4. DATA ANALYSIS: Questions involving uploaded data, rankings, maps, comparisons
                - Use appropriate data analysis tools
+               - For custom variable analysis, extract the variable names and pass them properly
                
             CRITICAL: Don't hardcode question patterns! Users ask differently. Use LLM intelligence to:
             - Classify intent (greeting/knowledge/data analysis/system)  
@@ -410,7 +411,45 @@ class RequestInterpreter:
                 "routing": "knowledge_agent"
             }}
 
-            Example 8:
+            Example 8: Custom Analysis with Specific Variables  
+            User: "I want you to rerun the analysis only using the flood and evi variables"
+            Response: {{
+                "intent_type": "data_analysis",
+                "primary_goal": "Run custom analysis with flood and EVI variables",
+                "tool_calls": [
+                    {{
+                        "tool_name": "runcompleteanalysis",
+                        "parameters": {{
+                            "composite_variables": ["flood", "evi"],
+                            "pca_variables": ["flood", "evi"]
+                        }},
+                        "reasoning": "Use exact user-specified variable names - pipeline will handle fuzzy matching"
+                    }}
+                ],
+                "requires_session_data": true,
+                "routing": "data_agent"
+            }}
+            
+            Example 8b: Statistical Concept Question
+            User: "How do you handle multicollinearity in composite scoring?"
+            Response: {{
+                "intent_type": "knowledge",
+                "primary_goal": "Explain multicollinearity handling in composite scoring",
+                "tool_calls": [
+                    {{
+                        "tool_name": "explainconcept",
+                        "parameters": {{
+                            "concept": "multicollinearity in composite scoring",
+                            "technical_level": "intermediate"
+                        }},
+                        "reasoning": "User asking about statistical concept, not our specific analysis"
+                    }}
+                ],
+                "requires_session_data": false,
+                "routing": "knowledge_agent"
+            }}
+            
+            Example 9:
             User: "run analysis"
             Response: {{
                 "intent_type": "clarification_needed",
@@ -1332,13 +1371,13 @@ Please generate a friendly, helpful clarification response that guides the user.
             suggestions.extend(['gettopriskwards', 'getwardriskscore'])
         
         if any(word in message_lower for word in ['map', 'visualize', 'show']):
-            suggestions.append('create_vulnerability_map')
+            suggestions.append('createvulnerabilitymap')
             
         if any(word in message_lower for word in ['scatter', 'plot', 'correlation']):
-            suggestions.append('scatter_plot')
+            suggestions.append('createscatterplot')
             
         if any(word in message_lower for word in ['explain', 'what is', 'tell me about']):
-            suggestions.append('explain_concept')
+            suggestions.append('explainconcept')
             
         if any(word in message_lower for word in ['ward', 'specific area']):
             suggestions.append('getwardinformation')
@@ -1439,7 +1478,7 @@ Please generate a helpful response that:
                     "Statistical analysis - correlations and relationships",
                     "Spatial analysis - geographic patterns"
                 ],
-                'suggestions': ['run_composite_analysis', 'run_pca_analysis', 'correlation_matrix']
+                'suggestions': ['runcompositeanalysis', 'runpcaanalysis', 'getcorrelationanalysis']
             },
             'data_view': {
                 'message': "I can show you data in different ways. What would you like to see?",
@@ -1449,7 +1488,7 @@ Please generate a helpful response that:
                     "Specific ward information",
                     "Variable distributions"
                 ],
-                'suggestions': ['get_composite_rankings', 'descriptive_statistics', 'get_ward_information']
+                'suggestions': ['gettopriskwards', 'getdescriptivestatistics', 'getwardinformation']
             },
             'visualization_type': {
                 'message': "I can create different visualizations. Which type would help you most?",
@@ -1459,7 +1498,7 @@ Please generate a helpful response that:
                     "Box plot - distribution comparisons",
                     "Correlation matrix - variable relationships"
                 ],
-                'suggestions': ['create_vulnerability_map', 'scatter_plot', 'box_plot']
+                'suggestions': ['createvulnerabilitymap', 'createscatterplot', 'createboxplot']
             },
             'ward_info': {
                 'message': "What would you like to know about this ward?",
@@ -1469,7 +1508,7 @@ Please generate a helpful response that:
                     "Comparison with other wards",
                     "Detailed statistics"
                 ],
-                'suggestions': ['get_ward_information', 'get_composite_rankings']
+                'suggestions': ['getwardinformation', 'gettopriskwards']
             },
             'general': {
                 'message': "I can help with malaria risk analysis. What would you like to explore?",
