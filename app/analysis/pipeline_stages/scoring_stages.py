@@ -35,52 +35,50 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
             
             # Import here to avoid circular imports
             from app.core.utils import get_analysis_variables, select_composite_variables
+            from ..variable_selection_coordinator import get_variable_coordinator
             
-            # Variable selection logic
-            if selected_variables:
-                # User provided specific variables - trust the data preparation stage validation
-                # and directly use variables that are available in normalized data
-                norm_cols = [col for col in data_handler.normalized_data.columns if col.startswith('normalization_')]
-                all_variables = [col.replace('normalization_', '') for col in norm_cols]
+            # Get the session coordinator to ensure consistency
+            coordinator = get_variable_coordinator(step_id)  # Use step_id as session identifier
+            
+            # Get the unified variables from the coordinator
+            final_variables = coordinator.get_variables_for_method('composite')
+            
+            if not final_variables:
+                logger.error("⚠️ COMPOSITE METHOD: No variables available from coordinator")
+                return {
+                    'status': 'error',
+                    'message': 'No variables available for composite analysis from unified selection'
+                }
+            
+            # Validate that the coordinator variables are available in normalized data
+            norm_cols = [col for col in data_handler.normalized_data.columns if col.startswith('normalization_')]
+            all_variables = [col.replace('normalization_', '') for col in norm_cols]
+            
+            # Match coordinator variables to normalized variables
+            matched_variables = []
+            for var in final_variables:
+                # Case-insensitive matching against available normalized variables
+                matched_var = None
+                for norm_var in all_variables:
+                    if var.lower() == norm_var.lower():
+                        matched_var = norm_var
+                        break
                 
-                print(f"🔍 CUSTOM VARIABLE SELECTION:")
-                print(f"   📊 Available normalized variables: {len(all_variables)} - {all_variables}")
-                print(f"   👤 User requested: {selected_variables}")
-                
-                # Direct matching - if data preparation stage passed these variables through,
-                # they're already validated. Just match them to available normalized variables.
-                final_variables = []
-                for var in selected_variables:
-                    # Case-insensitive matching against available normalized variables
-                    matched_var = None
-                    for norm_var in all_variables:
-                        if var.lower() == norm_var.lower():
-                            matched_var = norm_var
-                            break
-                    
-                    if matched_var:
-                        final_variables.append(matched_var)
-                        print(f"   ✅ Found: '{var}' → '{matched_var}'")
-                    else:
-                        print(f"   ❌ Not normalized: '{var}' (may have been excluded during data preparation)")
-                
-                if final_variables:
-                    print(f"✅ COMPOSITE METHOD: Using {len(final_variables)} user-selected variables: {final_variables}")
+                if matched_var:
+                    matched_variables.append(matched_var)
+                    logger.info(f"✅ COMPOSITE MATCH: '{var}' → '{matched_var}'")
                 else:
-                    # Provide helpful error message
-                    return {
-                        'status': 'error',
-                        'message': f'None of the variables {selected_variables} are available in normalized data. This usually means they were identified as metadata columns or failed validation. Available variables: {all_variables[:10]}{"..." if len(all_variables) > 10 else ""}'
-                    }
-            else:
-                # Auto-select variables using smart selection
-                norm_cols = [col for col in data_handler.normalized_data.columns if col.startswith('normalization_')]
-                all_variables = [col.replace('normalization_', '') for col in norm_cols]
-                
-                analysis_vars = get_analysis_variables(data_handler.csv_data, exclude_metadata=True)
-                filtered_vars = [var for var in all_variables if var in analysis_vars]
-                final_variables = select_composite_variables(filtered_vars, target_count=5)
-                print(f"🤖 AUTO-SELECTION: Using {len(final_variables)} smart-selected variables: {final_variables}")
+                    logger.warning(f"❌ COMPOSITE MISSING: '{var}' not found in normalized data")
+            
+            if not matched_variables:
+                logger.error("⚠️ COMPOSITE METHOD: No coordinator variables found in normalized data")
+                return {
+                    'status': 'error',
+                    'message': f'None of the unified variables {final_variables} are available in normalized data. Available: {all_variables[:10]}{"..." if len(all_variables) > 10 else ""}'
+                }
+            
+            final_variables = matched_variables
+            logger.info(f"🔄 COMPOSITE METHOD: Using {len(final_variables)} unified variables: {final_variables}")
             
             # Compute composite scores
             composite_scores = compute_composite_scores(
@@ -94,7 +92,10 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
             # Store composite scores
             data_handler.composite_scores_mean = composite_scores
             data_handler.composite_variables = final_variables
-            data_handler.variable_selection_method = 'user_selected' if selected_variables else 'smart_selection'
+            data_handler.variable_selection_method = 'unified_coordinator'
+            
+            # Store variables used for composite method (for comparison with PCA)
+            data_handler.composite_variables_used = final_variables.copy()
             
             # Update step with results
             execution_time = time.time() - start_time

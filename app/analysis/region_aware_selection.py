@@ -16,6 +16,7 @@ import geopandas as gpd
 from typing import Dict, List, Optional, Tuple, Any
 from difflib import SequenceMatcher
 import re
+from ..core.variable_matcher import variable_matcher
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,13 @@ def find_fuzzy_match(target_var: str, available_vars: List[str], threshold: floa
     Returns:
         Best matching variable name or None if no good match found
     """
+    # Use the enhanced variable matcher for better fuzzy matching
+    match_results = variable_matcher.match_variables([target_var], available_vars, threshold)
+    
+    if target_var in match_results['matched']:
+        return match_results['matched'][target_var]
+    
+    # Fallback to original implementation for backward compatibility
     best_match = None
     best_score = 0
     
@@ -301,7 +309,7 @@ def infer_zone_from_ward_names(ward_names: List[str]) -> Optional[str]:
     return None
 
 def select_variables_by_zone(zone: str, available_variables: List[str], 
-                           llm_manager=None, cleaned_data=None) -> List[str]:
+                           llm_manager=None, cleaned_data=None, min_variables: int = 2) -> List[str]:
     """
     Select the exact scientifically-validated variables for the detected zone.
     Falls back to LLM selection if too many variables are missing.
@@ -311,6 +319,7 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
         available_variables: List of available variables in the data
         llm_manager: Optional LLM manager for fallback selection
         cleaned_data: Optional cleaned data for LLM context
+        min_variables: Minimum number of variables required for robust analysis
         
     Returns:
         List of zone-specific variables that are available in the data
@@ -320,7 +329,7 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
         # Fallback to LLM selection if available, otherwise use all variables
         if llm_manager and cleaned_data is not None:
             logger.info("Attempting LLM fallback for unknown zone")
-            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone)
+            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone, min_variables)
         else:
             # Use conservative filtering for unknown zones
             fallback_vars = [var for var in available_variables if var not in IDENTIFIER_COLUMNS]
@@ -330,15 +339,28 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
                 fallback_vars = [col for col in numeric_cols if 'name' not in col.lower() and 'code' not in col.lower()]
                 logger.warning(f"🚨 Emergency fallback for unknown zone: using {len(fallback_vars)} numeric variables")
             logger.info(f"Using basic fallback: {len(fallback_vars)} available variables")
-            return fallback_vars
+            return _ensure_minimum_variables(fallback_vars, available_variables, cleaned_data, min_variables)
     
     # Get the scientifically-validated variable list for this zone
     zone_variable_list = ZONE_VARIABLES[zone]
     selected_variables = []
     missing_variables = []
     
-    # Select variables using fuzzy matching for flexibility
+    # ENHANCED: First ensure core malaria variables are prioritized
+    prioritized_variables = []
+    
+    # Add core variables first (highest priority)
+    for core_var in CORE_VARIABLES:
+        if core_var in zone_variable_list:
+            prioritized_variables.append(core_var)
+    
+    # Add remaining zone variables
     for var in zone_variable_list:
+        if var not in prioritized_variables:
+            prioritized_variables.append(var)
+    
+    # Select variables using fuzzy matching for flexibility
+    for var in prioritized_variables:
         # First try exact match
         if var in available_variables:
             selected_variables.append(var)
@@ -351,7 +373,7 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
             else:
                 missing_variables.append(var)
     
-    # Check if we have enough variables from the region-specific list
+    # ENHANCED: Check if we have enough variables from the region-specific list
     missing_percentage = len(missing_variables) / len(zone_variable_list) if zone_variable_list else 0
     
     if missing_variables:
@@ -360,30 +382,43 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
         # If more than 50% of expected variables are missing, fallback to LLM
         if missing_percentage > 0.5 and llm_manager and cleaned_data is not None:
             logger.info(f"Zone {zone}: {missing_percentage*100:.1f}% variables missing, falling back to LLM selection")
-            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone)
+            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone, min_variables)
     
-    # Ensure we have at least the core malaria variables if available
-    if len(selected_variables) < 3:
-        # Try to find core variables using fuzzy matching
+    # ENHANCED: Ensure we have minimum variables for analysis (composite needs at least 2)
+    if len(selected_variables) < min_variables:
+        logger.warning(f"Zone {zone}: Only {len(selected_variables)} variables selected, minimum {min_variables} required")
+        
+        # Try to find additional core variables using fuzzy matching
+        additional_vars = []
         for core_var in CORE_VARIABLES:
             if core_var not in selected_variables:
                 # First try exact match
                 if core_var in available_variables:
-                    selected_variables.append(core_var)
+                    additional_vars.append(core_var)
                 else:
                     # Try fuzzy match
                     matched_var = find_fuzzy_match(core_var, available_variables)
                     if matched_var and matched_var not in selected_variables:
-                        selected_variables.append(matched_var)
+                        additional_vars.append(matched_var)
                         logger.info(f"🎯 Core variable fuzzy matched '{core_var}' to '{matched_var}'")
         
-        # If still too few variables, fallback to LLM
-        if len(selected_variables) < 3 and llm_manager and cleaned_data is not None:
-            logger.info(f"Zone {zone}: Only {len(selected_variables)} variables available, falling back to LLM selection")
-            return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone)
+        selected_variables.extend(additional_vars)
+        
+        # If still too few variables, fallback to LLM or emergency selection
+        if len(selected_variables) < min_variables:
+            if llm_manager and cleaned_data is not None:
+                logger.info(f"Zone {zone}: Only {len(selected_variables)} variables available, falling back to LLM selection")
+                return _fallback_to_llm_selection(available_variables, llm_manager, cleaned_data, zone, min_variables)
+            else:
+                # Emergency fallback: add any numeric variables
+                logger.warning(f"Zone {zone}: Emergency fallback - adding any available numeric variables")
+                selected_variables = _ensure_minimum_variables(selected_variables, available_variables, cleaned_data, min_variables)
     
-    logger.info(f"Zone {zone}: Selected {len(selected_variables)}/{len(zone_variable_list)} scientifically-validated variables")
-    return selected_variables
+    # ENHANCED: Validate variable quality
+    final_variables = _validate_variable_quality(selected_variables, cleaned_data)
+    
+    logger.info(f"Zone {zone}: Selected {len(final_variables)}/{len(zone_variable_list)} scientifically-validated variables")
+    return final_variables
 
 def get_zone_metadata(zone: str) -> Dict[str, Any]:
     """Get metadata about a geopolitical zone."""
@@ -429,8 +464,83 @@ def get_zone_metadata(zone: str) -> Dict[str, Any]:
     return zone_metadata.get(zone, {})
 
 
+def _ensure_minimum_variables(selected_variables: List[str], available_variables: List[str], 
+                             cleaned_data: pd.DataFrame, min_variables: int) -> List[str]:
+    """
+    Ensure minimum number of variables for robust analysis.
+    
+    Args:
+        selected_variables: Currently selected variables
+        available_variables: All available variables
+        cleaned_data: Cleaned data for validation
+        min_variables: Minimum number of variables required
+        
+    Returns:
+        List of variables meeting minimum requirement
+    """
+    if len(selected_variables) >= min_variables:
+        return selected_variables
+    
+    # Get numeric columns that aren't already selected
+    numeric_cols = cleaned_data.select_dtypes(include=['number']).columns.tolist()
+    additional_vars = []
+    
+    for col in numeric_cols:
+        if col not in selected_variables and col not in IDENTIFIER_COLUMNS:
+            # Check if variable has sufficient variance
+            if cleaned_data[col].var() > 0 and cleaned_data[col].notna().sum() > len(cleaned_data) * 0.5:
+                additional_vars.append(col)
+                if len(selected_variables) + len(additional_vars) >= min_variables:
+                    break
+    
+    result = selected_variables + additional_vars
+    logger.info(f"🔧 Ensured minimum variables: {len(result)} variables (added {len(additional_vars)})")
+    return result
+
+
+def _validate_variable_quality(selected_variables: List[str], cleaned_data: pd.DataFrame) -> List[str]:
+    """
+    Validate quality of selected variables.
+    
+    Args:
+        selected_variables: Variables to validate
+        cleaned_data: Cleaned data for validation
+        
+    Returns:
+        List of validated variables
+    """
+    if cleaned_data is None:
+        return selected_variables
+    
+    validated_vars = []
+    
+    for var in selected_variables:
+        if var not in cleaned_data.columns:
+            logger.warning(f"⚠️ Variable '{var}' not found in data")
+            continue
+        
+        # Check for sufficient data
+        non_null_count = cleaned_data[var].notna().sum()
+        data_coverage = non_null_count / len(cleaned_data)
+        
+        if data_coverage < 0.5:
+            logger.warning(f"⚠️ Variable '{var}' has insufficient data coverage: {data_coverage:.1%}")
+            continue
+        
+        # Check for variance
+        if pd.api.types.is_numeric_dtype(cleaned_data[var]):
+            if cleaned_data[var].var() == 0:
+                logger.warning(f"⚠️ Variable '{var}' has zero variance")
+                continue
+        
+        validated_vars.append(var)
+    
+    logger.info(f"✅ Validated {len(validated_vars)}/{len(selected_variables)} variables")
+    return validated_vars
+
+
 def _fallback_to_llm_selection(available_variables: List[str], llm_manager, cleaned_data: pd.DataFrame, 
-                              zone: str, min_vars: int = 3, max_vars: int = 7) -> List[str]:
+                              zone: str, min_vars: int = 2, max_vars: int = 7) -> List[str]:
     """
     Fallback to LLM-based variable selection when region-specific variables aren't available.
     

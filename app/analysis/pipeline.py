@@ -154,96 +154,96 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
         if clean_result['status'] == 'error':
             return clean_result
         
-        # 1.5. Apply region-aware variable selection if no variables specified
+        # 1.5. Apply unified variable selection using the coordinator
+        from .variable_selection_coordinator import get_variable_coordinator
+        
+        coordinator = get_variable_coordinator(session_id or "default")
+        
         if selected_variables is None:
-            logger.info("Step 1.5: Applying region-aware variable selection")
-            from .region_aware_selection import apply_region_aware_selection
+            logger.info("Step 1.5: Applying unified variable selection")
             
-            region_result = apply_region_aware_selection(
+            selection_result = coordinator.get_unified_variable_selection(
                 data_handler.cleaned_data, 
                 data_handler.shapefile_data,
+                None,  # No custom variables
                 llm_manager
             )
             
-            if region_result['status'] == 'success':
-                selected_variables = region_result['selected_variables']
-                selection_method = region_result.get('selection_method', 'region_specific')
-                logger.info(f"Region-aware selection: {region_result['zone_detected']} zone, "
+            if selection_result['status'] == 'success':
+                selected_variables = selection_result['variables']
+                selection_method = selection_result.get('selection_method', 'unified')
+                logger.info(f"✅ UNIFIED SELECTION: {selection_result['zone_detected']} zone, "
                            f"{len(selected_variables)} variables selected via {selection_method}")
                 
-                # Store region metadata for later use
+                # Store unified metadata for later use
                 metadata.record_step(
-                    'region_aware_selection',
+                    'unified_variable_selection',
                     {
-                        'zone_detected': region_result['zone_detected'],
-                        'detection_method': region_result['detection_method'],
+                        'zone_detected': selection_result['zone_detected'],
                         'variables_selected': len(selected_variables),
-                        'selection_method': region_result.get('selection_method', 'region_specific')
+                        'selection_method': selection_method,
+                        'coordinator_used': True
                     },
                     {
                         'selected_variables': selected_variables,
-                        'zone_metadata': region_result['zone_metadata']
+                        'zone_metadata': selection_result.get('zone_metadata', {})
                     },
-                    'region_aware_selection',
+                    'unified_variable_selection',
                     {'automated_selection': True}
                 )
                 
-                # Save region metadata to file for unified dataset integration
+                # Save unified metadata to file for integration
                 try:
                     session_folder = getattr(data_handler, 'session_folder', f"instance/uploads/{session_id}")
                     if session_folder:
                         import json
-                        region_metadata = {
-                            'zone_detected': region_result['zone_detected'],
-                            'detection_method': region_result['detection_method'],
+                        unified_metadata = {
+                            'zone_detected': selection_result['zone_detected'],
                             'selected_variables': selected_variables,
-                            'selection_method': region_result.get('selection_method', 'region_specific'),
-                            'zone_metadata': region_result['zone_metadata'],
-                            'total_available_variables': region_result.get('total_available_variables', 0),
-                            'variables_selected': len(selected_variables),
+                            'selection_method': selection_method,
+                            'zone_metadata': selection_result.get('zone_metadata', {}),
+                            'variables_count': len(selected_variables),
+                            'coordinator_used': True,
                             'timestamp': time.time()
                         }
                         
-                        region_metadata_path = os.path.join(session_folder, 'region_metadata.json')
-                        with open(region_metadata_path, 'w') as f:
-                            json.dump(region_metadata, f, indent=2, default=str)
+                        metadata_path = os.path.join(session_folder, 'unified_variable_metadata.json')
+                        with open(metadata_path, 'w') as f:
+                            json.dump(unified_metadata, f, indent=2, default=str)
                         
-                        logger.info(f"💾 Saved region metadata to {region_metadata_path}")
+                        logger.info(f"💾 Saved unified variable metadata to {metadata_path}")
                         
                 except Exception as save_error:
-                    logger.warning(f"Could not save region metadata: {save_error}")
+                    logger.warning(f"Could not save unified variable metadata: {save_error}")
             else:
-                logger.warning(f"Region-aware selection failed: {region_result.get('message', 'Unknown error')}")
-                # Fallback to all available analysis variables (exclude identifiers)
-                identifier_columns = ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
-                selected_variables = [col for col in data_handler.cleaned_data.columns 
-                                    if col not in identifier_columns]
-                
-                # Save fallback metadata
-                try:
-                    session_folder = getattr(data_handler, 'session_folder', f"instance/uploads/{session_id}")
-                    if session_folder:
-                        import json
-                        fallback_metadata = {
-                            'zone_detected': None,
-                            'detection_method': 'failed',
-                            'selected_variables': selected_variables,
-                            'selection_method': 'all_available_fallback',
-                            'zone_metadata': {},
-                            'error_message': region_result.get('message', 'Unknown error'),
-                            'total_available_variables': len(selected_variables),
-                            'variables_selected': len(selected_variables),
-                            'timestamp': time.time()
-                        }
-                        
-                        region_metadata_path = os.path.join(session_folder, 'region_metadata.json')
-                        with open(region_metadata_path, 'w') as f:
-                            json.dump(fallback_metadata, f, indent=2, default=str)
-                        
-                        logger.info(f"💾 Saved fallback region metadata to {region_metadata_path}")
-                        
-                except Exception as save_error:
-                    logger.warning(f"Could not save fallback region metadata: {save_error}")
+                logger.error(f"❌ UNIFIED SELECTION FAILED: {selection_result.get('message', 'Unknown error')}")
+                return {
+                    'status': 'error',
+                    'message': f"Variable selection failed: {selection_result.get('message', 'Unknown error')}",
+                    'data': None
+                }
+        else:
+            # User provided custom variables - validate through coordinator
+            logger.info("Step 1.5: Validating user-provided variables through coordinator")
+            
+            selection_result = coordinator.get_unified_variable_selection(
+                data_handler.cleaned_data, 
+                data_handler.shapefile_data,
+                selected_variables,  # Custom variables
+                llm_manager
+            )
+            
+            if selection_result['status'] == 'success':
+                # Update selected_variables with validated set
+                selected_variables = selection_result['variables']
+                logger.info(f"✅ CUSTOM VARIABLES VALIDATED: {len(selected_variables)} variables approved")
+            else:
+                logger.error(f"❌ CUSTOM VARIABLES VALIDATION FAILED: {selection_result.get('message', 'Unknown error')}")
+                return {
+                    'status': 'error',
+                    'message': f"Custom variable validation failed: {selection_result.get('message', 'Unknown error')}",
+                    'data': None
+                }
         
         # 2. Determine variable relationships if needed
         relationship_result = run_relationship_stage(data_handler, metadata, pipeline_step_id, rerun_stages, custom_relationships, selected_variables)
@@ -284,6 +284,31 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
         if urban_result['status'] == 'error':
             return urban_result
         
+        # 7. Validate variable consistency across methods
+        from .variable_comparison_validator import validate_analysis_consistency
+        
+        logger.info("Step 7: Validating variable consistency")
+        consistency_result = validate_analysis_consistency(data_handler, session_id or "default")
+        
+        if not consistency_result['consistent']:
+            logger.warning(f"⚠️ CONSISTENCY: {consistency_result['message']}")
+            
+            # If inconsistent, try to fix it
+            if consistency_result['status'] == 'warning':
+                logger.info("🔧 CONSISTENCY: Attempting to fix variable inconsistency")
+                from .variable_comparison_validator import VariableComparisonValidator
+                validator = VariableComparisonValidator(session_id or "default")
+                fix_result = validator.fix_variable_inconsistency(data_handler)
+                
+                if fix_result['status'] == 'success':
+                    logger.info(f"✅ CONSISTENCY: {fix_result['message']}")
+                    if fix_result['requires_rerun']:
+                        logger.info("🔄 CONSISTENCY: Variable fix requires analysis rerun")
+                else:
+                    logger.error(f"❌ CONSISTENCY: {fix_result['message']}")
+        else:
+            logger.info(f"✅ CONSISTENCY: {consistency_result['message']}")
+        
         # Note: PCA analysis uses the dedicated pca_pipeline.py, not embedded composite scoring
         
         # Update pipeline step with results
@@ -297,9 +322,11 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
                     'composite_result': composite_result.get('status') if composite_result else None,
                     'ranking_result': ranking_result.get('status') if ranking_result else None,
                     'urban_result': urban_result.get('status') if urban_result else None,
+                    'consistency_result': consistency_result.get('status'),
                     'variables_used': composite_result.get('variables_used') if composite_result else [],
-                    'selection_method': composite_result.get('selection_method', 'default'),
+                    'selection_method': composite_result.get('selection_method', 'unified_coordinator'),
                     'vulnerable_wards': ranking_result.get('vulnerable_wards') if ranking_result else [],
+                    'variable_consistency': consistency_result.get('consistent', False),
                     # PCA analysis is handled by dedicated pca_pipeline.py
                 }
                 break

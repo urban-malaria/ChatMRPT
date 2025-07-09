@@ -497,16 +497,25 @@ def send_message_streaming():
         app = current_app._get_current_object()
         flask_session = dict(session)  # Copy session data
         
+        # Make session available in streaming context
+        def setup_streaming_context():
+            # Set up Flask session context for streaming
+            for key, value in flask_session.items():
+                session[key] = value
+        
         # Use streaming response
         def generate():
             try:
                 with app.app_context():
+                    # Set up session context for streaming
+                    setup_streaming_context()
+                    
                     logger.info(f"Processing streaming message: '{user_message[:100]}...'")
                     
-                    # Use fallback method directly to avoid Flask context issues
-                    # The regular process_message has Flask session dependencies that fail in streaming
-                    logger.info("Using simple response method for streaming (avoids Flask context issues)")
-                    result = request_interpreter._generate_simple_response(user_message, session_id)
+                    # Use the full conversational data access system for streaming
+                    # This ensures users get the same capabilities in streaming mode
+                    logger.info("Using full conversational data access system for streaming")
+                    result = request_interpreter.process_message(user_message, session_id)
                     
                     # Simulate streaming by breaking response into chunks
                     response_text = result.get('response', '')

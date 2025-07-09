@@ -83,14 +83,17 @@ class TieredToolLoader:
             ToolGroup.CORE: ToolGroupDefinition(
                 name="Core Conversational Tools",
                 modules=[
-                    # 'app.tools.complete_analysis_tools',  # Removed during streamlining
+                    'app.tools.complete_analysis_tools',  # Essential: complete analysis pipeline
                     'app.tools.variable_distribution',    # Essential: variable visualization
+                    'app.tools.data_query_tool',          # Essential: conversational data access
                 ],
                 tools=[
                     'runcompleteanalysis',      # 1. Complete analysis execution
                     'runcompositeanalysis',     # 2. Composite analysis only
                     'runpcaanalysis',           # 3. PCA analysis only  
-                    'variable_distribution'     # 4. Variable distribution maps
+                    'variable_distribution',    # 4. Variable distribution maps
+                    'executedataquery',         # 5. Execute pandas/numpy queries
+                    'exploredataschema'         # 6. Explore dataset schema
                 ],
                 description="Essential analysis and visualization tools for immediate startup",
                 dependencies=['plotly', 'geopandas', 'scikit-learn']
@@ -102,7 +105,7 @@ class TieredToolLoader:
                     'app.tools.visualization_maps_tools',
                     'app.tools.visualization_charts_tools',
                     'app.tools.settlement_visualization_tools'
-,                ],
+                ],
                 tools=[
                     # Essential Maps (5 tools)
                     'createvulnerabilitymap',   # 5. Vulnerability choropleth maps
@@ -122,51 +125,32 @@ class TieredToolLoader:
             ),
             
             ToolGroup.STATISTICAL: ToolGroupDefinition(
-                name="Statistical & Data Tools",
+                name="Settlement Analysis Tools",
                 modules=[
-                    'app.tools.ward_data_tools',
-                    'app.tools.risk_analysis_tools',
-                    'app.tools.statistical_analysis_tools',
+                    'app.tools.settlement_validation_tools',
+                    'app.tools.settlement_intervention_tools',
                 ],
                 tools=[
-                    # Ward Data Tools (4 tools)
-                    'getwardinformation',       # 14. Ward details lookup
-                    'getwardvariable',          # 15. Ward variable values
-                    'comparewards',             # 16. Ward comparisons
-                    'searchwards',              # 17. Ward search functionality
-                    
-                    # Risk Analysis Tools (3 tools)
-                    'gettopriskwards',          # 18. Top risk wards ranking
-                    'getwardriskscore',         # 19. Individual ward risk scores
-                    'getriskstatistics',        # 20. Risk statistics summary
-                    
-                    # Statistical Analysis (2 tools)
-                    'getdescriptivestatistics', # 21. Descriptive statistics
-                    'getcorrelationanalysis'    # 22. Correlation analysis
+                    # Settlement Analysis Tools
+                    'createsettlementanalysismap',   # Settlement pattern analysis
+                    'validatesettlementdata',        # Settlement data validation
+                    'analyzesettlementpatterns',     # Settlement clustering
                 ],
-                description="Statistical analysis and ward data management tools",
-                dependencies=['scipy', 'sklearn', 'geopandas']
+                description="Settlement analysis and validation tools",
+                dependencies=['geopandas', 'shapely', 'sklearn']
             ),
             
             ToolGroup.SPECIALIZED: ToolGroupDefinition(
-                name="Specialized & Knowledge Tools",
+                name="Advanced Visualization Tools",
                 modules=[
-                    'app.tools.smart_knowledge_tools',
-                    'app.tools.settlement_validation_tools',
-                    'app.tools.settlement_intervention_tools',
-                    'app.tools.intervention_targeting_tools',
-                    
+                    'app.tools.custom_analysis_parser',
                 ],
                 tools=[
-                    # Knowledge & Methodology (2 tools)
-                    'explainanalysismethodology',    # 23. Methodology explanations
-                    'getpersonalizedrecommendations', # 24. Personalized insights
-                    
-                    # Intervention Targeting (1 tool)
-                    'createinterventiontargetingmap' # 25. Intervention planning
+                    # Custom Analysis Tools
+                    'parsecustomanalysis',          # Parse natural language analysis requests
                 ],
-                description="Knowledge base and intervention planning tools",
-                dependencies=['geopandas', 'shapely']
+                description="Advanced analysis parsing and customization tools",
+                dependencies=['pandas', 'numpy']
             )
         }
     

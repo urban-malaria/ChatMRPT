@@ -208,6 +208,17 @@ from .complete_analysis_tools import (
     GenerateComprehensiveAnalysisSummary
 )
 
+# Data Query Tools for Conversational Access
+from .data_query_tool import (
+    ExecuteDataQuery,
+    ExploreDataSchema
+)
+
+# Variable Distribution Tools
+from .variable_distribution import (
+    VariableDistribution
+)
+
 # Methodology Explanation Tools
 # from .methodology_explanation_tools import (
 #     ExplainAnalysisMethodology
@@ -350,14 +361,15 @@ def _build_minimal_registry():
     
     # Include essential tools for basic functionality AND analysis tools
     essential_tools = [
-        'simple_greeting', 
-        'explain_concept',
         'run_complete_analysis',
         'run_composite_analysis', 
         'run_pca_analysis',
-        'gettopriskwards',
         'createvulnerabilitymap',
-        'createpcamap'
+        'createpcamap',
+        'createboxplot',
+        'createscatterplot',
+        'executedataquery',
+        'variable_distribution'
     ]
     
     # Create deferred wrapper that will load tools on first use

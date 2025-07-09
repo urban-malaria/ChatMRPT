@@ -74,28 +74,54 @@ class PCAAnalysisPipeline:
                     'data': None
                 }
             
-            # Step 1.5: Apply region-aware variable selection if no variables specified
+            # Step 1.5: Apply unified variable selection using the coordinator
+            from .variable_selection_coordinator import get_variable_coordinator
+            
+            coordinator = get_variable_coordinator(self.session_id)
+            
             if selected_variables is None:
-                logger.info("🌍 PCA PIPELINE: Applying region-aware variable selection")
-                from .region_aware_selection import apply_region_aware_selection
+                logger.info("🔄 PCA PIPELINE: Applying unified variable selection")
                 
-                region_result = apply_region_aware_selection(
+                selection_result = coordinator.get_unified_variable_selection(
                     self.raw_data, 
                     data_handler.shapefile_data,
+                    None,  # No custom variables
                     llm_manager
                 )
                 
-                if region_result['status'] == 'success':
-                    selected_variables = region_result['selected_variables']
-                    logger.info(f"🌍 PCA region-aware selection: {region_result['zone_detected']} zone, "
-                               f"{len(selected_variables)} variables selected")
+                if selection_result['status'] == 'success':
+                    selected_variables = selection_result['variables']
+                    logger.info(f"✅ PCA UNIFIED SELECTION: {selection_result['zone_detected']} zone, "
+                               f"{len(selected_variables)} variables selected via {selection_result['selection_method']}")
                 else:
-                    logger.warning(f"PCA region-aware selection failed: {region_result.get('message', 'Unknown error')}")
-                    # Fallback to all available numeric analysis variables (exclude identifiers)
-                    identifier_columns = ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
-                    selected_variables = [col for col in self.raw_data.columns 
-                                        if col not in identifier_columns and 
-                                        pd.api.types.is_numeric_dtype(self.raw_data[col])]
+                    logger.error(f"❌ PCA UNIFIED SELECTION FAILED: {selection_result.get('message', 'Unknown error')}")
+                    return {
+                        'status': 'error',
+                        'message': f"PCA variable selection failed: {selection_result.get('message', 'Unknown error')}",
+                        'data': None
+                    }
+            else:
+                # User provided custom variables - validate through coordinator
+                logger.info("🔄 PCA PIPELINE: Validating user-provided variables through coordinator")
+                
+                selection_result = coordinator.get_unified_variable_selection(
+                    self.raw_data, 
+                    data_handler.shapefile_data,
+                    selected_variables,  # Custom variables
+                    llm_manager
+                )
+                
+                if selection_result['status'] == 'success':
+                    # Update selected_variables with validated set
+                    selected_variables = selection_result['variables']
+                    logger.info(f"✅ PCA CUSTOM VARIABLES VALIDATED: {len(selected_variables)} variables approved")
+                else:
+                    logger.error(f"❌ PCA CUSTOM VARIABLES VALIDATION FAILED: {selection_result.get('message', 'Unknown error')}")
+                    return {
+                        'status': 'error',
+                        'message': f"PCA custom variable validation failed: {selection_result.get('message', 'Unknown error')}",
+                        'data': None
+                    }
             
             # Step 2: Clean and prepare data for PCA
             if not self._clean_and_prepare_data(selected_variables):
@@ -512,6 +538,9 @@ class PCAAnalysisPipeline:
             data_handler.pca_model = self.pca_model
             data_handler.pca_explained_variance = self.explained_variance
             data_handler.pca_variable_importance = self.variable_importance
+            
+            # Store variables used for PCA (for comparison with composite method)
+            data_handler.pca_variables_used = list(self.cleaned_data.columns[:-1])  # Exclude WardName
             
             # Transform PCA rankings to expected format for vulnerability maps
             # The map expects 'overall_rank' and 'vulnerability_category' columns

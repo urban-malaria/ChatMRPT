@@ -124,25 +124,13 @@ def create_app(config_name=None):
     
     init_services(app)
     
-    # --- Initialize Unified Memory System ---
-    # Disabled for development - enable in production with --preload
+    # --- Memory System Removed ---
+    # Using simpler in-memory conversation tracking in request_interpreter.py
+    # Complex unified memory system removed for simplicity and performance
     if config_name == 'production':
-        try:
-            from .core.unified_memory import init_unified_memory
-            memory_manager = init_unified_memory(app)
-            app.logger.info("✅ Unified memory system initialized successfully")
-            
-            # Log memory system status
-            if memory_manager.enabled:
-                app.logger.info("🧠 Memory features: Vector search, conversation tracking, analysis context")
-            else:
-                app.logger.warning("⚠️  Memory system disabled - falling back to basic mode")
-                
-        except Exception as e:
-            app.logger.error(f"❌ Failed to initialize unified memory system: {e}")
-            app.logger.warning("Continuing without advanced memory features")
+        app.logger.info("🧠 Using lightweight conversation tracking")
     else:
-        app.logger.info("🚀 Development mode - Memory system disabled for faster startup")
+        app.logger.info("🚀 Development mode - Using in-memory conversation tracking")
     
     # --- Register Blueprints ---
     from .web import admin_bp, register_all_blueprints

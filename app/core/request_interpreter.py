@@ -36,6 +36,10 @@ class RequestInterpreter:
         # Initialize tiered tool loading system
         from .tiered_tool_loader import get_tiered_tool_loader
         self.tiered_loader = get_tiered_tool_loader()
+        
+        # Initialize conversational data access system
+        from app.services.conversational_data_access import get_conversational_data_access
+        self.conversational_data_access = None  # Will be initialized per session
     
     def process_message(self, user_message: str, session_id: str) -> Dict[str, Any]:
         """Main conversational processing - single method with function calling."""
@@ -379,9 +383,14 @@ class RequestInterpreter:
         return context
     
     def _build_conversational_prompt(self, session_context: Dict) -> str:
-        """Build the new conversational system prompt with data schema context (py-sidebot approach)."""
+        """Build the new conversational system prompt with comprehensive data access."""
         
-        # Core identity and expertise
+        # Check if we have conversational data access
+        if session_context.get('conversational_data_access') and self.conversational_data_access:
+            # Use enhanced conversational prompt with full data schema
+            return self.conversational_data_access.build_conversational_prompt(session_context)
+        
+        # Fallback to standard prompt
         identity_section = """You are ChatMRPT, a malaria epidemiologist and statistician embedded in a specialized urban microstratification platform powered by GPT-4o.
 
 ## Your Expertise
@@ -787,6 +796,10 @@ Based on typical requests, you help with:
                 function_name = response['function_call']['name']
                 function_args = json.loads(response['function_call']['arguments'])
                 
+                # Enhanced: Parse custom analysis variables from natural language
+                if function_name in ['run_complete_analysis', 'run_composite_analysis', 'run_pca_analysis']:
+                    function_args = self._enhance_analysis_arguments(function_args, user_message, session_id)
+                
                 logger.info(f"Executing function: {function_name} with args: {function_args}")
                 
                 # Execute tool
@@ -845,6 +858,55 @@ Based on typical requests, you help with:
                 'response': f'I encountered an issue processing your request: {str(e)}',
                 'visualizations': []
             }
+    
+    def _enhance_analysis_arguments(self, function_args: Dict, user_message: str, session_id: str) -> Dict:
+        """Enhance analysis function arguments with intelligent variable parsing."""
+        try:
+            from ..tools.custom_analysis_parser import parse_custom_analysis
+            from flask import session
+            
+            # Get available variables from session data
+            available_vars = []
+            if hasattr(self, 'data_service') and self.data_service:
+                data_handler = self.data_service.get_data_handler(session_id)
+                if data_handler and hasattr(data_handler, 'cleaned_data') and data_handler.cleaned_data is not None:
+                    available_vars = list(data_handler.cleaned_data.columns)
+            
+            if not available_vars:
+                # Try to get from session
+                available_vars = session.get('available_variables', [])
+            
+            if available_vars:
+                # Parse custom analysis request
+                parse_result = parse_custom_analysis(user_message, available_vars)
+                
+                if parse_result['is_custom_request']:
+                    logger.info(f"🎯 Custom analysis detected with confidence: {parse_result['confidence']:.0%}")
+                    
+                    # Update function arguments based on parsing results
+                    if parse_result['unified_variables']:
+                        # Same variables for both methods
+                        if 'composite_variables' in function_args or 'variables' in function_args:
+                            function_args['composite_variables'] = parse_result['unified_variables']
+                        if 'pca_variables' in function_args:
+                            function_args['pca_variables'] = parse_result['unified_variables']
+                        if 'variables' in function_args:
+                            function_args['variables'] = parse_result['unified_variables']
+                    else:
+                        # Method-specific variables
+                        if parse_result['composite_variables'] and 'composite_variables' in function_args:
+                            function_args['composite_variables'] = parse_result['composite_variables']
+                        if parse_result['composite_variables'] and 'variables' in function_args:
+                            function_args['variables'] = parse_result['composite_variables']
+                        if parse_result['pca_variables'] and 'pca_variables' in function_args:
+                            function_args['pca_variables'] = parse_result['pca_variables']
+                    
+                    logger.info(f"🔧 Enhanced arguments: {function_args}")
+            
+        except Exception as e:
+            logger.warning(f"Could not enhance analysis arguments: {e}")
+        
+        return function_args
     
     def _is_confirmation_message(self, user_message: str) -> bool:
         """Check if user message is a confirmation for running analysis."""
@@ -1311,18 +1373,25 @@ Provide helpful, conversational responses about malaria analysis and public heal
             'session_id': session_id,
             'conversation_history': self.conversation_history.get(session_id, []),
             'data_schema': None,
-            'current_data': None
+            'current_data': None,
+            'conversational_data_access': True
         }
         
-        # Add data schema context (py-sidebot approach)
+        # Initialize conversational data access for this session
         try:
-            data_handler = self.data_service.get_handler(session_id)
-            if data_handler and hasattr(data_handler, 'df') and data_handler.df is not None:
-                # Generate data schema like py-sidebot
-                context['data_schema'] = self._generate_data_schema(data_handler.df)
-                context['current_data'] = 'CSV data loaded with shapefile'
+            from app.services.conversational_data_access import get_conversational_data_access
+            self.conversational_data_access = get_conversational_data_access(session_id, self.llm_manager)
+            
+            # Get comprehensive data schema
+            schema = self.conversational_data_access.generate_comprehensive_schema()
+            if 'error' not in schema:
+                context['data_schema'] = schema
+                context['current_data'] = f"Dataset with {schema['dataset_info']['total_rows']} rows, {schema['dataset_info']['total_columns']} columns"
+                context['analysis_stage'] = schema['dataset_info']['stage']
+            else:
+                context['data_error'] = schema['error']
         except Exception as e:
-            logger.debug(f"Could not get data context: {e}")
+            logger.debug(f"Could not get conversational data context: {e}")
         
         return context
     
@@ -1383,3 +1452,4 @@ Provide helpful, conversational responses about malaria analysis and public heal
             # Fallback explanation
             viz_name = viz_type.replace('_', ' ').title() if viz_type else 'Visualization'
             return f"📊 **{viz_name} Created** - This visualization shows your malaria risk analysis results to guide intervention planning."
+    
