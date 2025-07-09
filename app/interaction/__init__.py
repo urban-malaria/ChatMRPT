@@ -182,10 +182,10 @@ class InteractionLogger:
                                                            data_summary, visual_elements, patterns_detected)
     
     def log_llm_interaction(self, session_id, prompt_type, prompt, prompt_context=None, 
-                           response=None, tokens_used=None, latency=None):
+                           response=None, tokens_used=None, latency=None, enhanced_timing=None):
         """Log an interaction with the LLM"""
         return self.event_logger.log_llm_interaction(session_id, prompt_type, prompt, prompt_context,
-                                                    response, tokens_used, latency)
+                                                    response, tokens_used, latency, enhanced_timing)
     
     def log_explanation(self, session_id, entity_type, entity_name, question_type, 
                        question, explanation, context_used=None, llm_interaction_id=None):

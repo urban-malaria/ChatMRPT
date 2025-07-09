@@ -40,6 +40,73 @@ class APIClient {
     }
 
     /**
+     * Send message with streaming response (ChatGPT-like UX)
+     * @param {string} message - The message to send
+     * @param {string} language - Language code
+     * @param {Function} onChunk - Callback for each chunk of response
+     * @param {Function} onComplete - Callback when streaming completes
+     * @returns {EventSource} Event source for streaming
+     */
+    sendMessageStreaming(message, language = 'en', onChunk, onComplete) {
+        console.log('🔥 API CLIENT: sendMessageStreaming called');
+        // First, send the message to initiate streaming
+        fetch('/send_message_streaming', {
+            method: 'POST',
+            headers: this.defaultHeaders,
+            body: JSON.stringify({
+                message: message,
+                language: language
+            })
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Read the streaming response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            const processChunk = async () => {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    if (onComplete) onComplete();
+                    return;
+                }
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (onChunk) onChunk(data);
+                            
+                            if (data.done) {
+                                if (onComplete) onComplete(data);
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing streaming chunk:', e);
+                        }
+                    }
+                }
+                
+                // Continue reading
+                processChunk();
+            };
+            
+            processChunk();
+        }).catch(error => {
+            console.error('Error with streaming message:', error);
+            if (onComplete) onComplete({ error: error.message });
+        });
+    }
+
+    /**
      * Upload files to backend
      * @param {File|null} csvFile - CSV/Excel file
      * @param {File|null} shapeFile - Shapefile ZIP

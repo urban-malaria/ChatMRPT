@@ -296,7 +296,7 @@ STYLE: Clear, professional, friendly. Provide direct explanations for "what is" 
                 'response': final_content,
                 'tool_calls': tool_calls
             }
-            
+        
         except Exception as e:
             error_message = f"Error in tool calling: {str(e)}"
             logger.error(error_message)
@@ -309,8 +309,273 @@ STYLE: Clear, professional, friendly. Provide direct explanations for "what is" 
                 )
             
             return {
-                'response': f"I encountered an error: {str(e)}",
+                'response': f"I apologize, but I encountered an error: {str(e)}",
                 'tool_calls': []
+            }
+    
+    def generate_with_functions(self, messages: List[Dict], system_prompt: str, 
+                              functions: List[Dict], temperature: float = 0.7, 
+                              session_id: Optional[str] = None) -> Dict[str, Any]:
+        """Generate response with OpenAI function calling - new conversational approach."""
+        if not self.client:
+            if not self.api_key:
+                return {'content': "Error: No API key available", 'function_call': None}
+            try:
+                self.client = openai.OpenAI(api_key=self.api_key)
+            except Exception as e:
+                return {'content': f"Error initializing client: {str(e)}", 'function_call': None}
+        
+        # Build complete messages array
+        complete_messages = [{"role": "system", "content": system_prompt}]
+        complete_messages.extend(messages)
+        
+        # Convert functions to OpenAI format
+        openai_functions = []
+        for func in functions:
+            openai_functions.append({
+                "type": "function",
+                "function": {
+                    "name": func["name"],
+                    "description": func["description"],
+                    "parameters": func["parameters"]
+                }
+            })
+        
+        start_time = time.time()
+        
+        try:
+            # Track detailed LLM timing
+            api_call_start = time.time()
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=complete_messages,
+                tools=openai_functions,
+                tool_choice="auto",
+                temperature=temperature,
+                max_tokens=1000
+            )
+            api_call_duration = time.time() - api_call_start
+            
+            assistant_message = response.choices[0].message
+            
+            # Check if function was called
+            if assistant_message.tool_calls:
+                # Return the first function call (simplified for now)
+                first_tool_call = assistant_message.tool_calls[0]
+                
+                # Log the interaction with enhanced timing
+                if self.interaction_logger and session_id:
+                    latency = time.time() - start_time
+                    self.interaction_logger.log_llm_interaction(
+                        session_id=session_id,
+                        prompt_type="function_calling",
+                        prompt=messages[-1].get('content', ''),
+                        prompt_context=system_prompt,
+                        response=f"Function call: {first_tool_call.function.name}",
+                        tokens_used=response.usage.total_tokens if hasattr(response, 'usage') else None,
+                        latency=latency,
+                        enhanced_timing={
+                            'api_call_duration_ms': api_call_duration * 1000,
+                            'total_processing_ms': latency * 1000,
+                            'overhead_ms': (latency - api_call_duration) * 1000,
+                            'model_used': self.model,
+                            'prompt_tokens': response.usage.prompt_tokens if hasattr(response, 'usage') else None,
+                            'completion_tokens': response.usage.completion_tokens if hasattr(response, 'usage') else None,
+                            'tokens_per_second': response.usage.total_tokens / latency if hasattr(response, 'usage') and latency > 0 else None
+                        }
+                    )
+                
+                return {
+                    'content': assistant_message.content,
+                    'function_call': {
+                        'name': first_tool_call.function.name,
+                        'arguments': first_tool_call.function.arguments
+                    }
+                }
+            else:
+                # No function call, return conversational response
+                
+                # Log the interaction with enhanced timing
+                if self.interaction_logger and session_id:
+                    latency = time.time() - start_time
+                    self.interaction_logger.log_llm_interaction(
+                        session_id=session_id,
+                        prompt_type="conversational",
+                        prompt=messages[-1].get('content', ''),
+                        prompt_context=system_prompt,
+                        response=assistant_message.content,
+                        tokens_used=response.usage.total_tokens if hasattr(response, 'usage') else None,
+                        latency=latency,
+                        enhanced_timing={
+                            'api_call_duration_ms': api_call_duration * 1000,
+                            'total_processing_ms': latency * 1000,
+                            'overhead_ms': (latency - api_call_duration) * 1000,
+                            'model_used': self.model,
+                            'prompt_tokens': response.usage.prompt_tokens if hasattr(response, 'usage') else None,
+                            'completion_tokens': response.usage.completion_tokens if hasattr(response, 'usage') else None,
+                            'tokens_per_second': response.usage.total_tokens / latency if hasattr(response, 'usage') and latency > 0 else None
+                        }
+                    )
+                
+                return {
+                    'content': assistant_message.content,
+                    'function_call': None
+                }
+                
+        except Exception as e:
+            error_message = f"Error in function calling: {str(e)}"
+            logger.error(error_message)
+            
+            if self.interaction_logger and session_id:
+                self.interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type="function_calling_error",
+                    error_message=str(e)
+                )
+            
+            return {
+                'content': f"I apologize, but I encountered an error: {str(e)}",
+                'function_call': None
+            }
+    
+    def generate_with_functions_streaming(self, messages: List[Dict], system_prompt: str, 
+                                        functions: List[Dict], temperature: float = 0.7, 
+                                        session_id: Optional[str] = None):
+        """Generate streaming response with OpenAI function calling for better UX."""
+        if not self.client:
+            if not self.api_key:
+                yield {'content': "Error: No API key available", 'function_call': None, 'done': True}
+                return
+            try:
+                self.client = openai.OpenAI(api_key=self.api_key)
+            except Exception as e:
+                yield {'content': f"Error initializing client: {str(e)}", 'function_call': None, 'done': True}
+                return
+        
+        # Build complete messages array
+        complete_messages = [{"role": "system", "content": system_prompt}]
+        complete_messages.extend(messages)
+        
+        # Convert functions to OpenAI format
+        openai_functions = []
+        for func in functions:
+            openai_functions.append({
+                "type": "function",
+                "function": {
+                    "name": func["name"],
+                    "description": func["description"],
+                    "parameters": func["parameters"]
+                }
+            })
+        
+        start_time = time.time()
+        
+        try:
+            # Create streaming response
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=complete_messages,
+                tools=openai_functions,
+                tool_choice="auto",
+                temperature=temperature,
+                max_tokens=1000,
+                stream=True
+            )
+            
+            # Collect chunks for function calls
+            collected_chunks = []
+            collected_messages = []
+            
+            # Process streaming chunks
+            for chunk in response:
+                collected_chunks.append(chunk)
+                
+                # Check if this chunk has content
+                if chunk.choices[0].delta.content:
+                    yield {
+                        'content': chunk.choices[0].delta.content,
+                        'function_call': None,
+                        'done': False
+                    }
+                
+                # Check if function call is starting
+                if chunk.choices[0].delta.tool_calls:
+                    # Function call detected - we need to pause streaming
+                    break
+            
+            # Reconstruct the full message from collected chunks
+            full_message = ""
+            tool_calls = []
+            
+            for chunk in collected_chunks:
+                if chunk.choices[0].delta.content:
+                    full_message += chunk.choices[0].delta.content
+                if chunk.choices[0].delta.tool_calls:
+                    tool_calls.extend(chunk.choices[0].delta.tool_calls)
+            
+            # If function was called, handle it
+            if tool_calls:
+                # Get the first tool call
+                first_tool_call = tool_calls[0]
+                
+                # Log the interaction
+                if self.interaction_logger and session_id:
+                    latency = time.time() - start_time
+                    self.interaction_logger.log_llm_interaction(
+                        session_id=session_id,
+                        prompt_type="streaming_function_calling",
+                        prompt=messages[-1].get('content', ''),
+                        prompt_context=system_prompt,
+                        response=f"Function call: {first_tool_call.function.name}",
+                        tokens_used=None,
+                        latency=latency
+                    )
+                
+                yield {
+                    'content': full_message,
+                    'function_call': {
+                        'name': first_tool_call.function.name,
+                        'arguments': first_tool_call.function.arguments
+                    },
+                    'done': True
+                }
+            else:
+                # No function call, just conversational response
+                
+                # Log the interaction
+                if self.interaction_logger and session_id:
+                    latency = time.time() - start_time
+                    self.interaction_logger.log_llm_interaction(
+                        session_id=session_id,
+                        prompt_type="streaming_conversational",
+                        prompt=messages[-1].get('content', ''),
+                        prompt_context=system_prompt,
+                        response=full_message,
+                        tokens_used=None,
+                        latency=latency
+                    )
+                
+                yield {
+                    'content': full_message,
+                    'function_call': None,
+                    'done': True
+                }
+                
+        except Exception as e:
+            error_message = f"Error in streaming function calling: {str(e)}"
+            logger.error(error_message)
+            
+            if self.interaction_logger and session_id:
+                self.interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type="streaming_function_calling_error",
+                    error_message=str(e)
+                )
+            
+            yield {
+                'content': f"I apologize, but I encountered an error: {str(e)}",
+                'function_call': None,
+                'done': True
             }
     
     def _resolve_tool_dynamically(self, tool_name: str):

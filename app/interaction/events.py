@@ -484,7 +484,7 @@ def log_visualization_metadata(db_manager: DatabaseManager, session_id, viz_type
 
 
 def log_llm_interaction(db_manager: DatabaseManager, session_id, prompt_type, prompt, prompt_context=None, 
-                       response=None, tokens_used=None, latency=None):
+                       response=None, tokens_used=None, latency=None, enhanced_timing=None):
     """
     Log an interaction with the LLM
     
@@ -497,6 +497,7 @@ def log_llm_interaction(db_manager: DatabaseManager, session_id, prompt_type, pr
         response: The response from the LLM
         tokens_used: Number of tokens used in the interaction
         latency: Time taken for the response (seconds)
+        enhanced_timing: Detailed timing breakdown (dict)
         
     Returns:
         str: interaction_id or None if error
@@ -510,14 +511,15 @@ def log_llm_interaction(db_manager: DatabaseManager, session_id, prompt_type, pr
         
         # Convert context to JSON if needed
         context_json = json.dumps(prompt_context) if prompt_context is not None else None
+        enhanced_timing_json = json.dumps(enhanced_timing) if enhanced_timing is not None else None
         
         cursor.execute('''
         INSERT INTO llm_interactions 
         (interaction_id, session_id, timestamp, prompt_type, prompt, 
-         prompt_context, response, tokens_used, latency)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         prompt_context, response, tokens_used, latency, enhanced_timing)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (interaction_id, session_id, now, prompt_type, prompt, 
-             context_json, response, tokens_used, latency))
+             context_json, response, tokens_used, latency, enhanced_timing_json))
         
         conn.commit()
         conn.close()
@@ -640,10 +642,10 @@ class EventLogger:
                                          data_summary, visual_elements, patterns_detected)
     
     def log_llm_interaction(self, session_id, prompt_type, prompt, prompt_context=None, 
-                           response=None, tokens_used=None, latency=None):
+                           response=None, tokens_used=None, latency=None, enhanced_timing=None):
         """Log LLM interaction"""
         return log_llm_interaction(self.db_manager, session_id, prompt_type, prompt, prompt_context,
-                                  response, tokens_used, latency)
+                                  response, tokens_used, latency, enhanced_timing)
     
     def log_explanation(self, session_id, entity_type, entity_name, question_type, 
                        question, explanation, context_used=None, llm_interaction_id=None):

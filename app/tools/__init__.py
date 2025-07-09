@@ -169,12 +169,7 @@ from .intervention_targeting_tools import (
 )
 
 # Phase 5: SCENARIO_SIMULATION tools
-from .scenario_simulation_tools import (
-    SimulateCoverageIncrease,
-    SimulateResourceReallocation,
-    SimulateClimateChange,
-    CompareMultipleScenarios
-)
+# scenario_simulation_tools removed during streamlining
 
 # Phase 4: SMART_KNOWLEDGE tools (data-driven insights)
 from .smart_knowledge_tools import (
@@ -185,25 +180,25 @@ from .smart_knowledge_tools import (
 )
 
 # Data Preparation Tools
-from .data_preparation_tools import (
-    CreateUnifiedDataset,
-    CheckDataReadiness
-)
+# from .data_preparation_tools import (
+#     CreateUnifiedDataset,
+#     CheckDataReadiness
+# )
 
 # Advanced Mapping Tools
-from .advanced_mapping_tools import (
-    CreateMultiLayerRiskMap,
-    CreateEnvironmentalDriverMap
-)
+# from .advanced_mapping_tools import (
+#     CreateMultiLayerRiskMap,
+#     CreateEnvironmentalDriverMap
+# )
 
 from .settlement_intervention_tools import (
     CreateSettlementAnalysisMap,
     CreateInterventionTargetingMap
 )
 
-from .spatial_autocorrelation_tools import (
-    CreateSpatialAutocorrelationMap
-)
+# from .spatial_autocorrelation_tools import (
+#     CreateSpatialAutocorrelationMap
+# )
 
 # Complete Analysis Tools - Coordinated Dual-Method Workflow
 from .complete_analysis_tools import (
@@ -214,9 +209,9 @@ from .complete_analysis_tools import (
 )
 
 # Methodology Explanation Tools
-from .methodology_explanation_tools import (
-    ExplainAnalysisMethodology
-)
+# from .methodology_explanation_tools import (
+#     ExplainAnalysisMethodology
+# )
 
 # Enhanced Environmental Risk Analysis Tools
 # from .environmental_risk_tools import (

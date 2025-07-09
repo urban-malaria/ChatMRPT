@@ -12,8 +12,9 @@ This module contains the analysis-related routes for the ChatMRPT web applicatio
 import logging
 import time
 import traceback
+import json
 from datetime import datetime
-from flask import Blueprint, session, request, current_app, jsonify
+from flask import Blueprint, session, request, current_app, jsonify, Response
 
 from ...core.decorators import handle_errors, log_execution_time, validate_session
 from ...core.exceptions import ValidationError
@@ -301,6 +302,9 @@ def send_message():
             )
             
             # Log comprehensive response timing for demo analytics
+            detailed_timing = response.get('timing_breakdown', {})
+            performance_metrics = response.get('performance_metrics', {})
+            
             interaction_logger.log_analysis_event(
                 session_id=session_id,
                 event_type='response_timing',
@@ -313,7 +317,22 @@ def send_message():
                     'message_length': len(user_message),
                     'response_length': len(ai_response_content),
                     'complexity_score': len(response.get('tools_used', [])) * 2 + len(response.get('visualizations', [])),
-                    'endpoint': '/send_message'
+                    'endpoint': '/send_message',
+                    # Enhanced timing breakdown
+                    'timing_breakdown': {
+                        'context_retrieval_ms': detailed_timing.get('context_retrieval', 0) * 1000,
+                        'prompt_building_ms': detailed_timing.get('prompt_building', 0) * 1000,
+                        'llm_processing_ms': detailed_timing.get('llm_processing', 0) * 1000,
+                        'tool_execution_ms': detailed_timing.get('tool_execution', 0) * 1000,
+                        'response_formatting_ms': detailed_timing.get('response_formatting', 0) * 1000,
+                        'total_duration_ms': detailed_timing.get('total_duration', 0) * 1000
+                    },
+                    'performance_metrics': {
+                        'llm_percentage': performance_metrics.get('llm_percentage', 0),
+                        'tool_percentage': performance_metrics.get('tool_percentage', 0),
+                        'context_percentage': performance_metrics.get('context_percentage', 0),
+                        'bottleneck': performance_metrics.get('bottleneck', 'unknown')
+                    }
                 },
                 success=True
             )
@@ -433,6 +452,162 @@ def send_message():
         return jsonify({
             'status': 'error',
             'message': f'Error processing message: {str(e)}'
+        }), 500
+
+
+@analysis_bp.route('/send_message_streaming', methods=['POST'])
+@validate_session
+@handle_errors
+@log_execution_time
+def send_message_streaming():
+    """
+    Handle chat messages with streaming response for better UX.
+    """
+    print("🔥 STREAMING MESSAGE RECEIVED - USING NEW STREAMING SYSTEM!")
+    import sys
+    sys.stdout.flush()
+    
+    try:
+        # Get the message from the request
+        data = request.json
+        user_message = data.get('message', '')
+        if not user_message: 
+            raise ValidationError('No message provided')
+
+        # Get session ID
+        session_id = session.get('session_id')
+        
+        # Get Request Interpreter service
+        try:
+            request_interpreter = current_app.services.request_interpreter
+            if request_interpreter is None:
+                logger.error("Request Interpreter not available")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Request processing system not available'
+                }), 500
+        except Exception as e:
+            logger.error(f"Error getting Request Interpreter: {str(e)}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Error accessing request processing system'
+            }), 500
+        
+        # Capture Flask context for use in generator
+        app = current_app._get_current_object()
+        flask_session = dict(session)  # Copy session data
+        
+        # Use streaming response
+        def generate():
+            try:
+                with app.app_context():
+                    logger.info(f"Processing streaming message: '{user_message[:100]}...'")
+                    
+                    # Use fallback method directly to avoid Flask context issues
+                    # The regular process_message has Flask session dependencies that fail in streaming
+                    logger.info("Using simple response method for streaming (avoids Flask context issues)")
+                    result = request_interpreter._generate_simple_response(user_message, session_id)
+                    
+                    # Simulate streaming by breaking response into chunks
+                    response_text = result.get('response', '')
+                    words = response_text.split()
+                    chunk_size = 5  # words per chunk
+                    
+                    for i in range(0, len(words), chunk_size):
+                        chunk_words = words[i:i + chunk_size]
+                        chunk_text = ' '.join(chunk_words)
+                        
+                        chunk = {
+                            'content': chunk_text + (' ' if i + chunk_size < len(words) else ''),
+                            'status': 'streaming'
+                        }
+                        chunk_json = json.dumps(chunk)
+                        logger.debug(f"Sending chunk: {chunk_json}")
+                        yield f"data: {chunk_json}\n\n"
+                        
+                        # Small delay for better UX
+                        import time
+                        time.sleep(0.1)
+                    
+                    # Send final chunk with complete data
+                    final_chunk = {
+                        'content': '',  # No additional content
+                        'status': result.get('status', 'success'),
+                        'visualizations': result.get('visualizations', []),
+                        'tools_used': result.get('tools_used', []),
+                        'done': True
+                    }
+                    
+                    # Send final chunk
+                    final_json = json.dumps(final_chunk)
+                    logger.debug(f"Sending final chunk: {final_json}")
+                    yield f"data: {final_json}\n\n"
+                    
+                    # Log completion
+                    tools_used = result.get('tools_used', [])
+                    if any(tool in tools_used for tool in ['run_composite_analysis', 'run_pca_analysis', 'runcompleteanalysis']):
+                        if 'runcompleteanalysis' in tools_used:
+                            analysis_type = 'dual_method'
+                        elif 'run_composite_analysis' in tools_used:
+                            analysis_type = 'composite'
+                        else:
+                            analysis_type = 'pca'
+                        logger.info(f"Session {session_id}: Analysis completed via streaming ({analysis_type})")
+                    
+                    # Log completion with enhanced timing
+                    if hasattr(app, 'services') and app.services.interaction_logger:
+                        interaction_logger = app.services.interaction_logger
+                        detailed_timing = result.get('timing_breakdown', {})
+                        performance_metrics = result.get('performance_metrics', {})
+                        
+                        interaction_logger.log_message(
+                            session_id=session_id,
+                            sender='assistant',
+                            content=response_text,
+                            intent=result.get('intent_type'),
+                            entities={
+                                'streaming': True,
+                                'tools_used': tools_used,
+                                'status': result.get('status', 'success'),
+                                'timing_breakdown': {
+                                    'context_retrieval_ms': detailed_timing.get('context_retrieval', 0) * 1000,
+                                    'prompt_building_ms': detailed_timing.get('prompt_building', 0) * 1000,
+                                    'llm_processing_ms': detailed_timing.get('llm_processing', 0) * 1000,
+                                    'tool_execution_ms': detailed_timing.get('tool_execution', 0) * 1000,
+                                    'response_formatting_ms': detailed_timing.get('response_formatting', 0) * 1000,
+                                    'total_duration_ms': detailed_timing.get('total_duration', 0) * 1000
+                                },
+                                'performance_metrics': {
+                                    'llm_percentage': performance_metrics.get('llm_percentage', 0),
+                                    'tool_percentage': performance_metrics.get('tool_percentage', 0),
+                                    'context_percentage': performance_metrics.get('context_percentage', 0),
+                                    'bottleneck': performance_metrics.get('bottleneck', 'unknown')
+                                }
+                            }
+                        )
+                            
+            except Exception as e:
+                logger.error(f"Error in streaming processing: {e}")
+                error_json = json.dumps({'content': f'Error: {str(e)}', 'status': 'error', 'done': True})
+                yield f"data: {error_json}\n\n"
+        
+        # Return streaming response with proper headers
+        response = Response(generate(), mimetype='text/event-stream')
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['Connection'] = 'keep-alive'
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    
+    except ValidationError as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+    except Exception as e:
+        logger.error(f"Error in streaming endpoint: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f'Error processing streaming message: {str(e)}'
         }), 500
 
 

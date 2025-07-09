@@ -119,6 +119,7 @@ class CreateVulnerabilityMap(BaseTool):
             elif 'composite_category' in gdf.columns:
                 category_counts = gdf['composite_category'].value_counts().to_dict()
             
+            
             result_data = {
                 'classification_method': self.classification_method,
                 'risk_categories': self.risk_categories,
@@ -139,6 +140,7 @@ class CreateVulnerabilityMap(BaseTool):
         except Exception as e:
             logger.error(f"Error creating vulnerability map: {e}")
             return self._create_error_result(f"Vulnerability map creation failed: {str(e)}")
+    
 
 
 class CreatePCAMap(BaseTool):
@@ -221,6 +223,7 @@ class CreatePCAMap(BaseTool):
                 'std': float(gdf['pca_score'].std()),
                 'median': float(gdf['pca_score'].median())
             }
+            
             
             result_data = {
                 'color_scheme': self.color_scheme,

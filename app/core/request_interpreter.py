@@ -1,9 +1,8 @@
 """
-Request Interpreter for ChatMRPT
+Conversational Request Interpreter for ChatMRPT
 
-Central brain that parses natural language user messages into structured tool calls.
-Routes between Data Agent (session data analysis) and Knowledge Agent (explanations).
-Handles end-to-end interaction logic as outlined in the architecture.
+Clean, conversational approach using LLM's natural abilities instead of complex pattern matching.
+Inspired by py-sidebot's simple, effective design.
 """
 
 import logging
@@ -11,20 +10,18 @@ import json
 import time
 from typing import Dict, Any, List, Optional
 from flask import current_app
-from difflib import get_close_matches
 
-# Import unified memory system
-from app.core.unified_memory import get_unified_memory, MemoryType, MemoryPriority
+# Removed complex unified memory system - using py-sidebot lightweight approach
 
 logger = logging.getLogger(__name__)
 
 
 class RequestInterpreter:
     """
-    Central Request Interpreter for ChatMRPT
+    Conversational Request Interpreter for ChatMRPT
     
-    Parses natural language into structured tool calls and routes requests
-    to appropriate agents (Data Agent vs Knowledge Agent).
+    Uses LLM's natural conversation abilities with function calling
+    instead of complex pattern matching and hardcoded rules.
     """
     
     def __init__(self, llm_manager, data_service, analysis_service, visualization_service):
@@ -33,848 +30,812 @@ class RequestInterpreter:
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
         
-        # Initialize unified memory system (only in production)
-        if current_app.config.get('ENV') == 'production':
-            self.memory = get_unified_memory()
-        else:
-            self.memory = None
-            logger.info("🚀 Memory system disabled in development mode")
+        # Using py-sidebot lightweight approach - no complex memory system
+        self.conversation_history = {}  # Simple in-memory conversation storage
         
-        # Initialize tiered tool loading system (ONLY system needed)
+        # Initialize tiered tool loading system
         from .tiered_tool_loader import get_tiered_tool_loader
         self.tiered_loader = get_tiered_tool_loader()
-        
-        # Common ambiguous phrases that need clarification
-        self.ambiguous_patterns = {
-            'analysis': ['composite analysis', 'PCA analysis', 'statistical analysis', 'spatial analysis'],
-            'ranking': ['composite rankings', 'PCA rankings', 'vulnerability rankings'],
-            'map': ['vulnerability map', 'risk map', 'choropleth map'],
-            'top': ['top vulnerable wards', 'highest risk areas', 'most affected regions'],
-            'data': ['upload data', 'analyze data', 'view data', 'data summary']
+    
+    def process_message(self, user_message: str, session_id: str) -> Dict[str, Any]:
+        """Main conversational processing - single method with function calling."""
+        start_time = time.time()
+        timing_breakdown = {
+            'total_start': start_time,
+            'context_retrieval': 0,
+            'prompt_building': 0,
+            'llm_processing': 0,
+            'tool_execution': 0,
+            'response_formatting': 0
         }
         
-        # Intelligent defaults for common ambiguous requests (simplified)
-        self.intelligent_defaults = {
-            ('analysis', 'ranking', 'top wards', 'risk assessment'): {
-                'default_tools': ['gettopriskwards'],  # Use tiered loader tool
-                'default_params': {'top_n': 10},
-                'message': "Running vulnerability analysis by default"
-            },
-            ('vulnerable areas',): {
-                'default_tools': ['gettopriskwards'], 
-                'default_params': {'top_n': 15},
-                'message': "Showing top vulnerable areas by default"
-            }
-        }
-
-    # Removed redundant legacy tool registry methods - using tiered loader only
-
-    def parse_request(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Parse user request into structured intent using tiered tool loader."""
         try:
+            logger.info(f"Processing conversational message for session {session_id}: {user_message[:100]}...")
+            
             # Check for analysis permission workflow
             from flask import session
             if session.get('should_ask_analysis_permission', False):
                 if self._is_confirmation_message(user_message):
                     # Clear the flag and trigger analysis
                     session['should_ask_analysis_permission'] = False
-                    return self._create_automatic_analysis_intent()
-            
-            # Get available tools from tiered loader only
-            available_tool_names = self.tiered_loader.get_all_available_tool_names()
-            tool_names = set(available_tool_names)
-            
-            # Get basic tool schemas from tiered loader (avoids 30-second delay from heavy registry)
-            tool_schemas = self.tiered_loader.get_basic_tool_schemas()
-            
-            # Create comprehensive tool documentation
-            tool_documentation = self._generate_enhanced_tool_documentation_from_schemas(tool_schemas)
-            
-            # Get session context for better understanding
-            from flask import session
-            session_context = {
-                'data_uploaded': session.get('csv_loaded', False) and session.get('shapefile_loaded', False),
-                'analysis_complete': session.get('analysis_complete', False),
-                'analysis_type': session.get('analysis_type', 'none'),
-                'variables_used': session.get('variables_used', [])
-            }
-            
-            # Create context-aware system prompt
-            context_info = ""
-            if session_context['data_uploaded']:
-                context_info += "✅ User has uploaded CSV and shapefile data.\n"
-                context_info += "✅ Data is available for analysis and querying.\n"
-            if session_context['analysis_complete']:
-                context_info += f"✅ User has completed {session_context['analysis_type']} analysis.\n"
-                context_info += "✅ Analysis results and unified dataset are available for querying.\n"
-                context_info += "⚠️  User may be asking follow-up questions about previous analysis results.\n"
-                context_info += "⚠️  Always use data analysis tools for questions about wards, rankings, settlements, etc.\n"
-            if session_context['variables_used']:
-                context_info += f"📊 Previous analysis used variables: {', '.join(session_context['variables_used'][:5])}.\n"
-            
-            system_prompt = f"""
-            Parse user requests into structured tool calls for ChatMRPT malaria analysis system.
-
-            SESSION CONTEXT:
-            {context_info}
-
-            AVAILABLE TOOLS AND PARAMETERS:
-            {tool_documentation}
-
-            PARAMETER VALIDATION:
-            - All tools are auto-validated using Pydantic models
-            - Required parameters MUST be provided
-            - Use exact parameter names as specified in tool schemas
-            - For ward-specific queries, use the ward_name parameter where available
-
-            Return JSON in this EXACT format:
-            {{
-                "intent_type": "data_analysis|knowledge|system",
-                "primary_goal": "brief description",
-                "tool_calls": [
-                    {{
-                        "tool_name": "exact_tool_name",
-                        "parameters": {{"param1": "value1"}},
-                        "reasoning": "why this tool"
-                    }}
-                ],
-                "requires_session_data": true|false,
-                "routing": "data_agent|knowledge_agent",
-                "direct_response": "For knowledge questions, provide explanation here"
-            }}
-
-            INTELLIGENT CLASSIFICATION RULES:
-            
-            CRITICAL PRIORITY: METHODOLOGY EXPLANATIONS always take precedence over analysis execution!
-            
-            🚨 METHODOLOGY EXPLANATION DETECTION (HIGHEST PRIORITY):
-            If user asks about "explain", "how does X work", "methodology", "methods", "composite", "PCA":
-            → ALWAYS use explainanalysismethodology tool first
-            → NEVER trigger analysis when user wants explanations
-            → Examples: "explain the methods", "how does composite work", "what is PCA"
-            
-            1. GREETINGS: Simple hello/hi responses
-               - Basic greetings like "hello", "hi" -> simple_greeting
-            
-            2. SYSTEM QUESTIONS: About ChatMRPT itself  
-               - "who are you", "what can you do", "tell me about yourself" -> explain_concept with concept="ChatMRPT"
-               - "help", "help me", "I need help", "what do I do" -> show_help_options
-            
-            3. KNOWLEDGE/EDUCATIONAL: Questions about malaria, health, epidemiology, statistics
-               - METHODOLOGY EXPLANATIONS: ONLY when users ask about how YOUR analysis methods worked
-                 * "explain the composite/PCA methods you used" -> explainanalysismethodology
-                 * "how did you calculate the scores" -> explainanalysismethodology
-                 * Questions about YOUR specific analysis results and methods
-               - GENERAL CONCEPTS: For statistical/epidemiological concepts, use explain_concept
-                 * "what is multicollinearity" -> explain_concept with concept="multicollinearity"
-                 * "nonlinear relationships" -> explain_concept with concept="nonlinear relationships"
-                 * "how to handle multicollinearity" -> explain_concept
-                 * General malaria knowledge -> explain_concept
-            
-            4. DATA ANALYSIS: Questions involving uploaded data, rankings, maps, comparisons
-               - Use appropriate data analysis tools
-               - For custom variable analysis, extract the variable names and pass them properly
-               
-            CRITICAL: Don't hardcode question patterns! Users ask differently. Use LLM intelligence to:
-            - Classify intent (greeting/knowledge/data analysis/system)  
-            - Extract the core concept/topic flexibly
-            - Default to explain_concept for educational questions when unsure
-            
-            DATA ANALYSIS QUERIES (never treat as greetings):
-            - "What are the top N..." -> get_composite_rankings + get_pca_rankings (both with top_n=N)
-            - "Show me the top N..." -> get_composite_rankings + get_pca_rankings (both with top_n=N)
-            - "Which wards..." -> get_composite_rankings + get_pca_rankings (top_n based on context)
-            - "How does..." -> appropriate analysis tool
-            - "top 10", "top 15", "top 20" -> extract number and use as top_n parameter
-            - "Ward X vulnerability/ranking" -> get_ward_information with ward_name="X" 
-            - "What's Kumbashi ranking" -> get_ward_information with ward_name="Kumbashi"
-            - "Top wards/highest risk/malaria burden" -> get_composite_rankings + get_pca_rankings
-            - "Show scatter plot X vs Y" -> scatter_plot with x_variable="X", y_variable="Y"
-            - Comparison questions -> call both relevant ranking tools with same top_n
-            - Visualization requests -> map to available visualization tools only
-            
-            INDIVIDUAL VULNERABILITY MAP REQUESTS:
-            - "vulnerability map for composite method/score" -> createvulnerabilitymap (individual composite map)
-            - "vulnerability map for PCA method" -> createpcamap (individual PCA map)  
-            - "show me composite vulnerability map" -> createvulnerabilitymap
-            - "show me PCA vulnerability map" -> createpcamap
-            - "composite risk map" -> createvulnerabilitymap
-            - "PCA risk map" -> createpcamap
-            
-            COMPARISON MAP REQUESTS (only when explicitly asking for comparison):
-            - "compare composite vs PCA maps" -> createmultilayerriskmap
-            - "show both methods side by side" -> createmultilayerriskmap
-            - "comparison of composite and PCA" -> createmultilayerriskmap
-            
-            SETTLEMENT ANALYSIS QUERIES:
-            - "Which settlement types..." -> Use createsettlementanalysismap or getdescriptivestatistics with settlement variables
-            - "Settlement vulnerability/risk" -> Use ward data tools and settlement analysis (createsettlementanalysismap)
-            - "Informal vs formal" -> Use createsettlementanalysismap with analysis_focus="settlement_types"
-            - "Highest malaria vulnerability" -> Use getcompositerankings with settlement context or createsettlementanalysismap
-            
-            RESOURCE ALLOCATION QUERIES:
-            - "Budget for nets/resources" -> Always use intervention targeting tools
-            - "Which wards should I prioritize" -> Use get_composite_rankings or intervention tools
-            - "Resource allocation/distribution" -> Use intervention targeting or optimization tools
-
-            CRITICAL TOP_N PARAMETER EXTRACTION:
-            - Extract numbers from user queries: "top 10" -> top_n=10, "top 15" -> top_n=15
-            - Default to top_n=10 if no number specified
-            - For comparative questions asking about both methods, call BOTH tools with SAME top_n
-            - Examples: "top 10 composite and PCA" -> get_composite_rankings(top_n=10) + get_pca_rankings(top_n=10)
-
-            CRITICAL: Questions starting with "What are", "What is the", "Which", "How", "Where", "When", "Why" 
-            that contain data terms (wards, risk, ranking, score, malaria, vulnerability) are DATA QUERIES, NOT greetings!
-
-            CUSTOM VARIABLE SELECTION PARSING:
-            - Extract custom variables from natural language patterns
-            - "run composite with pfpr, elevation, housing" -> composite_variables=["pfpr", "elevation", "housing"]
-            - "use these variables for PCA: rainfall, population" -> pca_variables=["rainfall", "population"]
-            - "analyze using pfpr and elevation for composite, rainfall for PCA" -> both parameters
-            - "run analysis with custom variables x, y, z" -> depends on context (composite or PCA)
-            - Look for keywords: "with", "using", "variables", "include", "custom"
-            - Variable names can be separated by: commas, "and", "plus", semicolons
-            - Clean variable names: strip whitespace, remove quotes, handle common variations
-
-            PARAMETER VALIDATION:
-            - Ward queries: Extract top_n from user request or default to 10
-            - Scatter plots: Use x_variable and y_variable, suggest actual column names like "composite_score", "pca_score", "population_density", "elevation"
-            - Maps: Use method="composite" or "pca" or "auto"
-            - Custom variables: Parse from natural language patterns and clean variable names
-
-            AMBIGUOUS REQUEST HANDLING:
-            When user request is vague or could mean multiple things:
-            1. If asking about "analysis" without specifying type, return empty tool_calls and set intent_type="clarification_needed"
-            2. If asking about "data" without context, return empty tool_calls and set intent_type="clarification_needed"
-            3. If mentioning tools that don't exist, return empty tool_calls and set intent_type="clarification_needed"
-            4. If parameters are missing or unclear, return empty tool_calls and set intent_type="clarification_needed"
-            
-            Example ambiguous requests that need clarification:
-            - "run analysis" (which type?)
-            - "show me the data" (what aspect?)
-            - "what about ward X" (what information?)
-            - "make a chart" (what kind?)
-            - "do the thing" (what thing?)
-
-            Only use exact tool names and parameters from the available list. If unsure, set intent_type="clarification_needed" instead of guessing.
-
-            FEW-SHOT EXAMPLES FOR PRECISE TOOL SELECTION:
-
-            Example 1:
-            User: "What are the top 10 most vulnerable wards?"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Get top 10 most vulnerable wards",
-                "tool_calls": [
-                    {{
-                        "tool_name": "getcompositerankings",
-                        "parameters": {{"top_n": 10}},
-                        "reasoning": "User wants vulnerability rankings"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-            
-            Example: Settlement Analysis
-            User: "Which settlement types have the highest malaria vulnerability?"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Analyze settlement vulnerability patterns",
-                "tool_calls": [
-                    {{
-                        "tool_name": "createsettlementanalysismap",
-                        "parameters": {{"analysis_focus": "settlement_types"}},
-                        "reasoning": "User wants settlement type vulnerability analysis"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-
-            Example: Variable Distribution
-            User: "Show me the distribution of pfpr variable"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Visualize spatial distribution of pfpr variable",
-                "tool_calls": [
-                    {{
-                        "tool_name": "variable_distribution",
-                        "parameters": {{"variable_name": "pfpr"}},
-                        "reasoning": "User wants to see spatial distribution map of pfpr variable"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-
-            Example 2:
-            User: "What is malaria transmission?"
-            Response: {{
-                "intent_type": "knowledge",
-                "primary_goal": "Explain malaria transmission",
-                "tool_calls": [],
-                "requires_session_data": false,
-                "routing": "knowledge_agent",
-                "direct_response": "Malaria is transmitted through the bite of infected female Anopheles mosquitoes. When an infected mosquito bites a person, it injects Plasmodium parasites into the bloodstream. These parasites travel to the liver, multiply, and then return to infect red blood cells. The cycle continues when another mosquito bites the infected person and picks up the parasites, becoming a vector for further transmission. Key factors affecting transmission include mosquito breeding sites (stagnant water), climate conditions, and human behavior patterns."
-            }}
-
-            Example 3:
-            User: "If ITN coverage in Kano Municipal increases by 30%, what happens?"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Simulate coverage increase impact",
-                "tool_calls": [
-                    {{
-                        "tool_name": "simulatecoverageimpact",
-                        "parameters": {{
-                            "ward_name": "Kano Municipal",
-                            "coverage_increase": 0.3,
-                            "intervention_type": "ITN"
-                        }},
-                        "reasoning": "User wants scenario simulation for specific ward"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-
-            Example 4: Custom Variable Selection
-            User: "Run composite analysis using pfpr, elevation, and housing_quality"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Run composite analysis with custom variables",
-                "tool_calls": [
-                    {{
-                        "tool_name": "run_complete_analysis",
-                        "parameters": {{
-                            "composite_variables": ["pfpr", "elevation", "housing_quality"]
-                        }},
-                        "reasoning": "User specified custom variables for composite analysis"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-
-            Example 5: Custom Variables for Both Methods
-            User: "Do PCA with rainfall, population_density and composite with pfpr, elevation"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Run dual analysis with different custom variables",
-                "tool_calls": [
-                    {{
-                        "tool_name": "run_complete_analysis",
-                        "parameters": {{
-                            "composite_variables": ["pfpr", "elevation"],
-                            "pca_variables": ["rainfall", "population_density"]
-                        }},
-                        "reasoning": "User specified different custom variables for each method"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-
-            Example 6: Methodology Explanation Query
-            User: "Can you explain the composite and pca methods you speak about?"
-            Response: {{
-                "intent_type": "knowledge",
-                "primary_goal": "Explain both composite score and PCA methods",
-                "tool_calls": [
-                    {{
-                        "tool_name": "explainanalysismethodology", 
-                        "parameters": {{"methods": ["composite", "pca"]}},
-                        "reasoning": "User specifically asks for methodology explanation, NOT analysis execution"
-                    }}
-                ],
-                "requires_session_data": false,
-                "routing": "knowledge_agent"
-            }}
-
-            Example 6b: General Knowledge Query
-            User: "What is malaria transmission?"
-            Response: {{
-                "intent_type": "knowledge",
-                "primary_goal": "Explain malaria transmission",
-                "tool_calls": [
-                    {{
-                        "tool_name": "explain_concept",
-                        "parameters": {{"concept": "transmission"}},
-                        "reasoning": "Educational question about malaria concept"
-                    }}
-                ],
-                "requires_session_data": false,
-                "routing": "knowledge_agent"
-            }}
-
-            Example 7:
-            User: "Hello"
-            Response: {{
-                "intent_type": "system",
-                "primary_goal": "Respond to greeting",
-                "tool_calls": [
-                    {{
-                        "tool_name": "simple_greeting",
-                        "parameters": {{}},
-                        "reasoning": "Simple greeting requires greeting response"
-                    }}
-                ],
-                "requires_session_data": false,
-                "routing": "knowledge_agent"
-            }}
-
-            Example 8: Custom Analysis with Specific Variables  
-            User: "I want you to rerun the analysis only using the flood and evi variables"
-            Response: {{
-                "intent_type": "data_analysis",
-                "primary_goal": "Run custom analysis with flood and EVI variables",
-                "tool_calls": [
-                    {{
-                        "tool_name": "runcompleteanalysis",
-                        "parameters": {{
-                            "composite_variables": ["flood", "evi"],
-                            "pca_variables": ["flood", "evi"]
-                        }},
-                        "reasoning": "Use exact user-specified variable names - pipeline will handle fuzzy matching"
-                    }}
-                ],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-            
-            Example 8b: Statistical Concept Question
-            User: "How do you handle multicollinearity in composite scoring?"
-            Response: {{
-                "intent_type": "knowledge",
-                "primary_goal": "Explain multicollinearity handling in composite scoring",
-                "tool_calls": [
-                    {{
-                        "tool_name": "explainconcept",
-                        "parameters": {{
-                            "concept": "multicollinearity in composite scoring",
-                            "technical_level": "intermediate"
-                        }},
-                        "reasoning": "User asking about statistical concept, not our specific analysis"
-                    }}
-                ],
-                "requires_session_data": false,
-                "routing": "knowledge_agent"
-            }}
-            
-            Example 9:
-            User: "run analysis"
-            Response: {{
-                "intent_type": "clarification_needed",
-                "primary_goal": "Need to clarify analysis type",
-                "tool_calls": [],
-                "requires_session_data": true,
-                "routing": "data_agent"
-            }}
-
-            Use these patterns as guidance for consistent tool selection and parameter extraction.
-            """
-            
-            user_prompt = f'Parse this request: "{user_message}"'
-            
-            parse_response = self.llm_manager.generate_response(
-                prompt=user_prompt,
-                system_message=system_prompt,
-                temperature=0.3,
-                max_tokens=800,
-                session_id=session_id
-            )
-            
-            logger.info(f"🔧 DEBUG: LLM raw response: {parse_response[:500]}...")
-            
-            # Extract JSON - WITH CLARIFICATION FALLBACK
-            clean_response = parse_response.strip()
-            if clean_response.startswith('```json'):
-                clean_response = clean_response[7:-3]
-            
-            logger.info(f"🔧 DEBUG: Cleaned response: {clean_response[:300]}...")
-            
-            try:
-                parsed_intent = json.loads(clean_response)
-            except json.JSONDecodeError as e:
-                # Instead of failing, try to understand what went wrong and ask for clarification
-                return self._generate_clarification_response(
-                    user_message, 
-                    "I'm having trouble understanding your request. Could you please rephrase it or be more specific?",
-                    session_id
-                )
-            
-            logger.info(f"🔧 DEBUG: Parsed intent tool_calls: {len(parsed_intent.get('tool_calls', []))}")
-            
-            # Check if clarification is needed
-            if parsed_intent.get('intent_type') == 'clarification_needed':
-                # Try to apply intelligent defaults before asking for clarification
-                default_response = self._try_intelligent_defaults(user_message, session_id)
-                if default_response:
-                    return default_response
-                
-                # If no defaults apply, determine what kind of clarification to provide
-                clarification_type = self._determine_clarification_type(user_message, parsed_intent)
-                return self._generate_contextual_clarification(
-                    user_message, 
-                    clarification_type,
-                    session_id
-                )
-            
-            # Validate tool calls - WITH HELPFUL SUGGESTIONS
-            for tool_call in parsed_intent.get('tool_calls', []):
-                tool_name = tool_call.get('tool_name')
-                if not self.tiered_loader.is_tool_available(tool_name):
-                    # Find similar tool names
-                    close_matches = get_close_matches(tool_name, available_tool_names, n=3, cutoff=0.6)
-                    
-                    if close_matches:
-                        suggestion_text = f"Did you mean one of these: {', '.join(close_matches)}?"
-                    else:
-                        # Try to understand what the user might want
-                        suggestion_text = self._suggest_relevant_tools(user_message, available_tool_names)
-                    
-                    return self._generate_clarification_response(
-                        user_message,
-                        f"I couldn't find a tool called '{tool_name}'. {suggestion_text}",
-                        session_id,
-                        available_tools=close_matches if close_matches else None
-                    )
-            
-            # Don't inject session_id here - it's passed separately to execute_tool_with_registry
-            for tool_call in parsed_intent['tool_calls']:
-                if 'parameters' not in tool_call:
-                    tool_call['parameters'] = {}
-            
-            return {
-                'status': 'success',
-                'message': 'Request parsed successfully',
-                'parsed_intent': parsed_intent,
-                'original_message': user_message
-            }
-                
-        except Exception as e:
-            logger.error(f"Error parsing request: {e}")
-            return {
-                'status': 'error',
-                'message': f'Request parsing exception: {str(e)}',
-                'original_message': user_message
-            }
-
-
-    def execute_intent(self, parsed_intent: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Execute the parsed intent by calling appropriate tools via dynamic registry."""
-        try:
-            tool_calls = parsed_intent.get('tool_calls', [])
-            logger.info(f"🔧 DEBUG: Executing {len(tool_calls)} tool calls via dynamic registry")
-            execution_results = []
-            
-            # Check if unified dataset needs to be created before executing data-dependent tools
-            data_dependent_tools = [tc for tc in tool_calls if self._requires_unified_dataset(tc.get('tool_name'))]
-            if data_dependent_tools:
-                logger.info(f"🔧 DEBUG: {len(data_dependent_tools)} tools require unified dataset, checking availability...")
-                
-                # Try to ensure unified dataset exists
-                unified_check_result = self._ensure_unified_dataset_exists(session_id)
-                if not unified_check_result['success']:
-                    logger.warning(f"🔧 DEBUG: Unified dataset not available: {unified_check_result['message']}")
-                    # Continue anyway - tools will handle missing data gracefully
-                else:
-                    logger.info(f"🔧 DEBUG: Unified dataset is available for analysis tools")
-            
-            for tool_call in tool_calls:
-                tool_name = tool_call.get('tool_name')
-                parameters = tool_call.get('parameters', {})
-                
-                logger.info(f"🔧 DEBUG: Executing tool '{tool_name}' with params: {parameters}")
-                
-                # Use dynamic registry to execute tool
-                try:
-                    result = self.execute_tool_with_registry(tool_name, session_id, **parameters)
-                    logger.info(f"🔧 DEBUG: Tool '{tool_name}' executed, result status: {result.get('status') if isinstance(result, dict) else 'unknown'}")
-                    
-                    if isinstance(result, dict) and result.get('status') == 'error':
-                        logger.error(f"🔧 DEBUG: Tool '{tool_name}' error details: {result.get('message', 'No error message')}")
-                    
-                    # Ensure result is a dictionary
-                    if not isinstance(result, dict):
-                        result = {'status': 'success', 'data': result}
-                    
-                    # Ensure tool_name is set
-                    if 'tool_name' not in result:
-                        result['tool_name'] = tool_name
-                        
-                    execution_results.append(result)
-                    
-                except Exception as tool_error:
-                    logger.error(f"🔧 DEBUG: Tool '{tool_name}' FAILED with error: {tool_error}")
-                    execution_results.append({
-                        'tool_name': tool_name,
-                        'status': 'error',
-                        'message': str(tool_error),
-                        'error_details': f"Exception: {type(tool_error).__name__}"
-                    })
-            
-            successful_tools = [r for r in execution_results if r.get('status') == 'success']
-            logger.info(f"🔧 DEBUG: Execution complete - {len(successful_tools)}/{len(tool_calls)} tools successful")
-            
-            # Auto-trigger comprehensive summary if both composite and PCA analyses just completed
-            successful_tool_names = [r.get('tool_name') for r in successful_tools]
-            if ('run_composite_analysis' in successful_tool_names and 'run_pca_analysis' in successful_tool_names):
-                logger.info("🔧 DEBUG: Both analyses completed - triggering comprehensive summary")
-                try:
-                    summary_result = self.execute_tool_with_registry(
-                        'generate_comprehensive_analysis_summary', 
-                        session_id
-                    )
-                    if isinstance(summary_result, dict):
-                        summary_result['tool_name'] = 'generate_comprehensive_analysis_summary'
-                        execution_results.append(summary_result)
-                        if summary_result.get('status') == 'success':
-                            successful_tools.append(summary_result)
-                            logger.info("🔧 DEBUG: Comprehensive summary generated successfully")
-                except Exception as e:
-                    logger.error(f"🔧 DEBUG: Failed to generate comprehensive summary: {e}")
-            
-            overall_status = 'success' if len(successful_tools) > 0 else 'error'
-            
-            return {
-                'status': overall_status,
-                'message': f'Executed {len(successful_tools)}/{len(tool_calls)} tools successfully',
-                'intent_type': parsed_intent.get('intent_type'),
-                'primary_goal': parsed_intent.get('primary_goal'),
-                'results': execution_results,
-                'successful_tools': len(successful_tools),
-                'failed_tools': len(tool_calls) - len(successful_tools)
-            }
-            
-        except Exception as e:
-            logger.error(f"🔧 DEBUG: Execute intent failed completely: {e}")
-            return {
-                'status': 'error',
-                'message': f'Error executing intent: {str(e)}',
-                'results': []
-            }
-
-
-    def format_response(self, execution_results: Dict[str, Any], user_message: str, session_id: str = None) -> Dict[str, Any]:
-        """Format execution results into comprehensive chat response - NO FALLBACKS."""
-        try:
-            if execution_results.get('status') == 'error':
-                # Generate helpful error response
-                return self._generate_helpful_error_response(
-                    user_message, 
-                    execution_results.get('message', 'Unknown error'),
-                    session_id
-                )
-            
-            results = execution_results.get('results', [])
-            successful_results = [r for r in results if r.get('status') == 'success']
-            failed_results = [r for r in results if r.get('status') == 'error']
-            
-            if not successful_results:
-                # All tools failed - provide helpful guidance and trigger help
-                error_details = [f"{r.get('tool_name')}: {r.get('message')}" for r in failed_results]
-                
-                # Try to invoke help tool automatically
-                try:
-                    help_result = self.execute_tool_with_registry(
-                        'show_help_options',
-                        session_id,
-                        error_context=f"All requested operations failed: {'; '.join(error_details[:2])}"
-                    )
-                    if help_result.get('status') == 'success' and help_result.get('response'):
-                        return {
-                            'status': 'error',
-                            'response': help_result['response'],
-                            'visualizations': [],
-                            'error_handled': True,
-                            'help_provided': True
-                        }
-                except Exception as e:
-                    logger.error(f"Failed to invoke help tool: {e}")
-                
-                # Fallback to error response
-                return self._generate_helpful_error_response(
-                    user_message,
-                    f"I encountered issues with the analysis. Details: {'; '.join(error_details[:2])}",
-                    session_id
-                )
-            
-            # Collect visualizations and data
-            visualizations = []
-            explanations = []
-            
-            for result in successful_results:
-                # Extract visualizations
-                if 'web_path' in result:
-                    visualizations.append({
-                        'type': result.get('chart_type', result.get('tool_name', 'chart')),
-                        'url': result['web_path'],
-                        'title': result.get('message', 'Visualization'),
-                        'tool': result.get('tool_name')
-                    })
-                
-                # Extract explanations
-                if 'explanation' in result:
-                    explanations.append({
-                        'tool': result.get('tool_name'),
-                        'explanation': result['explanation']
-                    })
-            
-            # Generate response text - NO FALLBACKS  
-            response_text = self._generate_response_text(user_message, successful_results, session_id)
-            
-            return {
-                'status': 'success',
-                'message': f"✅ {len(successful_results)}/{len(results)} tools successful",
-                'response': response_text,
-                'visualizations': visualizations,
-                'explanations': explanations,
-                'tools_used': [r.get('tool_name') for r in successful_results],
-                'failed_tools': failed_results if failed_results else None
-            }
-            
-        except Exception as e:
-            logger.error(f"Error formatting response: {e}")
-            return {
-                'status': 'error',
-                'response': f'❌ RESPONSE FORMATTING FAILED: {str(e)}',
-                'visualizations': []
-            }
-
-
-    def process_message(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Main entry point - processes user message end-to-end with unified memory integration."""
-        start_time = time.time()
-        tools_used = []
-        
-        try:
-            logger.info(f"Processing message for session {session_id}: {user_message[:100]}...")
-            
-            # Get conversation context from unified memory (if available)
-            if self.memory:
-                context = self.memory.get_context(session_id)
-                relevant_memories = self.memory.recall(
-                    query=user_message,
-                    memory_types=[MemoryType.CONVERSATION, MemoryType.ANALYSIS_CONTEXT],
-                    limit=3,
-                    session_only=True
-                )
-            else:
-                context = {}
-                relevant_memories = []
+                    return self._execute_automatic_analysis(session_id)
             
             # Check for automatic data description workflow
-            from flask import session
             if session.get('should_describe_data', False):
-                # Clear the flag to prevent repeated triggering
                 session['should_describe_data'] = False
-                
-                # Generate automatic data description
                 result = self._generate_automatic_data_description(session_id)
-                tools_used.append('automatic_data_description')
+                # Store in simple conversation history
+                self._store_conversation_simple(session_id, user_message, result.get('response', ''))
+                return result
+            
+            # Check for fork intent (what-if scenarios)
+            fork_intent = self._detect_fork_intent(user_message)
+            
+            if fork_intent['should_fork']:
+                # Create fork for scenario exploration
+                fork_id = self.fork_conversation(session_id, fork_intent['scenario_name'])
                 
-                # Store in memory before returning
-                self._store_conversation_in_memory(
-                    user_message, result.get('response', ''), 
-                    tools_used, time.time() - start_time, True
-                )
-                return result
+                if fork_id:
+                    # Switch to fork temporarily for this response
+                    self.switch_to_fork(fork_id)
+                    
+                    # Update session_id to fork_id for this processing
+                    session_id = fork_id
+                    
+                    # Add fork context to response
+                    fork_context = f"🔀 **Exploring scenario**: {fork_intent['scenario_name']}\\n\\n"
+                else:
+                    fork_context = ""
+            else:
+                fork_context = ""
             
-            # Step 1: Parse request - WITH CLARIFICATION
-            parse_result = self.parse_request(user_message, session_id)
+            # Get session context for conversation
+            context_start = time.time()
+            session_context = self._get_session_context(session_id)
+            timing_breakdown['context_retrieval'] = time.time() - context_start
             
-            # Handle clarification responses
-            if parse_result.get('status') == 'clarification_needed':
-                self._store_conversation_in_memory(
-                    user_message, parse_result.get('response', ''), 
-                    [], time.time() - start_time, True
-                )
-                return parse_result
+            # Build conversational system prompt
+            prompt_start = time.time()
+            system_prompt = self._build_conversational_prompt(session_context)
+            timing_breakdown['prompt_building'] = time.time() - prompt_start
             
-            if parse_result['status'] == 'error':
-                # Instead of showing technical error, ask for clarification
-                result = self._generate_clarification_response(
-                    user_message,
-                    "I'm having trouble understanding what you'd like me to do. Could you please provide more details or rephrase your request?",
-                    session_id
-                )
-                self._store_conversation_in_memory(
-                    user_message, result.get('response', ''), 
-                    [], time.time() - start_time, False
-                )
-                return result
+            # Get available tools as functions
+            available_functions = self._get_available_functions()
             
-            # Check for direct response from parsing (knowledge questions)
-            parsed_intent = parse_result['parsed_intent']
-            if 'direct_response' in parsed_intent and parsed_intent['direct_response']:
-                logger.info("🚀 Using direct response from parsing - no tool execution needed")
-                result = {
-                    'status': 'success',
-                    'response': parsed_intent['direct_response'],
-                    'visualizations': [],
-                    'intent_type': parsed_intent.get('intent_type', 'knowledge'),
-                    'method': 'direct_parsing_response'
-                }
-                
-                self._store_conversation_in_memory(
-                    user_message, result['response'], 
-                    ['knowledge_response'], time.time() - start_time, True
-                )
-                return result
+            # Build conversation messages
+            messages = self._build_conversation_messages(user_message, session_context, session_id)
             
-            # Track tools that will be used
-            if 'tool_calls' in parsed_intent:
-                tools_used = [tool.get('tool_name') for tool in parsed_intent['tool_calls']]
-            
-            # Step 2: Execute intent - NO FALLBACKS
-            execution_results = self.execute_intent(parse_result['parsed_intent'], session_id)
-            
-            # Step 3: Format response - NO FALLBACKS
-            formatted_response = self.format_response(execution_results, user_message, session_id)
-            
-            # Store conversation in unified memory
-            success = formatted_response.get('status') == 'success'
-            response_text = formatted_response.get('response', '')
-            
-            self._store_conversation_in_memory(
-                user_message, response_text, tools_used, 
-                time.time() - start_time, success
+            # Single LLM call with function calling
+            llm_start = time.time()
+            response = self.llm_manager.generate_with_functions(
+                messages=messages,
+                system_prompt=system_prompt,
+                functions=available_functions,
+                temperature=0.7,
+                session_id=session_id
             )
+            timing_breakdown['llm_processing'] = time.time() - llm_start
             
-            # Store analysis results if any
-            if success and execution_results.get('successful_results'):
-                self._store_analysis_results_in_memory(execution_results['successful_results'])
+            # Process the response
+            tool_start = time.time()
+            result = self._process_llm_response(response, user_message, session_id)
+            timing_breakdown['tool_execution'] = time.time() - tool_start
             
-            return formatted_response
+            # Add fork context to response if we forked
+            if fork_context:
+                result['response'] = fork_context + result.get('response', '')
+                result['forked'] = True
+                result['fork_id'] = session_id
+            
+            # Update conversation history
+            response_start = time.time()
+            self._update_conversation_history(session_id, user_message, result.get('response', ''))
+            
+            # Store in memory
+            tools_used = result.get('tools_used', [])
+            success = result.get('status') == 'success'
+            
+            # Store conversation in simple memory (py-sidebot approach)
+            self._store_conversation_simple(session_id, user_message, result.get('response', ''))
+            
+            # Calculate final timing
+            timing_breakdown['response_formatting'] = time.time() - response_start
+            timing_breakdown['total_duration'] = time.time() - start_time
+            
+            # Add detailed timing to result for enhanced monitoring
+            result['timing_breakdown'] = timing_breakdown
+            result['performance_metrics'] = {
+                'total_time': timing_breakdown['total_duration'],
+                'llm_percentage': round((timing_breakdown['llm_processing'] / timing_breakdown['total_duration']) * 100, 1),
+                'tool_percentage': round((timing_breakdown['tool_execution'] / timing_breakdown['total_duration']) * 100, 1),
+                'context_percentage': round((timing_breakdown['context_retrieval'] / timing_breakdown['total_duration']) * 100, 1),
+                'bottleneck': max(timing_breakdown, key=timing_breakdown.get) if timing_breakdown else 'unknown'
+            }
+            
+            return result
             
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
+            logger.error(f"Error in conversational processing: {e}")
             return {
                 'status': 'error',
-                'response': f'❌ MESSAGE PROCESSING FAILED: {str(e)}',
+                'response': f'I encountered an issue processing your request: {str(e)}',
                 'visualizations': []
             }
-
-    def _generate_automatic_data_description(self, session_id: str) -> Dict[str, Any]:
-        """DISABLED: Old duplicate data description system - now handled by frontend file-uploader.js"""
+    
+    def process_message_streaming(self, user_message: str, session_id: str):
+        """Main conversational processing with streaming for better UX."""
+        start_time = time.time()
+        
+        try:
+            logger.info(f"Processing streaming message for session {session_id}: {user_message[:100]}...")
+            
+            # Check for analysis permission workflow
+            from flask import session
+            if session.get('should_ask_analysis_permission', False):
+                if self._is_confirmation_message(user_message):
+                    # Clear the flag and trigger analysis
+                    session['should_ask_analysis_permission'] = False
+                    result = self._execute_automatic_analysis(session_id)
+                    yield {
+                        'content': result.get('response', ''),
+                        'status': result.get('status', 'success'),
+                        'visualizations': result.get('visualizations', []),
+                        'tools_used': result.get('tools_used', []),
+                        'done': True
+                    }
+                    return
+            
+            # Check for automatic data description workflow
+            if session.get('should_describe_data', False):
+                session['should_describe_data'] = False
+                result = self._generate_automatic_data_description(session_id)
+                yield {
+                    'content': result.get('response', ''),
+                    'status': result.get('status', 'success'),
+                    'visualizations': result.get('visualizations', []),
+                    'automatic_workflow': result.get('automatic_workflow', ''),
+                    'done': True
+                }
+                return
+            
+            # Check for fork intent (what-if scenarios)
+            fork_intent = self._detect_fork_intent(user_message)
+            
+            if fork_intent['should_fork']:
+                # Create fork for scenario exploration
+                fork_id = self.fork_conversation(session_id, fork_intent['scenario_name'])
+                
+                if fork_id:
+                    # Switch to fork temporarily for this response
+                    self.switch_to_fork(fork_id)
+                    
+                    # Update session_id to fork_id for this processing
+                    session_id = fork_id
+                    
+                    # Add fork context to response
+                    fork_context = f"🔀 **Exploring scenario**: {fork_intent['scenario_name']}\\n\\n"
+                    yield {
+                        'content': fork_context,
+                        'status': 'success',
+                        'forked': True,
+                        'fork_id': fork_id,
+                        'done': False
+                    }
+                else:
+                    yield {
+                        'content': "Failed to create scenario fork. Continuing with main conversation.\\n\\n",
+                        'status': 'warning',
+                        'done': False
+                    }
+            
+            # Get session context for conversation
+            session_context = self._get_session_context(session_id)
+            
+            # Build conversational system prompt
+            system_prompt = self._build_conversational_prompt(session_context)
+            
+            # Get available tools as functions
+            available_functions = self._get_available_functions()
+            
+            # Build conversation messages
+            messages = self._build_conversation_messages(user_message, session_context, session_id)
+            
+            # Stream LLM response with function calling
+            accumulated_content = ""
+            tools_used = []
+            
+            for chunk in self.llm_manager.generate_with_functions_streaming(
+                messages=messages,
+                system_prompt=system_prompt,
+                functions=available_functions,
+                temperature=0.7,
+                session_id=session_id
+            ):
+                accumulated_content += chunk.get('content', '')
+                
+                if chunk.get('function_call'):
+                    # Function call detected - execute it
+                    function_name = chunk['function_call']['name']
+                    function_args = json.loads(chunk['function_call']['arguments'])
+                    
+                    logger.info(f"Executing function: {function_name} with args: {function_args}")
+                    
+                    # Execute tool
+                    tool_result = self.execute_tool_with_registry(function_name, session_id, **function_args)
+                    tools_used.append(function_name)
+                    
+                    # Send tool execution update
+                    yield {
+                        'content': f"\\n\\n*Executing {function_name}...*\\n\\n",
+                        'status': 'processing',
+                        'tools_used': tools_used,
+                        'done': False
+                    }
+                    
+                    # Send tool result
+                    if tool_result.get('status') == 'success':
+                        tool_response = tool_result.get('message', tool_result.get('response', 'Analysis completed successfully'))
+                        
+                        # Extract visualizations if any
+                        visualizations = []
+                        if 'web_path' in tool_result:
+                            visualizations.append({
+                                'type': tool_result.get('chart_type', function_name),
+                                'url': tool_result['web_path'],
+                                'title': tool_result.get('message', 'Visualization'),
+                                'tool': function_name
+                            })
+                        
+                        yield {
+                            'content': tool_response,
+                            'status': 'success',
+                            'visualizations': visualizations,
+                            'tools_used': tools_used,
+                            'done': True
+                        }
+                    else:
+                        yield {
+                            'content': f"I encountered an issue with the {function_name} analysis: {tool_result.get('message', 'Unknown error')}",
+                            'status': 'error',
+                            'tools_used': tools_used,
+                            'done': True
+                        }
+                    
+                    # Update conversation history
+                    final_response = accumulated_content + (tool_result.get('message', '') if tool_result.get('status') == 'success' else '')
+                    self._update_conversation_history(session_id, user_message, final_response)
+                    
+                    # Store in memory
+                    self._store_conversation_in_memory(
+                        user_message, final_response, 
+                        tools_used, time.time() - start_time, tool_result.get('status') == 'success'
+                    )
+                    return
+                
+                elif chunk.get('done'):
+                    # Pure conversational response - no function call
+                    yield {
+                        'content': '',  # Already sent incrementally
+                        'status': 'success',
+                        'visualizations': [],
+                        'tools_used': [],
+                        'done': True
+                    }
+                    
+                    # Update conversation history
+                    self._update_conversation_history(session_id, user_message, accumulated_content)
+                    
+                    # Store in memory
+                    self._store_conversation_in_memory(
+                        user_message, accumulated_content, 
+                        [], time.time() - start_time, True
+                    )
+                    return
+                
+                else:
+                    # Stream content chunk
+                    yield {
+                        'content': chunk.get('content', ''),
+                        'status': 'streaming',
+                        'done': False
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Error in streaming conversational processing: {e}")
+            yield {
+                'content': f'I encountered an issue processing your request: {str(e)}',
+                'status': 'error',
+                'visualizations': [],
+                'done': True
+            }
+    
+    def _get_session_context(self, session_id: str) -> Dict[str, Any]:
+        """Get comprehensive session context for conversation."""
         from flask import session
         
-        # The new file-uploader.js handles the upload display professionally
-        # This old system was creating duplicate messages with emojis
-        logger.info(f"Automatic data description disabled - handled by frontend for session {session_id}")
-        
-        # Set flag for analysis permission handling (this is still needed)
-        session['should_ask_analysis_permission'] = True
-        
-        return {
-            'status': 'success',
-            'response': '',  # Empty response - frontend handles the display
-            'visualizations': [],
-            'automatic_workflow': 'data_description_complete'
+        context = {
+            'data_loaded': session.get('csv_loaded', False) and session.get('shapefile_loaded', False),
+            'analysis_complete': session.get('analysis_complete', False),
+            'analysis_type': session.get('analysis_type', 'none'),
+            'variables_used': session.get('variables_used', []),
+            'state_name': session.get('state_name', 'Not specified'),
+            'ward_column': session.get('ward_column', 'Not identified'),
+            'conversation_history': session.get('conversation_history', [])
         }
+        
+        # Get memory context if available
+        if self.memory:
+            try:
+                memory_context = self.memory.get_context(session_id)
+                if memory_context:
+                    context.update({
+                        'recent_topics': getattr(memory_context, 'entities_mentioned', [])[:5],
+                        'recent_tools': getattr(memory_context, 'tools_used', [])[-3:],
+                        'analysis_state': getattr(memory_context, 'analysis_state', None)
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to get memory context: {e}")
+        
+        return context
+    
+    def _build_conversational_prompt(self, session_context: Dict) -> str:
+        """Build the new conversational system prompt with data schema context (py-sidebot approach)."""
+        
+        # Core identity and expertise
+        identity_section = """You are ChatMRPT, a malaria epidemiologist and statistician embedded in a specialized urban microstratification platform powered by GPT-4o.
 
+## Your Expertise
+- **Malaria risk assessment** in endemic countries, focusing on urban sub-Saharan Africa (especially Nigeria)
+- **Urban microstratification** - ranking administrative units (wards, districts) by malaria risk for targeted interventions
+- **WHO guidelines** for malaria intervention planning and resource allocation
+- **Reprioritization strategies** - identifying areas for deprioritization or enhanced targeting based on burden, morphology, and intervention coverage
+- **Two core analytical methods**:
+  • Composite Risk Scoring: summing normalized values across malaria risk factors
+  • Principal Component Analysis (PCA): dimensionality reduction with weighted variable combinations
+
+## Common User Needs You Support
+Based on typical requests, you help with:
+
+### 1. Burden Stratification & Prioritization
+- Ranking wards by composite risk scores
+- Identifying top decile/quintile risk areas
+- Finding high-burden wards with low intervention coverage
+- Spatial dependency analysis of malaria burden
+
+### 2. Urban Morphology & Settlement Analysis
+- Classifying wards by settlement type (formal/informal/non-residential)
+- Identifying morphology profiles (compactness, building density)
+- Finding industrial zones affecting risk scores
+- Determining likely uninhabited areas
+
+### 3. Variable-Specific Insights
+- Test Positivity Rate (TPR) analysis among under-fives
+- Mapping relationships between variables and risk
+- Identifying data quality issues (missing values, imputation)
+- Understanding variable contributions to scores
+
+### 4. Environmental & Spatial Drivers
+- Flood-prone area identification
+- Water body proximity analysis
+- Elevation profiling and low-lying area risks
+- Vegetation density impacts
+
+### 5. Intervention Targeting & Reprioritization
+- ITN distribution recommendations
+- IRS eligibility based on burden and settlement type
+- SMC round planning
+- CHW deployment strategies
+- Deprioritization decisions for resource optimization
+
+### 6. Scenario Simulation ("What-If" Analysis)
+- Impact of increased ITN coverage
+- Effects of variable exclusion/inclusion
+- Custom risk thresholds
+- Settlement-specific classifications
+
+### 7. Data Interpretation & Methodology
+- Composite score calculation explanations
+- PCA vs Composite scoring guidance
+- Variable weighting options
+- Data source transparency
+- Missing value handling"""
+
+        # Current session context with data schema (py-sidebot approach)
+        data_schema_section = ""
+        if session_context.get('data_schema'):
+            data_schema_section = f"""
+## Current Dataset Schema
+{session_context['data_schema']}"""
+
+        session_section = f"""
+## Current Session Status
+- **Geographic Area**: {session_context.get('state_name', 'Not specified - please specify the state you are working with')}
+- **Data Uploaded**: {session_context.get('current_data', 'No data uploaded')}
+- **Analysis Complete**: {session_context.get('analysis_complete', False)}
+- **Ward Column**: {session_context.get('ward_column', 'Not identified')}
+- **Available Variables**: {len(session_context.get('variables_used', []))} variables loaded
+- **Recent Topics**: {', '.join(session_context.get('recent_topics', [])[:3]) if session_context.get('recent_topics') else 'None'}{data_schema_section}"""
+
+        # Workflow guidance
+        workflow_section = """
+## Core Workflow Support
+1. **Data Upload** → CSV/Excel demographics + shapefile boundaries
+2. **Data Validation** → Confirm ward column and variable names
+3. **Analysis Planning** → Discuss methodology options and variable selection
+4. **Execution** → Run composite scoring and/or PCA analysis
+5. **Interpretation** → Explain results with epidemiological context
+6. **Visualization** → Generate risk maps, rankings, charts
+7. **Intervention Planning** → Recommend targeting strategies
+
+### Key Terminology You Use
+- **Reprioritization**: Systematic reallocation of resources based on updated risk assessments
+- **Deprioritization**: Identifying low-risk areas where resources can be safely reduced
+- **Prioritization**: Targeting high-risk areas for intervention focus
+- **Composite Score**: Sum of normalized risk variables (0-1 scale per variable)
+- **PCA Score**: First principal component capturing maximum variance
+- **Settlement Types**: Formal (planned), Informal (unplanned), Non-residential
+- **TPR**: Test Positivity Rate among children under 5 years
+- **Urban Extent**: Percentage of ward area classified as urban
+- **Compactness**: Building density measure indicating settlement patterns
+
+### State & Geographic Tracking
+- Always ask for and track the **state name** for the geographic area
+- Use this context in all responses: "In [State Name], the highest risk wards are..."
+- Reference specific ward names when available
+- Acknowledge LGA (Local Government Area) hierarchies when relevant"""
+
+        # Communication guidelines
+        guidelines_section = """
+## Communication Guidelines
+
+### Data Upload Workflow
+1. When users upload CSV/Excel files:
+   - Search for "wardname" column (case-insensitive)
+   - If not found, identify likely alternatives ("ward", "district", "area", "lga")
+   - Ask user to confirm ward column before proceeding
+   - Validate first row contains variable names (discard if entirely numeric)
+   - Check for key variables: TPR, population, elevation, flood risk, settlement data
+
+### Communication Style
+- **Match user expertise level**: Simplify for program staff, use technical language for data scientists
+- **Maintain friendly, respectful tone**
+- **Reference state name, ward names, and data context** in all relevant responses
+- **Provide step-by-step explanations** for analyses and visualizations
+- **Maintain session memory** for continuity across interactions
+
+### Handling Common Questions
+- **"Which wards to deprioritize?"** → Identify low-risk wards with current high coverage
+- **"What variables matter most?"** → Reference PCA loadings or composite score contributions
+- **"Can I use custom variables?"** → Yes, guide them through variable selection
+- **"What if ITN coverage increases by X%?"** → Suggest scenario simulation with fork
+- **"How to interpret the results?"** → Explain scores, rankings, and practical implications
+- **"Missing data handling?"** → Explain spatial mean imputation for TPR, other strategies
+
+### Analysis Approach
+- **Explore before executing**: Discuss options, trade-offs, scenarios
+- **Ask clarifying questions** when requests are ambiguous
+- **Explain epidemiological significance** of findings
+- **Provide actionable insights** for malaria program decision-making
+- **Reference actual ward names and data** in responses, not generic examples
+- **Offer both technical explanations and practical recommendations**"""
+
+        # Conversation flow
+        flow_section = f"""
+## Conversation Flow
+- **For hypothetical questions** ("what if..."): Create scenario forks for safe exploration
+- **For analysis requests**: Confirm parameters, then execute appropriate functions
+- **For data questions**: Access session data directly and provide contextual responses
+- **For explanations**: Use domain expertise to explain concepts clearly
+- **For unclear requests**: Ask clarifying questions rather than assuming
+
+### Scenario Fork Management
+- **When users say "what if..."**: Automatically create scenario forks for safe exploration
+- **Current session type**: {'Fork' if session_context.get('is_fork') else 'Main conversation'}
+- **Parent session**: {session_context.get('parent_session_id', 'N/A')}
+- **Available forks**: {len(session_context.get('conversation_forks', []))} scenarios created
+
+### Function Usage
+- Use available functions when users are ready to execute analysis
+- For scenario exploration, use `create_scenario_fork` for what-if analysis
+- Use `return_to_main_conversation` to return from scenario forks
+- Always explain methodology and interpret results with epidemiological context
+- Show actual data (ward names, scores, rankings) not generic responses
+
+### Natural Capabilities (No functions needed)
+- **Greetings & explanations** - Respond using domain expertise
+- **Data inquiries** - Access session data directly for ward lookups, scores, rankings
+- **Simple visualizations** - Generate basic charts using available data
+- **Concept explanations** - Explain malaria epidemiology, methods, terminology
+- **Result interpretation** - Analyze findings and provide epidemiological insights
+- **Intervention recommendations** - Suggest targeting strategies based on risk patterns"""
+
+        return f"{identity_section}\n{session_section}\n{workflow_section}\n{guidelines_section}\n{flow_section}"
+    
+    def _get_available_functions(self) -> List[Dict]:
+        """Get available tools as OpenAI-style functions."""
+        functions = []
+        
+        # Core Analysis Functions
+        functions.extend([
+            {
+                "name": "run_complete_analysis",
+                "description": "Execute both composite and PCA analysis with optional custom variables",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "composite_variables": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Custom variables for composite analysis"
+                        },
+                        "pca_variables": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Custom variables for PCA analysis"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "run_composite_analysis",
+                "description": "Run composite risk scoring with custom variables - allows variable selection and weighting",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "variables": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Variables to include (e.g., TPR, elevation, flood_risk, population_density)"
+                        },
+                        "weights": {
+                            "type": "object",
+                            "description": "Optional custom weights for variables (default: equal weights)",
+                            "additionalProperties": {"type": "number"}
+                        }
+                    }
+                }
+            },
+            {
+                "name": "run_pca_analysis",
+                "description": "Run Principal Component Analysis with custom variables",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "variables": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Variables to include in PCA analysis"
+                        }
+                    }
+                }
+            }
+        ])
+        
+        # Essential Visualization Functions
+        functions.extend([
+            {
+                "name": "create_vulnerability_map",
+                "description": "Generate choropleth vulnerability maps",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "method": {
+                            "type": "string",
+                            "enum": ["composite", "pca", "auto"],
+                            "description": "Analysis method to visualize"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "create_scatter_plot",
+                "description": "Create scatter plots for variable relationships",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x_variable": {
+                            "type": "string",
+                            "description": "Variable for x-axis"
+                        },
+                        "y_variable": {
+                            "type": "string",
+                            "description": "Variable for y-axis"
+                        }
+                    },
+                    "required": ["x_variable", "y_variable"]
+                }
+            }
+        ])
+        
+        # Data Processing Functions
+        functions.extend([
+            {
+                "name": "get_ward_information",
+                "description": "Get comprehensive information about a specific ward",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "ward_name": {
+                            "type": "string",
+                            "description": "Name of the ward to analyze"
+                        }
+                    },
+                    "required": ["ward_name"]
+                }
+            },
+            {
+                "name": "get_top_risk_wards",
+                "description": "Get top N highest risk wards for prioritization or find low-risk wards for deprioritization",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "top_n": {
+                            "type": "integer",
+                            "description": "Number of wards to return",
+                            "default": 10
+                        },
+                        "method": {
+                            "type": "string",
+                            "enum": ["composite", "pca", "both"],
+                            "description": "Analysis method to use",
+                            "default": "both"
+                        },
+                        "risk_level": {
+                            "type": "string",
+                            "enum": ["highest", "lowest", "decile", "quintile"],
+                            "description": "Risk level to retrieve",
+                            "default": "highest"
+                        }
+                    }
+                }
+            }
+        ])
+        
+        # Knowledge Functions
+        functions.extend([
+            {
+                "name": "explain_analysis_methodology",
+                "description": "Explain the composite and PCA analysis methods, including reprioritization concepts",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "methods": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["composite", "pca", "reprioritization", "deprioritization"]},
+                            "description": "Methods or concepts to explain"
+                        },
+                        "technical_level": {
+                            "type": "string",
+                            "enum": ["basic", "intermediate", "advanced"],
+                            "description": "Level of technical detail",
+                            "default": "intermediate"
+                        }
+                    }
+                }
+            }
+        ])
+        
+        # Fork Management Functions
+        functions.extend([
+            {
+                "name": "create_scenario_fork",
+                "description": "Create a new scenario fork for what-if analysis",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "scenario_name": {
+                            "type": "string",
+                            "description": "Name for the scenario being explored"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Description of what will be tested in this scenario"
+                        }
+                    },
+                    "required": ["scenario_name"]
+                }
+            },
+            {
+                "name": "return_to_main_conversation",
+                "description": "Return to the main conversation from a scenario fork",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "save_insights": {
+                            "type": "boolean",
+                            "description": "Whether to save insights from the fork",
+                            "default": False
+                        }
+                    }
+                }
+            },
+            {
+                "name": "list_scenario_forks",
+                "description": "List all scenario forks created during this conversation",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        ])
+        
+        return functions
+    
+    def _build_conversation_messages(self, user_message: str, session_context: Dict, session_id: str) -> List[Dict]:
+        """Build message array for conversation."""
+        messages = []
+        
+        # Add recent conversation history
+        history = session_context.get('conversation_history', [])
+        if history:
+            # Add last 5 exchanges to maintain context
+            for exchange in history[-5:]:
+                messages.append({"role": "user", "content": exchange.get('user', '')})
+                messages.append({"role": "assistant", "content": exchange.get('assistant', '')})
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        return messages
+    
+    def _process_llm_response(self, response: Dict, user_message: str, session_id: str) -> Dict[str, Any]:
+        """Process LLM response with function calls."""
+        try:
+            # Check if LLM called functions
+            if response.get('function_call'):
+                # Execute the function
+                function_name = response['function_call']['name']
+                function_args = json.loads(response['function_call']['arguments'])
+                
+                logger.info(f"Executing function: {function_name} with args: {function_args}")
+                
+                # Execute tool
+                tool_result = self.execute_tool_with_registry(function_name, session_id, **function_args)
+                
+                # Format response
+                if tool_result.get('status') == 'success':
+                    response_text = tool_result.get('message', tool_result.get('response', 'Analysis completed successfully'))
+                    visualizations = []
+                    
+                    
+                    # Extract visualizations if any
+                    if 'web_path' in tool_result:
+                        visualizations.append({
+                            'type': tool_result.get('chart_type', function_name),
+                            'url': tool_result['web_path'],
+                            'title': tool_result.get('message', 'Visualization'),
+                            'tool': function_name
+                        })
+                    
+                    return {
+                        'status': 'success',
+                        'response': response_text,
+                        'visualizations': visualizations,
+                        'tools_used': [function_name]
+                    }
+                else:
+                    return {
+                        'status': 'error',
+                        'response': f"I encountered an issue with the {function_name} analysis: {tool_result.get('message', 'Unknown error')}",
+                        'visualizations': []
+                    }
+            
+            # No function call - pure conversational response
+            return {
+                'status': 'success',
+                'response': response.get('content', response.get('message', 'I can help you with malaria risk analysis. What would you like to explore?')),
+                'visualizations': [],
+                'tools_used': []
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing LLM response: {e}")
+            return {
+                'status': 'error',
+                'response': f'I encountered an issue processing your request: {str(e)}',
+                'visualizations': []
+            }
+    
     def _is_confirmation_message(self, user_message: str) -> bool:
         """Check if user message is a confirmation for running analysis."""
         confirmation_patterns = [
@@ -883,7 +844,7 @@ class RequestInterpreter:
             'composite', 'pca', 'analysis', 'first run'
         ]
         
-        # Comprehensive analysis patterns (from workflow guidance)
+        # Comprehensive analysis patterns
         comprehensive_patterns = [
             'comprehensive analysis', 'complete analysis', 'full analysis',
             'run comprehensive analysis', 'proceed with analysis',
@@ -893,7 +854,7 @@ class RequestInterpreter:
         
         user_lower = user_message.lower().strip()
         
-        # Check for comprehensive analysis phrases first (more specific)
+        # Check for comprehensive analysis phrases first
         if any(pattern in user_lower for pattern in comprehensive_patterns):
             return True
         
@@ -907,303 +868,70 @@ class RequestInterpreter:
             return False
             
         return False
-
-    def _create_automatic_analysis_intent(self) -> Dict[str, Any]:
-        """Create intent for automatic composite and PCA analysis."""
+    
+    def _execute_automatic_analysis(self, session_id: str) -> Dict[str, Any]:
+        """Execute automatic complete analysis when user confirms."""
+        try:
+            result = self.execute_tool_with_registry('runcompleteanalysis', session_id)
+            
+            if result.get('status') == 'success':
+                return {
+                    'status': 'success',
+                    'response': result.get('message', 'Analysis completed successfully'),
+                    'visualizations': [],
+                    'tools_used': ['runcompleteanalysis']
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'response': f"Analysis failed: {result.get('message', 'Unknown error')}",
+                    'visualizations': []
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in automatic analysis: {e}")
+            return {
+                'status': 'error',
+                'response': f'Failed to run analysis: {str(e)}',
+                'visualizations': []
+            }
+    
+    def _generate_automatic_data_description(self, session_id: str) -> Dict[str, Any]:
+        """Generate automatic data description (disabled - handled by frontend)."""
+        from flask import session
+        
+        logger.info(f"Automatic data description disabled - handled by frontend for session {session_id}")
+        
+        # Set flag for analysis permission handling
+        session['should_ask_analysis_permission'] = True
+        
         return {
             'status': 'success',
-            'parsed_intent': {
-                'intent_type': 'data_analysis',
-                'primary_goal': 'Run complete dual-method analysis (Composite + PCA)',
-                'tool_calls': [
-                    {
-                        'tool_name': 'runcompleteanalysis',
-                        'parameters': {
-                            'create_unified_dataset': True
-                        },
-                        'reasoning': 'User confirmed they want to run both composite and PCA analysis together with unified dataset creation'
-                    }
-                ],
-                'requires_session_data': True,
-                'routing': 'data_agent',
-                'automatic_workflow': 'complete_analysis_granted'
-            }
+            'response': '',  # Empty response - frontend handles the display
+            'visualizations': [],
+            'automatic_workflow': 'data_description_complete'
         }
-
-    def _generate_response_text(self, user_message: str, successful_results: List[Dict], session_id: str = None) -> str:
-        """Generate natural language response using LLM to interpret tool results."""
+    
+    def _update_conversation_history(self, session_id: str, user_message: str, assistant_response: str):
+        """Update conversation history in session."""
         try:
-            # HIGHEST PRIORITY: Simple greetings get short responses
-            for result in successful_results:
-                tool_name = result.get('tool_name', '')
-                if tool_name == 'simple_greeting' and 'greeting' in result:
-                    return result['greeting']
+            from flask import session
             
-            # SECOND PRIORITY: Use comprehensive analysis summary (already LLM-generated)
-            for result in successful_results:
-                tool_name = result.get('tool_name', '')
-                if tool_name == 'generate_comprehensive_analysis_summary' and 'message' in result:
-                    return result['message']
+            if 'conversation_history' not in session:
+                session['conversation_history'] = []
             
-            # THIRD PRIORITY: Use detailed explanations from knowledge tools (already LLM-generated)
-            knowledge_explanations = []
-            for result in successful_results:
-                tool_name = result.get('tool_name', '')
-                if tool_name in ['explain_concept', 'explain_methodology', 'explain_variable', 'interpret_results'] and 'explanation' in result:
-                    knowledge_explanations.append(result['explanation'])
+            session['conversation_history'].append({
+                'user': user_message,
+                'assistant': assistant_response,
+                'timestamp': time.time()
+            })
             
-            # If we have knowledge explanations, combine them naturally
-            if knowledge_explanations:
-                if len(knowledge_explanations) == 1:
-                    return knowledge_explanations[0]
-                else:
-                    # Use LLM to combine multiple explanations with smooth transitions
-                    return self._combine_explanations_intelligently(knowledge_explanations, user_message, session_id)
-            
-            # FOURTH PRIORITY: Use detailed message from analysis tools (already generated)
-            for result in successful_results:
-                tool_name = result.get('tool_name', '')
-                # Check for complete analysis results
-                if tool_name in ['runcompleteanalysis', 'runcompositeanalysis', 'runpcaanalysis'] and 'message' in result:
-                    return result['message']
-                # Check for upload analysis
-                if tool_name == 'analyze_uploaded_data_and_recommend' and 'message' in result:
-                    return result['message']
-            
-            # FIFTH PRIORITY: Check for any tool with a detailed message
-            for result in successful_results:
-                if 'message' in result and len(result.get('message', '')) > 100:
-                    # If the tool provided a detailed message, use it directly
-                    return result['message']
-            
-            # FOR ALL OTHER TOOLS: Use LLM to generate conversational response
-            return self._generate_llm_conversational_response(user_message, successful_results, session_id)
-            
-        except Exception as e:
-            logger.error(f"Error generating response text: {e}")
-            return f"I've processed your request successfully, but encountered an issue formatting the response: {str(e)}"
-
-    def _generate_llm_conversational_response(self, user_message: str, successful_results: List[Dict], session_id: str = None) -> str:
-        """Use LLM to generate conversational response from tool results."""
-        try:
-            # Prepare context for LLM
-            tools_used = []
-            tool_data = {}
-            visualizations = []
-            
-            for result in successful_results:
-                tool_name = result.get('tool_name', 'unknown_tool')
-                tools_used.append(tool_name)
+            # Keep only last 10 exchanges
+            if len(session['conversation_history']) > 10:
+                session['conversation_history'] = session['conversation_history'][-10:]
                 
-                # Extract key data for LLM context
-                if 'web_path' in result:
-                    visualizations.append({
-                        'type': result.get('chart_type', tool_name),
-                        'variables': f"{result.get('y_variable', '')} vs {result.get('x_variable', '')}".strip(' vs'),
-                        'method': result.get('method', '')
-                    })
-                
-                # Store relevant data
-                tool_data[tool_name] = {
-                    'status': result.get('status'),
-                    'message': result.get('message', ''),
-                    'data': {k: v for k, v in result.items() if k not in ['status', 'message', 'tool_name']}
-                }
-            
-            # Create LLM prompt
-            system_prompt = """You are a malaria epidemiologist embedded in ChatMRPT, a specialized tool for malaria risk assessment in urban Nigeria. 
-
-Your personality:
-- Expert in malaria epidemiology, urban microstratification, and WHO guidelines
-- Conversational, helpful, and educational
-- Provide insights and context, not just data
-- Explain the epidemiological significance of findings
-- Offer practical recommendations
-
-CRITICAL INSTRUCTIONS FOR DATA-DRIVEN RESPONSES:
-
-1. **Ranking Questions**: When user asks for "top N wards" or "most vulnerable wards":
-   - Use the EXACT ward names and scores from the tool results
-   - Show the COMPLETE list requested (if user wants top 10, show all 10)
-   - Include actual numerical scores, ranks, and percentiles
-   - Example: "The top 10 most vulnerable wards are: 1. Rafin Gora (Score: 0.578, Rank: 1/275), 2. Tunga Wawa..."
-
-2. **Ward-Specific Questions**: When user asks about a specific ward:
-   - Use the ACTUAL risk factors, scores, and rankings from get_ward_information results
-   - Reference specific environmental, health, and demographic data
-   - Explain WHY the ward ranks high/low based on actual data
-   - Example: "Rafin Gora ranks #1 due to its high flood risk (0.85), distance to water (1200m), and pfpr rate (0.34)..."
-
-3. **PCA Analysis**: When PCA data is available:
-   - Use the actual high/medium/low risk ward lists
-   - Don't say "PCA doesn't highlight wards" if data exists
-   - Reference the actual variance explained and components used
-
-4. **Data Accuracy**: Always use the ACTUAL data from tool results, never make generic statements.
-
-Respond naturally to the user's question based on the tool results provided. Be conversational but professional."""
-
-            user_prompt = f"""User asked: "{user_message}"
-
-I executed these tools successfully: {', '.join(tools_used)}
-
-Tool Results Summary:
-{self._format_tool_data_for_llm(tool_data)}
-
-Visualizations created: {len(visualizations)} charts{"" if not visualizations else f" - {visualizations}"}
-
-Please provide a conversational, expert response that:
-1. Directly addresses what the user asked
-2. Interprets the results with epidemiological context
-3. Explains the significance of findings
-4. Offers practical insights or recommendations
-5. Maintains the personality of a malaria epidemiologist
-
-Keep it natural and conversational, not rigid or template-like."""
-
-            # Generate response using LLM
-            llm_response = self.llm_manager.generate_response(
-                prompt=user_prompt,
-                system_message=system_prompt,
-                temperature=0.7,
-                max_tokens=1000,
-                session_id=session_id
-            )
-            
-            # Add visualization note if charts were created
-            response_text = llm_response.strip()
-            if visualizations:
-                response_text += f"\n\n📈 **{len(visualizations)} interactive chart{'s' if len(visualizations) > 1 else ''} displayed below** - explore the data to identify patterns and specific areas of interest!"
-            
-            return response_text
-            
         except Exception as e:
-            logger.error(f"Error generating LLM conversational response: {e}")
-            # Fallback to basic summary
-            tool_names = [r.get('tool_name', 'tool') for r in successful_results]
-            return f"I've successfully executed {len(successful_results)} analysis tools ({', '.join(tool_names)}) to address your question. The results are ready for your review."
-
-    def _format_tool_data_for_llm(self, tool_data: Dict) -> str:
-        """Format tool data for LLM consumption with comprehensive details."""
-        formatted_parts = []
-        
-        for tool_name, data in tool_data.items():
-            parts = [f"**{tool_name}:**"]
-            
-            # Don't truncate important messages for ranking tools
-            if data['message']:
-                message = data['message']
-                # Only truncate non-ranking tool messages
-                if tool_name not in ['gettopriskwards', 'getwardriskscore', 'getwardinformation'] and len(message) > 500:
-                    message = message[:500] + "... [truncated]"
-                parts.append(f"Message: {message}")
-            
-            # Enhanced data extraction for ranking tools
-            tool_data_dict = data.get('data', {})
-            
-            if tool_name == 'gettopriskwards':
-                # Show full ward lists with scores for ranking queries
-                if 'top_wards' in tool_data_dict:
-                    parts.append(f"Top Wards: {tool_data_dict['top_wards']}")
-                if 'bottom_wards' in tool_data_dict:
-                    parts.append(f"Bottom Wards: {tool_data_dict['bottom_wards']}")
-                if 'total_wards' in tool_data_dict:
-                    parts.append(f"Total Wards: {tool_data_dict['total_wards']}")
-                if 'score_column' in tool_data_dict:
-                    parts.append(f"Score Column: {tool_data_dict['score_column']}")
-                    
-            elif tool_name == 'getwardriskscore':
-                # Show risk score data
-                if 'high_risk_wards' in tool_data_dict:
-                    parts.append(f"High Risk Wards: {tool_data_dict['high_risk_wards']}")
-                if 'medium_risk_wards' in tool_data_dict:
-                    parts.append(f"Medium Risk Wards: {tool_data_dict['medium_risk_wards']}")
-                if 'low_risk_wards' in tool_data_dict:
-                    parts.append(f"Low Risk Wards: {tool_data_dict['low_risk_wards']}")
-                if 'category_column' in tool_data_dict:
-                    parts.append(f"Category Column: {tool_data_dict['category_column']}")
-                if 'total_wards' in tool_data_dict:
-                    parts.append(f"Total Wards: {tool_data_dict['total_wards']}")
-                    
-            elif tool_name == 'getwardinformation':
-                # Show comprehensive ward details
-                if 'ward_found' in tool_data_dict:
-                    parts.append(f"Ward Found: {tool_data_dict['ward_found']}")
-                if 'risk_factors' in tool_data_dict:
-                    parts.append(f"Risk Factors: {tool_data_dict['risk_factors']}")
-                if 'ranking_info' in tool_data_dict:
-                    parts.append(f"Rankings: {tool_data_dict['ranking_info']}")
-                if 'vulnerability_category' in tool_data_dict:
-                    parts.append(f"Vulnerability Category: {tool_data_dict['vulnerability_category']}")
-                if 'total_wards_in_dataset' in tool_data_dict:
-                    parts.append(f"Total Wards in Dataset: {tool_data_dict['total_wards_in_dataset']}")
-                    
-            else:
-                # For other tools, show key data points
-                key_fields = ['total_wards', 'ward_name', 'chart_type', 'x_variable', 'y_variable', 'method', 'file_path']
-                
-                for field in key_fields:
-                    if field in tool_data_dict and tool_data_dict[field] is not None:
-                        value = tool_data_dict[field]
-                        # Only truncate large lists for non-ranking tools
-                        if isinstance(value, list) and len(value) > 10:
-                            value = value[:10] + ['...']
-                        parts.append(f"{field}: {value}")
-            
-            formatted_parts.append(' | '.join(parts))
-        
-        return '\n'.join(formatted_parts)
-
-    def _combine_explanations_intelligently(self, explanations: List[str], user_message: str, session_id: str = None) -> str:
-        """Use LLM to combine multiple explanations with smooth transitions and proper structure."""
-        try:
-            system_prompt = """
-            You are a malaria epidemiologist. You have multiple detailed explanations that need to be combined into a single, well-structured response.
-            
-            Your task:
-            1. Combine the explanations into a cohesive, flowing response
-            2. Add smooth transitions between topics using natural language
-            3. Organize with clear **bold headers** and logical structure  
-            4. Remove redundancy while keeping all important information
-            5. Ensure the response feels natural, not like separate sections pasted together
-            6. Keep the total length reasonable (600-800 words max)
-            
-            Structure guidelines:
-            • Start with a brief intro connecting to the user's question
-            • Use **bold headers** to organize main sections
-            • Create natural flow: "Building on this understanding..." or "This connects directly to..."
-            • End with a cohesive summary or practical next steps
-            • Maintain the expert malaria epidemiologist voice throughout
-            """
-            
-            user_prompt = f"""
-            The user asked: "{user_message}"
-            
-            I have {len(explanations)} separate explanations that need to be combined into one cohesive response:
-            
-            {chr(10).join([f"--- EXPLANATION {i+1} ---{chr(10)}{explanation}{chr(10)}" for i, explanation in enumerate(explanations)])}
-            
-            Please combine these into a single, well-structured response that flows naturally and addresses the user's question comprehensively. Focus on creating smooth transitions and eliminating redundancy while maintaining all the important information.
-            """
-            
-            combined_response = self.llm_manager.generate_response(
-                prompt=user_prompt,
-                system_message=system_prompt,
-                temperature=0.7,
-                max_tokens=1200,
-                session_id=session_id
-            )
-            
-            return combined_response.strip()
-            
-        except Exception as e:
-            logger.error(f"Error combining explanations intelligently: {e}")
-            # Fallback to simple combination with dividers
-            return '\n\n---\n\n'.join(explanations)
-
-    # ========================================================================
-    # UNIFIED MEMORY INTEGRATION METHODS
-    # ========================================================================
+            logger.error(f"Error updating conversation history: {e}")
     
     def _store_conversation_in_memory(self, user_message: str, ai_response: str, 
                                     tools_used: List[str], response_time: float, 
@@ -1226,745 +954,392 @@ Keep it natural and conversational, not rigid or template-like."""
         except Exception as e:
             logger.error(f"Failed to store conversation in memory: {e}")
     
-    def _store_analysis_results_in_memory(self, successful_results: List[Dict[str, Any]]):
-        """Store analysis results in unified memory."""
-        try:
-            for result in successful_results:
-                tool_name = result.get('tool_name', 'unknown')
-                
-                # Extract meaningful results
-                analysis_data = {
-                    'tool': tool_name,
-                    'message': result.get('message', ''),
-                    'data': result.get('data', {}),
-                    'visualizations': result.get('web_path', ''),
-                    'success': result.get('status') == 'success'
-                }
-                
-                # Store in memory with high priority for analysis results
-                if self.memory:
-                    self.memory.store_analysis_results(
-                    analysis_type=tool_name,
-                    results=analysis_data,
-                    metadata={
-                        'execution_time': result.get('execution_time', 0),
-                        'tool_category': self._categorize_tool(tool_name)
-                    }
-                )
-        except Exception as e:
-            logger.error(f"Failed to store analysis results in memory: {e}")
-    
-    def _categorize_tool(self, tool_name: str) -> str:
-        """Categorize tool for better memory organization."""
-        if 'ranking' in tool_name.lower():
-            return 'ranking_analysis'
-        elif 'map' in tool_name.lower() or 'visualization' in tool_name.lower():
-            return 'visualization'
-        elif 'ward' in tool_name.lower():
-            return 'ward_analysis'
-        elif 'settlement' in tool_name.lower():
-            return 'settlement_analysis'
-        else:
-            return 'general_analysis'
-    
-    def _get_memory_enhanced_context(self, user_message: str, session_id: str) -> str:
-        """Get memory-enhanced context for better LLM responses."""
-        if not self.memory:
-            return ""
-            
-        try:
-            # Get recent conversation context
-            context = self.memory.get_context(session_id)
-            
-            # Get relevant memories
-            relevant_memories = self.memory.recall(
-                query=user_message,
-                memory_types=[MemoryType.CONVERSATION, MemoryType.ANALYSIS_CONTEXT],
-                limit=3,
-                session_only=True
-            )
-            
-            context_parts = []
-            
-            # Add recent analysis context
-            if context.analysis_state:
-                context_parts.append(f"Recent Analysis: {context.analysis_state}")
-            
-            # Add entities mentioned
-            if context.entities_mentioned:
-                context_parts.append(f"Key Topics: {', '.join(context.entities_mentioned[:5])}")
-            
-            # Add tools used
-            if context.tools_used:
-                context_parts.append(f"Recent Tools: {', '.join(context.tools_used[-3:])}")
-            
-            # Add relevant memories
-            if relevant_memories:
-                memory_summaries = []
-                for memory in relevant_memories[:2]:  # Top 2 most relevant
-                    if memory.memory_item.type == MemoryType.CONVERSATION:
-                        content = memory.memory_item.content
-                        if 'message' in content:
-                            summary = content['message'].get('content', '')[:100]
-                            memory_summaries.append(f"Previous: {summary}...")
-                    elif memory.memory_item.type == MemoryType.ANALYSIS_CONTEXT:
-                        analysis_type = memory.memory_item.content.get('analysis_type', 'analysis')
-                        memory_summaries.append(f"Previous {analysis_type}")
-                
-                if memory_summaries:
-                    context_parts.append(f"Relevant History: {'; '.join(memory_summaries)}")
-            
-            return " | ".join(context_parts) if context_parts else ""
-            
-        except Exception as e:
-            logger.error(f"Failed to get memory-enhanced context: {e}")
-            return ""
-
-    # Legacy methods removed - all responses now generated by LLM
-    
-    def _generate_clarification_response(self, user_message: str, clarification_message: str, 
-                                       session_id: str, available_tools: List[str] = None) -> Dict[str, Any]:
-        """Generate a helpful clarification response when request is ambiguous."""
-        try:
-            # Use LLM to generate a natural clarification
-            system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
-            
-The user's request was unclear or ambiguous. Your task is to:
-1. Acknowledge their request in a friendly way
-2. Explain what wasn't clear (without being technical)
-3. Offer helpful suggestions or ask clarifying questions
-4. If possible tools are provided, present them as options
-5. Guide them to rephrase or be more specific
-
-Be conversational and helpful, like a knowledgeable colleague would be.
-Don't mention technical terms like "parsing", "JSON", or "tool validation".
-"""
-            
-            user_prompt = f"""User said: "{user_message}"
-
-Issue: {clarification_message}
-
-{f"Possible tools that might help: {', '.join(available_tools)}" if available_tools else ""}
-
-Please generate a friendly, helpful clarification response that guides the user."""
-
-            clarification_response = self.llm_manager.generate_response(
-                prompt=user_prompt,
-                system_message=system_prompt,
-                temperature=0.8,
-                max_tokens=400,
-                session_id=session_id
-            )
-            
-            return {
-                'status': 'clarification_needed',
-                'response': clarification_response.strip(),
-                'visualizations': [],
-                'original_message': user_message,
-                'suggestions': available_tools if available_tools else []
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating clarification: {e}")
-            # Fallback to simple clarification
-            return {
-                'status': 'clarification_needed',
-                'response': clarification_message,
-                'visualizations': [],
-                'original_message': user_message
-            }
-    
-    def _suggest_relevant_tools(self, user_message: str, available_tools: List[str]) -> str:
-        """Suggest relevant tools based on keywords in user message."""
-        message_lower = user_message.lower()
-        suggestions = []
-        
-        # Check for common patterns
-        if any(word in message_lower for word in ['rank', 'top', 'vulnerable', 'highest']):
-            suggestions.extend(['gettopriskwards', 'getwardriskscore'])
-        
-        if any(word in message_lower for word in ['map', 'visualize', 'show']):
-            suggestions.append('createvulnerabilitymap')
-            
-        if any(word in message_lower for word in ['scatter', 'plot', 'correlation']):
-            suggestions.append('createscatterplot')
-            
-        if any(word in message_lower for word in ['explain', 'what is', 'tell me about']):
-            suggestions.append('explainconcept')
-            
-        if any(word in message_lower for word in ['ward', 'specific area']):
-            suggestions.append('getwardinformation')
-        
-        # Filter to only include available tools
-        valid_suggestions = [s for s in suggestions if s in available_tools][:3]
-        
-        if valid_suggestions:
-            return f"Based on your question, you might want to try: {', '.join(valid_suggestions)}"
-        else:
-            return "Could you please be more specific about what kind of analysis or information you're looking for?"
-    
-    def _generate_helpful_error_response(self, user_message: str, error_details: str, session_id: str) -> Dict[str, Any]:
-        """Generate a helpful response when errors occur."""
-        try:
-            system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
-
-An error occurred while processing the user's request. Your task is to:
-1. Acknowledge the issue without being overly technical
-2. Suggest what might have gone wrong in simple terms
-3. Offer alternative approaches or clarifying questions
-4. Guide them on how to proceed
-
-Common issues and responses:
-- No data uploaded: "It looks like you haven't uploaded any data yet. Would you like me to guide you through the data upload process?"
-- Tool not found: "I couldn't find that specific analysis. Would you like me to show you what analyses are available?"
-- Invalid parameters: "I need a bit more information to complete that analysis. Could you specify..."
-
-Be helpful and solution-oriented, not just reporting errors."""
-
-            user_prompt = f"""User said: "{user_message}"
-
-Error encountered: {error_details}
-
-Please generate a helpful response that:
-1. Explains what might have gone wrong (simply)
-2. Offers solutions or alternatives
-3. Asks clarifying questions if needed
-4. Maintains a helpful, professional tone"""
-
-            error_response = self.llm_manager.generate_response(
-                prompt=user_prompt,
-                system_message=system_prompt,
-                temperature=0.8,
-                max_tokens=400,
-                session_id=session_id
-            )
-            
-            return {
-                'status': 'error',
-                'response': error_response.strip(),
-                'visualizations': [],
-                'original_message': user_message,
-                'error_handled': True
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating helpful error response: {e}")
-            # Fallback to simple error message
-            return {
-                'status': 'error',
-                'response': "I encountered an issue processing your request. Could you please try rephrasing it or let me know what specific analysis you're looking for?",
-                'visualizations': [],
-                'original_message': user_message
-            }
-    
-    def _determine_clarification_type(self, user_message: str, parsed_intent: Dict) -> str:
-        """Determine what type of clarification is needed based on the ambiguous request."""
-        message_lower = user_message.lower()
-        
-        # Analysis ambiguity
-        if any(word in message_lower for word in ['analysis', 'analyze', 'run']):
-            return 'analysis_type'
-        
-        # Data ambiguity
-        if any(word in message_lower for word in ['data', 'show', 'display']) and not any(word in message_lower for word in ['map', 'chart', 'plot']):
-            return 'data_view'
-        
-        # Visualization ambiguity
-        if any(word in message_lower for word in ['chart', 'graph', 'plot', 'visualize', 'map']):
-            return 'visualization_type'
-        
-        # Ward information ambiguity
-        if 'ward' in message_lower and not any(word in message_lower for word in ['ranking', 'top', 'information']):
-            return 'ward_info'
-        
-        # General ambiguity
-        return 'general'
-    
-    def _generate_contextual_clarification(self, user_message: str, clarification_type: str, session_id: str) -> Dict[str, Any]:
-        """Generate context-specific clarification based on the type of ambiguity."""
-        clarification_prompts = {
-            'analysis_type': {
-                'message': "I can help you with different types of analysis. Which would you prefer?",
-                'options': [
-                    "Composite vulnerability analysis - combines multiple risk factors",
-                    "PCA analysis - identifies key patterns in your data",
-                    "Statistical analysis - correlations and relationships",
-                    "Spatial analysis - geographic patterns"
-                ],
-                'suggestions': ['runcompositeanalysis', 'runpcaanalysis', 'getcorrelationanalysis']
-            },
-            'data_view': {
-                'message': "I can show you data in different ways. What would you like to see?",
-                'options': [
-                    "Ward rankings by vulnerability",
-                    "Summary statistics of your data",
-                    "Specific ward information",
-                    "Variable distributions"
-                ],
-                'suggestions': ['gettopriskwards', 'getdescriptivestatistics', 'getwardinformation']
-            },
-            'visualization_type': {
-                'message': "I can create different visualizations. Which type would help you most?",
-                'options': [
-                    "Vulnerability map - geographic risk distribution",
-                    "Scatter plot - relationship between two variables",
-                    "Box plot - distribution comparisons",
-                    "Correlation matrix - variable relationships"
-                ],
-                'suggestions': ['createvulnerabilitymap', 'createscatterplot', 'createboxplot']
-            },
-            'ward_info': {
-                'message': "What would you like to know about this ward?",
-                'options': [
-                    "Vulnerability ranking and score",
-                    "Key risk factors",
-                    "Comparison with other wards",
-                    "Detailed statistics"
-                ],
-                'suggestions': ['getwardinformation', 'gettopriskwards']
-            },
-            'general': {
-                'message': "I can help with malaria risk analysis. What would you like to explore?",
-                'options': [
-                    "Upload and analyze data",
-                    "View vulnerability rankings",
-                    "Create risk maps",
-                    "Learn about malaria concepts"
-                ],
-                'suggestions': []
-            }
-        }
-        
-        prompt_data = clarification_prompts.get(clarification_type, clarification_prompts['general'])
-        
-        # Use LLM to make the clarification more natural and contextual
-        system_prompt = """You are ChatMRPT, a helpful malaria epidemiologist assistant.
-
-The user made an ambiguous request. Based on the clarification type and options provided, 
-create a natural, conversational response that:
-1. Acknowledges their request
-2. Explains the available options conversationally
-3. Asks them to choose or be more specific
-4. Feels like a helpful colleague, not a menu system
-
-Don't just list options - weave them into natural language."""
-
-        user_prompt = f"""User said: "{user_message}"
-
-Clarification type: {clarification_type}
-Base message: {prompt_data['message']}
-Available options: {prompt_data['options']}
-
-Generate a helpful, conversational clarification response."""
-
-        try:
-            clarification_response = self.llm_manager.generate_response(
-                prompt=user_prompt,
-                system_message=system_prompt,
-                temperature=0.8,
-                max_tokens=400,
-                session_id=session_id
-            )
-            
-            return {
-                'status': 'clarification_needed',
-                'response': clarification_response.strip(),
-                'visualizations': [],
-                'original_message': user_message,
-                'suggestions': prompt_data.get('suggestions', [])
-            }
-            
-        except Exception as e:
-            # Fallback to structured response
-            options_text = '\n'.join([f"• {opt}" for opt in prompt_data['options']])
-            fallback_response = f"{prompt_data['message']}\n\n{options_text}"
-            
-            return {
-                'status': 'clarification_needed',
-                'response': fallback_response,
-                'visualizations': [],
-                'original_message': user_message,
-                'suggestions': prompt_data.get('suggestions', [])
-            }
-    
-    def _generate_tool_documentation(self) -> str:
-        """Generate comprehensive tool documentation for LLM prompt"""
-        documentation = []
-        
-        # Group tools by category for better organization
-        tools_by_category = {}
-        for tool_name in self.tool_registry.list_tools():
-            metadata = self.tool_registry.get_tool_metadata(tool_name)
-            if metadata:
-                category = metadata.category.value
-                if category not in tools_by_category:
-                    tools_by_category[category] = []
-                tools_by_category[category].append((tool_name, metadata))
-        
-        # Generate documentation for each category
-        for category, tools in tools_by_category.items():
-            documentation.append(f"\n{category.upper().replace('_', ' ')} TOOLS:")
-            
-            for tool_name, metadata in tools:
-                # Basic tool info
-                doc_lines = [f"• {tool_name}: {metadata.description}"]
-                
-                # Parameters
-                if metadata.parameters and "properties" in metadata.parameters:
-                    props = metadata.parameters["properties"]
-                    required = metadata.parameters.get("required", [])
-                    
-                    param_docs = []
-                    for param_name, param_info in props.items():
-                        if param_name == "session_id":
-                            continue  # Skip session_id as it's auto-provided
-                        
-                        param_type = param_info.get("type", "string")
-                        param_desc = param_info.get("description", "")
-                        is_required = param_name in required
-                        
-                        req_marker = " (REQUIRED)" if is_required else " (optional)"
-                        param_docs.append(f"    - {param_name}: {param_type}{req_marker} - {param_desc}")
-                    
-                    if param_docs:
-                        doc_lines.append("  Parameters:")
-                        doc_lines.extend(param_docs)
-                
-                # Examples
-                if metadata.examples:
-                    doc_lines.append(f"  Examples: {', '.join(metadata.examples[:2])}")
-                
-                documentation.extend(doc_lines)
-                documentation.append("")  # Empty line for readability
-        
-        return "\n".join(documentation)
-    
-    def _generate_enhanced_tool_documentation_from_schemas(self, schemas: List[Dict]) -> str:
-        """Generate enhanced tool documentation from schema list"""
-        documentation = []
-        
-        # Convert list of schemas to dict format for existing logic
-        schemas_dict = {schema['name']: schema for schema in schemas}
-        
-        return self._generate_enhanced_tool_documentation(schemas_dict)
-    
-    def _generate_enhanced_tool_documentation(self, schemas: Dict[str, Dict]) -> str:
-        """Generate enhanced tool documentation using combined schemas"""
-        documentation = []
-        
-        # Categorize tools for better organization
-        categories = {
-            'core_analysis': [],
-            'statistical': [],
-            'visualization': [],
-            'knowledge': [],
-            'system': [],
-            'other': []
-        }
-        
-        for tool_name, schema in schemas.items():
-            # Categorize based on tool name patterns
-            if any(x in tool_name.lower() for x in ['composite', 'pca', 'ranking', 'vulnerability']):
-                categories['core_analysis'].append((tool_name, schema))
-            elif any(x in tool_name.lower() for x in ['stats', 'correlation', 'summary', 'anova', 'test']):
-                categories['statistical'].append((tool_name, schema))
-            elif any(x in tool_name.lower() for x in ['plot', 'chart', 'histogram', 'scatter', 'map', 'visual']):
-                categories['visualization'].append((tool_name, schema))
-            elif any(x in tool_name.lower() for x in ['explain', 'greeting', 'help', 'concept']):
-                categories['knowledge'].append((tool_name, schema))
-            elif any(x in tool_name.lower() for x in ['check', 'data', 'session', 'available', 'ward']):
-                categories['system'].append((tool_name, schema))
-            else:
-                categories['other'].append((tool_name, schema))
-        
-        # Generate documentation for each category
-        for category_name, tools in categories.items():
-            if not tools:
-                continue
-                
-            documentation.append(f"\n{category_name.upper().replace('_', ' ')} TOOLS:")
-            
-            for tool_name, schema in tools:
-                # Basic tool info
-                description = schema.get('description', 'No description available')
-                doc_lines = [f"• {tool_name}: {description}"]
-                
-                # Parameters with enhanced details
-                parameters = schema.get('parameters', {})
-                if parameters and 'properties' in parameters:
-                    props = parameters['properties']
-                    required = parameters.get('required', [])
-                    
-                    param_docs = []
-                    for param_name, param_info in props.items():
-                        if param_name == "session_id":
-                            continue  # Skip session_id as it's auto-provided
-                        
-                        param_type = param_info.get("type", "string")
-                        param_desc = param_info.get("description", "")
-                        is_required = param_name in required
-                        
-                        # Add enum values if available
-                        enum_values = param_info.get("enum", [])
-                        pattern = param_info.get("pattern", "")
-                        
-                        req_marker = " (REQUIRED)" if is_required else " (optional)"
-                        param_line = f"    - {param_name}: {param_type}{req_marker} - {param_desc}"
-                        
-                        if enum_values:
-                            param_line += f" Options: {enum_values}"
-                        elif pattern:
-                            param_line += f" Pattern: {pattern}"
-                        
-                        param_docs.append(param_line)
-                    
-                    if param_docs:
-                        doc_lines.append("  Parameters:")
-                        doc_lines.extend(param_docs)
-                
-                documentation.extend(doc_lines)
-                documentation.append("")  # Empty line for readability
-        
-        return "\n".join(documentation)
-    
     def execute_tool_with_registry(self, tool_name: str, session_id: str, **parameters):
-        """Execute a tool using the tiered loading system (simplified)"""
+        """Execute a tool using the tiered loading system."""
         
-        # Intercept explanation requests and handle directly (eliminates expensive nested LLM calls)
-        if tool_name.lower() == 'explainconcept':
-            logger.info(f"🚀 Handling explanation request directly (no nested LLM call): {parameters.get('concept', 'unknown concept')}")
-            return self._handle_explanation_directly(session_id, **parameters)
+        # Handle fork management functions directly
+        if tool_name == 'create_scenario_fork':
+            return self._handle_create_scenario_fork(session_id, **parameters)
+        elif tool_name == 'return_to_main_conversation':
+            return self._handle_return_to_main(session_id, **parameters)
+        elif tool_name == 'list_scenario_forks':
+            return self._handle_list_forks(session_id, **parameters)
         
-        # Block redundant greeting system when Phase 1 upload is complete (professional integration)
-        if tool_name.lower() in ['simple_greeting', 'simplegreeting']:
-            from flask import session
-            if session.get('raw_data_stored', False):
-                logger.info(f"🚫 Blocking redundant greeting - Phase 1 upload completed")
-                return {
-                    'status': 'success',
-                    'response': '',  # Silent - Phase 1 already handled greeting
-                    'data': {}
-                }
-        
+        # Regular tool execution
         logger.info(f"🚀 Executing tool '{tool_name}' via tiered loader")
         return self.tiered_loader.execute_tool(tool_name, session_id, **parameters)
     
-    def _handle_explanation_directly(self, session_id: str, **parameters):
-        """Handle explanation requests directly without nested LLM calls"""
-        import time
-        start_time = time.time()
+    def _handle_create_scenario_fork(self, session_id: str, **parameters) -> Dict[str, Any]:
+        """Handle creating a scenario fork."""
+        scenario_name = parameters.get('scenario_name', 'exploration')
+        description = parameters.get('description', '')
         
-        try:
-            concept = parameters.get('concept', 'unknown topic')
-            technical_level = parameters.get('technical_level', 'intermediate')
-            include_context = parameters.get('include_context', True)
+        fork_id = self.fork_conversation(session_id, scenario_name)
+        
+        if fork_id:
+            return {
+                'status': 'success',
+                'message': f"🔀 Created scenario fork: **{scenario_name}**\n\n{description}\n\nYou can now explore this scenario safely. Use 'return_to_main_conversation' to go back to your original analysis.",
+                'fork_id': fork_id,
+                'scenario_name': scenario_name
+            }
+        else:
+            return {
+                'status': 'error',
+                'message': 'Failed to create scenario fork. Please try again.',
+                'fork_id': None
+            }
+    
+    def _handle_return_to_main(self, session_id: str, **parameters) -> Dict[str, Any]:
+        """Handle returning to main conversation."""
+        from flask import session
+        
+        # Get parent session ID
+        parent_session_id = session.get('parent_session_id')
+        
+        if parent_session_id:
+            success = self.return_to_main_session(parent_session_id)
             
-            # Build concise explanation prompt for the main LLM
-            if concept.lower() in ['chatmrpt', 'system capabilities', 'what can you do']:
-                explanation_prompt = f"Explain ChatMRPT's capabilities clearly at a {technical_level} level. Cover urban microstratification, risk analysis, mapping, and intervention targeting."
-            
-            elif any(keyword in concept.lower() for keyword in ['how to use', 'upload data', 'data accept', 'getting started', 'data format']):
-                explanation_prompt = f"Provide step-by-step guidance for using ChatMRPT at a {technical_level} level: data requirements, upload process, and what happens after upload."
-            
+            if success:
+                return {
+                    'status': 'success',
+                    'message': "🔙 Returned to main conversation. Your original analysis is restored.",
+                    'returned_to': parent_session_id
+                }
             else:
-                explanation_prompt = f"Explain '{concept}' from a malaria epidemiology perspective at a {technical_level} level. Be comprehensive but concise."
+                return {
+                    'status': 'error',
+                    'message': 'Failed to return to main conversation. Please try again.',
+                    'returned_to': None
+                }
+        else:
+            return {
+                'status': 'error',
+                'message': 'You are already in the main conversation.',
+                'returned_to': None
+            }
+    
+    def _handle_list_forks(self, session_id: str, **parameters) -> Dict[str, Any]:
+        """Handle listing scenario forks."""
+        forks = self.get_conversation_forks(session_id)
+        
+        if forks:
+            fork_list = []
+            for fork in forks:
+                fork_list.append(f"• **{fork['scenario']}** (created {time.strftime('%H:%M:%S', time.localtime(fork['created_at']))})")
             
-            # Add session context if requested
-            context_info = ""
-            if include_context:
-                from flask import session
-                if session.get('csv_loaded') and session.get('shapefile_loaded'):
-                    context_info = "\n\nNote: Reference the user's uploaded data when relevant to make the explanation more practical and applicable to their specific analysis."
+            message = f"🔀 **Scenario Forks Created:**\n\n" + "\n".join(fork_list)
+            message += f"\n\n*Total: {len(forks)} scenario forks*"
+        else:
+            message = "No scenario forks have been created yet. Say 'what if...' to explore alternatives!"
+        
+        return {
+            'status': 'success',
+            'message': message,
+            'forks': forks
+        }
+    
+    def fork_conversation(self, session_id: str, scenario_name: str = None) -> str:
+        """Fork conversation for scenario exploration like py-sidebot."""
+        try:
+            from flask import session
+            import os
+            import shutil
             
-            # Get explanation from main LLM (no nested call - same LLM with enhanced system prompt)
-            explanation = self.llm_manager.generate_response(
-                prompt=explanation_prompt + context_info,
-                temperature=0.7,
-                max_tokens=200,  # Further reduced for faster response
-                session_id=session_id
-            )
+            # Generate fork ID
+            timestamp = int(time.time())
+            scenario_suffix = f"_{scenario_name}" if scenario_name else ""
+            fork_id = f"{session_id}_fork{scenario_suffix}_{timestamp}"
             
-            execution_time = time.time() - start_time
+            logger.info(f"🔀 Forking conversation: {session_id} → {fork_id}")
+            
+            # Copy session data to fork
+            original_session_data = dict(session)
+            
+            # Create fork session data
+            fork_session_data = original_session_data.copy()
+            fork_session_data.update({
+                'parent_session_id': session_id,
+                'is_fork': True,
+                'fork_scenario': scenario_name or 'exploration',
+                'fork_created_at': timestamp,
+                'session_id': fork_id  # Update session ID
+            })
+            
+            # Copy uploaded files if they exist
+            original_upload_dir = f"instance/uploads/{session_id}"
+            fork_upload_dir = f"instance/uploads/{fork_id}"
+            
+            if os.path.exists(original_upload_dir):
+                logger.info(f"📁 Copying session files: {original_upload_dir} → {fork_upload_dir}")
+                shutil.copytree(original_upload_dir, fork_upload_dir)
+            
+            # Store fork session data (we'll set it when user switches to fork)
+            if not hasattr(self, '_fork_sessions'):
+                self._fork_sessions = {}
+            self._fork_sessions[fork_id] = fork_session_data
+            
+            # Add fork to parent session tracking
+            if 'conversation_forks' not in session:
+                session['conversation_forks'] = []
+            session['conversation_forks'].append({
+                'fork_id': fork_id,
+                'scenario': scenario_name or 'exploration',
+                'created_at': timestamp
+            })
+            
+            logger.info(f"✅ Fork created successfully: {fork_id}")
+            return fork_id
+            
+        except Exception as e:
+            logger.error(f"❌ Error forking conversation: {e}")
+            return None
+    
+    def switch_to_fork(self, fork_id: str) -> bool:
+        """Switch to a forked session."""
+        try:
+            from flask import session
+            
+            if hasattr(self, '_fork_sessions') and fork_id in self._fork_sessions:
+                # Store current session as backup
+                if not hasattr(self, '_session_backup'):
+                    self._session_backup = {}
+                self._session_backup[session.get('session_id', 'unknown')] = dict(session)
+                
+                # Switch to fork session
+                fork_data = self._fork_sessions[fork_id]
+                session.clear()
+                session.update(fork_data)
+                
+                logger.info(f"🔄 Switched to fork: {fork_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ Fork not found: {fork_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error switching to fork: {e}")
+            return False
+    
+    def return_to_main_session(self, main_session_id: str) -> bool:
+        """Return to main session from fork."""
+        try:
+            from flask import session
+            
+            if hasattr(self, '_session_backup') and main_session_id in self._session_backup:
+                # Restore main session
+                main_session_data = self._session_backup[main_session_id]
+                session.clear()
+                session.update(main_session_data)
+                
+                logger.info(f"🔙 Returned to main session: {main_session_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ Main session backup not found: {main_session_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error returning to main session: {e}")
+            return False
+    
+    def get_conversation_forks(self, session_id: str) -> List[Dict]:
+        """Get list of conversation forks for a session."""
+        from flask import session
+        return session.get('conversation_forks', [])
+    
+    def _detect_fork_intent(self, user_message: str) -> Dict[str, Any]:
+        """Detect if user wants to fork conversation for what-if scenarios."""
+        fork_indicators = [
+            'what if', 'suppose', 'let\'s try', 'how about', 'alternatively', 
+            'what would happen if', 'let me explore', 'can we try', 'test this scenario',
+            'hypothetically', 'for comparison', 'different approach', 'another way'
+        ]
+        
+        message_lower = user_message.lower()
+        
+        for indicator in fork_indicators:
+            if indicator in message_lower:
+                return {
+                    'should_fork': True,
+                    'trigger_phrase': indicator,
+                    'scenario_name': self._extract_scenario_name(user_message, indicator)
+                }
+        
+        return {'should_fork': False}
+    
+    def _extract_scenario_name(self, user_message: str, trigger_phrase: str) -> str:
+        """Extract scenario name from user message."""
+        # Simple extraction - could be enhanced
+        message_lower = user_message.lower()
+        
+        if 'variable' in message_lower:
+            return 'custom_variables'
+        elif 'threshold' in message_lower:
+            return 'threshold_test'
+        elif 'method' in message_lower:
+            return 'method_comparison'
+        elif 'ward' in message_lower:
+            return 'ward_focus'
+        else:
+            return 'exploration'
+    
+    # Legacy methods for backward compatibility
+    def parse_request(self, user_message: str, session_id: str) -> Dict[str, Any]:
+        """Legacy method - redirects to new conversational processing."""
+        logger.info("Using legacy parse_request - redirecting to conversational processing")
+        result = self.process_message(user_message, session_id)
+        
+        # Convert to legacy format for compatibility
+        if result.get('status') == 'success':
+            return {
+                'status': 'success',
+                'parsed_intent': {
+                    'intent_type': 'data_analysis',
+                    'primary_goal': 'Conversational processing',
+                    'tool_calls': [],
+                    'requires_session_data': True
+                }
+            }
+        else:
+            return {
+                'status': 'error',
+                'message': result.get('response', 'Error in conversational processing')
+            }
+    
+    def execute_intent(self, parsed_intent: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Legacy method - maintained for backward compatibility."""
+        logger.info("Using legacy execute_intent - this should be replaced with conversational processing")
+        return {
+            'status': 'success',
+            'message': 'Legacy method - use conversational processing instead',
+            'results': []
+        }
+    
+    def format_response(self, execution_results: Dict[str, Any], user_message: str, session_id: str = None) -> Dict[str, Any]:
+        """Legacy method - maintained for backward compatibility."""
+        logger.info("Using legacy format_response - this should be replaced with conversational processing")
+        return {
+            'status': 'success',
+            'response': 'Legacy method - use conversational processing instead',
+            'visualizations': []
+        }
+    
+    def _generate_simple_response(self, user_message: str, session_id: str) -> Dict[str, Any]:
+        """Generate a simple LLM response without Flask session dependencies for streaming."""
+        try:
+            # Simple system prompt without session-specific workflows
+            system_prompt = """You are ChatMRPT, a specialized assistant for malaria risk assessment and urban microstratification.
+
+You help with:
+- Malaria risk analysis using composite scoring and PCA
+- Urban settlement analysis and intervention targeting  
+- Data interpretation and visualization
+- Epidemiological insights and recommendations
+
+Provide helpful, conversational responses about malaria analysis and public health topics."""
+
+            # Simple message structure
+            messages = [
+                {"role": "user", "content": user_message}
+            ]
+            
+            # Generate response using LLM manager
+            try:
+                logger.info("Calling LLM manager for simple response...")
+                response = self.llm_manager.generate_response(
+                    prompt=user_message,
+                    system_message=system_prompt,
+                    temperature=0.7,
+                    session_id=session_id
+                )
+                logger.info(f"LLM response received: {len(response)} characters")
+            except Exception as llm_error:
+                logger.error(f"LLM call failed: {llm_error}")
+                # Fallback to a simple response
+                response = f"I'm ChatMRPT, your malaria risk analysis assistant. I encountered a technical issue but I'm here to help with malaria analysis, risk assessment, and intervention planning. How can I assist you?"
             
             return {
                 'status': 'success',
-                'message': f'Successfully explained "{concept}"',
-                'response': explanation,
-                'concept': concept,
-                'technical_level': technical_level,
-                'execution_time': round(execution_time, 2),
-                'tool_name': 'explainconcept',
-                'method': 'direct_explanation'  # Flag to show this was optimized
+                'response': response,
+                'visualizations': [],
+                'tools_used': [],
+                'intent_type': 'conversational',
+                'fallback': True
             }
             
         except Exception as e:
-            execution_time = time.time() - start_time
-            logger.error(f"Error in direct explanation handling: {e}")
+            logger.error(f"Error in simple response generation: {e}")
             return {
-                'status': 'error',
-                'message': f'Failed to explain concept: {str(e)}',
-                'execution_time': round(execution_time, 2),
-                'tool_name': 'explainconcept'
+                'status': 'error', 
+                'response': f'I encountered an issue processing your request: {str(e)}', 
+                'visualizations': [],
+                'fallback': True
             }
     
-    def _try_intelligent_defaults(self, user_message: str, session_id: str) -> Optional[Dict[str, Any]]:
-        """Try to apply intelligent defaults for common ambiguous requests"""
-        user_message_lower = user_message.lower()
-        
-        # Check each pattern group for matches
-        for pattern_group, default_config in self.intelligent_defaults.items():
-            for pattern in pattern_group:
-                if pattern in user_message_lower:
-                    logger.info(f"🤖 Applying intelligent default for pattern: {pattern}")
-                    
-                    # Create tool calls using the default configuration
-                    tool_calls = []
-                    
-                    for tool_name in default_config['default_tools']:
-                        if self.tiered_loader.is_tool_available(tool_name):
-                            tool_calls.append({
-                                'tool_name': tool_name,
-                                'parameters': default_config['default_params'].copy(),
-                                'reasoning': f"Intelligent default for ambiguous request: {pattern}"
-                            })
-                            break  # Use only the first available tool
-                
-                # If no tools found, use the first one anyway (fallback)
-                if not tool_calls and default_config['default_tools']:
-                    tool_calls.append({
-                        'tool_name': default_config['default_tools'][0],
-                        'parameters': default_config['default_params'].copy(),
-                        'reasoning': f"Fallback intelligent default for ambiguous request: {pattern}"
-                    })
-                
-                # Check if session has data before proceeding
-                if not self.validate_session_data_exists(session_id):
-                    return {
-                        'status': 'error',
-                        'message': 'No data uploaded yet. Please upload your data first before running analysis.',
-                        'visualizations': [],
-                        'original_message': user_message
-                    }
-                
-                # Execute the default tools
-                default_intent = {
-                    'intent_type': 'data_analysis',
-                    'primary_goal': f"Applied intelligent default: {default_config['message']}",
-                    'tool_calls': tool_calls,
-                    'requires_session_data': True,
-                    'routing': 'data_agent'
-                }
-                
-                # Execute the intent
-                execution_result = self.execute_intent(default_intent, session_id)
-                
-                # Add a note about the intelligent default being applied
-                if execution_result.get('status') == 'success':
-                    response_message = execution_result.get('response', '')
-                    default_note = f"\n\n💡 Note: {default_config['message']}. If you wanted something different, please be more specific in your request."
-                    execution_result['response'] = response_message + default_note
-                
-                return execution_result
-        
-        # Check for common phrases that might need number extraction
-        import re
-        number_matches = re.findall(r'\b(\d+)\b', user_message_lower)
-        if number_matches and any(phrase in user_message_lower for phrase in ['top', 'highest', 'most', 'vulnerable', 'risk']):
-            top_n = int(number_matches[0])
-            if 1 <= top_n <= 100:  # Reasonable range
-                logger.info(f"🤖 Applying intelligent default with extracted number: {top_n}")
-                
-                tool_calls = [{
-                    'tool_name': 'gettopriskwards',
-                    'parameters': {'top_n': top_n},
-                    'reasoning': f"Extracted top_n={top_n} from user request"
-                }]
-                
-                if not self.validate_session_data_exists(session_id):
-                    return {
-                        'status': 'error',
-                        'message': 'No data uploaded yet. Please upload your data first before running analysis.',
-                        'visualizations': [],
-                        'original_message': user_message
-                    }
-                
-                default_intent = {
-                    'intent_type': 'data_analysis',
-                    'primary_goal': f"Show top {top_n} vulnerability rankings",
-                    'tool_calls': tool_calls,
-                    'requires_session_data': True,
-                    'routing': 'data_agent'
-                }
-                
-                execution_result = self.execute_intent(default_intent, session_id)
-                
-                if execution_result.get('status') == 'success':
-                    response_message = execution_result.get('response', '')
-                    default_note = f"\n\n💡 Note: I extracted the number {top_n} from your request. If you wanted something different, please clarify."
-                    execution_result['response'] = response_message + default_note
-                
-                return execution_result
-        
-        return None  # No intelligent defaults apply
+    # ========================================================================
+    # PY-SIDEBOT LIGHTWEIGHT MEMORY IMPLEMENTATION
+    # ========================================================================
     
-    def validate_session_data_exists(self, session_id: str) -> bool:
-        """Check if session has uploaded data"""
-        from ..tools.base import validate_session_data_exists
-        return validate_session_data_exists(session_id)
+    def _store_conversation_simple(self, session_id: str, user_message: str, assistant_response: str):
+        """Store conversation in simple in-memory history (py-sidebot approach)."""
+        if session_id not in self.conversation_history:
+            self.conversation_history[session_id] = []
+        
+        self.conversation_history[session_id].append({
+            'user': user_message,
+            'assistant': assistant_response,
+            'timestamp': time.time()
+        })
+        
+        # Keep only last 10 exchanges per session to prevent memory bloat
+        if len(self.conversation_history[session_id]) > 10:
+            self.conversation_history[session_id] = self.conversation_history[session_id][-10:]
     
-    def _requires_unified_dataset(self, tool_name: str) -> bool:
-        """Check if a tool requires unified dataset"""
-        # Tools that require access to session data
-        data_dependent_tools = {
-            'getwardriskscore', 'gettopriskwards', 'filterwardsbyrisk', 'getriskstatistics',
-            'getwardinformation', 'getwardvariable', 'comparewards', 'searchwards',
-            'getdescriptivestatistics', 'getcorrelationanalysis', 'performregressionanalysis',
-            'createvulnerabilitymap', 'createpcamap', 'createscatterplot', 'createboxplot',
-            'getinterventionpriorities', 'simulatecoverageincrease',
-            # Add missing analysis tools
-            'runcompositeanalysis', 'runpcaanalysis', 'create_unified_dataset',
-            'runcompositeanalysis', 'runpcaanalysis', 'createunifieddataset',
-            'composite_analysis', 'pca_analysis', 'unified_dataset',
-            # Complete analysis tools
-            'runcompleteanalysis', 'complete_analysis'
+    def _get_session_context(self, session_id: str) -> Dict:
+        """Get session context including conversation history and data schema."""
+        context = {
+            'session_id': session_id,
+            'conversation_history': self.conversation_history.get(session_id, []),
+            'data_schema': None,
+            'current_data': None
         }
-        return tool_name.lower() in data_dependent_tools
-    
-    def _ensure_unified_dataset_exists(self, session_id: str) -> Dict[str, Any]:
-        """Ensure unified dataset exists for session"""
+        
+        # Add data schema context (py-sidebot approach)
         try:
-            import os
-            from ..data.unified_dataset_builder import load_unified_dataset, UnifiedDatasetBuilder
-            
-            # Check if unified dataset already exists
-            unified_path = os.path.join(f"instance/uploads/{session_id}", "unified_dataset.geoparquet")
-            if os.path.exists(unified_path):
-                # Try to load it to ensure it's valid
-                gdf = load_unified_dataset(session_id)
-                if gdf is not None:
-                    return {'success': True, 'message': 'Unified dataset exists and is valid'}
-            
-            # Check if we have the required base data to create unified dataset
-            session_folder = f"instance/uploads/{session_id}"
-            csv_exists = os.path.exists(os.path.join(session_folder, "processed_data.csv"))
-            shapefile_exists = os.path.exists(os.path.join(session_folder, "shapefile", "processed.shp"))
-            
-            if not csv_exists or not shapefile_exists:
-                return {
-                    'success': False, 
-                    'message': f'Missing base data - CSV: {csv_exists}, Shapefile: {shapefile_exists}'
-                }
-            
-            # Try to create unified dataset
-            logger.info(f"Creating unified dataset for session {session_id}")
-            builder = UnifiedDatasetBuilder(session_id)
-            result = builder.build_unified_dataset()
-            
-            if result['status'] == 'success':
-                return {'success': True, 'message': 'Unified dataset created successfully'}
-            else:
-                return {'success': False, 'message': f'Failed to create unified dataset: {result.get("message")}'}
-                
+            data_handler = self.data_service.get_handler(session_id)
+            if data_handler and hasattr(data_handler, 'df') and data_handler.df is not None:
+                # Generate data schema like py-sidebot
+                context['data_schema'] = self._generate_data_schema(data_handler.df)
+                context['current_data'] = 'CSV data loaded with shapefile'
         except Exception as e:
-            logger.error(f"Error ensuring unified dataset exists: {e}")
-            return {'success': False, 'message': f'Error: {str(e)}'}
+            logger.debug(f"Could not get data context: {e}")
+        
+        return context
+    
+    def _generate_data_schema(self, df) -> str:
+        """Generate data schema description like py-sidebot's df_to_schema."""
+        try:
+            schema_parts = []
+            schema_parts.append(f"Dataset: {len(df)} rows, {len(df.columns)} columns")
+            
+            # Column information
+            for col in df.columns:
+                dtype = str(df[col].dtype)
+                non_null = df[col].notna().sum()
+                
+                if df[col].dtype == 'object':
+                    unique_count = df[col].nunique()
+                    if unique_count <= 10:
+                        unique_vals = df[col].unique()[:5]
+                        schema_parts.append(f"- {col}: categorical ({non_null}/{len(df)} non-null, {unique_count} unique values: {list(unique_vals)})")
+                    else:
+                        schema_parts.append(f"- {col}: text ({non_null}/{len(df)} non-null, {unique_count} unique values)")
+                else:
+                    min_val = df[col].min()
+                    max_val = df[col].max()
+                    schema_parts.append(f"- {col}: numeric ({non_null}/{len(df)} non-null, range: {min_val} to {max_val})")
+            
+            return "\n".join(schema_parts)
+        except Exception as e:
+            logger.error(f"Error generating data schema: {e}")
+            return "Data schema unavailable"

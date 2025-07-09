@@ -472,16 +472,16 @@ class ToolRegistry:
             'app.tools.visualization_maps_tools',
             'app.tools.visualization_charts_tools',
             'app.tools.intervention_targeting_tools',
-            'app.tools.scenario_simulation_tools',
+            # 'app.tools.scenario_simulation_tools',  # Removed during streamlining
             'app.tools.smart_knowledge_tools',
-            'app.tools.knowledge_tools',
+            # 'app.tools.knowledge_tools',  # Removed during streamlining
             'app.tools.settlement_validation_tools',
             'app.tools.settlement_visualization_tools',
-            'app.tools.data_preparation_tools',  # NEW: Data preparation tools
-            # Advanced tools
-            'app.tools.advanced_mapping_tools',
+            # 'app.tools.data_preparation_tools',  # Removed during streamlining
+            # Advanced tools (removed during streamlining)
+            # 'app.tools.advanced_mapping_tools',
             'app.tools.settlement_intervention_tools',
-            'app.tools.spatial_autocorrelation_tools',
+            # 'app.tools.spatial_autocorrelation_tools',
             'app.tools.complete_analysis_tools'  # CRITICAL: Include complete analysis
         ]
         

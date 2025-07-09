@@ -103,6 +103,12 @@ export class ChatManager {
             console.log('🔍 DEBUG: response.response field:', response.response);
             console.log('🔍 DEBUG: response.message field:', response.message);
             
+            // ✅ FIX: Skip processing if this was already handled via streaming
+            if (response.streamed || response.streaming_handled) {
+                console.log('🔍 DEBUG: Skipping messageResponse - already handled via streaming');
+                return;
+            }
+            
             // Transition from initial state on first message
             if (this.isInitialState) {
                 this.transitionToNormalChat();

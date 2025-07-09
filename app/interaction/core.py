@@ -250,9 +250,19 @@ class DatabaseManager:
                 response TEXT,
                 tokens_used INTEGER,
                 latency REAL,
+                enhanced_timing TEXT,
                 FOREIGN KEY (session_id) REFERENCES sessions (session_id)
             )
             ''')
+            
+            # Add enhanced_timing column if it doesn't exist (for existing databases)
+            try:
+                cursor.execute('''
+                ALTER TABLE llm_interactions ADD COLUMN enhanced_timing TEXT
+                ''')
+            except sqlite3.OperationalError:
+                # Column already exists, which is fine
+                pass
             
             # Create explanations table - tracks explanations generated for users
             cursor.execute('''

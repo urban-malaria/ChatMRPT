@@ -78,80 +78,95 @@ class TieredToolLoader:
         logger.info("🚀 Tiered loader initialized - tools will load on first app visit")
     
     def _define_tool_groups(self) -> Dict[ToolGroup, ToolGroupDefinition]:
-        """Define tool groups based on usage patterns analysis"""
+        """Define tool groups optimized for essential 25 tools - streamlined for conversational system"""
         return {
             ToolGroup.CORE: ToolGroupDefinition(
-                name="Core Tools",
+                name="Core Conversational Tools",
                 modules=[
-                    'app.tools.knowledge_tools',          # greetings, explanations, methodology (truly lightweight)
-                    'app.tools.variable_distribution',    # variable distribution maps (eager loaded)
+                    # 'app.tools.complete_analysis_tools',  # Removed during streamlining
+                    'app.tools.variable_distribution',    # Essential: variable visualization
                 ],
                 tools=[
-                    'simplegreeting',
-                    'explainconcept',
-                    'explainanalysismethodology',
-                    'variable_distribution'
+                    'runcompleteanalysis',      # 1. Complete analysis execution
+                    'runcompositeanalysis',     # 2. Composite analysis only
+                    'runpcaanalysis',           # 3. PCA analysis only  
+                    'variable_distribution'     # 4. Variable distribution maps
                 ],
-                description="Essential tools for immediate startup including variable visualization and methodology explanations",
-                dependencies=['plotly', 'geopandas']  # Needed for variable distribution
+                description="Essential analysis and visualization tools for immediate startup",
+                dependencies=['plotly', 'geopandas', 'scikit-learn']
             ),
             
             ToolGroup.VISUALIZATION: ToolGroupDefinition(
-                name="Visualization Tools",
+                name="Essential Visualization Tools",
                 modules=[
                     'app.tools.visualization_maps_tools',
                     'app.tools.visualization_charts_tools',
-                    'app.tools.settlement_visualization_tools',
-                ],
+                    'app.tools.settlement_visualization_tools'
+,                ],
                 tools=[
-                    'createvulnerabilitymap', 'createpcamap', 'createurbanextentmap',
-                    'createdecisiontree', 'createboxplot', 'createcompositescoremaps',
-                    'createhistogram', 'createscatterplot', 'createcorrelationheatmap',
-                    'createsettlementanalysismap', 'createinterventionmap'
+                    # Essential Maps (5 tools)
+                    'createvulnerabilitymap',   # 5. Vulnerability choropleth maps
+                    'createpcamap',             # 6. PCA result maps  
+                    'createcompositescoremaps', # 7. Composite score maps
+                    'createinterventionmap',    # 8. Intervention targeting maps
+                    'createurbanextentmap',     # 9. Urban extent visualization
+                    
+                    # Essential Charts (4 tools)
+                    'createhistogram',          # 10. Variable distributions
+                    'createscatterplot',        # 11. Variable relationships
+                    'createcorrelationheatmap', # 12. Correlation analysis
+                    'createboxplot'             # 13. Risk score distributions
                 ],
-                description="All visualization tools sharing plotly/matplotlib",
+                description="Essential visualization tools for malaria risk analysis",
                 dependencies=['plotly', 'matplotlib', 'folium']
             ),
             
             ToolGroup.STATISTICAL: ToolGroupDefinition(
-                name="Statistical Analysis Tools",
+                name="Statistical & Data Tools",
                 modules=[
-                    'app.tools.ward_data_tools',          # ward data queries (moved from CORE)
-                    'app.tools.smart_knowledge_tools',    # personalized recommendations (moved from CORE)
-                    'app.tools.risk_analysis_tools',      # ward risk tools (moved from CORE)
+                    'app.tools.ward_data_tools',
+                    'app.tools.risk_analysis_tools',
                     'app.tools.statistical_analysis_tools',
-                    'app.tools.spatial_autocorrelation_tools',
                 ],
                 tools=[
-                    'getwardinformation', 'getwardvariable', 'comparewards', 'searchwards',  # Ward data
-                    'getpersonalizedrecommendations', 'interpretyourresults',  # Smart knowledge
-                    'getwardriskscore', 'gettopriskwards', 'filterwardsbyrisklevel', 'getriskstatistics',  # Risk analysis
-                    'getdescriptivestatistics', 'getcorrelationanalysis',
-                    'performregressionanalysis', 'performanova', 'performttest'
+                    # Ward Data Tools (4 tools)
+                    'getwardinformation',       # 14. Ward details lookup
+                    'getwardvariable',          # 15. Ward variable values
+                    'comparewards',             # 16. Ward comparisons
+                    'searchwards',              # 17. Ward search functionality
+                    
+                    # Risk Analysis Tools (3 tools)
+                    'gettopriskwards',          # 18. Top risk wards ranking
+                    'getwardriskscore',         # 19. Individual ward risk scores
+                    'getriskstatistics',        # 20. Risk statistics summary
+                    
+                    # Statistical Analysis (2 tools)
+                    'getdescriptivestatistics', # 21. Descriptive statistics
+                    'getcorrelationanalysis'    # 22. Correlation analysis
                 ],
-                description="Statistical, ward data, and risk analysis tools using scipy/sklearn/geopandas",
-                dependencies=['scipy', 'sklearn', 'statsmodels', 'geopandas']
+                description="Statistical analysis and ward data management tools",
+                dependencies=['scipy', 'sklearn', 'geopandas']
             ),
             
             ToolGroup.SPECIALIZED: ToolGroupDefinition(
-                name="Specialized Tools",
+                name="Specialized & Knowledge Tools",
                 modules=[
-                    'app.tools.complete_analysis_tools',  # Heavy analysis tools (moved from CORE)
+                    'app.tools.smart_knowledge_tools',
                     'app.tools.settlement_validation_tools',
                     'app.tools.settlement_intervention_tools',
-                    'app.tools.scenario_simulation_tools',
                     'app.tools.intervention_targeting_tools',
-                    'app.tools.data_preparation_tools',
-                    'app.tools.advanced_mapping_tools',
+                    
                 ],
                 tools=[
-                    'runcompleteanalysis', 'runcompositeanalysis', 'runpcaanalysis',  # Complete analysis tools
-                    'generatecomprehensiveanalysissummary',  # Analysis summary tool
-                    'settlement_validation_tools', 'settlement_intervention_tools',
-                    'scenario_simulation_tools', 'createinterventiontargetingmap'
+                    # Knowledge & Methodology (2 tools)
+                    'explainanalysismethodology',    # 23. Methodology explanations
+                    'getpersonalizedrecommendations', # 24. Personalized insights
+                    
+                    # Intervention Targeting (1 tool)
+                    'createinterventiontargetingmap' # 25. Intervention planning
                 ],
-                description="Low-frequency specialized tools and heavy analysis workflows",
-                dependencies=['geopandas', 'shapely', 'rasterio']
+                description="Knowledge base and intervention planning tools",
+                dependencies=['geopandas', 'shapely']
             )
         }
     

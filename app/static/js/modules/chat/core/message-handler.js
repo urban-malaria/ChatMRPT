@@ -54,28 +54,92 @@ export class MessageHandler {
 
         try {
             const sessionData = SessionDataManager.getSessionData();
-            const response = await apiClient.sendMessage(message, sessionData.currentLanguage);
-
-            this.hideTypingIndicator();
             
-            // Debug logging
-            console.log('🔍 DEBUG: Raw response from backend:', response);
-            console.log('🔍 DEBUG: Response has .response field:', !!response.response);
-            console.log('🔍 DEBUG: Response has .message field:', !!response.message);
+            // Check if streaming is enabled (can be toggled via settings)
+            const useStreaming = true; // Always use streaming for better UX
+            console.log('🔥 STREAMING DEBUG: useStreaming =', useStreaming);
             
-            // Emit event for other modules to handle
-            document.dispatchEvent(new CustomEvent('messageResponse', { 
-                detail: { response, originalMessage: message }
-            }));
+            if (useStreaming) {
+                console.log('🔥 STREAMING DEBUG: Using streaming endpoint!');
+                // Use streaming for better UX
+                let streamingMessageElement = null;
+                let streamingContent = '';
+                let fullResponse = {};
+                
+                apiClient.sendMessageStreaming(
+                    message, 
+                    sessionData.currentLanguage,
+                    // onChunk callback
+                    (chunk) => {
+                        if (!streamingMessageElement) {
+                            this.hideTypingIndicator();
+                            streamingMessageElement = this.createMessageElement('assistant', '', 'assistant-message streaming');
+                            this.appendMessage(streamingMessageElement);
+                        }
+                        
+                        if (chunk.content) {
+                            streamingContent += chunk.content;
+                            const contentDiv = streamingMessageElement.querySelector('.message-content');
+                            if (contentDiv) {
+                                const parsedContent = this.parseMarkdownContent(streamingContent);
+                                contentDiv.innerHTML = parsedContent;
+                                this.scrollToBottom();
+                            }
+                        }
+                        
+                        // Update fullResponse with latest data
+                        if (chunk.status) fullResponse.status = chunk.status;
+                        if (chunk.visualizations) fullResponse.visualizations = chunk.visualizations;
+                        if (chunk.tools_used) fullResponse.tools_used = chunk.tools_used;
+                    },
+                    // onComplete callback
+                    (finalData) => {
+                        if (streamingMessageElement) {
+                            streamingMessageElement.classList.remove('streaming');
+                        }
+                        
+                        // Prepare final response object
+                        fullResponse.response = streamingContent;
+                        fullResponse.message = streamingContent;
+                        fullResponse.streaming_handled = true;  // ✅ Mark as handled via streaming
+                        
+                        // Emit event for other modules to handle
+                        document.dispatchEvent(new CustomEvent('messageResponse', { 
+                            detail: { response: fullResponse, originalMessage: message }
+                        }));
+                        
+                        this.isWaitingForResponse = false;
+                    }
+                );
+                
+                return; // Exit early for streaming
+            } else {
+                // Fallback to regular non-streaming
+                const response = await apiClient.sendMessage(message, sessionData.currentLanguage);
 
-            return response;
+                this.hideTypingIndicator();
+                
+                // Debug logging
+                console.log('🔍 DEBUG: Raw response from backend:', response);
+                console.log('🔍 DEBUG: Response has .response field:', !!response.response);
+                console.log('🔍 DEBUG: Response has .message field:', !!response.message);
+                
+                // Emit event for other modules to handle
+                document.dispatchEvent(new CustomEvent('messageResponse', { 
+                    detail: { response, originalMessage: message }
+                }));
+
+                return response;
+            }
         } catch (error) {
             this.hideTypingIndicator();
             this.addSystemMessage('Sorry, there was an error processing your request. Please try again.');
             console.error('Error sending message:', error);
             throw error;
         } finally {
-            this.isWaitingForResponse = false;
+            if (!window.chatStreamingEnabled || window.chatStreamingEnabled === false) {
+                this.isWaitingForResponse = false;
+            }
         }
     }
 
