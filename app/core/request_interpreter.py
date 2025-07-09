@@ -637,21 +637,21 @@ Based on typical requests, you help with:
                 }
             },
             {
-                "name": "create_scatter_plot",
-                "description": "Create scatter plots for variable relationships",
+                "name": "execute_data_query",
+                "description": "Execute data queries and create visualizations using conversational data access. Can create scatter plots, histograms, correlations, descriptive statistics, and more.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "x_variable": {
+                        "query": {
                             "type": "string",
-                            "description": "Variable for x-axis"
+                            "description": "Natural language description of the analysis or visualization needed (e.g., 'scatter plot of elevation vs pfpr', 'histogram of rainfall values', 'correlation between temperature and pfpr')"
                         },
-                        "y_variable": {
+                        "code": {
                             "type": "string",
-                            "description": "Variable for y-axis"
+                            "description": "Optional Python code to execute for the analysis. If not provided, will be generated from the query."
                         }
                     },
-                    "required": ["x_variable", "y_variable"]
+                    "required": ["query"]
                 }
             }
         ])
@@ -1036,6 +1036,8 @@ Based on typical requests, you help with:
             return self._handle_return_to_main(session_id, **parameters)
         elif tool_name == 'list_scenario_forks':
             return self._handle_list_forks(session_id, **parameters)
+        elif tool_name == 'execute_data_query':
+            return self._handle_execute_data_query(session_id, **parameters)
         
         # Regular tool execution
         logger.info(f"🚀 Executing tool '{tool_name}' via tiered loader")
@@ -1452,4 +1454,58 @@ Provide helpful, conversational responses about malaria analysis and public heal
             # Fallback explanation
             viz_name = viz_type.replace('_', ' ').title() if viz_type else 'Visualization'
             return f"📊 **{viz_name} Created** - This visualization shows your malaria risk analysis results to guide intervention planning."
+    
+    def _handle_execute_data_query(self, session_id: str, **parameters) -> Dict[str, Any]:
+        """Handle data query execution using conversational data access."""
+        try:
+            query = parameters.get('query', '')
+            code = parameters.get('code', '')
+            
+            # Initialize conversational data access for this session
+            if not self.conversational_data_access:
+                from app.services.conversational_data_access import ConversationalDataAccess
+                self.conversational_data_access = ConversationalDataAccess(session_id, self.llm_manager)
+            
+            # Execute the query
+            if code:
+                # Use provided code directly
+                result = self.conversational_data_access.execute_code(code)
+            else:
+                # Generate code from natural language query
+                result = self.conversational_data_access.process_query(query)
+            
+            if result.get('success'):
+                response_message = result.get('response', f"Successfully executed: {query}")
+                
+                # Check if there's a plot/visualization
+                if result.get('plot_base64'):
+                    # Create visualization entry
+                    return {
+                        'status': 'success',
+                        'message': response_message,
+                        'response': response_message,
+                        'plot_data': result.get('plot_base64'),
+                        'plot_type': result.get('plot_type', 'visualization')
+                    }
+                else:
+                    return {
+                        'status': 'success',
+                        'message': response_message,
+                        'response': response_message,
+                        'data': result.get('data', {})
+                    }
+            else:
+                return {
+                    'status': 'error',
+                    'message': result.get('error', f"Failed to execute query: {query}"),
+                    'response': f"I encountered an error while processing your request: {result.get('error', 'Unknown error')}"
+                }
+            
+        except Exception as e:
+            logger.error(f"Error in execute_data_query: {e}")
+            return {
+                'status': 'error',
+                'message': f"Error executing data query: {str(e)}",
+                'response': f"I encountered an error while processing your data query: {str(e)}"
+            }
     

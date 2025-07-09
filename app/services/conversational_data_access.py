@@ -720,6 +720,85 @@ Here's a sample of the data:
 """
         
         return prompt
+    
+    def process_query(self, query: str) -> Dict[str, Any]:
+        """Process natural language query by generating and executing code."""
+        try:
+            # Get data schema for context
+            schema = self.generate_comprehensive_schema()
+            if 'error' in schema:
+                return {
+                    'success': False,
+                    'error': schema['error'],
+                    'query': query
+                }
+            
+            # Generate code using LLM
+            if not self.llm_manager:
+                return {
+                    'success': False,
+                    'error': 'LLM manager not available for query processing',
+                    'query': query
+                }
+            
+            # Build prompt for code generation
+            code_prompt = f"""
+Given this malaria dataset schema and a user query, generate Python pandas code to answer the question.
+
+DATASET SCHEMA:
+- Total rows: {schema['dataset_info']['total_rows']}
+- Total columns: {schema['dataset_info']['total_columns']}
+- Stage: {schema['dataset_info']['stage']}
+
+AVAILABLE COLUMNS:
+{', '.join(schema['columns'].keys())}
+
+SAMPLE DATA:
+{schema['sample_data']}
+
+USER QUERY: {query}
+
+Generate Python code using 'df' as the dataframe variable. If the query asks for visualization, use matplotlib/seaborn.
+
+IMPORTANT:
+- Use only pandas, numpy, matplotlib, seaborn operations
+- The dataframe is already loaded as 'df'
+- For plots, use plt.figure() and plt.show()
+- Return only the code, no explanations
+
+CODE:
+"""
+            
+            # Generate code
+            response = self.llm_manager.generate_response(
+                messages=[{"role": "user", "content": code_prompt}],
+                temperature=0.1,
+                max_tokens=500
+            )
+            
+            generated_code = response.get('content', '').strip()
+            
+            # Clean up code (remove markdown formatting if present)
+            if generated_code.startswith('```'):
+                lines = generated_code.split('\n')
+                generated_code = '\n'.join(lines[1:-1])
+            
+            # Execute the generated code
+            result = self.execute_code(generated_code, context=query)
+            
+            # Add query context to result
+            result['query'] = query
+            result['generated_code'] = generated_code
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error processing query: {e}")
+            return {
+                'success': False,
+                'error': f"Failed to process query: {str(e)}",
+                'query': query
+            }
 
 
 def get_conversational_data_access(session_id: str, llm_manager=None) -> ConversationalDataAccess:
