@@ -98,32 +98,51 @@ class RequestInterpreter:
             session_context = self._get_session_context(session_id)
             timing_breakdown['context_retrieval'] = time.time() - context_start
             
-            # Build conversational system prompt
-            prompt_start = time.time()
-            system_prompt = self._build_conversational_prompt(session_context)
-            timing_breakdown['prompt_building'] = time.time() - prompt_start
+            # SMART ROUTING: Determine the best approach for this request
+            routing_decision = self._determine_routing_strategy(user_message, session_context)
+            logger.info(f"ROUTING DECISION for '{user_message[:50]}...': {routing_decision}")
             
-            # Get available tools as functions
-            available_functions = self._get_available_functions()
-            
-            # Build conversation messages
-            messages = self._build_conversation_messages(user_message, session_context, session_id)
-            
-            # Single LLM call with function calling
-            llm_start = time.time()
-            response = self.llm_manager.generate_with_functions(
-                messages=messages,
-                system_prompt=system_prompt,
-                functions=available_functions,
-                temperature=0.7,
-                session_id=session_id
-            )
-            timing_breakdown['llm_processing'] = time.time() - llm_start
-            
-            # Process the response
-            tool_start = time.time()
-            result = self._process_llm_response(response, user_message, session_id)
-            timing_breakdown['tool_execution'] = time.time() - tool_start
+            if routing_decision['strategy'] == 'direct_data_access':
+                # Handle with conversational data access directly
+                tool_start = time.time()
+                result = self._handle_execute_data_query(session_id, query=user_message)
+                timing_breakdown['tool_execution'] = time.time() - tool_start
+                timing_breakdown['llm_processing'] = 0  # No LLM call needed
+                
+                # Format as standard response
+                if result.get('status') == 'success':
+                    result['response'] = result.get('message', result.get('response', ''))
+                    result['tools_used'] = ['conversational_data_access']
+                else:
+                    result['response'] = result.get('message', 'Sorry, I encountered an error processing your request.')
+                    result['tools_used'] = []
+            else:
+                # Use LLM with function calling for complex requests
+                prompt_start = time.time()
+                system_prompt = self._build_conversational_prompt(session_context)
+                timing_breakdown['prompt_building'] = time.time() - prompt_start
+                
+                # Get available tools as functions (filtered based on routing)
+                available_functions = self._get_available_functions(routing_decision['preferred_tools'])
+                
+                # Build conversation messages
+                messages = self._build_conversation_messages(user_message, session_context, session_id)
+                
+                # Single LLM call with function calling
+                llm_start = time.time()
+                response = self.llm_manager.generate_with_functions(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                    functions=available_functions,
+                    temperature=0.7,
+                    session_id=session_id
+                )
+                timing_breakdown['llm_processing'] = time.time() - llm_start
+                
+                # Process the response
+                tool_start = time.time()
+                result = self._process_llm_response(response, user_message, session_id)
+                timing_breakdown['tool_execution'] = time.time() - tool_start
             
             # Add fork context to response if we forked
             if fork_context:
@@ -357,8 +376,32 @@ class RequestInterpreter:
         """Get comprehensive session context for conversation."""
         from flask import session
         
+        # Check actual data availability using SessionDataService
+        data_loaded = False
+        try:
+            if self.data_service and hasattr(self.data_service, 'has_data'):
+                data_loaded = self.data_service.has_data(session_id)
+                logger.info(f"SessionDataService.has_data({session_id}) = {data_loaded}")
+            else:
+                # Fallback to Flask session check
+                data_loaded = session.get('csv_loaded', False) and session.get('shapefile_loaded', False)
+                logger.info(f"Flask session check: csv_loaded={session.get('csv_loaded')}, shapefile_loaded={session.get('shapefile_loaded')}, data_loaded={data_loaded}")
+                
+            # Double-check with additional validation
+            if not data_loaded:
+                # Try alternative check - just CSV for pre-analysis
+                flask_csv = session.get('csv_loaded', False)
+                if flask_csv:
+                    logger.info(f"Using Flask session CSV flag as fallback: csv_loaded={flask_csv}")
+                    data_loaded = flask_csv
+                    
+        except Exception as e:
+            logger.warning(f"Error checking data availability for session {session_id}: {e}")
+            data_loaded = session.get('csv_loaded', False) 
+            logger.info(f"Exception fallback check: data_loaded={data_loaded}")
+        
         context = {
-            'data_loaded': session.get('csv_loaded', False) and session.get('shapefile_loaded', False),
+            'data_loaded': data_loaded,
             'analysis_complete': session.get('analysis_complete', False),
             'analysis_type': session.get('analysis_type', 'none'),
             'variables_used': session.get('variables_used', []),
@@ -560,7 +603,95 @@ Based on typical requests, you help with:
 
         return f"{identity_section}\n{session_section}\n{workflow_section}\n{guidelines_section}\n{flow_section}"
     
-    def _get_available_functions(self) -> List[Dict]:
+    def _determine_routing_strategy(self, user_message: str, session_context: Dict) -> Dict[str, Any]:
+        """
+        Determine the best routing strategy for a user request.
+        
+        Returns:
+            Dict with 'strategy' and 'preferred_tools' keys
+        """
+        message_lower = user_message.lower()
+        
+        # Check if data is available
+        has_data = session_context.get('data_loaded', False)
+        
+        if not has_data:
+            # No data available - use conversational approach
+            return {
+                'strategy': 'conversational',
+                'preferred_tools': ['greeting', 'help', 'data_upload'],
+                'reason': 'No data available'
+            }
+        
+        # CORE ANALYSIS ROUTING - Use retained core tools
+        core_analysis_patterns = [
+            'run analysis', 'complete analysis', 'full analysis', 'run the analysis',
+            'execute analysis', 'perform analysis', 'start analysis', 'begin analysis',
+            'composite and pca', 'both methods', 'dual method'
+        ]
+        
+        if any(pattern in message_lower for pattern in core_analysis_patterns):
+            return {
+                'strategy': 'core_tools',
+                'preferred_tools': ['run_complete_analysis', 'run_composite_analysis', 'run_pca_analysis'],
+                'reason': 'Core analysis request'
+            }
+        
+        # CORE VISUALIZATION ROUTING - Use retained core tools
+        core_viz_patterns = [
+            ('vulnerability map', ['create_vulnerability_map']),
+            ('pca map', ['create_pca_map']),
+            ('box plot', ['create_box_plot']),
+            ('urban extent', ['create_urban_extent_map']),
+            ('decision tree', ['create_decision_tree']),
+            ('composite score map', ['create_composite_score_maps']),
+        ]
+        
+        for pattern, tools in core_viz_patterns:
+            if pattern in message_lower:
+                return {
+                    'strategy': 'core_tools',
+                    'preferred_tools': tools,
+                    'reason': f'Core visualization request: {pattern}'
+                }
+        
+        # EXPLORATORY DATA ANALYSIS - Use conversational data access
+        exploratory_patterns = [
+            'show me', 'tell me about', 'what is', 'how many', 'which ward',
+            'range of', 'values', 'statistics', 'stats', 'describe',
+            'histogram', 'scatter plot', 'correlation', 'compare',
+            'distribution', 'mean', 'median', 'min', 'max', 'count',
+            'highest', 'lowest', 'top', 'bottom', 'sort', 'rank'
+        ]
+        
+        if any(pattern in message_lower for pattern in exploratory_patterns):
+            return {
+                'strategy': 'direct_data_access',
+                'preferred_tools': ['execute_data_query'],
+                'reason': 'Exploratory data analysis request'
+            }
+        
+        # METHODOLOGY QUESTIONS - Use methodology tool
+        methodology_patterns = [
+            'explain', 'how does', 'what is composite', 'what is pca',
+            'methodology', 'method', 'approach', 'algorithm'
+        ]
+        
+        if any(pattern in message_lower for pattern in methodology_patterns):
+            return {
+                'strategy': 'core_tools',
+                'preferred_tools': ['explain_analysis_methodology'],
+                'reason': 'Methodology explanation request'
+            }
+        
+        # DEFAULT - Use conversational approach with all tools
+        return {
+            'strategy': 'conversational',
+            'preferred_tools': 'all',
+            'reason': 'General conversational request'
+        }
+    
+    def _get_available_functions(self, preferred_tools=None) -> List[Dict]:
         """Get available tools as OpenAI-style functions."""
         functions = []
         
@@ -767,6 +898,22 @@ Based on typical requests, you help with:
                 }
             }
         ])
+        
+        # Filter functions based on preferred tools
+        if preferred_tools and preferred_tools != 'all':
+            if isinstance(preferred_tools, list):
+                # Filter to only include preferred tools
+                filtered_functions = []
+                for func in functions:
+                    if func['name'] in preferred_tools:
+                        filtered_functions.append(func)
+                return filtered_functions
+            else:
+                # Single tool preference
+                for func in functions:
+                    if func['name'] == preferred_tools:
+                        return [func]
+                return []
         
         return functions
     

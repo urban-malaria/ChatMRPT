@@ -176,11 +176,8 @@ from .complete_analysis_tools import (
     GenerateComprehensiveAnalysisSummary
 )
 
-# Data Query Tools for Conversational Access
-from .data_query_tool import (
-    ExecuteDataQuery,
-    ExploreDataSchema
-)
+# Data Query Tools for Conversational Access - REMOVED
+# Now handled directly by request interpreter with conversational data access
 
 # Variable Distribution Tools
 from .variable_distribution import (

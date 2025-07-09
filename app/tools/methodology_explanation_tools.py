@@ -6,7 +6,7 @@ Tools to explain analysis methodologies and help users understand the different 
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, ClassVar
 from pydantic import BaseModel, Field
 
 from .base import BaseTool, ToolCategory, ToolExecutionResult
@@ -32,10 +32,10 @@ class ExplainAnalysisMethodology(BaseTool):
     - Advantages and limitations
     """
     
-    name = "explain_analysis_methodology"
-    description = "Explain analysis methodologies (composite scoring, PCA) used in malaria risk assessment"
-    category = ToolCategory.KNOWLEDGE
-    input_model = ExplainAnalysisMethodologyInput
+    name: ClassVar[str] = "explain_analysis_methodology"
+    description: ClassVar[str] = "Explain analysis methodologies (composite scoring, PCA) used in malaria risk assessment"
+    category: ClassVar[ToolCategory] = ToolCategory.KNOWLEDGE
+    input_model: ClassVar[type] = ExplainAnalysisMethodologyInput
     
     def _execute(self, **kwargs) -> ToolExecutionResult:
         """Execute methodology explanation"""
