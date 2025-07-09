@@ -797,7 +797,6 @@ Based on typical requests, you help with:
                     response_text = tool_result.get('message', tool_result.get('response', 'Analysis completed successfully'))
                     visualizations = []
                     
-                    
                     # Extract visualizations if any
                     if 'web_path' in tool_result:
                         visualizations.append({
@@ -806,6 +805,17 @@ Based on typical requests, you help with:
                             'title': tool_result.get('message', 'Visualization'),
                             'tool': function_name
                         })
+                        
+                        # UNIVERSAL VISUALIZATION EXPLANATION (py-sidebot approach)
+                        # Automatically explain ANY visualization using image analysis
+                        explanation = self._explain_visualization_universally(
+                            viz_path=tool_result.get('file_path', tool_result['web_path']),
+                            viz_type=tool_result.get('map_type', function_name),
+                            session_id=session_id
+                        )
+                        
+                        # Prepend explanation to response (explanation appears first in chat)
+                        response_text = f"{explanation}\n\n{response_text}"
                     
                     return {
                         'status': 'success',
@@ -1343,3 +1353,33 @@ Provide helpful, conversational responses about malaria analysis and public heal
         except Exception as e:
             logger.error(f"Error generating data schema: {e}")
             return "Data schema unavailable"
+    
+    def _explain_visualization_universally(self, viz_path: str, viz_type: str, session_id: str) -> str:
+        """
+        Universal visualization explanation using py-sidebot approach.
+        
+        This method automatically explains ANY visualization by:
+        1. Converting it to an image
+        2. Sending to LLM for analysis
+        3. Getting malaria-specific interpretation
+        """
+        try:
+            # Import and initialize universal explainer
+            from app.services.universal_viz_explainer import get_universal_viz_explainer
+            
+            explainer = get_universal_viz_explainer(llm_manager=self.llm_manager)
+            
+            # Get automatic explanation
+            explanation = explainer.explain_visualization(
+                viz_path=viz_path,
+                viz_type=viz_type,
+                session_id=session_id
+            )
+            
+            return explanation
+            
+        except Exception as e:
+            logger.error(f"Error in universal visualization explanation: {e}")
+            # Fallback explanation
+            viz_name = viz_type.replace('_', ' ').title() if viz_type else 'Visualization'
+            return f"📊 **{viz_name} Created** - This visualization shows your malaria risk analysis results to guide intervention planning."

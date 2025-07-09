@@ -686,4 +686,93 @@ def select_optimal_variables_with_llm(llm_manager, available_vars: List[str], cs
     
     except Exception as e:
         logger.error(f"Error in LLM variable selection: {e}")
-        return available_vars[:max_vars], "Default variable selection (error occurred)" 
+        return available_vars[:max_vars], "Default variable selection (error occurred)"
+    
+    def generate_with_image(self, prompt: str, image_url: str, session_id: Optional[str] = None) -> str:
+        """
+        Generate response using image input (for visualization explanations).
+        
+        This method supports vision-enabled models like GPT-4V for analyzing
+        visualization images in py-sidebot style.
+        """
+        if not self.client:
+            if not self.api_key:
+                return "Error: No API key available for image analysis"
+            try:
+                self.client = openai.OpenAI(api_key=self.api_key)
+            except Exception as e:
+                return f"Error initializing OpenAI client: {str(e)}"
+        
+        try:
+            # Check if the model supports vision
+            vision_models = ['gpt-4o', 'gpt-4-turbo', 'gpt-4-vision-preview']
+            if self.model not in vision_models:
+                # Fallback to text-only response
+                return self.generate_response(
+                    prompt=f"Explain this malaria visualization: {prompt}",
+                    system_message="You are a malaria epidemiologist explaining visualizations to public health officials.",
+                    session_id=session_id
+                )
+            
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a malaria epidemiologist explaining visualizations to public health officials. Focus on epidemiological significance, intervention guidance, and actionable insights."
+                },
+                {
+                    "role": "user", 
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]
+                }
+            ]
+            
+            start_time = time.time()
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            llm_response = response.choices[0].message.content
+            
+            # Log the interaction
+            if self.interaction_logger and session_id:
+                latency = time.time() - start_time
+                self.interaction_logger.log_llm_interaction(
+                    session_id=session_id,
+                    prompt_type="image_analysis",
+                    prompt=prompt,
+                    response=llm_response,
+                    tokens_used=response.usage.total_tokens if hasattr(response, 'usage') else None,
+                    latency=latency,
+                    enhanced_timing={
+                        'model_used': self.model,
+                        'image_analysis': True,
+                        'prompt_tokens': response.usage.prompt_tokens if hasattr(response, 'usage') else None,
+                        'completion_tokens': response.usage.completion_tokens if hasattr(response, 'usage') else None
+                    }
+                )
+            
+            return llm_response
+            
+        except Exception as e:
+            error_message = f"Error in image analysis: {str(e)}"
+            logger.error(error_message)
+            
+            if self.interaction_logger and session_id:
+                self.interaction_logger.log_error(
+                    session_id=session_id,
+                    error_type="image_analysis_error",
+                    error_message=str(e)
+                )
+            
+            # Fallback to text-only explanation
+            return self.generate_response(
+                prompt=f"Explain this malaria visualization: {prompt}",
+                system_message="You are a malaria epidemiologist explaining visualizations to public health officials.",
+                session_id=session_id
+            ) 
