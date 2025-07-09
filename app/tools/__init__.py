@@ -90,30 +90,8 @@ from .settlement_validation_tools import *
 from .settlement_visualization_tools import *
 
 # NEW ARCHITECTURE - Phase 1 Tools
-from .risk_analysis_tools import (
-    GetWardRiskScore,
-    GetTopRiskWards,
-    FilterWardsByRiskLevel,
-    GetRiskStatistics
-)
-
-from .ward_data_tools import (
-    GetWardInformation,
-    GetWardVariable,
-    CompareWards,
-    SearchWards
-)
-
-from .statistical_analysis_tools import (
-    GetDescriptiveStatistics,
-    GetCorrelationAnalysis,
-    PerformRegressionAnalysis,
-    PerformANOVAAnalysis,
-    PerformTTest,
-    GetDistributionAnalysis,
-    PerformClusterAnalysis,
-    GetVariableImportance
-)
+# Removed tools: risk_analysis_tools, ward_data_tools, statistical_analysis_tools
+# These have been replaced with conversational data access
 
 from .visualization_maps_tools import (
     CreateVulnerabilityMap,
@@ -160,24 +138,14 @@ from .visualization_charts_tools import (
     CreateCoordinatePlot
 )
 
-# Phase 4: INTERVENTION_TARGETING tools
-from .intervention_targeting_tools import (
-    GetInterventionPriorities,
-    IdentifyCoverageGaps,
-    GetReprioritizationStrategy,
-    CalculateResourceNeeds
-)
+# Phase 4: INTERVENTION_TARGETING tools - REMOVED
+# intervention_targeting_tools removed during streamlining
 
-# Phase 5: SCENARIO_SIMULATION tools
+# Phase 5: SCENARIO_SIMULATION tools - REMOVED
 # scenario_simulation_tools removed during streamlining
 
-# Phase 4: SMART_KNOWLEDGE tools (data-driven insights)
-from .smart_knowledge_tools import (
-    ExplainDataContext,
-    GetPersonalizedRecommendations,
-    InterpretYourResults,
-    GetDataDrivenInsights
-)
+# Phase 4: SMART_KNOWLEDGE tools - REMOVED
+# smart_knowledge_tools removed during streamlining
 
 # Data Preparation Tools
 # from .data_preparation_tools import (
@@ -220,9 +188,9 @@ from .variable_distribution import (
 )
 
 # Methodology Explanation Tools
-# from .methodology_explanation_tools import (
-#     ExplainAnalysisMethodology
-# )
+from .methodology_explanation_tools import (
+    ExplainAnalysisMethodology
+)
 
 # Enhanced Environmental Risk Analysis Tools
 # from .environmental_risk_tools import (

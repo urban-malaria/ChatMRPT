@@ -127,13 +127,13 @@ class ServiceContainer:
             return None
     
     def _create_data_service(self, container: 'ServiceContainer'):
-        """Create data service - unified dataset processing."""
+        """Create data service - session-aware data handling."""
         try:
-            from ..data import DataHandler
+            from ..data.session_data_service import SessionDataService
             
             upload_folder = self._app.config.get('UPLOAD_FOLDER')
-            return DataHandler(
-                session_folder=upload_folder,
+            return SessionDataService(
+                base_upload_folder=upload_folder,
             )
         except Exception as e:
             logger.warning(f"Failed to create data service: {e}")
