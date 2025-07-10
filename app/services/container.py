@@ -43,6 +43,9 @@ class ServiceContainer:
         # Register core services only
         self._register_core_services()
         
+        # FIXED: Eager initialization to prevent 18-second first message delay
+        self._eager_init_core_services()
+        
         logger.info("Service container initialized with core services")
     
     def register(self, name: str, factory: callable, singleton: bool = True) -> None:
@@ -98,6 +101,40 @@ class ServiceContainer:
         
         # Request Interpreter (NEW)
         self.register('request_interpreter', self._create_request_interpreter)
+    
+    def _eager_init_core_services(self) -> None:
+        """FIXED: Eagerly initialize all core services at startup to prevent first-message delays."""
+        logger.info("🚀 Starting eager initialization of core services...")
+        
+        # Initialize in dependency order
+        services_to_init = [
+            'interaction_logger',  # No dependencies
+            'llm_manager',         # Depends on interaction_logger
+            'data_service',        # No dependencies 
+            'analysis_service',    # Depends on data_service (heavy initialization)
+            'visualization_service', # Depends on data_service
+            'report_service',      # No dependencies
+            'request_interpreter'  # Depends on all above services
+        ]
+        
+        for service_name in services_to_init:
+            try:
+                import time
+                start_time = time.time()
+                
+                # This will trigger creation if it's a singleton
+                service = self.get(service_name)
+                
+                duration = time.time() - start_time
+                if service:
+                    logger.info(f"✅ {service_name} initialized in {duration:.2f}s")
+                else:
+                    logger.warning(f"⚠️  {service_name} returned None")
+                    
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize {service_name}: {e}")
+        
+        logger.info("🎯 Eager initialization complete - services ready for instant responses!")
     
     def _create_interaction_logger(self, container: 'ServiceContainer'):
         """Create interaction logger service."""

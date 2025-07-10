@@ -316,7 +316,8 @@ export class MessageHandler {
 
         if (this.chatContainer) {
             this.chatContainer.appendChild(typingDiv);
-            this.scrollToBottom();
+            // FIXED: Don't force scroll when showing typing indicator
+            // Let appendMessage handle scroll logic consistently
         }
     }
 
@@ -349,7 +350,7 @@ export class MessageHandler {
     isScrolledToBottom() {
         if (!this.chatContainer) return true;
         
-        const threshold = 100; // pixels from bottom
+        const threshold = 50; // FIXED: Reduced from 100px - less aggressive auto-scroll
         const scrollTop = this.chatContainer.scrollTop;
         const scrollHeight = this.chatContainer.scrollHeight;
         const clientHeight = this.chatContainer.clientHeight;
