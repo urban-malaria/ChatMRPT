@@ -60,10 +60,10 @@ class ProductionConfig(BaseConfig):
         'X-XSS-Protection': '1; mode=block',
         'Content-Security-Policy': (
             "default-src 'self'; "
-            "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdn.plot.ly; "
+            "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "img-src 'self' data: https:; "
-            "font-src 'self'; "
+            "font-src 'self' https://fonts.gstatic.com; "
             "connect-src 'self' https://tile.openstreetmap.org"
         )
     }
