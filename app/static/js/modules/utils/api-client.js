@@ -35,7 +35,8 @@ class APIClient {
             return await response.json();
         } catch (error) {
             console.error('Error sending message:', error);
-            throw error;
+            // Return error response instead of throwing to prevent global error handler cascade
+            return { status: 'error', message: error.message, error: error.toString() };
         }
     }
 
@@ -102,7 +103,8 @@ class APIClient {
             processChunk();
         }).catch(error => {
             console.error('Error with streaming message:', error);
-            if (onComplete) onComplete({ error: error.message });
+            if (onComplete) onComplete({ error: error.message, status: 'error' });
+            // Don't re-throw to prevent global error handler cascade
         });
     }
 
@@ -135,7 +137,7 @@ class APIClient {
             return await response.json();
         } catch (error) {
             console.error('Error uploading files:', error);
-            throw error;
+            return { status: 'error', message: error.message, error: error.toString() };
         }
     }
 
@@ -158,7 +160,7 @@ class APIClient {
             return await response.json();
         } catch (error) {
             console.error('Error loading sample data:', error);
-            throw error;
+            return { status: 'error', message: error.message, error: error.toString() };
         }
     }
 
@@ -184,7 +186,7 @@ class APIClient {
             return await response.json();
         } catch (error) {
             console.error('Error running analysis:', error);
-            throw error;
+            return { status: 'error', message: error.message, error: error.toString() };
         }
     }
 
@@ -220,7 +222,8 @@ class APIClient {
             document.body.removeChild(a);
         } catch (error) {
             console.error('Error generating report:', error);
-            throw error;
+            // For report generation, we might want to show user feedback
+            return { status: 'error', message: 'Failed to generate report: ' + error.message };
         }
     }
 
@@ -250,7 +253,7 @@ class APIClient {
             return await response.json();
         } catch (error) {
             console.error('Error requesting visualization:', error);
-            throw error;
+            return { status: 'error', message: error.message, error: error.toString() };
         }
     }
 
@@ -299,7 +302,7 @@ class APIClient {
             return await response.json();
         } catch (error) {
             console.error('Error changing language:', error);
-            throw error;
+            return { status: 'error', message: error.message, error: error.toString() };
         }
     }
 }

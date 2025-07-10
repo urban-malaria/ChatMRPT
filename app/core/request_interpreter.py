@@ -308,7 +308,12 @@ class RequestInterpreter:
         """Run complete dual-method malaria risk analysis (composite scoring + PCA)."""
         try:
             result = self.analysis_service.run_complete_analysis(session_id, variables=variables)
-            message = result.get('message', 'Complete analysis finished successfully')
+            
+            # Get the detailed message (which contains comprehensive summary)
+            if hasattr(result, 'message'):
+                message = result.message  # ToolExecutionResult.message
+            else:
+                message = result.get('message', 'Complete analysis finished successfully')
             
             # Auto-explain any visualizations
             if result.get('visualizations'):
@@ -330,7 +335,12 @@ class RequestInterpreter:
         """Run composite scoring malaria risk analysis with equal weights."""
         try:
             result = self.analysis_service.run_composite_analysis(session_id, variables=variables)
-            return result.get('message', 'Composite analysis completed successfully')
+            
+            # Get the detailed message (which contains comprehensive summary)
+            if hasattr(result, 'message'):
+                return result.message  # ToolExecutionResult.message
+            else:
+                return result.get('message', 'Composite analysis completed successfully')
         except Exception as e:
             return f"Error running composite analysis: {str(e)}"
     
@@ -614,12 +624,19 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
         except Exception as e:
             return f"Error explaining methodology: {str(e)}"
     
-    def _create_settlement_map(self, session_id: str, ward_name: str = None, zoom_level: int = 11):
+    def _create_settlement_map(self, session_id: str, ward_name: str = None, zoom_level: int = 11, **kwargs):
         """Create interactive settlement map showing building types for specific wards."""
         try:
+            # Filter out any invalid parameters that LLM might pass
+            valid_params = {'session_id': session_id}
+            if ward_name:
+                valid_params['ward_name'] = ward_name
+            if zoom_level:
+                valid_params['zoom_level'] = zoom_level
+            
             from app.tools.settlement_visualization_tools import create_settlement_map
             
-            result = create_settlement_map(session_id, ward_name, zoom_level)
+            result = create_settlement_map(**valid_params)
             
             if result.get('status') == 'success':
                 message = result.get('message', f'Settlement map created')
@@ -697,7 +714,7 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
             base_params['properties']['variables'] = {
                 'type': 'array',
                 'items': {'type': 'string'},
-                'description': 'Optional custom variables for analysis'
+                'description': 'Optional custom variables for analysis. When specified, these will override automatic region-based selection.'
             }
         
         if 'map' in tool_name or 'plot' in tool_name:
@@ -769,19 +786,39 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
         if session_context.get('data_schema'):
             context_info += f"- {session_context['data_schema']}\\n"
         
-        tool_guidance = """
+        # Add analysis-specific guidance
+        analysis_guidance = ""
+        if session_context.get('analysis_complete', False):
+            analysis_guidance = """
+## IMPORTANT: Analysis Already Complete
+This session has completed analysis. For questions about results, rankings, or data exploration:
+- **ALWAYS use execute_data_query** for questions about rankings, top areas, vulnerable wards, statistics
+- **DO NOT run new analysis** unless explicitly requested by the user
+- The unified dataset contains all analysis results and rankings
+
+"""
+        
+        tool_guidance = f"""{analysis_guidance}
 ## Available Tools
 Use the appropriate tool based on user requests:
 
+**For data questions after analysis (use execute_data_query):**
+- Rankings, top vulnerable areas, statistics
+- "What are the most at-risk areas?"
+- "Show me the top 5 vulnerable wards"
+- "Which areas should I focus on?"
+
+**For new analysis:**
 - **run_complete_analysis**: For full dual-method analysis
 - **run_composite_analysis**: For composite scoring only  
 - **run_pca_analysis**: For PCA analysis only
+
+**For visualizations:**
 - **create_vulnerability_map**: For choropleth risk maps
 - **create_box_plot**: For vulnerability score distributions
 - **create_variable_distribution**: For spatial distribution maps of any variable
 - **create_settlement_map**: For interactive settlement/building classification maps
 - **show_settlement_statistics**: For settlement data statistics and summary
-- **execute_data_query**: For data questions, plots, statistics
 - **explain_analysis_methodology**: For methodology explanations
 
 Always provide malaria epidemiology context and intervention guidance with your responses."""

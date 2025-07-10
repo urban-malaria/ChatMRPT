@@ -135,7 +135,8 @@ export class MessageHandler {
             this.hideTypingIndicator();
             this.addSystemMessage('Sorry, there was an error processing your request. Please try again.');
             console.error('Error sending message:', error);
-            throw error;
+            // Don't re-throw error to prevent global error handler spam
+            return { status: 'error', message: error.message };
         } finally {
             if (!window.chatStreamingEnabled || window.chatStreamingEnabled === false) {
                 this.isWaitingForResponse = false;

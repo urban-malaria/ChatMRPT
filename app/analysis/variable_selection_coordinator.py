@@ -44,7 +44,25 @@ class VariableSelectionCoordinator:
             Dictionary with unified variable selection results
         """
         try:
-            # ALWAYS check for region-aware selection first for scientific accuracy
+            # Check for custom variables first to respect user intent
+            if custom_variables:
+                logger.info(f"🎯 USER VARIABLES SPECIFIED: {custom_variables} - respecting user choice")
+                result = self._validate_custom_variables(cleaned_data, custom_variables)
+                self.selected_variables = result['variables']
+                self.selection_method = 'user_specified'
+                self.zone_detected = None
+                self.zone_metadata = {}
+                
+                return {
+                    'status': 'success',
+                    'variables': self.selected_variables,
+                    'zone_detected': self.zone_detected,
+                    'selection_method': self.selection_method,
+                    'zone_metadata': self.zone_metadata,
+                    'total_available': len(cleaned_data.columns)
+                }
+            
+            # Check for region-aware selection only when no custom variables
             logger.info("🌍 Checking for region-aware variable selection")
             region_result = apply_region_aware_selection(
                 cleaned_data, 
@@ -53,11 +71,9 @@ class VariableSelectionCoordinator:
             )
             
             if region_result['status'] == 'success' and region_result.get('zone_detected'):
-                # Zone detected - use scientifically-validated variables (override any custom suggestions)
+                # Zone detected - use scientifically-validated variables
                 logger.info(f"🎯 ZONE DETECTED: {region_result['zone_detected']} - using scientifically-validated variables")
                 logger.info(f"🔬 ZONE VARIABLES: {region_result['selected_variables']}")
-                if custom_variables:
-                    logger.info(f"⚠️ OVERRIDING custom variables {custom_variables} with zone-specific variables")
                 self.selected_variables = region_result['selected_variables']
                 self.selection_method = region_result.get('selection_method', 'region_aware')
                 self.zone_detected = region_result['zone_detected']
@@ -72,14 +88,15 @@ class VariableSelectionCoordinator:
                     'total_available': region_result.get('total_available_variables', 0)
                 }
                 
-            elif custom_variables:
-                # No zone detected - use custom variables as fallback
-                logger.info(f"🎯 No zone detected - using custom variables: {custom_variables}")
-                result = self._validate_custom_variables(cleaned_data, custom_variables)
-                self.selected_variables = result['variables']
-                self.selection_method = 'user_specified'
-                self.zone_detected = None
-                self.zone_metadata = {}
+            # This block is now redundant since custom variables are handled first
+            # elif custom_variables:
+            #     # No zone detected - use custom variables as fallback
+            #     logger.info(f"🎯 No zone detected - using custom variables: {custom_variables}")
+            #     result = self._validate_custom_variables(cleaned_data, custom_variables)
+            #     self.selected_variables = result['variables']
+            #     self.selection_method = 'user_specified'
+            #     self.zone_detected = None
+            #     self.zone_metadata = {}
                 
             elif self.selected_variables is not None:
                 # Variables already selected - reuse them

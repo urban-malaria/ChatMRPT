@@ -1301,15 +1301,27 @@ class ChatMRPTApp {
     }
 
     /**
-     * Handle global errors
+     * Handle global errors with throttling to prevent spam
      * @param {Error} error - Error object
      */
     handleGlobalError(error) {
         console.error('💥 Global error handled:', error);
         
-        // Show user-friendly error message
-        if (this.chatManager) {
-            this.chatManager.addSystemMessage('An unexpected error occurred. Please refresh the page if issues persist.');
+        // Throttle error messages to prevent spam (max 1 every 5 seconds)
+        const now = Date.now();
+        const errorKey = error.message || 'unknown_error';
+        
+        if (!this.lastErrorTime) this.lastErrorTime = {};
+        
+        if (!this.lastErrorTime[errorKey] || (now - this.lastErrorTime[errorKey] > 5000)) {
+            this.lastErrorTime[errorKey] = now;
+            
+            // Show user-friendly error message
+            if (this.chatManager) {
+                this.chatManager.addSystemMessage('An unexpected error occurred. Please refresh the page if issues persist.');
+            }
+        } else {
+            console.warn('⚠️ Global error throttled to prevent spam:', errorKey);
         }
     }
 
