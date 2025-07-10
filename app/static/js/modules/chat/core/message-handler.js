@@ -51,6 +51,12 @@ export class MessageHandler {
         this.addUserMessage(message);
         this.isWaitingForResponse = true;
         this.showTypingIndicator();
+        
+        // FIXED: Add loading state to send button
+        if (this.sendButton) {
+            this.sendButton.classList.add('loading');
+            this.sendButton.disabled = true;
+        }
 
         try {
             const sessionData = SessionDataManager.getSessionData();
@@ -118,6 +124,12 @@ export class MessageHandler {
                         }));
                         
                         this.isWaitingForResponse = false;
+                        
+                        // FIXED: Remove loading state from send button
+                        if (this.sendButton) {
+                            this.sendButton.classList.remove('loading');
+                            this.sendButton.disabled = false;
+                        }
                     }
                 );
                 
@@ -143,6 +155,12 @@ export class MessageHandler {
         } catch (error) {
             this.hideTypingIndicator();
             this.isWaitingForResponse = false;
+            
+            // FIXED: Remove loading state on error
+            if (this.sendButton) {
+                this.sendButton.classList.remove('loading');
+                this.sendButton.disabled = false;
+            }
             
             // FIXED: Better error messages based on error type
             let errorMessage = 'Sorry, there was an error processing your request.';
@@ -280,10 +298,21 @@ export class MessageHandler {
     showTypingIndicator() {
         this.hideTypingIndicator();
         
+        // FIXED: Enhanced loading indicator with better visual feedback
         const typingDiv = DOMHelpers.createElement('div', {
             id: 'typing-indicator',
-            className: 'typing-indicator'
-        }, `<span></span><span></span><span></span>`);
+            className: 'typing-indicator enhanced'
+        }, `
+            <div class="typing-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="typing-content">
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+                <div class="typing-text">ChatMRPT is thinking...</div>
+            </div>
+        `);
 
         if (this.chatContainer) {
             this.chatContainer.appendChild(typingDiv);
