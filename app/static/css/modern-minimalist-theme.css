@@ -84,7 +84,7 @@ body {
     color: var(--text-primary);
     background-color: var(--bg-primary);
     transition: background-color var(--transition), color var(--transition);
-    overflow: hidden;
+    /* CRITICAL FIX: Remove overflow hidden to allow proper scrolling */
     height: 100vh; /* Ensure body takes full viewport height */
     margin: 0; /* Remove default margins */
 }
@@ -107,7 +107,7 @@ body {
     flex-direction: column;
     background: var(--bg-primary);
     position: relative;
-    overflow: hidden; /* Prevent container overflow */
+    /* CRITICAL FIX: Remove overflow hidden that blocks ALL scrolling */
     /* CRITICAL FIX: Ensure proper flex layout */
     min-height: 100vh;
 }
@@ -298,10 +298,9 @@ body {
 
 /* Normal chat state */
 .chat-container:not(.initial-state) .chat-messages-container {
-    /* FIXED: Remove redundant declarations, inherit from parent */
+    /* FIXED: Remove flexbox conflict that prevents scrolling */
     padding: var(--space-4) 0;
-    display: flex;
-    flex-direction: column;
+    /* CRITICAL FIX: Don't make container a flex container - let it be block element for proper scrolling */
 }
 
 /* Simple Welcome Message - For Normal State */

@@ -634,13 +634,16 @@ class UnifiedDatasetBuilder:
         csv_wardcode_col = None
         shp_wardcode_col = None
         
-        for col in ['WardCode', 'ward_code', 'WardCode_x', 'WardCode_y']:
-            exists, resolved_col = variable_resolver.check_column_exists(col, list(csv_df.columns))
-            if exists:
+        # Check for WardCode columns in both dataframes
+        for col in ['WardCode', 'ward_code']:
+            if col in csv_df.columns:
                 csv_wardcode_col = col
-            exists, resolved_col = variable_resolver.check_column_exists(col, list(shp_gdf.columns))
-            if exists:
+                break
+        
+        for col in ['WardCode', 'ward_code']:
+            if col in shp_gdf.columns:
                 shp_wardcode_col = col
+                break
         
         if csv_wardcode_col and shp_wardcode_col:
             # Use WardCode for precise matching
