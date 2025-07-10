@@ -235,6 +235,11 @@ def handle_state_selection_with_file(session_id: str, selected_state: str, csv_f
         session['tpr_convergence_complete'] = True
         session['should_ask_analysis_permission'] = True
         
+        # CRITICAL: Set data loaded flags so request interpreter recognizes the data
+        session['csv_loaded'] = True
+        session['shapefile_loaded'] = True  # TPR convergence creates shapefile
+        session['data_loaded'] = True
+        
         return jsonify({
             'status': 'success',
             'upload_type': 'tpr_only',
@@ -466,6 +471,11 @@ def handle_full_dataset_path(session_id: str, csv_file, shapefile, upload_summar
     session['raw_data_stored'] = True
     # session['should_describe_data'] = True  # DISABLED - Frontend handles this now
     session['should_ask_analysis_permission'] = True  # Trigger permission system
+    
+    # CRITICAL: Set data loaded flags so request interpreter recognizes the data
+    session['csv_loaded'] = True
+    session['shapefile_loaded'] = True
+    session['data_loaded'] = True
     
     # Return comprehensive result
     return jsonify({
@@ -712,6 +722,11 @@ def handle_tpr_only_path(session_id: str, csv_file, upload_summary: dict):
         session['tpr_convergence_complete'] = True
         session['should_ask_analysis_permission'] = True
         
+        # CRITICAL: Set data loaded flags so request interpreter recognizes the data
+        session['csv_loaded'] = True
+        session['shapefile_loaded'] = True  # TPR convergence creates shapefile
+        session['data_loaded'] = True
+        
         return jsonify({
             'status': 'success',
             'upload_type': 'tpr_only',
@@ -813,6 +828,11 @@ def handle_state_selection(session_id: str, selected_state: str):
         session['tpr_convergence_complete'] = True
         session['should_ask_analysis_permission'] = True
         
+        # CRITICAL: Set data loaded flags so request interpreter recognizes the data
+        session['csv_loaded'] = True
+        session['shapefile_loaded'] = True  # TPR convergence creates shapefile
+        session['data_loaded'] = True
+        
         return jsonify({
             'status': 'success',
             'upload_type': 'tpr_only',
@@ -880,6 +900,11 @@ def handle_csv_only_path(session_id: str, csv_file, upload_summary: dict):
     session['raw_data_stored'] = True
     # session['should_describe_data'] = True  # DISABLED - Frontend handles this now
     session['should_ask_analysis_permission'] = True
+    
+    # CRITICAL: Set data loaded flags so request interpreter recognizes the data
+    session['csv_loaded'] = True
+    session['shapefile_loaded'] = False  # No shapefile in CSV-only path
+    session['data_loaded'] = True
     
     return jsonify({
         'status': 'success',

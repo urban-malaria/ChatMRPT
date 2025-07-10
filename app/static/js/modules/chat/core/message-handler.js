@@ -229,7 +229,19 @@ export class MessageHandler {
 
     appendMessage(messageElement) {
         if (this.chatContainer) {
+            // CRITICAL FIX: Store scroll position before adding message
+            const wasScrolledToBottom = this.isScrolledToBottom();
+            const scrollTop = this.chatContainer.scrollTop;
+            
             this.chatContainer.appendChild(messageElement);
+            
+            // CRITICAL FIX: Only auto-scroll if user was already at bottom
+            if (wasScrolledToBottom) {
+                this.scrollToBottom();
+            } else {
+                // Preserve scroll position for users reading history
+                this.chatContainer.scrollTop = scrollTop;
+            }
             
             setTimeout(() => {
                 DOMHelpers.removeClass(messageElement, 'new-message');
@@ -267,13 +279,65 @@ export class MessageHandler {
 
     scrollToBottom() {
         if (this.chatContainer) {
-            DOMHelpers.scrollToBottom(this.chatContainer);
+            // Only auto-scroll if user is near bottom or this is a new message
+            if (this.isScrolledToBottom()) {
+                DOMHelpers.scrollToBottom(this.chatContainer);
+            }
         }
+    }
+    
+    /**
+     * CRITICAL FIX: Check if user is scrolled to bottom
+     * @returns {boolean} True if scrolled to bottom
+     */
+    isScrolledToBottom() {
+        if (!this.chatContainer) return true;
+        
+        const threshold = 100; // pixels from bottom
+        const scrollTop = this.chatContainer.scrollTop;
+        const scrollHeight = this.chatContainer.scrollHeight;
+        const clientHeight = this.chatContainer.clientHeight;
+        
+        return scrollHeight - scrollTop - clientHeight < threshold;
     }
 
     clearChat() {
         if (this.chatContainer) {
+            // CRITICAL FIX: Store reference to prevent accidental clearing
+            const messages = this.chatContainer.querySelectorAll('.message');
+            console.log(`🧹 Clearing ${messages.length} messages from chat`);
             DOMHelpers.clearChildren(this.chatContainer);
         }
+    }
+
+    scrollToTop() {
+        if (this.chatContainer) {
+            this.chatContainer.scrollTop = 0;
+            console.log('🔝 Scrolled to top of chat');
+        }
+    }
+    
+    /**
+     * CRITICAL FIX: Get all messages count for debugging
+     * @returns {number} Number of messages in chat
+     */
+    getMessageCount() {
+        if (!this.chatContainer) return 0;
+        return this.chatContainer.querySelectorAll('.message').length;
+    }
+    
+    /**
+     * CRITICAL FIX: Debug scroll information
+     */
+    debugScrollInfo() {
+        if (!this.chatContainer) return;
+        
+        console.log('📊 SCROLL DEBUG INFO:');
+        console.log('- Container height:', this.chatContainer.clientHeight);
+        console.log('- Scroll height:', this.chatContainer.scrollHeight);
+        console.log('- Scroll top:', this.chatContainer.scrollTop);
+        console.log('- Is scrolled to bottom:', this.isScrolledToBottom());
+        console.log('- Messages count:', this.getMessageCount());
+        console.log('- Container overflow-y:', getComputedStyle(this.chatContainer).overflowY);
     }
 } 

@@ -85,6 +85,8 @@ body {
     background-color: var(--bg-primary);
     transition: background-color var(--transition), color var(--transition);
     overflow: hidden;
+    height: 100vh; /* Ensure body takes full viewport height */
+    margin: 0; /* Remove default margins */
 }
 
 /* ==========================================================================
@@ -105,6 +107,9 @@ body {
     flex-direction: column;
     background: var(--bg-primary);
     position: relative;
+    overflow: hidden; /* Prevent container overflow */
+    /* CRITICAL FIX: Ensure proper flex layout */
+    min-height: 100vh;
 }
 
 /* ==========================================================================
@@ -282,23 +287,26 @@ body {
    ========================================================================== */
 .chat-messages-container {
     flex: 1;
+    min-height: 0;
     padding: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     background: var(--bg-primary);
     scroll-behavior: smooth;
     transition: all var(--transition-slow);
+    position: relative;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Normal chat state */
 .chat-container:not(.initial-state) .chat-messages-container {
-    height: calc(100vh - 200px);
+    flex: 1;
+    min-height: 0;
     padding: var(--space-4) 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-    max-width: 100%;
-    margin: 0 auto;
 }
 
 /* Simple Welcome Message - For Normal State */
@@ -335,6 +343,7 @@ body {
     margin: 0 auto var(--space-6) auto;
     padding: 0 var(--space-6);
     animation: fadeIn 0.3s ease-out;
+    flex-shrink: 0; /* Prevent messages from shrinking in flex container */
 }
 
 @keyframes fadeIn {
@@ -419,6 +428,7 @@ body {
     max-width: 900px;
     margin: 0 auto;
     width: 100%;
+    flex-shrink: 0; /* Prevent input area from shrinking */
     transition: all var(--transition-slow);
 }
 

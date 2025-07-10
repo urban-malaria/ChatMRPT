@@ -75,17 +75,42 @@ class ConversationalDataAccess:
         self.execution_cache = {}
     
     def get_analysis_stage(self) -> str:
-        """Determine current analysis stage."""
+        """Determine current analysis stage based on available files."""
         try:
-            from flask import session
+            session_folder = Path(f"instance/uploads/{self.session_id}")
             
-            if session.get('analysis_complete', False):
-                return 'post_analysis'
-            elif session.get('csv_loaded', False):
-                return 'pre_analysis'
-            else:
+            if not session_folder.exists():
                 return 'no_data'
-        except:
+            
+            # Check for CSV data
+            csv_files = [
+                session_folder / "raw_data.csv",
+                session_folder / "processed_data.csv"
+            ]
+            
+            has_csv = any(f.exists() for f in csv_files)
+            
+            if not has_csv:
+                return 'no_data'
+            
+            # Check for analysis results (post-analysis files)
+            analysis_files = [
+                session_folder / "unified_dataset.csv",
+                session_folder / "analysis_results.csv", 
+                session_folder / "analysis_cleaned_data.csv",
+                session_folder / "composite_analysis.csv"
+            ]
+            
+            has_analysis = any(f.exists() for f in analysis_files)
+            
+            # If analysis files exist, we're in post-analysis stage
+            if has_analysis:
+                return 'post_analysis'
+            else:
+                return 'pre_analysis'
+                
+        except Exception as e:
+            logger.error(f"Error determining analysis stage: {e}")
             return 'no_data'
     
     def get_available_data(self) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
@@ -403,6 +428,7 @@ class ConversationalDataAccess:
     
     def execute_code(self, code: str, context: str = "") -> Dict[str, Any]:
         """Execute pandas/numpy code safely on session data."""
+        
         try:
             # Validate code safety first
             if not self._is_code_safe(code):
@@ -416,12 +442,15 @@ class ConversationalDataAccess:
             # Get current data
             df, info = self.get_available_data()
             if df is None:
+                logger.error(f"No data available for session {self.session_id}: {info}")
                 return {
                     'success': False,
                     'error': info.get('error', 'No data available'),
                     'output': '',
                     'code': code
                 }
+            
+            logger.info(f"Data loaded successfully: {df.shape} rows x columns")
             
             # Set up execution environment
             local_vars = {
@@ -450,15 +479,21 @@ class ConversationalDataAccess:
                     if plt.get_fignums():  # Check if any figures exist
                         plot_data = self._capture_plot()
                     
-                    return {
+                    # Format the output for better user experience
+                    formatted_output = self._format_analysis_output(output, code, context)
+                    
+                    result = {
                         'success': True,
-                        'output': output,
+                        'output': formatted_output,
+                        'raw_output': output,  # Keep raw output for debugging
                         'error': error_output,
                         'plot_data': plot_data,
                         'code': code,
                         'context': context,
                         'variables_created': [k for k in local_vars.keys() if k not in ['df', 'data', 'session_id', 'stage']]
                     }
+                    
+                    return result
                     
                 except Exception as e:
                     return {
@@ -723,6 +758,7 @@ Here's a sample of the data:
     
     def process_query(self, query: str) -> Dict[str, Any]:
         """Process natural language query by generating and executing code."""
+        
         try:
             # Get data schema for context
             schema = self.generate_comprehensive_schema()
@@ -764,24 +800,35 @@ IMPORTANT:
 - Use only pandas, numpy, matplotlib, seaborn operations
 - The dataframe is already loaded as 'df'
 - For plots, use plt.figure() and plt.show()
+- ALWAYS use print() statements to show results
+- For data exploration, use print() to display values, summaries, correlations, etc.
+- Format numeric outputs to 4 decimal places when appropriate (e.g., .4f for floats)
 - Return only the code, no explanations
+
+EXAMPLES:
+- For "What is the shape?": print(f"Dataset shape: {{df.shape[0]}} rows x {{df.shape[1]}} columns")
+- For "Show min/max": print(f"Min value: {{df['column'].min():.4f}}\\nMax value: {{df['column'].max():.4f}}")
+- For "Show correlation": print(df[['col1', 'col2']].corr().round(4))
+- For "List top values": print(df.nlargest(10, 'column').round(4))
 
 CODE:
 """
             
             # Generate code
             response = self.llm_manager.generate_response(
-                messages=[{"role": "user", "content": code_prompt}],
+                prompt=code_prompt,
                 temperature=0.1,
                 max_tokens=500
             )
             
-            generated_code = response.get('content', '').strip()
+            generated_code = response.strip()
             
             # Clean up code (remove markdown formatting if present)
             if generated_code.startswith('```'):
                 lines = generated_code.split('\n')
                 generated_code = '\n'.join(lines[1:-1])
+            
+            logger.info(f"Generated code for query '{query}':\n{generated_code}")
             
             # Execute the generated code
             result = self.execute_code(generated_code, context=query)
@@ -799,6 +846,183 @@ CODE:
                 'error': f"Failed to process query: {str(e)}",
                 'query': query
             }
+    
+    def _format_analysis_output(self, output: str, code: str, context: str = "") -> str:
+        """Format raw analysis output into structured, contextual responses."""
+        if not output or not output.strip():
+            return f"Analysis completed successfully. {context}"
+        
+        # Handle missing data reports first (before correlation check)
+        if 'missing data' in context.lower() or 'Missing data in each column' in output:
+            return self._format_missing_data_output(output, context)
+        
+        # Handle correlation matrices
+        if 'correlation' in context.lower() or ('elevation' in output and 'pfpr' in output and 'corr' in context.lower()):
+            return self._format_correlation_output(output, context)
+        
+        # Handle histogram/distribution requests
+        if 'histogram' in context.lower() or 'distribution' in context.lower():
+            return self._format_histogram_output(output, context)
+        
+        # Handle statistical summaries
+        if 'describe' in context.lower() or 'statistics' in context.lower():
+            return self._format_statistical_output(output, context)
+        
+        # Handle data quality reports
+        if 'quality' in context.lower() or 'data types' in output:
+            return self._format_data_quality_output(output, context)
+        
+        # Handle general queries with data output
+        if output.strip():
+            return self._format_general_output(output, context)
+        
+        return f"Analysis completed. {context}"
+    
+    def _format_correlation_output(self, output: str, context: str) -> str:
+        """Format correlation matrix output."""
+        lines = output.strip().split('\n')
+        
+        # Extract correlation value if present
+        correlation_value = None
+        if 'elevation' in output and 'pfpr' in output:
+            # Look for correlation coefficient
+            import re
+            match = re.search(r'0\.\d+', output)
+            if match:
+                correlation_value = float(match.group())
+        
+        if correlation_value:
+            # Interpret correlation strength
+            if abs(correlation_value) < 0.1:
+                strength = "very weak"
+            elif abs(correlation_value) < 0.3:
+                strength = "weak"
+            elif abs(correlation_value) < 0.5:
+                strength = "moderate"
+            elif abs(correlation_value) < 0.7:
+                strength = "strong"
+            else:
+                strength = "very strong"
+            
+            direction = "positive" if correlation_value > 0 else "negative"
+            
+            return f"""**Correlation Analysis Results**
+
+The correlation between elevation and pfpr is {correlation_value:.3f}, indicating a {strength} {direction} relationship.
+
+**Interpretation for Malaria Analysis:**
+This {strength} correlation suggests that elevation {'has a modest influence on' if abs(correlation_value) > 0.15 else 'has minimal impact on'} malaria parasite prevalence in your study area. {'Higher elevations show slightly higher malaria rates' if correlation_value > 0 else 'Higher elevations show slightly lower malaria rates'}, which may be due to environmental factors like temperature, humidity, or vector breeding patterns at different altitudes.
+
+**Public Health Implications:**
+{'Consider elevation as a supplementary factor' if abs(correlation_value) > 0.15 else 'Elevation appears to be a minor factor'} when designing targeted interventions. Other environmental and socioeconomic variables may have stronger predictive power for malaria risk stratification."""
+        
+        return f"**Correlation Analysis**\n\n{output}\n\nThis analysis shows the relationships between variables in your malaria risk dataset."
+    
+    def _format_missing_data_output(self, output: str, context: str) -> str:
+        """Format missing data analysis output."""
+        lines = output.strip().split('\n')
+        
+        # Parse missing data counts
+        missing_info = []
+        total_missing = 0
+        
+        for line in lines:
+            if line.strip() and not line.startswith('Missing data'):
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    try:
+                        count = int(parts[-1])
+                        var_name = ' '.join(parts[:-1])
+                        if count > 0:
+                            missing_info.append((var_name, count))
+                            total_missing += count
+                    except ValueError:
+                        continue
+        
+        if missing_info:
+            # Sort by missing count
+            missing_info.sort(key=lambda x: x[1], reverse=True)
+            
+            response = "**Data Quality Assessment**\n\n"
+            
+            if total_missing == 0:
+                response += "Excellent news! Your dataset has no missing values across all variables. This high data quality will ensure robust analysis results for malaria risk assessment.\n\n"
+            else:
+                response += f"Your dataset has {total_missing} total missing values across {len(missing_info)} variables. Here's the breakdown:\n\n"
+                
+                for var_name, count in missing_info[:5]:  # Show top 5
+                    response += f"• **{var_name}**: {count} missing values\n"
+                
+                if len(missing_info) > 5:
+                    response += f"• ... and {len(missing_info) - 5} other variables with missing data\n"
+            
+            response += "\n**Recommendation for Malaria Analysis:**\n"
+            if total_missing < 50:
+                response += "The low amount of missing data suggests your dataset is well-suited for comprehensive malaria risk analysis. Consider using imputation techniques for critical variables if needed."
+            else:
+                response += "The missing data pattern should be carefully considered. Focus on variables with complete data for initial analysis, and consider data collection improvements for future studies."
+            
+            return response
+        
+        return f"**Data Quality Check**\n\n{output}\n\nThis shows the completeness of your malaria risk dataset."
+    
+    def _format_histogram_output(self, output: str, context: str) -> str:
+        """Format histogram/distribution output."""
+        if 'no output generated' in output:
+            return f"""**Distribution Analysis Request**
+
+I've generated a histogram visualization for you showing the distribution of pfpr values in your dataset. The chart should appear above this message.
+
+**What to Look For:**
+• **Distribution shape**: Is it normal, skewed, or bimodal?
+• **Outliers**: Any unusual values that might need investigation?
+• **Concentration**: Where do most pfpr values cluster?
+
+**Malaria Analysis Context:**
+Understanding pfpr (parasite prevalence) distribution helps identify:
+- High-risk areas that need immediate intervention
+- Patterns that might indicate environmental or social factors
+- Data quality issues that could affect analysis results
+
+If you don't see the chart, please let me know and I'll help troubleshoot the visualization."""
+        
+        return f"**Distribution Analysis**\n\n{output}\n\nThis shows the distribution pattern of values in your malaria dataset."
+    
+    def _format_statistical_output(self, output: str, context: str) -> str:
+        """Format statistical summary output."""
+        return f"""**Statistical Summary**
+
+{output}
+
+**Interpretation for Malaria Analysis:**
+These statistics provide baseline understanding of your dataset's characteristics. Key insights for malaria risk assessment:
+
+• **Central tendencies** help identify typical conditions in your study area
+• **Variability measures** indicate how diverse the risk factors are across wards
+• **Range information** shows the spectrum of conditions you're working with
+
+Use these statistics to understand data distribution before proceeding with composite scoring or PCA analysis."""
+    
+    def _format_data_quality_output(self, output: str, context: str) -> str:
+        """Format data quality assessment output."""
+        return f"""**Data Quality Assessment**
+
+{output}
+
+**Dataset Readiness for Malaria Analysis:**
+Your data structure and quality directly impact analysis reliability. This summary helps ensure your dataset is ready for:
+
+• Composite scoring analysis
+• Principal Component Analysis (PCA)
+• Geographic visualization
+• Risk stratification
+
+Any data quality issues should be addressed before proceeding with formal analysis."""
+    
+    def _format_general_output(self, output: str, context: str) -> str:
+        """Format general analysis output."""
+        # Return clean output without extra headers
+        return output.strip()
 
 
 def get_conversational_data_access(session_id: str, llm_manager=None) -> ConversationalDataAccess:

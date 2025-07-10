@@ -199,9 +199,6 @@ def send_message():
     """
     Handle chat messages with Request Interpreter (NEW TOOL-BASED SYSTEM).
     """
-    print("🔥 MESSAGE RECEIVED - USING NEW REQUEST INTERPRETER SYSTEM!")
-    import sys
-    sys.stdout.flush()
     
     try:
         # Get the message from the request
@@ -463,9 +460,6 @@ def send_message_streaming():
     """
     Handle chat messages with streaming response for better UX.
     """
-    print("🔥 STREAMING MESSAGE RECEIVED - USING NEW STREAMING SYSTEM!")
-    import sys
-    sys.stdout.flush()
     
     try:
         # Get the message from the request
@@ -493,29 +487,21 @@ def send_message_streaming():
                 'message': 'Error accessing request processing system'
             }), 500
         
-        # Capture Flask context for use in generator
+        # Capture Flask context and session data for use in generator
         app = current_app._get_current_object()
-        flask_session = dict(session)  # Copy session data
-        
-        # Make session available in streaming context
-        def setup_streaming_context():
-            # Set up Flask session context for streaming
-            for key, value in flask_session.items():
-                session[key] = value
+        # Capture session data before entering generator (avoids request context issues)
+        session_data = dict(session)
         
         # Use streaming response
         def generate():
             try:
                 with app.app_context():
-                    # Set up session context for streaming
-                    setup_streaming_context()
-                    
                     logger.info(f"Processing streaming message: '{user_message[:100]}...'")
                     
                     # Use the full conversational data access system for streaming
                     # This ensures users get the same capabilities in streaming mode
                     logger.info("Using full conversational data access system for streaming")
-                    result = request_interpreter.process_message(user_message, session_id)
+                    result = request_interpreter.process_message(user_message, session_id, session_data)
                     
                     # Simulate streaming by breaking response into chunks
                     response_text = result.get('response', '')
