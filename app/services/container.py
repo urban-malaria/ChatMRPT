@@ -6,7 +6,7 @@ that work well: data handling, analysis, visualization, and reporting.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from flask import Flask
 
 from ..core.exceptions import ConfigurationError
@@ -142,9 +142,67 @@ class ServiceContainer:
     def _create_analysis_service(self, container: 'ServiceContainer'):
         """Create analysis service - composite scoring and PCA."""
         try:
-            from ..analysis import AnalysisEngine
+            from ..analysis.engine import AnalysisEngine
             
-            return AnalysisEngine()
+            class AnalysisServiceWrapper:
+                """Wrapper for AnalysisEngine to handle data handler retrieval."""
+                
+                def __init__(self, container):
+                    self.container = container
+                    self.engine = AnalysisEngine()
+                
+                def run_complete_analysis(self, session_id: str, variables: Optional[List[str]] = None):
+                    """Run complete analysis with data handler from session."""
+                    data_service = self.container.get('data_service')
+                    if not data_service:
+                        return {'status': 'error', 'message': 'Data service not available'}
+                    
+                    data_handler = data_service.get_handler(session_id)
+                    if not data_handler:
+                        return {'status': 'error', 'message': 'No data handler found for session'}
+                    
+                    self.engine.data_handler = data_handler
+                    return self.engine.run_complete_analysis(session_id, variables)
+                
+                def run_composite_analysis(self, session_id: str, variables: Optional[List[str]] = None):
+                    """Run composite analysis with data handler from session."""
+                    data_service = self.container.get('data_service')
+                    if not data_service:
+                        return {'status': 'error', 'message': 'Data service not available'}
+                    
+                    data_handler = data_service.get_handler(session_id)
+                    if not data_handler:
+                        return {'status': 'error', 'message': 'No data handler found for session'}
+                    
+                    self.engine.data_handler = data_handler
+                    return self.engine.run_composite_analysis(session_id, variables)
+                
+                def run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None):
+                    """Run PCA analysis with data handler from session."""
+                    data_service = self.container.get('data_service')
+                    if not data_service:
+                        return {'status': 'error', 'message': 'Data service not available'}
+                    
+                    data_handler = data_service.get_handler(session_id)
+                    if not data_handler:
+                        return {'status': 'error', 'message': 'No data handler found for session'}
+                    
+                    self.engine.data_handler = data_handler
+                    return self.engine.run_pca_analysis(session_id, variables)
+                
+                def explain_variable_selection(self, variables: List[str], data_handler):
+                    """Explain variable selection."""
+                    return self.engine.explain_variable_selection(variables, data_handler)
+                
+                def run_standard_analysis(self, data_handler, session_id: str = None):
+                    """Run standard analysis."""
+                    return self.engine.run_standard_analysis(data_handler, session_id)
+                
+                def run_custom_analysis(self, data_handler, selected_variables: List[str], session_id: str = None):
+                    """Run custom analysis."""
+                    return self.engine.run_custom_analysis(data_handler, selected_variables, session_id)
+            
+            return AnalysisServiceWrapper(container)
         except Exception as e:
             logger.warning(f"Failed to create analysis service: {e}")
             return None
@@ -187,7 +245,11 @@ class ServiceContainer:
                     
                     for name, func in visualizations:
                         try:
-                            result = func(data_handler, session_id=session_id)
+                            # Get unified dataset from data handler
+                            if not hasattr(data_handler, 'unified_dataset') or data_handler.unified_dataset is None:
+                                result = {'status': 'error', 'message': 'No unified dataset available. Please run analysis first.'}
+                            else:
+                                result = func(data_handler.unified_dataset, session_id=session_id)
                             results[name] = result
                         except Exception as e:
                             logger.error(f"Failed to create {name}: {e}")
@@ -198,9 +260,81 @@ class ServiceContainer:
                 def create_pca_workflow(self, data_handler, session_id=None):
                     """Run the PCA workflow (1 visualization)."""
                     try:
-                        return self.pca_vulnerability_map(data_handler, session_id=session_id)
+                        # Get unified dataset from data handler
+                        if not hasattr(data_handler, 'unified_dataset') or data_handler.unified_dataset is None:
+                            return {'status': 'error', 'message': 'No unified dataset available. Please run analysis first.'}
+                        
+                        return self.pca_vulnerability_map(data_handler.unified_dataset, session_id=session_id)
                     except Exception as e:
                         logger.error(f"Failed to create PCA visualization: {e}")
+                        return {'status': 'error', 'message': str(e)}
+                
+                # Wrapper methods for request interpreter compatibility
+                def create_vulnerability_map(self, session_id, method='composite'):
+                    """Create vulnerability map - wrapper for request interpreter."""
+                    try:
+                        # Get data handler via session
+                        data_service = container.get('data_service')
+                        if not data_service:
+                            return {'status': 'error', 'message': 'Data service not available'}
+                        
+                        data_handler = data_service.get_handler(session_id)
+                        if not data_handler:
+                            return {'status': 'error', 'message': 'No data handler found for session'}
+                        
+                        # Get unified dataset from data handler
+                        if not hasattr(data_handler, 'unified_dataset') or data_handler.unified_dataset is None:
+                            return {'status': 'error', 'message': 'No unified dataset available. Please run analysis first.'}
+                        
+                        # Call appropriate vulnerability map method
+                        if method == 'pca':
+                            return self.pca_vulnerability_map(data_handler.unified_dataset, session_id=session_id)
+                        else:
+                            return self.vulnerability_map(data_handler.unified_dataset, session_id=session_id)
+                    except Exception as e:
+                        logger.error(f"Failed to create vulnerability map: {e}")
+                        return {'status': 'error', 'message': str(e)}
+                
+                def create_box_plot(self, session_id, method='composite'):
+                    """Create box plot - wrapper for request interpreter."""
+                    try:
+                        # Get data handler via session
+                        data_service = container.get('data_service')
+                        if not data_service:
+                            return {'status': 'error', 'message': 'Data service not available'}
+                        
+                        data_handler = data_service.get_handler(session_id)
+                        if not data_handler:
+                            return {'status': 'error', 'message': 'No data handler found for session'}
+                        
+                        # Get unified dataset from data handler
+                        if not hasattr(data_handler, 'unified_dataset') or data_handler.unified_dataset is None:
+                            return {'status': 'error', 'message': 'No unified dataset available. Please run analysis first.'}
+                        
+                        return self.box_plot_ranking(data_handler.unified_dataset, session_id=session_id)
+                    except Exception as e:
+                        logger.error(f"Failed to create box plot: {e}")
+                        return {'status': 'error', 'message': str(e)}
+                
+                def create_pca_map(self, session_id):
+                    """Create PCA map - wrapper for request interpreter."""
+                    try:
+                        # Get data handler via session
+                        data_service = container.get('data_service')
+                        if not data_service:
+                            return {'status': 'error', 'message': 'Data service not available'}
+                        
+                        data_handler = data_service.get_handler(session_id)
+                        if not data_handler:
+                            return {'status': 'error', 'message': 'No data handler found for session'}
+                        
+                        # Get unified dataset from data handler
+                        if not hasattr(data_handler, 'unified_dataset') or data_handler.unified_dataset is None:
+                            return {'status': 'error', 'message': 'No unified dataset available. Please run analysis first.'}
+                        
+                        return self.pca_vulnerability_map(data_handler.unified_dataset, session_id=session_id)
+                    except Exception as e:
+                        logger.error(f"Failed to create PCA map: {e}")
                         return {'status': 'error', 'message': str(e)}
             
             return CoreVisualizationService()
