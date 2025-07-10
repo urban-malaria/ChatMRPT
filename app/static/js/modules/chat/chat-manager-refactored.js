@@ -49,16 +49,8 @@ export class ChatManager {
         // Setup response handling
         this.setupResponseHandling();
         
-        // CRITICAL FIX: Setup resize handler for scroll container
-        this.setupResizeHandler();
-        
         // Load welcome message
         this.loadWelcomeMessage();
-        
-        // CRITICAL FIX: Initialize scroll container after everything is loaded
-        setTimeout(() => {
-            this.recalculateScrollContainer();
-        }, 100);
         
         console.log('✅ ChatManager initialized (CLEAN & MODULAR)');
     }
@@ -434,41 +426,8 @@ export class ChatManager {
         }
     }
 
-    /**
-     * CRITICAL FIX: Setup resize handler for scroll container
-     */
-    setupResizeHandler() {
-        let resizeTimeout;
-        
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                this.recalculateScrollContainer();
-            }, 250);
-        });
-    }
-    
-    /**
-     * CRITICAL FIX: Recalculate scroll container height
-     */
-    recalculateScrollContainer() {
-        const messagesContainer = document.getElementById('chat-messages');
-        if (!messagesContainer) return;
-        
-        const header = document.querySelector('.chat-header');
-        const inputContainer = document.querySelector('.chat-input-container');
-        
-        if (header && inputContainer) {
-            const headerHeight = header.offsetHeight;
-            const inputHeight = inputContainer.offsetHeight;
-            const windowHeight = window.innerHeight;
-            
-            const availableHeight = windowHeight - headerHeight - inputHeight - 20; // 20px padding
-            messagesContainer.style.maxHeight = `${availableHeight}px`;
-            
-            console.log(`📊 Recalculated scroll container height: ${availableHeight}px`);
-        }
-    }
+    // REMOVED: Height calculation methods that were breaking scroll
+    // CSS flexbox handles height automatically - no JavaScript needed!
     
     /**
      * Generate unique session ID
