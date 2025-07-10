@@ -81,62 +81,58 @@ class TieredToolLoader:
         """Define tool groups optimized for essential 25 tools - streamlined for conversational system"""
         return {
             ToolGroup.CORE: ToolGroupDefinition(
-                name="Core Conversational Tools",
+                name="Core Analysis Tools",
                 modules=[
                     'app.tools.complete_analysis_tools',  # Essential: complete analysis pipeline
-                    'app.tools.variable_distribution',    # Essential: variable visualization
-                    'app.tools.data_query_tool',          # Essential: conversational data access
+                    'app.tools.methodology_explanation_tools',  # Essential: methodology tools
                 ],
                 tools=[
                     'runcompleteanalysis',      # 1. Complete analysis execution
                     'runcompositeanalysis',     # 2. Composite analysis only
                     'runpcaanalysis',           # 3. PCA analysis only  
-                    'variable_distribution',    # 4. Variable distribution maps
-                    'executedataquery',         # 5. Execute pandas/numpy queries
-                    'exploredataschema'         # 6. Explore dataset schema
+                    'explainanalysismethodology',  # 4. Explain analysis methods
+                    'generatecomprehensiveanalysissummary',  # 5. Generate analysis summary
                 ],
-                description="Essential analysis and visualization tools for immediate startup",
+                description="Essential analysis tools for malaria risk assessment",
                 dependencies=['plotly', 'geopandas', 'scikit-learn']
             ),
             
             ToolGroup.VISUALIZATION: ToolGroupDefinition(
-                name="Essential Visualization Tools",
+                name="Domain-Specific Visualization Tools",
                 modules=[
                     'app.tools.visualization_maps_tools',
-                    'app.tools.visualization_charts_tools',
-                    'app.tools.settlement_visualization_tools'
+                    'app.tools.settlement_visualization_tools',
+                    'app.tools.settlement_intervention_tools'
                 ],
                 tools=[
-                    # Essential Maps (5 tools)
+                    # Domain-Specific Maps - These require malaria domain logic
                     'createvulnerabilitymap',   # 5. Vulnerability choropleth maps
                     'createpcamap',             # 6. PCA result maps  
                     'createcompositescoremaps', # 7. Composite score maps
                     'createinterventionmap',    # 8. Intervention targeting maps
                     'createurbanextentmap',     # 9. Urban extent visualization
+                    'createdecisiontree',       # 10. Risk factor decision tree
+                    'createboxplot',            # 11. Risk score distributions (domain-specific)
                     
-                    # Essential Charts (4 tools)
-                    'createhistogram',          # 10. Variable distributions
-                    'createscatterplot',        # 11. Variable relationships
-                    'createcorrelationheatmap', # 12. Correlation analysis
-                    'createboxplot'             # 13. Risk score distributions
+                    # Settlement-specific tools
+                    'createsettlementanalysismap',   # 12. Settlement pattern analysis
+                    'createinterventiontargetingmap' # 13. Intervention targeting optimization
                 ],
-                description="Essential visualization tools for malaria risk analysis",
-                dependencies=['plotly', 'matplotlib', 'folium']
+                description="Domain-specific visualization tools requiring malaria expertise",
+                dependencies=['plotly', 'folium', 'geopandas']
             ),
             
             ToolGroup.STATISTICAL: ToolGroupDefinition(
-                name="Settlement Analysis Tools",
+                name="Statistical Analysis Tools",
                 modules=[
                     'app.tools.settlement_validation_tools',
-                    'app.tools.settlement_intervention_tools',
                 ],
                 tools=[
-                    # Settlement Analysis Tools
-                    'createsettlementanalysismap',   # Settlement pattern analysis
+                    # Statistical Analysis Tools (function-based)
                     'validatesettlementdata',        # Settlement data validation
                     'analyzesettlementpatterns',     # Settlement clustering
                 ],
-                description="Settlement analysis and validation tools",
+                description="Statistical analysis and validation tools",
                 dependencies=['geopandas', 'shapely', 'sklearn']
             ),
             

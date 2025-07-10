@@ -1117,7 +1117,8 @@ class RunCompositeAnalysis(DataAnalysisTool):
     """Run composite score analysis only"""
     
     name: str = "run_composite_analysis"
-    description: str = "Run composite score malaria risk analysis"
+    description: str = "Run composite score malaria risk analysis with equal weights for all variables"
+    variables: Optional[List[str]] = Field(None, description="Custom variables for composite analysis")
     
     def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
         """Execute composite score analysis"""
@@ -1128,6 +1129,7 @@ class RunCompositeAnalysis(DataAnalysisTool):
         """Execute composite score analysis"""
         try:
             session_id = kwargs.get('session_id')
+            variables = kwargs.get('variables') or getattr(self, 'variables', None)
             
             from ..analysis.engine import AnalysisEngine
             from ..models.data_handler import DataHandler
@@ -1138,11 +1140,20 @@ class RunCompositeAnalysis(DataAnalysisTool):
             # Initialize data handler for the session
             data_handler = DataHandler(session_folder)
             analysis_engine = AnalysisEngine(data_handler)
-            result = analysis_engine.run_composite_analysis(session_id)
+            
+            # Pass custom variables if provided (all variables weighted equally)
+            if variables:
+                result = analysis_engine.run_composite_analysis(session_id, variables=variables)
+            else:
+                result = analysis_engine.run_composite_analysis(session_id)
             
             if result.get('status') == 'success':
                 # Mark partial analysis complete for workflow guidance
-                self._mark_partial_analysis_complete(session_id, 'composite')
+                try:
+                    from flask import session
+                    session['composite_analysis_complete'] = True
+                except:
+                    pass  # Session not available in test context
                 
                 return ToolExecutionResult(
                     success=True,
@@ -1176,6 +1187,7 @@ class RunPCAAnalysis(DataAnalysisTool):
     
     name: str = "run_pca_analysis"
     description: str = "Run Principal Component Analysis (PCA) for malaria risk assessment"
+    variables: Optional[List[str]] = Field(None, description="Custom variables for PCA analysis")
     
     def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
         """Execute PCA analysis"""
@@ -1186,6 +1198,7 @@ class RunPCAAnalysis(DataAnalysisTool):
         """Execute PCA analysis"""
         try:
             session_id = kwargs.get('session_id')
+            variables = kwargs.get('variables') or getattr(self, 'variables', None)
             
             from ..analysis.engine import AnalysisEngine
             from ..models.data_handler import DataHandler
@@ -1196,11 +1209,20 @@ class RunPCAAnalysis(DataAnalysisTool):
             # Initialize data handler for the session
             data_handler = DataHandler(session_folder)
             analysis_engine = AnalysisEngine(data_handler)
-            result = analysis_engine.run_pca_analysis(session_id)
+            
+            # Pass custom variables if provided
+            if variables:
+                result = analysis_engine.run_pca_analysis(session_id, variables=variables)
+            else:
+                result = analysis_engine.run_pca_analysis(session_id)
             
             if result.get('status') == 'success':
                 # Mark partial analysis complete for workflow guidance
-                self._mark_partial_analysis_complete(session_id, 'pca')
+                try:
+                    from flask import session
+                    session['pca_analysis_complete'] = True
+                except:
+                    pass  # Session not available in test context
                 
                 return ToolExecutionResult(
                     success=True,

@@ -82,7 +82,7 @@ class SettlementLoader:
                 # 1. Session-specific uploads
                 self.session_folder,
                 # 2. Project settlement data directories
-                "kano_settlement_data/Kano_clustered_footprint",
+                "www/kano_settlement_data/Kano_clustered_footprint",
                 "settlement_data",
                 "data/settlements",
                 # 3. Instance uploads (for other sessions)
@@ -218,7 +218,7 @@ class SettlementLoader:
         
         # Search locations for settlement data
         search_locations = [
-            "kano_settlement_data/Kano_clustered_footprint",
+            "www/kano_settlement_data/Kano_clustered_footprint",
             "settlement_data",
             "data/settlements",
             self.session_folder,
@@ -260,7 +260,7 @@ class SettlementLoader:
                         detected_region = self._detect_region_from_content(file_path)
                         if detected_region and detected_region not in detected_regions:
                             detected_regions.append(detected_region)
-                        elif location == "kano_settlement_data/Kano_clustered_footprint":
+                        elif location == "www/kano_settlement_data/Kano_clustered_footprint":
                             # Kano data directory
                             if 'Kano' not in detected_regions:
                                 detected_regions.append('Kano')

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Scroll Fix Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        .test-container { max-width: 800px; margin: 0 auto; }
+        .test-button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .test-button:hover { background: #0056b3; }
+        .test-results { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px; }
+        iframe { width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🚑 Chat Scroll Fix Test</h1>
+        
+        <p><strong>EMERGENCY SCROLL FIX APPLIED</strong></p>
+        
+        <div class="test-results">
+            <h3>Changes Made:</h3>
+            <ul>
+                <li>✅ Fixed CSS flexbox layout in chat-messages-container</li>
+                <li>✅ Changed display from flex to block for better scroll behavior</li>
+                <li>✅ Added max-height constraint to prevent overflow issues</li>
+                <li>✅ Added scroll position preservation during state transitions</li>
+                <li>✅ Added intelligent scroll behavior (only auto-scroll if user was at bottom)</li>
+                <li>✅ Added resize handler to recalculate scroll container height</li>
+                <li>✅ Added debug utilities for troubleshooting</li>
+            </ul>
+            
+            <h3>Debug Commands (Available in Browser Console):</h3>
+            <pre>
+debugScroll()           // Show scroll container information
+forceScrollToBottom()   // Force scroll to bottom
+            </pre>
+            
+            <h3>Test Instructions:</h3>
+            <ol>
+                <li>Load the main application in the iframe below</li>
+                <li>Start a conversation to transition from initial state</li>
+                <li>Send multiple messages to create a long conversation</li>
+                <li>Try scrolling up to read previous messages</li>
+                <li>Verify you can scroll all the way to the beginning</li>
+                <li>Send a new message and check if it preserves your scroll position</li>
+                <li>Use the debug commands to verify scroll behavior</li>
+            </ol>
+        </div>
+        
+        <button class="test-button" onclick="loadApp()">Load Main Application</button>
+        <button class="test-button" onclick="runScrollTest()">Run Scroll Test</button>
+        <button class="test-button" onclick="clearIframe()">Clear Test</button>
+        
+        <iframe id="testFrame" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        function loadApp() {
+            document.getElementById('testFrame').src = '/';
+        }
+        
+        function runScrollTest() {
+            const frame = document.getElementById('testFrame');
+            const frameWindow = frame.contentWindow;
+            
+            if (frameWindow && frameWindow.chatManager) {
+                // Add multiple test messages
+                for (let i = 1; i <= 10; i++) {
+                    setTimeout(() => {
+                        frameWindow.chatManager.addUserMessage(`Test message ${i} - This is a test message to create scroll content.`);
+                        frameWindow.chatManager.addAssistantMessage(`Response ${i} - This is a response to test message ${i}. This creates enough content to test scrolling behavior.`);
+                    }, i * 500);
+                }
+                
+                // Test scroll after messages are added
+                setTimeout(() => {
+                    if (frameWindow.debugScroll) {
+                        frameWindow.debugScroll();
+                    }
+                    alert('Scroll test completed. Check console for debug info and test scrolling manually.');
+                }, 6000);
+            } else {
+                alert('Please load the main application first.');
+            }
+        }
+        
+        function clearIframe() {
+            document.getElementById('testFrame').src = 'about:blank';
+        }
+    </script>
+</body>
+</html>

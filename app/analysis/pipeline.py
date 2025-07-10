@@ -397,11 +397,23 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
         # Create/update unified dataset with region metadata
         try:
             print("PIPELINE DEBUG: Creating unified dataset with region metadata...")
-            from ..data.unified_dataset_builder import build_unified_dataset
+            from ..data.unified_dataset_builder import build_unified_dataset, load_unified_dataset
             
             unified_result = build_unified_dataset(session_id)
             if unified_result['status'] == 'success':
                 print(f"PIPELINE DEBUG: ✅ Unified dataset created successfully: {unified_result['message']}")
+                
+                # Load the created unified dataset and assign it to data_handler
+                try:
+                    unified_dataset = load_unified_dataset(session_id)
+                    if unified_dataset is not None:
+                        data_handler.unified_dataset = unified_dataset
+                        print(f"PIPELINE DEBUG: ✅ Unified dataset loaded and assigned to data_handler: {len(unified_dataset)} rows, {len(unified_dataset.columns)} columns")
+                    else:
+                        print(f"PIPELINE DEBUG: ⚠️ Failed to load unified dataset from disk")
+                except Exception as load_error:
+                    print(f"PIPELINE DEBUG: Error loading unified dataset: {load_error}")
+                    logger.warning(f"Could not load unified dataset: {load_error}")
             else:
                 print(f"PIPELINE DEBUG: ⚠️ Unified dataset creation failed: {unified_result.get('message', 'Unknown error')}")
                 

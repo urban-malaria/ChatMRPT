@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatMRPT - Malaria Risk Prioritization Tool</title>
+
+    <!-- Google Fonts - System UI inspired -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Bootstrap CSS (minimal usage for modals only) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Modern Minimalist Theme - Complete UI Makeover -->
+    <link rel="stylesheet" href="/static/css/modern-minimalist-theme.css">
+</head>
+<body>
+    <!-- Sidebar (Updated) -->
+    <div id="app-sidebar" class="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-brand">
+                <h3>Settings</h3>
+            </div>
+            <button id="close-sidebar" class="close-sidebar-btn" aria-label="Close Sidebar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h4>Appearance</h4>
+                <div class="setting-item">
+                    <span>Dark Mode</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="theme-toggle" class="toggle-input">
+                        <label for="theme-toggle" class="toggle-label"></label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h4>Language</h4>
+                <select id="language-selector" class="form-select">
+                    <option value="en" selected>English</option>
+                    <option value="ha">Hausa</option>
+                    <option value="yo">Yoruba</option>
+                    <option value="ig">Igbo</option>
+                    <option value="fr">French</option>
+                    <option value="ar">Arabic</option>
+                </select>
+            </div>
+            
+            <div class="sidebar-section">
+                <h4>About</h4>
+                <p>ChatMRPT helps identify high-risk malaria areas for targeted interventions and resource allocation.</p>
+                <p><strong>Version:</strong> 2.0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Screen Chat Interface -->
+    <main class="main-chat-interface">
+        <div class="chat-container full-screen">
+            <!-- Integrated Chat Header -->
+            <div class="chat-header">
+                <div class="chat-controls-left">
+                    <button id="sidebar-toggle" class="control-btn" title="Menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+                <div class="chat-brand">
+                    <div class="brand-text">
+                        <h1>ChatMRPT</h1>
+                        <span>Malaria Risk Analysis</span>
+                    </div>
+                </div>
+                <div class="chat-controls-right">
+                    <!-- Empty for now, can add other controls later -->
+                </div>
+            </div>
+
+            <div id="chat-messages" class="chat-messages-container">
+                <!-- Messages will be added here by JavaScript -->
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="input-tools">
+                    <button id="upload-button" class="tool-btn" title="Upload Files">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <button id="download-report-btn" class="tool-btn" title="Generate Report">
+                        <i class="fas fa-file-alt"></i>
+                    </button>
+                </div>
+                <textarea id="message-input" class="chat-input" placeholder="Ask me about malaria risk analysis..." rows="1"></textarea>
+                <div class="chat-actions">
+                    <button id="send-message" class="chat-btn send-btn" title="Send Message">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookie-banner" class="cookie-banner" style="display: none;">
+        <div class="cookie-content">
+            <p><strong>This tool uses cookies and collects usage data</strong> to improve functionality and user experience. See details in the sidebar under "Legal Information".</p>
+            <button id="accept-cookies" class="btn btn-primary">Accept</button>
+        </div>
+    </div>
+
+    <!-- File Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadModalLabel"><i class="fas fa-cloud-upload-alt me-2"></i>Upload Your Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Tab Navigation -->
+                    <ul class="nav nav-tabs mb-4" id="uploadTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="standard-tab" data-bs-toggle="tab" data-bs-target="#standard-upload" type="button" role="tab">
+                                <i class="fas fa-file-csv me-2"></i>Standard Upload
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tpr-tab" data-bs-toggle="tab" data-bs-target="#tpr-upload" type="button" role="tab">
+                                <i class="fas fa-chart-line me-2"></i>TPR Data Upload
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-data" type="button" role="tab">
+                                <i class="fas fa-download me-2"></i>Download Processed Data
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="uploadTabContent">
+                        
+                        <!-- Standard Upload Tab -->
+                        <div class="tab-pane fade show active" id="standard-upload" role="tabpanel">
+                            <p class="text-muted mb-3">Please provide both your CSV/Excel data and the corresponding Shapefile (ZIP).</p>
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <div class="file-upload-option">
+                                <h5><i class="fas fa-file-csv me-2 text-success"></i>CSV / Excel Data</h5>
+                                <p>Ward-level data (e.g., environmental factors, demographics).</p>
+                                <div class="input-group">
+                                    <input type="file" class="form-control" id="csv-upload" accept=".csv,.xlsx,.xls">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="file-upload-option">
+                                <h5><i class="fas fa-map-marked-alt me-2 text-info"></i>Shapefile (ZIP)</h5>
+                                <p>Geographical boundaries of wards (must be a .zip archive).</p>
+                                <div class="input-group">
+                                    <input type="file" class="form-control" id="shapefile-upload" accept=".zip">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                            <button class="btn btn-primary mt-2 w-100" type="button" id="upload-files-btn">
+                                <i class="fas fa-upload me-2"></i>Upload Files
+                            </button>
+                            <div id="files-upload-status" class="upload-status mt-2"></div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <div class="text-center">
+                            <p class="mb-2">Alternatively, explore the tool's capabilities with our sample dataset:</p>
+                            <button type="button" class="btn btn-info" id="use-sample-data-btn-modal">
+                                <i class="fas fa-database me-2"></i>Load Sample Data
+                            </button>
+                        </div>
+                        </div>
+                        
+                        <!-- TPR Upload Tab -->
+                        <div class="tab-pane fade" id="tpr-upload" role="tabpanel">
+                            <div class="alert alert-info mb-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Upload your Test Positivity Rate (TPR) Excel file. The system will automatically extract environmental data and create analysis-ready datasets.
+                            </div>
+                            
+                            <div class="mb-4">
+                                <h5><i class="fas fa-vial me-2 text-warning"></i>TPR Data File</h5>
+                                <p class="text-muted mb-3">Upload your TPR data file containing facility data and test positivity rates.</p>
+                                
+                                <div class="mb-3">
+                                    <input type="file" class="form-control" id="tpr-file-upload" accept=".csv,.xlsx,.xls">
+                                    <div class="form-text">Supported formats: CSV, Excel (.xlsx, .xls)</div>
+                                </div>
+                                
+                                <!-- State Selection Dropdown -->
+                                <div id="tpr-state-selection" class="mb-3" style="display: none;">
+                                    <label for="tpr-state-select" class="form-label">Select State:</label>
+                                    <select id="tpr-state-select" class="form-select">
+                                        <option value="">Choose a state...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        
+                        <!-- Automatic Data Enhancement Section -->
+                        <div class="enhancement-section mb-4">
+                            <h5><i class="fas fa-magic me-2 text-success"></i>Automatic Data Enhancement</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Enhanced Vegetation Index (EVI)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Normalized Difference Vegetation Index (NDVI)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Rainfall Data</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Temperature Data</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Elevation</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Distance to Water Bodies</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Relative Humidity</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Soil Wetness</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>NDMI (Moisture Index)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>NDWI (Water Index)</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Nighttime Lights</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Urban Extent</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Population Density</span>
+                                    </div>
+                                    <div class="enhancement-item d-flex align-items-center mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        <span>Ward Boundaries (Nigeria Shapefile)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TPR Upload Button -->
+                        <div class="text-center mb-3">
+                            <button type="button" class="btn btn-warning w-100" id="upload-tpr-btn">
+                                <i class="fas fa-upload me-2"></i>Upload TPR Data
+                            </button>
+                        </div>
+                        
+                        <!-- TPR Status Display -->
+                        <div id="tpr-upload-status" class="upload-status"></div>
+                        
+                        <!-- TPR Download Content -->
+                        <div id="tpr-download-content" style="display: none;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Download Tab -->
+                        <div class="tab-pane fade" id="download-data" role="tabpanel">
+                            <div class="text-center mb-4">
+                                <p class="text-muted">Download your processed analysis-ready datasets.</p>
+                            </div>
+                            
+                            <div class="download-section" id="download-content">
+                                <h5><i class="fas fa-download me-2"></i>Download Your Convergence Data:</h5>
+                                <p class="text-muted mb-3" id="convergence-info">Ready for main workflow: <span id="ward-count">---</span> wards from <span id="state-name">---</span></p>
+                                
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-success btn-lg" id="download-csv-btn" disabled>
+                                        <i class="fas fa-file-csv me-2"></i>Download <span id="csv-filename">data_plus.csv</span>
+                                    </button>
+                                    <button type="button" class="btn btn-success btn-lg" id="download-shapefile-btn" disabled>
+                                        <i class="fas fa-map me-2"></i>Download <span id="shapefile-filename">state.zip</span>
+                                    </button>
+                                </div>
+                                
+                                <div class="alert alert-info mt-3" id="download-info" style="display: none;">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    These files are ready for the main ChatMRPT analysis workflow.
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            <div class="text-center">
+                                <p class="mb-2">Alternatively, explore the tool's capabilities with our sample dataset:</p>
+                                <button type="button" class="btn btn-info" id="use-sample-data-btn-modal">
+                                    <i class="fas fa-database me-2"></i>Load Sample Data
+                                </button>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                <div class="modal-footer">
+                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Generation Modal -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reportModalLabel"><i class="fas fa-file-invoice me-2"></i>Generate Analysis Report</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Quick Report Section -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold text-primary mb-3">
+                            <i class="fas fa-bolt me-2"></i>Quick Report Generation
+                        </h6>
+                        <p class="text-muted small mb-3">Generate a standard report with predefined sections.</p>
+                        
+                        <div class="form-group mb-3">
+                            <label for="report-format" class="form-label">Select Report Format:</label>
+                            <select class="form-select" id="report-format">
+                                <option value="pdf" selected>PDF Document</option>
+                                <option value="html">HTML Web Page</option>
+                                <option value="markdown">Markdown (.md)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="alert alert-light report-info" role="alert">
+                            <h6 class="alert-heading">Report Contents:</h6>
+                            <ul class="mb-0 small">
+                                <li>Data Overview & Methodology Summary</li>
+                                <li>Missing Value Handling Details</li>
+                                <li>Variable Relationship Analysis</li>
+                                <li>Composite Score Calculation Insights</li>
+                                <li>Ward Vulnerability Rankings & Prioritization</li>
+                                <li>Urban Extent Analysis Findings</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Advanced Report Builder Section -->
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-success mb-3">
+                            <i class="fas fa-tools me-2"></i>Advanced Report Builder
+                        </h6>
+                        <p class="text-muted small mb-3">Create customized reports with interactive previews and section selection.</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-cogs text-primary mb-2" style="font-size: 2rem;"></i>
+                                        <h6 class="card-title">Custom Report Builder</h6>
+                                        <p class="card-text small">Choose sections, formats, and detail levels with live preview.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-chart-bar text-success mb-2" style="font-size: 2rem;"></i>
+                                        <h6 class="card-title">Interactive Dashboard</h6>
+                                        <p class="card-text small">Generate modern, interactive web-based reports with charts.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <a href="/report_builder" class="btn btn-outline-success" target="_blank">
+                                <i class="fas fa-external-link-alt me-2"></i>Open Advanced Report Builder
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="generate-report-btn">
+                        <i class="fas fa-bolt me-2"></i>Generate Quick Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visualization Modal -->
+    <div class="modal fade" id="visualizationModal" tabindex="-1" aria-labelledby="visualizationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="visualizationModalLabel">Visualization</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="visualizationModalBody" style="height: 80vh; overflow-y: auto; display: flex; justify-content: center; align-items: center;">
+                    <!-- iframe or image will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- TPR Integration Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎯 TPR Integration script loaded');
+            // The TPR functionality is handled by the existing file-uploader.js module
+            // This script just logs that the integration is ready
+        });
+    </script>
+    
+    <!-- Custom JS - Modular Architecture -->
+    <script type="module" src="/static/js/app.js?v=20250709370468"></script>
+</body>
+</html>

@@ -95,6 +95,9 @@ class DataHandler:
         # Current viewing method ('mean' or 'pca')
         self.current_method = 'mean'  # Default to mean method for backwards compatibility
         
+        # Unified dataset for post-analysis operations
+        self.unified_dataset = None
+        
         # Don't auto-create session folder - only create when data is actually uploaded
         # This prevents confusion about whether data exists based on directory existence
         
@@ -698,6 +701,20 @@ class DataHandler:
                         self.shapefile_data = gpd.read_file(shp_path)
                         self.logger.info(f"Reloaded shapefile data from {shp_files[0]} (fallback)")
             
+            # If no shapefile found but raw_shapefile.zip exists, extract it automatically
+            if self.shapefile_data is None:
+                raw_shapefile_zip = os.path.join(self.session_folder, 'raw_shapefile.zip')
+                if os.path.exists(raw_shapefile_zip):
+                    try:
+                        self.logger.info("🔧 Auto-extracting shapefile from raw_shapefile.zip")
+                        result = self.load_shapefile_from_zip(raw_shapefile_zip)
+                        if result['status'] == 'success':
+                            self.logger.info("✅ Auto-extraction successful - shapefile data loaded")
+                        else:
+                            self.logger.warning(f"❌ Auto-extraction failed: {result.get('message', 'Unknown error')}")
+                    except Exception as e:
+                        self.logger.warning(f"❌ Auto-extraction failed with exception: {e}")
+            
             # **FIXED: Also reload composite_scores and analysis results**
             # Try to reload other data files
             files_to_reload = [
@@ -808,8 +825,58 @@ class DataHandler:
                     self.composite_scores_mean = self.composite_scores
                     self.logger.info("Set composite_scores_mean from composite_scores for consistency")
             
+            # **NEW: Load unified dataset if available**
+            self._load_unified_dataset()
+            
         except Exception as e:
             self.logger.warning(f"Could not reload some data files: {str(e)}")
+    
+    def _load_unified_dataset(self):
+        """Load unified dataset if available"""
+        try:
+            from .unified_dataset_builder import load_unified_dataset
+            
+            # Extract session ID from session folder
+            session_id = os.path.basename(self.session_folder)
+            
+            unified_dataset = load_unified_dataset(session_id)
+            if unified_dataset is not None:
+                self.unified_dataset = unified_dataset
+                self.logger.info(f"Loaded unified dataset with {len(unified_dataset)} rows, {len(unified_dataset.columns)} columns")
+            else:
+                self.logger.debug("No unified dataset found for session")
+                
+        except Exception as e:
+            self.logger.warning(f"Could not load unified dataset: {e}")
+    
+    def get_unified_dataset(self):
+        """Get unified dataset, creating it if necessary"""
+        # Return existing unified dataset if available
+        if self.unified_dataset is not None:
+            return self.unified_dataset
+        
+        # Try to load from disk first
+        self._load_unified_dataset()
+        if self.unified_dataset is not None:
+            return self.unified_dataset
+        
+        # If still not available, try to create it using the base tool function
+        try:
+            from ..tools.base import get_session_unified_dataset
+            session_id = os.path.basename(self.session_folder)
+            
+            unified_dataset = get_session_unified_dataset(session_id)
+            if unified_dataset is not None:
+                self.unified_dataset = unified_dataset
+                self.logger.info(f"Created and loaded unified dataset with {len(unified_dataset)} rows, {len(unified_dataset.columns)} columns")
+                return self.unified_dataset
+            else:
+                self.logger.warning("Could not create unified dataset - no data available")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error creating unified dataset: {e}")
+            return None
     
     def set_viewing_method(self, method: str) -> Dict[str, Any]:
         """

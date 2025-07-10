@@ -244,11 +244,14 @@ class ShapefileLoader:
                 shapefile_data = gpd.read_file(shp_files[0])
                 self.logger.info(f"Loaded shapefile with CRS: {shapefile_data.crs}")
                 
-                # Save raw shapefile ZIP for analysis workflow
+                # Save raw shapefile ZIP for analysis workflow (only if not already there)
                 raw_zip_path = os.path.join(self.session_folder, 'raw_shapefile.zip')
-                import shutil
-                shutil.copy2(zip_file_path, raw_zip_path)
-                self.logger.info(f"Saved raw shapefile ZIP to: {raw_zip_path}")
+                if not os.path.samefile(zip_file_path, raw_zip_path):
+                    import shutil
+                    shutil.copy2(zip_file_path, raw_zip_path)
+                    self.logger.info(f"Saved raw shapefile ZIP to: {raw_zip_path}")
+                else:
+                    self.logger.info(f"Raw shapefile ZIP already exists at: {raw_zip_path}")
                 
                 # Save extracted raw shapefile for analysis
                 shp_output_dir = os.path.join(self.session_folder, 'shapefile')

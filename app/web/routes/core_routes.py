@@ -155,33 +155,9 @@ def index():
                             stack_trace=traceback.format_exc()
                         )
     
-    # Preload knowledge tools in background for fast user interaction
-    if hasattr(current_app, 'services'):
-        try:
-            # Import and trigger background loading
-            from ...core.tiered_tool_loader import get_tiered_tool_loader
-            import threading
-            
-            def background_load_knowledge_tools():
-                try:
-                    loader = get_tiered_tool_loader()
-                    loader.preload_knowledge_tools_for_app_visit()
-                except Exception as e:
-                    logger.warning(f"Background knowledge tools loading failed: {e}")
-            
-            # Start background thread to load knowledge tools
-            threading.Thread(target=background_load_knowledge_tools, daemon=True).start()
-        except Exception as e:
-            logger.warning(f"Failed to start background knowledge tools loading: {e}")
-            
-            # 🎯 LOG BACKGROUND LOADING ERRORS - DEMO MONITORING
-            if hasattr(current_app, 'services') and current_app.services.interaction_logger:
-                current_app.services.interaction_logger.log_error(
-                    session_id=session.get('session_id'),
-                    error_type=f'BackgroundLoadingError:{type(e).__name__}',
-                    error_message=str(e),
-                    stack_trace=traceback.format_exc()
-                )
+    # py-sidebot pattern: No complex background loading needed
+    # Request interpreter handles tool registration directly
+    logger.info(f"Session {session['session_id']} initialized with py-sidebot pattern")
     
     # Check for UI preference
     use_tailwind = request.args.get('use_tailwind', 'false').lower() == 'true'

@@ -1389,4 +1389,17 @@ window.sidebarController = app.sidebarController;
 window.dataUploadManager = app.dataUploadManager;
 window.variableDisplayManager = variableDisplayManager;
 
+// CRITICAL FIX: Debug utilities for scroll issues
+window.debugScroll = () => {
+    if (window.chatManager && window.chatManager.messageHandler) {
+        window.chatManager.messageHandler.debugScrollInfo();
+    }
+};
+
+window.forceScrollToBottom = () => {
+    if (window.chatManager && window.chatManager.messageHandler) {
+        window.chatManager.messageHandler.scrollToBottom();
+    }
+};
+
 export default app; 

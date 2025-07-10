@@ -37,7 +37,7 @@ class AnalysisEngine:
     """Simple analysis engine wrapper for service container."""
     
     def __init__(self):
-        pass
+        self.data_handler = None
     
     def run_standard_analysis(self, data_handler, session_id=None):
         """Run standard analysis pipeline."""
@@ -75,6 +75,72 @@ class AnalysisEngine:
                 'status': 'error',
                 'message': f'Analysis failed: {str(e)}',
                 'variables_used': selected_variables
+            }
+    
+    def run_composite_analysis(self, session_id=None, variables=None):
+        """Run composite scoring analysis."""
+        try:
+            result = run_full_analysis_pipeline(
+                data_handler=self.data_handler, 
+                selected_variables=variables,
+                session_id=session_id,
+                analysis_type='composite'
+            )
+            return {
+                'status': 'success',
+                'message': 'Composite analysis completed successfully',
+                'variables_used': result.get('variables_used', []),
+                'results': result
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Composite analysis failed: {str(e)}',
+                'variables_used': variables or []
+            }
+    
+    def run_pca_analysis(self, session_id=None, variables=None):
+        """Run PCA analysis."""
+        try:
+            result = run_full_analysis_pipeline(
+                data_handler=self.data_handler,
+                selected_variables=variables,
+                session_id=session_id,
+                analysis_type='pca'
+            )
+            return {
+                'status': 'success',
+                'message': 'PCA analysis completed successfully',
+                'variables_used': result.get('variables_used', []),
+                'results': result
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'PCA analysis failed: {str(e)}',
+                'variables_used': variables or []
+            }
+    
+    def run_complete_analysis(self, session_id=None, variables=None):
+        """Run complete dual-method analysis."""
+        try:
+            result = run_full_analysis_pipeline(
+                data_handler=self.data_handler,
+                selected_variables=variables,
+                session_id=session_id,
+                analysis_type='complete'
+            )
+            return {
+                'status': 'success',
+                'message': 'Complete analysis finished successfully',
+                'variables_used': result.get('variables_used', []),
+                'results': result
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Complete analysis failed: {str(e)}',
+                'variables_used': variables or []
             }
     
     def explain_variable_selection(self, variables, data_handler):

@@ -247,15 +247,21 @@ class VariableDistribution(BaseTool):
             
             # Save map using the same pattern as other tools
             from datetime import datetime
-            from flask import current_app
             
             # Create unique filename with timestamp - ensures multiple visualizations coexist
             # Files persist until session closure (browser closed or session expired)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{variable}_distribution_map_{timestamp}.html"
             
-            # Ensure session directory exists
-            session_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
+            # Ensure session directory exists - use safe path access
+            try:
+                from flask import current_app
+                upload_folder = current_app.config['UPLOAD_FOLDER']
+            except RuntimeError:
+                # Working outside of request context, use default path
+                upload_folder = os.path.join('instance', 'uploads')
+            
+            session_dir = os.path.join(upload_folder, session_id)
             os.makedirs(session_dir, exist_ok=True)
             
             file_path = os.path.join(session_dir, filename)
@@ -320,26 +326,29 @@ class VariableDistribution(BaseTool):
     def _track_exploration_activity(self, session_id: str, variable_name: str):
         """Track user's exploration activity for workflow guidance"""
         try:
-            from flask import session
-            
-            # Initialize exploration tracking if not exists
-            if 'exploration_activity' not in session:
-                session['exploration_activity'] = {
-                    'distributions_viewed': [],
-                    'exploration_count': 0,
-                    'started_at': None
-                }
-            
-            # Track this distribution view
-            if variable_name not in session['exploration_activity']['distributions_viewed']:
-                session['exploration_activity']['distributions_viewed'].append(variable_name)
-                session['exploration_activity']['exploration_count'] += 1
+            try:
+                from flask import session
+                # Initialize exploration tracking if not exists
+                if 'exploration_activity' not in session:
+                    session['exploration_activity'] = {
+                        'distributions_viewed': [],
+                        'exploration_count': 0,
+                        'started_at': None
+                    }
                 
-                if session['exploration_activity']['started_at'] is None:
-                    from datetime import datetime
-                    session['exploration_activity']['started_at'] = datetime.now().isoformat()
-                
-                logger.info(f"📊 Tracked exploration: {variable_name} (count: {session['exploration_activity']['exploration_count']})")
+                # Track this distribution view
+                if variable_name not in session['exploration_activity']['distributions_viewed']:
+                    session['exploration_activity']['distributions_viewed'].append(variable_name)
+                    session['exploration_activity']['exploration_count'] += 1
+                    
+                    if session['exploration_activity']['started_at'] is None:
+                        from datetime import datetime
+                        session['exploration_activity']['started_at'] = datetime.now().isoformat()
+                    
+                    logger.info(f"📊 Tracked exploration: {variable_name} (count: {session['exploration_activity']['exploration_count']})")
+            except RuntimeError:
+                # Working outside of request context, skip session tracking
+                logger.info(f"📊 Variable distribution created: {variable_name} (session tracking skipped - no Flask context)")
             
         except Exception as e:
             logger.warning(f"Failed to track exploration activity: {e}")
@@ -347,14 +356,19 @@ class VariableDistribution(BaseTool):
     def _generate_workflow_guidance(self, session_id: str) -> dict:
         """Generate intelligent workflow guidance based on exploration activity"""
         try:
-            from flask import session
-            
-            exploration = session.get('exploration_activity', {})
-            distributions_viewed = exploration.get('distributions_viewed', [])
-            exploration_count = exploration.get('exploration_count', 0)
-            
-            # Check if comprehensive analysis has been run
-            analysis_complete = session.get('comprehensive_analysis_complete', False)
+            try:
+                from flask import session
+                exploration = session.get('exploration_activity', {})
+                distributions_viewed = exploration.get('distributions_viewed', [])
+                exploration_count = exploration.get('exploration_count', 0)
+                
+                # Check if comprehensive analysis has been run
+                analysis_complete = session.get('comprehensive_analysis_complete', False)
+            except RuntimeError:
+                # Working outside of request context, provide minimal guidance
+                exploration_count = 0
+                distributions_viewed = []
+                analysis_complete = False
             
             # Generate guidance based on activity
             if exploration_count == 0:

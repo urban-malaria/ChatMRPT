@@ -37,17 +37,15 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
             from app.core.utils import get_analysis_variables, select_composite_variables
             from ..variable_selection_coordinator import get_variable_coordinator
             
-            # Get the session coordinator to ensure consistency
-            coordinator = get_variable_coordinator(step_id)  # Use step_id as session identifier
-            
-            # Get the unified variables from the coordinator
-            final_variables = coordinator.get_variables_for_method('composite')
+            # Use the selected_variables that were passed to this stage
+            # (they've already been validated by the coordinator in the main pipeline)
+            final_variables = selected_variables
             
             if not final_variables:
-                logger.error("⚠️ COMPOSITE METHOD: No variables available from coordinator")
+                logger.error("⚠️ COMPOSITE METHOD: No variables provided to scoring stage")
                 return {
                     'status': 'error',
-                    'message': 'No variables available for composite analysis from unified selection'
+                    'message': 'No variables provided for composite analysis'
                 }
             
             # Validate that the coordinator variables are available in normalized data

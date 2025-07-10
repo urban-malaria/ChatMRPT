@@ -36,7 +36,7 @@ class ShapefileFetcher:
         # Known shapefile sources
         self.shapefile_sources = {
             'local': {
-                'path': os.path.join(os.path.dirname(__file__), '..', '..', 'kano_settlement_data'),
+                'path': os.path.join(os.path.dirname(__file__), '..', '..', 'www', 'kano_settlement_data'),
                 'states': ['Kano']
             },
             'gadm': {

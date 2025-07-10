@@ -37,6 +37,11 @@ class ExplainAnalysisMethodology(BaseTool):
     category: ClassVar[ToolCategory] = ToolCategory.KNOWLEDGE
     input_model: ClassVar[type] = ExplainAnalysisMethodologyInput
     
+    def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
+        """Execute methodology explanation"""
+        kwargs['session_id'] = session_id
+        return self._execute(**kwargs)
+    
     def _execute(self, **kwargs) -> ToolExecutionResult:
         """Execute methodology explanation"""
         try:

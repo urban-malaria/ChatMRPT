@@ -71,6 +71,10 @@ class RequestInterpreter:
         self.tools['create_pca_map'] = self._create_pca_map
         self.tools['create_variable_distribution'] = self._create_variable_distribution
         
+        # Register settlement visualization tools
+        self.tools['create_settlement_map'] = self._create_settlement_map
+        self.tools['show_settlement_statistics'] = self._show_settlement_statistics
+        
         # Register data tools
         self.tools['execute_data_query'] = self._execute_data_query
         
@@ -610,6 +614,74 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
         except Exception as e:
             return f"Error explaining methodology: {str(e)}"
     
+    def _create_settlement_map(self, session_id: str, ward_name: str = None, zoom_level: int = 11):
+        """Create interactive settlement map showing building types for specific wards."""
+        try:
+            from app.tools.settlement_visualization_tools import create_settlement_map
+            
+            result = create_settlement_map(session_id, ward_name, zoom_level)
+            
+            if result.get('status') == 'success':
+                message = result.get('message', f'Settlement map created')
+                
+                # Add ward-specific information
+                if ward_name:
+                    message += f" for {ward_name} ward"
+                
+                # Auto-explain the visualization if file_path exists
+                if result.get('file_path'):
+                    explanation = self._explain_visualization_universally(
+                        result['file_path'], 'settlement_map', session_id
+                    )
+                    message += f"\n\n{explanation}"
+                
+                # Return structured response
+                if result.get('web_path'):
+                    return {
+                        'response': message,
+                        'visualizations': [{
+                            'type': 'settlement_map',
+                            'file_path': result.get('file_path', ''),
+                            'path': result.get('web_path', ''),
+                            'url': result.get('web_path', ''),
+                            'title': f"Settlement Map{' - ' + ward_name if ward_name else ''}",
+                            'description': f"Building classification map showing settlement types{' for ' + ward_name + ' ward' if ward_name else ''}"
+                        }],
+                        'tools_used': ['create_settlement_map'],
+                        'status': 'success'
+                    }
+                else:
+                    return message
+            else:
+                return f"Error creating settlement map: {result.get('message', 'Unknown error')}"
+        except Exception as e:
+            return f"Error creating settlement map: {str(e)}"
+    
+    def _show_settlement_statistics(self, session_id: str):
+        """Show comprehensive statistics about available settlement data."""
+        try:
+            from app.tools.settlement_visualization_tools import show_settlement_statistics
+            
+            result = show_settlement_statistics(session_id)
+            
+            if result.get('status') == 'success':
+                message = result.get('message', 'Settlement statistics retrieved')
+                
+                # Enhance with AI explanation if available
+                if result.get('ai_response'):
+                    message = result['ai_response']
+                
+                return {
+                    'response': message,
+                    'tools_used': ['show_settlement_statistics'],
+                    'status': 'success',
+                    'data': result.get('data', {})
+                }
+            else:
+                return f"Error getting settlement statistics: {result.get('message', 'Unknown error')}"
+        except Exception as e:
+            return f"Error getting settlement statistics: {str(e)}"
+    
     # Helper Methods
     def _get_tool_parameters(self, tool_name: str) -> Dict[str, Any]:
         """Get parameter schema for a tool."""
@@ -656,6 +728,23 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
             }
             base_params['required'].append('variable_name')
         
+        if tool_name == 'create_settlement_map':
+            base_params['properties'].update({
+                'ward_name': {
+                    'type': 'string',
+                    'description': 'Optional specific ward name to highlight and focus on'
+                },
+                'zoom_level': {
+                    'type': 'integer',
+                    'description': 'Map zoom level (11=city view, 13=ward view, 15=detailed)',
+                    'default': 11
+                }
+            })
+        
+        if tool_name == 'show_settlement_statistics':
+            # No additional parameters needed - just session_id
+            pass
+        
         return base_params
     
     def _build_system_prompt(self, session_context: Dict) -> str:
@@ -690,6 +779,8 @@ Use the appropriate tool based on user requests:
 - **create_vulnerability_map**: For choropleth risk maps
 - **create_box_plot**: For vulnerability score distributions
 - **create_variable_distribution**: For spatial distribution maps of any variable
+- **create_settlement_map**: For interactive settlement/building classification maps
+- **show_settlement_statistics**: For settlement data statistics and summary
 - **execute_data_query**: For data questions, plots, statistics
 - **explain_analysis_methodology**: For methodology explanations
 

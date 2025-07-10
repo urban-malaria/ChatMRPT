@@ -235,4 +235,66 @@ class AnalysisEngine:
                 'status': 'error',
                 'message': f'Failed to generate explanations: {str(e)}',
                 'explanations': {}
+            }
+    
+    def run_complete_analysis(self, session_id: str, variables: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Run complete analysis using both composite scoring and PCA methods.
+        
+        This method runs both analysis types and returns combined results.
+        
+        Args:
+            session_id: Session identifier
+            variables: Optional list of variables to use (auto-selected if None)
+            
+        Returns:
+            Dictionary with complete analysis results from both methods
+        """
+        try:
+            logger.info("📊 Starting complete analysis (composite + PCA)")
+            
+            # Run composite analysis
+            composite_result = self.run_composite_analysis(session_id, variables)
+            
+            # Run PCA analysis
+            pca_result = self.run_pca_analysis(session_id, variables)
+            
+            # Combine results
+            if composite_result.get('status') == 'success' and pca_result.get('status') == 'success':
+                return {
+                    'status': 'success',
+                    'message': 'Complete analysis (composite + PCA) completed successfully.',
+                    'variables_used': composite_result.get('variables_used', []),
+                    'analysis_type': 'dual_method',
+                    'composite_results': composite_result.get('results', {}),
+                    'pca_results': pca_result.get('results', {}),
+                    'results': {
+                        'composite': composite_result.get('results', {}),
+                        'pca': pca_result.get('results', {})
+                    }
+                }
+            else:
+                # If either analysis fails, return error with details
+                error_messages = []
+                if composite_result.get('status') == 'error':
+                    error_messages.append(f"Composite: {composite_result.get('message', 'Unknown error')}")
+                if pca_result.get('status') == 'error':
+                    error_messages.append(f"PCA: {pca_result.get('message', 'Unknown error')}")
+                
+                return {
+                    'status': 'error',
+                    'message': f'Complete analysis failed: {"; ".join(error_messages)}',
+                    'variables_used': variables or [],
+                    'analysis_type': 'dual_method',
+                    'composite_results': composite_result,
+                    'pca_results': pca_result
+                }
+            
+        except Exception as e:
+            logger.error(f"Complete analysis failed: {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Complete analysis failed: {str(e)}',
+                'variables_used': variables or [],
+                'analysis_type': 'dual_method'
             } 
