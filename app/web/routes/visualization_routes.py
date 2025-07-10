@@ -372,6 +372,96 @@ def navigate_visualization():
         }), 500
 
 
+@viz_bp.route('/explain_visualization', methods=['POST'])
+@validate_session
+@handle_errors
+@log_execution_time
+def explain_visualization():
+    """Handle visualization explanation requests using AI vision"""
+    try:
+        data = request.json
+        visualization_path = data.get('visualization_path')
+        base64_data = data.get('base64_data')
+        title = data.get('title', 'Visualization')
+        viz_type = data.get('viz_type', 'unknown')
+        
+        # Get session ID
+        session_id = session.get('session_id')
+        
+        # Get the universal visualization explainer service
+        from app.services.universal_viz_explainer import get_universal_viz_explainer
+        
+        # Get LLM manager from services container
+        llm_manager = current_app.services.llm_manager
+        
+        # Create explainer instance
+        explainer = get_universal_viz_explainer(llm_manager=llm_manager)
+        
+        # Generate AI-powered explanation
+        if base64_data:
+            # For base64 images, we need to save temporarily and process
+            import tempfile
+            import base64
+            
+            # Decode base64 to image file
+            img_data = base64.b64decode(base64_data)
+            
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.png', delete=False) as tmp_file:
+                tmp_file.write(img_data)
+                tmp_path = tmp_file.name
+            
+            try:
+                # Get AI explanation
+                explanation = explainer.explain_visualization(
+                    viz_path=tmp_path,
+                    viz_type=viz_type,
+                    session_id=session_id
+                )
+            finally:
+                # Clean up temp file
+                import os
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                    
+        elif visualization_path:
+            # For file-based visualizations, construct full path
+            import os
+            
+            # Handle relative paths - construct full path from session folder
+            if not os.path.isabs(visualization_path):
+                session_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], session_id)
+                full_path = os.path.join(session_folder, visualization_path)
+            else:
+                full_path = visualization_path
+            
+            # Get AI explanation
+            explanation = explainer.explain_visualization(
+                viz_path=full_path,
+                viz_type=viz_type,
+                session_id=session_id
+            )
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Either visualization_path or base64_data must be provided'
+            }), 400
+        
+        return jsonify({
+            'status': 'success',
+            'explanation': explanation,
+            'title': title,
+            'viz_type': viz_type
+        })
+        
+    except Exception as e:
+        logger.error(f"Error explaining visualization: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f'Error generating explanation: {str(e)}'
+        }), 500
+
+
 # ========================================================================
 # VISUALIZATION UTILITY FUNCTIONS
 # ========================================================================

@@ -249,11 +249,18 @@ export class VisualizationManager {
             controls.appendChild(paginationControls);
         }
 
-        // Add expand and download buttons
+        // Add explain, expand and download buttons
+        const explainBtn = this.createControlButton('fas fa-sparkles', 'Explain this visualization');
         const expandBtn = this.createControlButton('fas fa-expand', 'View Fullscreen');
         const downloadBtn = this.createControlButton('fas fa-download', 'Download Visualization');
 
         // Add event listeners for the buttons
+        explainBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.explainVisualization(vizPath, title, vizType);
+        });
+
         expandBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -266,6 +273,7 @@ export class VisualizationManager {
             this.downloadVisualization(vizPath, title);
         });
 
+        controls.appendChild(explainBtn);
         controls.appendChild(expandBtn);
         controls.appendChild(downloadBtn);
         
@@ -294,11 +302,18 @@ export class VisualizationManager {
             controls.appendChild(paginationControls);
         }
 
-        // Add expand and download buttons for base64 images
+        // Add explain, expand and download buttons for base64 images
+        const explainBtn = this.createControlButton('fas fa-sparkles', 'Explain this visualization');
         const expandBtn = this.createControlButton('fas fa-expand', 'View Fullscreen');
         const downloadBtn = this.createControlButton('fas fa-download', 'Download Image');
 
         // Add event listeners for the buttons
+        explainBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.explainBase64Visualization(base64Data, title, vizType);
+        });
+
         expandBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -311,6 +326,7 @@ export class VisualizationManager {
             this.downloadBase64Image(base64Data, title);
         });
 
+        controls.appendChild(explainBtn);
         controls.appendChild(expandBtn);
         controls.appendChild(downloadBtn);
         
@@ -1107,5 +1123,403 @@ export class VisualizationManager {
             .toLowerCase();
         
         return `${cleanTitle}.png`;
+    }
+
+    /**
+     * Explain file-based visualization using AI
+     */
+    async explainVisualization(vizPath, title, vizType) {
+        try {
+            console.log('✨ Explaining visualization:', { vizPath, title, vizType });
+            
+            // Show loading state
+            this.showToast('Generating explanation...', 'info');
+            
+            // Call explanation endpoint
+            const response = await fetch('/explain_visualization', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    visualization_path: vizPath,
+                    title: title,
+                    viz_type: vizType
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                this.showExplanationModal(vizPath, title, result.explanation, false);
+            } else {
+                throw new Error(result.message || 'Failed to generate explanation');
+            }
+            
+        } catch (error) {
+            console.error('Error explaining visualization:', error);
+            this.showToast('Error generating explanation: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Explain base64 visualization using AI
+     */
+    async explainBase64Visualization(base64Data, title, vizType) {
+        try {
+            console.log('✨ Explaining base64 visualization:', { title, vizType });
+            
+            // Show loading state
+            this.showToast('Generating explanation...', 'info');
+            
+            // Call explanation endpoint with base64 data
+            const response = await fetch('/explain_visualization', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    base64_data: base64Data,
+                    title: title,
+                    viz_type: vizType
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                this.showExplanationModal(base64Data, title, result.explanation, true);
+            } else {
+                throw new Error(result.message || 'Failed to generate explanation');
+            }
+            
+        } catch (error) {
+            console.error('Error explaining base64 visualization:', error);
+            this.showToast('Error generating explanation: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Show explanation modal with side-by-side layout (py-sidebot style)
+     */
+    showExplanationModal(vizData, title, explanation, isBase64 = false) {
+        try {
+            console.log('✨ Showing explanation modal for:', title);
+            
+            // Create modal overlay
+            const modal = DOMHelpers.createElement('div', {
+                className: 'explanation-modal-overlay',
+                style: `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    background: rgba(0, 0, 0, 0.8);
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0;
+                    transition: opacity 0.3s ease;
+                    padding: 2rem;
+                    box-sizing: border-box;
+                `
+            });
+
+            // Create modal content container
+            const modalContent = DOMHelpers.createElement('div', {
+                className: 'explanation-modal-content',
+                style: `
+                    background: var(--bg-primary);
+                    border-radius: 12px;
+                    max-width: 90vw;
+                    max-height: 85vh;
+                    width: 1200px;
+                    height: 700px;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    transform: scale(0.9);
+                    transition: transform 0.3s ease;
+                `
+            });
+
+            // Create header
+            const header = DOMHelpers.createElement('div', {
+                className: 'explanation-modal-header',
+                style: `
+                    padding: 1.5rem 2rem;
+                    border-bottom: 1px solid var(--border-light);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    background: var(--bg-secondary);
+                `
+            });
+
+            const headerTitle = DOMHelpers.createElement('h3', {
+                style: `
+                    margin: 0;
+                    font-size: 1.25rem;
+                    font-weight: 600;
+                    color: var(--text-primary);
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                `
+            }, `<i class="fas fa-sparkles" style="color: #fbbf24;"></i> ${title} Explanation`);
+
+            const closeBtn = DOMHelpers.createElement('button', {
+                className: 'explanation-close-btn',
+                style: `
+                    background: none;
+                    border: none;
+                    font-size: 1.5rem;
+                    color: var(--text-secondary);
+                    cursor: pointer;
+                    padding: 0.5rem;
+                    border-radius: 6px;
+                    transition: all 0.2s ease;
+                `,
+                title: 'Close explanation'
+            }, '<i class="fas fa-times"></i>');
+
+            closeBtn.addEventListener('click', () => this.closeExplanationModal(modal));
+            closeBtn.addEventListener('mouseenter', () => {
+                closeBtn.style.background = 'var(--bg-tertiary)';
+                closeBtn.style.color = 'var(--text-primary)';
+            });
+            closeBtn.addEventListener('mouseleave', () => {
+                closeBtn.style.background = 'none';
+                closeBtn.style.color = 'var(--text-secondary)';
+            });
+
+            header.appendChild(headerTitle);
+            header.appendChild(closeBtn);
+
+            // Create main content area with side-by-side layout
+            const mainContent = DOMHelpers.createElement('div', {
+                className: 'explanation-modal-main',
+                style: `
+                    flex: 1;
+                    display: flex;
+                    overflow: hidden;
+                `
+            });
+
+            // Left side - Visualization
+            const vizPanel = DOMHelpers.createElement('div', {
+                className: 'explanation-viz-panel',
+                style: `
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    border-right: 1px solid var(--border-light);
+                    background: var(--bg-primary);
+                `
+            });
+
+            const vizHeader = DOMHelpers.createElement('div', {
+                style: `
+                    padding: 1rem 1.5rem;
+                    border-bottom: 1px solid var(--border-light);
+                    background: var(--bg-secondary);
+                    font-weight: 500;
+                    color: var(--text-primary);
+                `
+            }, '📊 Visualization');
+
+            const vizContent = DOMHelpers.createElement('div', {
+                className: 'explanation-viz-content',
+                style: `
+                    flex: 1;
+                    padding: 1rem;
+                    overflow: auto;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--bg-primary);
+                `
+            });
+
+            // Add visualization content
+            if (isBase64) {
+                const img = DOMHelpers.createElement('img', {
+                    src: `data:image/png;base64,${vizData}`,
+                    style: `
+                        max-width: 100%;
+                        max-height: 100%;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                        object-fit: contain;
+                    `,
+                    alt: title
+                });
+                vizContent.appendChild(img);
+            } else {
+                const iframe = DOMHelpers.createElement('iframe', {
+                    src: vizData,
+                    style: `
+                        width: 100%;
+                        height: 100%;
+                        border: none;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                    `,
+                    title: title
+                });
+                vizContent.appendChild(iframe);
+            }
+
+            vizPanel.appendChild(vizHeader);
+            vizPanel.appendChild(vizContent);
+
+            // Right side - AI Explanation
+            const explanationPanel = DOMHelpers.createElement('div', {
+                className: 'explanation-text-panel',
+                style: `
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    background: var(--bg-primary);
+                `
+            });
+
+            const explanationHeader = DOMHelpers.createElement('div', {
+                style: `
+                    padding: 1rem 1.5rem;
+                    border-bottom: 1px solid var(--border-light);
+                    background: var(--bg-secondary);
+                    font-weight: 500;
+                    color: var(--text-primary);
+                `
+            }, '🤖 AI Analysis');
+
+            const explanationContent = DOMHelpers.createElement('div', {
+                className: 'explanation-text-content',
+                style: `
+                    flex: 1;
+                    padding: 1.5rem;
+                    overflow-y: auto;
+                    line-height: 1.6;
+                    color: var(--text-primary);
+                    background: var(--bg-primary);
+                `
+            });
+
+            // Format explanation text with proper styling
+            const formattedExplanation = this.formatExplanationText(explanation);
+            explanationContent.innerHTML = formattedExplanation;
+
+            explanationPanel.appendChild(explanationHeader);
+            explanationPanel.appendChild(explanationContent);
+
+            // Assemble modal
+            mainContent.appendChild(vizPanel);
+            mainContent.appendChild(explanationPanel);
+            modalContent.appendChild(header);
+            modalContent.appendChild(mainContent);
+            modal.appendChild(modalContent);
+
+            // Add modal to DOM
+            document.body.appendChild(modal);
+
+            // Animate modal in
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                modalContent.style.transform = 'scale(1)';
+            }, 10);
+
+            // Setup event handlers
+            this.setupExplanationModalEvents(modal);
+
+        } catch (error) {
+            console.error('Error showing explanation modal:', error);
+            this.showToast('Error displaying explanation', 'error');
+        }
+    }
+
+    /**
+     * Format explanation text with proper styling and structure
+     */
+    formatExplanationText(explanation) {
+        // Convert markdown-like formatting to HTML
+        let formatted = explanation
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code style="background: var(--bg-tertiary); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace;">$1</code>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+
+        // Wrap in paragraphs
+        formatted = `<p>${formatted}</p>`;
+
+        // Handle lists
+        formatted = formatted.replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>');
+        formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+        return formatted;
+    }
+
+    /**
+     * Setup event handlers for explanation modal
+     */
+    setupExplanationModalEvents(modal) {
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeExplanationModal(modal);
+            }
+        });
+
+        // Close on ESC key
+        const keyHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeExplanationModal(modal);
+                document.removeEventListener('keydown', keyHandler);
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+
+        // Store key handler for cleanup
+        modal._keyHandler = keyHandler;
+    }
+
+    /**
+     * Close explanation modal with animation
+     */
+    closeExplanationModal(modal) {
+        try {
+            // Animate out
+            modal.style.opacity = '0';
+            const modalContent = modal.querySelector('.explanation-modal-content');
+            if (modalContent) {
+                modalContent.style.transform = 'scale(0.9)';
+            }
+
+            // Remove from DOM after animation
+            setTimeout(() => {
+                if (modal.parentNode) {
+                    modal.parentNode.removeChild(modal);
+                }
+                // Clean up event handler
+                if (modal._keyHandler) {
+                    document.removeEventListener('keydown', modal._keyHandler);
+                }
+            }, 300);
+
+        } catch (error) {
+            console.error('Error closing explanation modal:', error);
+        }
     }
 } 
