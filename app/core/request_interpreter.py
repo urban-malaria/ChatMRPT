@@ -1,8 +1,19 @@
 """
-Conversational Request Interpreter for ChatMRPT
+True py-sidebot Implementation for ChatMRPT
 
-Clean, conversational approach using LLM's natural abilities instead of complex pattern matching.
-Inspired by py-sidebot's simple, effective design.
+Clean implementation following py-sidebot's actual pattern:
+1. Create chat session with system prompt
+2. Register actual Python functions as tools
+3. Pass user messages directly to chat session
+4. Let LLM handle tool selection and execution
+
+Key components preserved:
+- Memory integration
+- Visualization explanation
+- Data schema handling
+- Conversational data access
+- Streaming support
+- Special workflows (permissions, forks)
 """
 
 import logging
@@ -11,17 +22,14 @@ import time
 from typing import Dict, Any, List, Optional
 from flask import current_app
 
-# Removed complex unified memory system - using py-sidebot lightweight approach
-
 logger = logging.getLogger(__name__)
 
 
 class RequestInterpreter:
     """
-    Conversational Request Interpreter for ChatMRPT
+    True py-sidebot inspired request interpreter for ChatMRPT.
     
-    Uses LLM's natural conversation abilities with function calling
-    instead of complex pattern matching and hardcoded rules.
+    Simple approach: register Python functions as tools and let LLM choose.
     """
     
     def __init__(self, llm_manager, data_service, analysis_service, visualization_service):
@@ -30,1629 +38,835 @@ class RequestInterpreter:
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
         
-        # Using py-sidebot lightweight approach - no complex memory system
-        self.conversation_history = {}  # Simple in-memory conversation storage
+        # py-sidebot approach: Simple conversation storage
+        self.conversation_history = {}
         
-        # Initialize tiered tool loading system
-        from .tiered_tool_loader import get_tiered_tool_loader
-        self.tiered_loader = get_tiered_tool_loader()
+        # Initialize memory system if available
+        try:
+            from app.services.memory_service import get_memory_service
+            self.memory = get_memory_service()
+        except Exception as e:
+            logger.debug(f"Memory service not available: {e}")
+            self.memory = None
         
-        # Initialize conversational data access system
-        from app.services.conversational_data_access import get_conversational_data_access
-        self.conversational_data_access = None  # Will be initialized per session
+        # Initialize conversational data access
+        self.conversational_data_access = None
+        
+        # py-sidebot pattern: Register tools as actual Python functions
+        self.tools = {}
+        self._register_tools()
     
-    def process_message(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Main conversational processing - single method with function calling."""
+    def _register_tools(self):
+        """Register actual Python functions as tools - true py-sidebot style."""
+        logger.info("Registering tools - py-sidebot pattern")
+        
+        # Register analysis tools
+        self.tools['run_complete_analysis'] = self._run_complete_analysis
+        self.tools['run_composite_analysis'] = self._run_composite_analysis
+        self.tools['run_pca_analysis'] = self._run_pca_analysis
+        
+        # Register visualization tools
+        self.tools['create_vulnerability_map'] = self._create_vulnerability_map
+        self.tools['create_box_plot'] = self._create_box_plot
+        self.tools['create_pca_map'] = self._create_pca_map
+        self.tools['create_variable_distribution'] = self._create_variable_distribution
+        
+        # Register data tools
+        self.tools['execute_data_query'] = self._execute_data_query
+        
+        # Register explanation tools
+        self.tools['explain_analysis_methodology'] = self._explain_analysis_methodology
+        
+        logger.info(f"Registered {len(self.tools)} tools")
+    
+    def process_message(self, user_message: str, session_id: str, session_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """py-sidebot pattern: Pass message directly to LLM with tools."""
         start_time = time.time()
-        timing_breakdown = {
-            'total_start': start_time,
-            'context_retrieval': 0,
-            'prompt_building': 0,
-            'llm_processing': 0,
-            'tool_execution': 0,
-            'response_formatting': 0
-        }
         
         try:
-            logger.info(f"Processing conversational message for session {session_id}: {user_message[:100]}...")
+            logger.info(f"Processing message for session {session_id}: {user_message[:100]}...")
             
-            # Check for analysis permission workflow
-            from flask import session
-            if session.get('should_ask_analysis_permission', False):
-                if self._is_confirmation_message(user_message):
-                    # Clear the flag and trigger analysis
-                    session['should_ask_analysis_permission'] = False
-                    return self._execute_automatic_analysis(session_id)
+            # Handle special workflows first
+            special_result = self._handle_special_workflows(user_message, session_id, session_data)
+            if special_result:
+                return special_result
             
-            # Check for automatic data description workflow
-            if session.get('should_describe_data', False):
-                session['should_describe_data'] = False
-                result = self._generate_automatic_data_description(session_id)
-                # Store in simple conversation history
-                self._store_conversation_simple(session_id, user_message, result.get('response', ''))
-                return result
+            # Get session context
+            session_context = self._get_session_context(session_id, session_data)
             
-            # Check for fork intent (what-if scenarios)
-            fork_intent = self._detect_fork_intent(user_message)
+            # Simple routing: no data = conversational, with data = tools available
+            if not session_context.get('data_loaded', False):
+                return self._simple_conversational_response(user_message, session_context)
             
-            if fork_intent['should_fork']:
-                # Create fork for scenario exploration
-                fork_id = self.fork_conversation(session_id, fork_intent['scenario_name'])
-                
-                if fork_id:
-                    # Switch to fork temporarily for this response
-                    self.switch_to_fork(fork_id)
-                    
-                    # Update session_id to fork_id for this processing
-                    session_id = fork_id
-                    
-                    # Add fork context to response
-                    fork_context = f"🔀 **Exploring scenario**: {fork_intent['scenario_name']}\\n\\n"
-                else:
-                    fork_context = ""
-            else:
-                fork_context = ""
+            # py-sidebot approach: LLM with all tools
+            result = self._llm_with_tools(user_message, session_context, session_id)
             
-            # Get session context for conversation
-            context_start = time.time()
-            session_context = self._get_session_context(session_id)
-            timing_breakdown['context_retrieval'] = time.time() - context_start
+            # Store conversation
+            self._store_conversation(session_id, user_message, result.get('response', ''))
             
-            # SMART ROUTING: Determine the best approach for this request
-            routing_decision = self._determine_routing_strategy(user_message, session_context)
-            logger.info(f"ROUTING DECISION for '{user_message[:50]}...': {routing_decision}")
-            
-            if routing_decision['strategy'] == 'direct_data_access':
-                # Handle with conversational data access directly
-                tool_start = time.time()
-                result = self._handle_execute_data_query(session_id, query=user_message)
-                timing_breakdown['tool_execution'] = time.time() - tool_start
-                timing_breakdown['llm_processing'] = 0  # No LLM call needed
-                
-                # Format as standard response
-                if result.get('status') == 'success':
-                    result['response'] = result.get('message', result.get('response', ''))
-                    result['tools_used'] = ['conversational_data_access']
-                else:
-                    result['response'] = result.get('message', 'Sorry, I encountered an error processing your request.')
-                    result['tools_used'] = []
-            else:
-                # Use LLM with function calling for complex requests
-                prompt_start = time.time()
-                system_prompt = self._build_conversational_prompt(session_context)
-                timing_breakdown['prompt_building'] = time.time() - prompt_start
-                
-                # Get available tools as functions (filtered based on routing)
-                available_functions = self._get_available_functions(routing_decision['preferred_tools'])
-                
-                # Build conversation messages
-                messages = self._build_conversation_messages(user_message, session_context, session_id)
-                
-                # Single LLM call with function calling
-                llm_start = time.time()
-                response = self.llm_manager.generate_with_functions(
-                    messages=messages,
-                    system_prompt=system_prompt,
-                    functions=available_functions,
-                    temperature=0.7,
-                    session_id=session_id
-                )
-                timing_breakdown['llm_processing'] = time.time() - llm_start
-                
-                # Process the response
-                tool_start = time.time()
-                result = self._process_llm_response(response, user_message, session_id)
-                timing_breakdown['tool_execution'] = time.time() - tool_start
-            
-            # Add fork context to response if we forked
-            if fork_context:
-                result['response'] = fork_context + result.get('response', '')
-                result['forked'] = True
-                result['fork_id'] = session_id
-            
-            # Update conversation history
-            response_start = time.time()
-            self._update_conversation_history(session_id, user_message, result.get('response', ''))
-            
-            # Store in memory
-            tools_used = result.get('tools_used', [])
-            success = result.get('status') == 'success'
-            
-            # Store conversation in simple memory (py-sidebot approach)
-            self._store_conversation_simple(session_id, user_message, result.get('response', ''))
-            
-            # Calculate final timing
-            timing_breakdown['response_formatting'] = time.time() - response_start
-            timing_breakdown['total_duration'] = time.time() - start_time
-            
-            # Add detailed timing to result for enhanced monitoring
-            result['timing_breakdown'] = timing_breakdown
-            result['performance_metrics'] = {
-                'total_time': timing_breakdown['total_duration'],
-                'llm_percentage': round((timing_breakdown['llm_processing'] / timing_breakdown['total_duration']) * 100, 1),
-                'tool_percentage': round((timing_breakdown['tool_execution'] / timing_breakdown['total_duration']) * 100, 1),
-                'context_percentage': round((timing_breakdown['context_retrieval'] / timing_breakdown['total_duration']) * 100, 1),
-                'bottleneck': max(timing_breakdown, key=timing_breakdown.get) if timing_breakdown else 'unknown'
-            }
-            
+            result['total_time'] = time.time() - start_time
             return result
             
         except Exception as e:
-            logger.error(f"Error in conversational processing: {e}")
+            logger.error(f"Error in py-sidebot processing: {e}")
             return {
                 'status': 'error',
-                'response': f'I encountered an issue processing your request: {str(e)}',
-                'visualizations': []
+                'response': f'I encountered an issue: {str(e)}',
+                'tools_used': []
             }
     
-    def process_message_streaming(self, user_message: str, session_id: str):
-        """Main conversational processing with streaming for better UX."""
-        start_time = time.time()
-        
+    def process_message_streaming(self, user_message: str, session_id: str, session_data: Dict[str, Any] = None):
+        """Streaming version for better UX."""
         try:
-            logger.info(f"Processing streaming message for session {session_id}: {user_message[:100]}...")
-            
-            # Check for analysis permission workflow
-            from flask import session
-            if session.get('should_ask_analysis_permission', False):
-                if self._is_confirmation_message(user_message):
-                    # Clear the flag and trigger analysis
-                    session['should_ask_analysis_permission'] = False
-                    result = self._execute_automatic_analysis(session_id)
-                    yield {
-                        'content': result.get('response', ''),
-                        'status': result.get('status', 'success'),
-                        'visualizations': result.get('visualizations', []),
-                        'tools_used': result.get('tools_used', []),
-                        'done': True
-                    }
-                    return
-            
-            # Check for automatic data description workflow
-            if session.get('should_describe_data', False):
-                session['should_describe_data'] = False
-                result = self._generate_automatic_data_description(session_id)
+            # Handle special workflows
+            special_result = self._handle_special_workflows(user_message, session_id, session_data)
+            if special_result:
                 yield {
-                    'content': result.get('response', ''),
-                    'status': result.get('status', 'success'),
-                    'visualizations': result.get('visualizations', []),
-                    'automatic_workflow': result.get('automatic_workflow', ''),
+                    'content': special_result.get('response', ''),
+                    'status': special_result.get('status', 'success'),
                     'done': True
                 }
                 return
             
-            # Check for fork intent (what-if scenarios)
-            fork_intent = self._detect_fork_intent(user_message)
+            # Get session context
+            session_context = self._get_session_context(session_id, session_data)
             
-            if fork_intent['should_fork']:
-                # Create fork for scenario exploration
-                fork_id = self.fork_conversation(session_id, fork_intent['scenario_name'])
-                
-                if fork_id:
-                    # Switch to fork temporarily for this response
-                    self.switch_to_fork(fork_id)
-                    
-                    # Update session_id to fork_id for this processing
-                    session_id = fork_id
-                    
-                    # Add fork context to response
-                    fork_context = f"🔀 **Exploring scenario**: {fork_intent['scenario_name']}\\n\\n"
-                    yield {
-                        'content': fork_context,
-                        'status': 'success',
-                        'forked': True,
-                        'fork_id': fork_id,
-                        'done': False
-                    }
-                else:
-                    yield {
-                        'content': "Failed to create scenario fork. Continuing with main conversation.\\n\\n",
-                        'status': 'warning',
-                        'done': False
-                    }
+            if not session_context.get('data_loaded', False):
+                response = self._simple_conversational_response(user_message, session_context)
+                yield {
+                    'content': response.get('response', ''),
+                    'status': 'success',
+                    'done': True
+                }
+                return
             
-            # Get session context for conversation
-            session_context = self._get_session_context(session_id)
+            # Stream with tools
+            yield from self._stream_with_tools(user_message, session_context, session_id)
             
-            # Build conversational system prompt
-            system_prompt = self._build_conversational_prompt(session_context)
-            
-            # Get available tools as functions
-            available_functions = self._get_available_functions()
-            
-            # Build conversation messages
-            messages = self._build_conversation_messages(user_message, session_context, session_id)
-            
-            # Stream LLM response with function calling
-            accumulated_content = ""
-            tools_used = []
-            
-            for chunk in self.llm_manager.generate_with_functions_streaming(
-                messages=messages,
-                system_prompt=system_prompt,
-                functions=available_functions,
-                temperature=0.7,
-                session_id=session_id
-            ):
-                accumulated_content += chunk.get('content', '')
-                
-                if chunk.get('function_call'):
-                    # Function call detected - execute it
-                    function_name = chunk['function_call']['name']
-                    function_args = json.loads(chunk['function_call']['arguments'])
-                    
-                    logger.info(f"Executing function: {function_name} with args: {function_args}")
-                    
-                    # Execute tool
-                    tool_result = self.execute_tool_with_registry(function_name, session_id, **function_args)
-                    tools_used.append(function_name)
-                    
-                    # Send tool execution update
-                    yield {
-                        'content': f"\\n\\n*Executing {function_name}...*\\n\\n",
-                        'status': 'processing',
-                        'tools_used': tools_used,
-                        'done': False
-                    }
-                    
-                    # Send tool result
-                    if tool_result.get('status') == 'success':
-                        tool_response = tool_result.get('message', tool_result.get('response', 'Analysis completed successfully'))
-                        
-                        # Extract visualizations if any
-                        visualizations = []
-                        if 'web_path' in tool_result:
-                            visualizations.append({
-                                'type': tool_result.get('chart_type', function_name),
-                                'url': tool_result['web_path'],
-                                'title': tool_result.get('message', 'Visualization'),
-                                'tool': function_name
-                            })
-                        
-                        yield {
-                            'content': tool_response,
-                            'status': 'success',
-                            'visualizations': visualizations,
-                            'tools_used': tools_used,
-                            'done': True
-                        }
-                    else:
-                        yield {
-                            'content': f"I encountered an issue with the {function_name} analysis: {tool_result.get('message', 'Unknown error')}",
-                            'status': 'error',
-                            'tools_used': tools_used,
-                            'done': True
-                        }
-                    
-                    # Update conversation history
-                    final_response = accumulated_content + (tool_result.get('message', '') if tool_result.get('status') == 'success' else '')
-                    self._update_conversation_history(session_id, user_message, final_response)
-                    
-                    # Store in memory
-                    self._store_conversation_in_memory(
-                        user_message, final_response, 
-                        tools_used, time.time() - start_time, tool_result.get('status') == 'success'
-                    )
-                    return
-                
-                elif chunk.get('done'):
-                    # Pure conversational response - no function call
-                    yield {
-                        'content': '',  # Already sent incrementally
-                        'status': 'success',
-                        'visualizations': [],
-                        'tools_used': [],
-                        'done': True
-                    }
-                    
-                    # Update conversation history
-                    self._update_conversation_history(session_id, user_message, accumulated_content)
-                    
-                    # Store in memory
-                    self._store_conversation_in_memory(
-                        user_message, accumulated_content, 
-                        [], time.time() - start_time, True
-                    )
-                    return
-                
-                else:
-                    # Stream content chunk
-                    yield {
-                        'content': chunk.get('content', ''),
-                        'status': 'streaming',
-                        'done': False
-                    }
-                    
         except Exception as e:
-            logger.error(f"Error in streaming conversational processing: {e}")
+            logger.error(f"Error in streaming: {e}")
             yield {
-                'content': f'I encountered an issue processing your request: {str(e)}',
+                'content': f'I encountered an issue: {str(e)}',
                 'status': 'error',
-                'visualizations': [],
                 'done': True
             }
     
-    def _get_session_context(self, session_id: str) -> Dict[str, Any]:
-        """Get comprehensive session context for conversation."""
-        from flask import session
+    def _llm_with_tools(self, user_message: str, session_context: Dict, session_id: str) -> Dict[str, Any]:
+        """py-sidebot pattern: Pass message to LLM with all tools available."""
+        system_prompt = self._build_system_prompt(session_context)
         
-        # Check actual data availability using SessionDataService
-        data_loaded = False
-        try:
-            if self.data_service and hasattr(self.data_service, 'has_data'):
-                data_loaded = self.data_service.has_data(session_id)
-                logger.info(f"SessionDataService.has_data({session_id}) = {data_loaded}")
-            else:
-                # Fallback to Flask session check
-                data_loaded = session.get('csv_loaded', False) and session.get('shapefile_loaded', False)
-                logger.info(f"Flask session check: csv_loaded={session.get('csv_loaded')}, shapefile_loaded={session.get('shapefile_loaded')}, data_loaded={data_loaded}")
-                
-            # Double-check with additional validation
-            if not data_loaded:
-                # Try alternative check - just CSV for pre-analysis
-                flask_csv = session.get('csv_loaded', False)
-                if flask_csv:
-                    logger.info(f"Using Flask session CSV flag as fallback: csv_loaded={flask_csv}")
-                    data_loaded = flask_csv
-                    
-        except Exception as e:
-            logger.warning(f"Error checking data availability for session {session_id}: {e}")
-            data_loaded = session.get('csv_loaded', False) 
-            logger.info(f"Exception fallback check: data_loaded={data_loaded}")
-        
-        context = {
-            'data_loaded': data_loaded,
-            'analysis_complete': session.get('analysis_complete', False),
-            'analysis_type': session.get('analysis_type', 'none'),
-            'variables_used': session.get('variables_used', []),
-            'state_name': session.get('state_name', 'Not specified'),
-            'ward_column': session.get('ward_column', 'Not identified'),
-            'conversation_history': session.get('conversation_history', [])
-        }
-        
-        # Get memory context if available
-        if self.memory:
-            try:
-                memory_context = self.memory.get_context(session_id)
-                if memory_context:
-                    context.update({
-                        'recent_topics': getattr(memory_context, 'entities_mentioned', [])[:5],
-                        'recent_tools': getattr(memory_context, 'tools_used', [])[-3:],
-                        'analysis_state': getattr(memory_context, 'analysis_state', None)
-                    })
-            except Exception as e:
-                logger.warning(f"Failed to get memory context: {e}")
-        
-        return context
-    
-    def _build_conversational_prompt(self, session_context: Dict) -> str:
-        """Build the new conversational system prompt with comprehensive data access."""
-        
-        # Check if we have conversational data access
-        if session_context.get('conversational_data_access') and self.conversational_data_access:
-            # Use enhanced conversational prompt with full data schema
-            return self.conversational_data_access.build_conversational_prompt(session_context)
-        
-        # Fallback to standard prompt
-        identity_section = """You are ChatMRPT, a malaria epidemiologist and statistician embedded in a specialized urban microstratification platform powered by GPT-4o.
-
-## Your Expertise
-- **Malaria risk assessment** in endemic countries, focusing on urban sub-Saharan Africa (especially Nigeria)
-- **Urban microstratification** - ranking administrative units (wards, districts) by malaria risk for targeted interventions
-- **WHO guidelines** for malaria intervention planning and resource allocation
-- **Reprioritization strategies** - identifying areas for deprioritization or enhanced targeting based on burden, morphology, and intervention coverage
-- **Two core analytical methods**:
-  • Composite Risk Scoring: summing normalized values across malaria risk factors
-  • Principal Component Analysis (PCA): dimensionality reduction with weighted variable combinations
-
-## Common User Needs You Support
-Based on typical requests, you help with:
-
-### 1. Burden Stratification & Prioritization
-- Ranking wards by composite risk scores
-- Identifying top decile/quintile risk areas
-- Finding high-burden wards with low intervention coverage
-- Spatial dependency analysis of malaria burden
-
-### 2. Urban Morphology & Settlement Analysis
-- Classifying wards by settlement type (formal/informal/non-residential)
-- Identifying morphology profiles (compactness, building density)
-- Finding industrial zones affecting risk scores
-- Determining likely uninhabited areas
-
-### 3. Variable-Specific Insights
-- Test Positivity Rate (TPR) analysis among under-fives
-- Mapping relationships between variables and risk
-- Identifying data quality issues (missing values, imputation)
-- Understanding variable contributions to scores
-
-### 4. Environmental & Spatial Drivers
-- Flood-prone area identification
-- Water body proximity analysis
-- Elevation profiling and low-lying area risks
-- Vegetation density impacts
-
-### 5. Intervention Targeting & Reprioritization
-- ITN distribution recommendations
-- IRS eligibility based on burden and settlement type
-- SMC round planning
-- CHW deployment strategies
-- Deprioritization decisions for resource optimization
-
-### 6. Scenario Simulation ("What-If" Analysis)
-- Impact of increased ITN coverage
-- Effects of variable exclusion/inclusion
-- Custom risk thresholds
-- Settlement-specific classifications
-
-### 7. Data Interpretation & Methodology
-- Composite score calculation explanations
-- PCA vs Composite scoring guidance
-- Variable weighting options
-- Data source transparency
-- Missing value handling"""
-
-        # Current session context with data schema (py-sidebot approach)
-        data_schema_section = ""
-        if session_context.get('data_schema'):
-            data_schema_section = f"""
-## Current Dataset Schema
-{session_context['data_schema']}"""
-
-        session_section = f"""
-## Current Session Status
-- **Geographic Area**: {session_context.get('state_name', 'Not specified - please specify the state you are working with')}
-- **Data Uploaded**: {session_context.get('current_data', 'No data uploaded')}
-- **Analysis Complete**: {session_context.get('analysis_complete', False)}
-- **Ward Column**: {session_context.get('ward_column', 'Not identified')}
-- **Available Variables**: {len(session_context.get('variables_used', []))} variables loaded
-- **Recent Topics**: {', '.join(session_context.get('recent_topics', [])[:3]) if session_context.get('recent_topics') else 'None'}{data_schema_section}"""
-
-        # Workflow guidance
-        workflow_section = """
-## Core Workflow Support
-1. **Data Upload** → CSV/Excel demographics + shapefile boundaries
-2. **Data Validation** → Confirm ward column and variable names
-3. **Analysis Planning** → Discuss methodology options and variable selection
-4. **Execution** → Run composite scoring and/or PCA analysis
-5. **Interpretation** → Explain results with epidemiological context
-6. **Visualization** → Generate risk maps, rankings, charts
-7. **Intervention Planning** → Recommend targeting strategies
-
-### Key Terminology You Use
-- **Reprioritization**: Systematic reallocation of resources based on updated risk assessments
-- **Deprioritization**: Identifying low-risk areas where resources can be safely reduced
-- **Prioritization**: Targeting high-risk areas for intervention focus
-- **Composite Score**: Sum of normalized risk variables (0-1 scale per variable)
-- **PCA Score**: First principal component capturing maximum variance
-- **Settlement Types**: Formal (planned), Informal (unplanned), Non-residential
-- **TPR**: Test Positivity Rate among children under 5 years
-- **Urban Extent**: Percentage of ward area classified as urban
-- **Compactness**: Building density measure indicating settlement patterns
-
-### State & Geographic Tracking
-- Always ask for and track the **state name** for the geographic area
-- Use this context in all responses: "In [State Name], the highest risk wards are..."
-- Reference specific ward names when available
-- Acknowledge LGA (Local Government Area) hierarchies when relevant"""
-
-        # Communication guidelines
-        guidelines_section = """
-## Communication Guidelines
-
-### Data Upload Workflow
-1. When users upload CSV/Excel files:
-   - Search for "wardname" column (case-insensitive)
-   - If not found, identify likely alternatives ("ward", "district", "area", "lga")
-   - Ask user to confirm ward column before proceeding
-   - Validate first row contains variable names (discard if entirely numeric)
-   - Check for key variables: TPR, population, elevation, flood risk, settlement data
-
-### Communication Style
-- **Match user expertise level**: Simplify for program staff, use technical language for data scientists
-- **Maintain friendly, respectful tone**
-- **Reference state name, ward names, and data context** in all relevant responses
-- **Provide step-by-step explanations** for analyses and visualizations
-- **Maintain session memory** for continuity across interactions
-
-### Handling Common Questions
-- **"Which wards to deprioritize?"** → Identify low-risk wards with current high coverage
-- **"What variables matter most?"** → Reference PCA loadings or composite score contributions
-- **"Can I use custom variables?"** → Yes, guide them through variable selection
-- **"What if ITN coverage increases by X%?"** → Suggest scenario simulation with fork
-- **"How to interpret the results?"** → Explain scores, rankings, and practical implications
-- **"Missing data handling?"** → Explain spatial mean imputation for TPR, other strategies
-
-### Analysis Approach
-- **Explore before executing**: Discuss options, trade-offs, scenarios
-- **Ask clarifying questions** when requests are ambiguous
-- **Explain epidemiological significance** of findings
-- **Provide actionable insights** for malaria program decision-making
-- **Reference actual ward names and data** in responses, not generic examples
-- **Offer both technical explanations and practical recommendations**"""
-
-        # Conversation flow
-        flow_section = f"""
-## Conversation Flow
-- **For hypothetical questions** ("what if..."): Create scenario forks for safe exploration
-- **For analysis requests**: Confirm parameters, then execute appropriate functions
-- **For data questions**: Access session data directly and provide contextual responses
-- **For explanations**: Use domain expertise to explain concepts clearly
-- **For unclear requests**: Ask clarifying questions rather than assuming
-
-### Scenario Fork Management
-- **When users say "what if..."**: Automatically create scenario forks for safe exploration
-- **Current session type**: {'Fork' if session_context.get('is_fork') else 'Main conversation'}
-- **Parent session**: {session_context.get('parent_session_id', 'N/A')}
-- **Available forks**: {len(session_context.get('conversation_forks', []))} scenarios created
-
-### Function Usage
-- Use available functions when users are ready to execute analysis
-- For scenario exploration, use `create_scenario_fork` for what-if analysis
-- Use `return_to_main_conversation` to return from scenario forks
-- Always explain methodology and interpret results with epidemiological context
-- Show actual data (ward names, scores, rankings) not generic responses
-
-### Natural Capabilities (No functions needed)
-- **Greetings & explanations** - Respond using domain expertise
-- **Data inquiries** - Access session data directly for ward lookups, scores, rankings
-- **Simple visualizations** - Generate basic charts using available data
-- **Concept explanations** - Explain malaria epidemiology, methods, terminology
-- **Result interpretation** - Analyze findings and provide epidemiological insights
-- **Intervention recommendations** - Suggest targeting strategies based on risk patterns"""
-
-        return f"{identity_section}\n{session_section}\n{workflow_section}\n{guidelines_section}\n{flow_section}"
-    
-    def _determine_routing_strategy(self, user_message: str, session_context: Dict) -> Dict[str, Any]:
-        """
-        Determine the best routing strategy for a user request.
-        
-        Returns:
-            Dict with 'strategy' and 'preferred_tools' keys
-        """
-        message_lower = user_message.lower()
-        
-        # Check if data is available
-        has_data = session_context.get('data_loaded', False)
-        
-        if not has_data:
-            # No data available - use conversational approach
-            return {
-                'strategy': 'conversational',
-                'preferred_tools': ['greeting', 'help', 'data_upload'],
-                'reason': 'No data available'
-            }
-        
-        # CORE ANALYSIS ROUTING - Use retained core tools
-        core_analysis_patterns = [
-            'run analysis', 'complete analysis', 'full analysis', 'run the analysis',
-            'execute analysis', 'perform analysis', 'start analysis', 'begin analysis',
-            'composite and pca', 'both methods', 'dual method'
-        ]
-        
-        if any(pattern in message_lower for pattern in core_analysis_patterns):
-            return {
-                'strategy': 'core_tools',
-                'preferred_tools': ['run_complete_analysis', 'run_composite_analysis', 'run_pca_analysis'],
-                'reason': 'Core analysis request'
-            }
-        
-        # CORE VISUALIZATION ROUTING - Use retained core tools
-        core_viz_patterns = [
-            ('vulnerability map', ['create_vulnerability_map']),
-            ('pca map', ['create_pca_map']),
-            ('box plot', ['create_box_plot']),
-            ('urban extent', ['create_urban_extent_map']),
-            ('decision tree', ['create_decision_tree']),
-            ('composite score map', ['create_composite_score_maps']),
-        ]
-        
-        for pattern, tools in core_viz_patterns:
-            if pattern in message_lower:
-                return {
-                    'strategy': 'core_tools',
-                    'preferred_tools': tools,
-                    'reason': f'Core visualization request: {pattern}'
-                }
-        
-        # EXPLORATORY DATA ANALYSIS - Use conversational data access
-        exploratory_patterns = [
-            'show me', 'tell me about', 'what is', 'how many', 'which ward',
-            'range of', 'values', 'statistics', 'stats', 'describe',
-            'histogram', 'scatter plot', 'correlation', 'compare',
-            'distribution', 'mean', 'median', 'min', 'max', 'count',
-            'highest', 'lowest', 'top', 'bottom', 'sort', 'rank'
-        ]
-        
-        if any(pattern in message_lower for pattern in exploratory_patterns):
-            return {
-                'strategy': 'direct_data_access',
-                'preferred_tools': ['execute_data_query'],
-                'reason': 'Exploratory data analysis request'
-            }
-        
-        # METHODOLOGY QUESTIONS - Use methodology tool
-        methodology_patterns = [
-            'explain', 'how does', 'what is composite', 'what is pca',
-            'methodology', 'method', 'approach', 'algorithm'
-        ]
-        
-        if any(pattern in message_lower for pattern in methodology_patterns):
-            return {
-                'strategy': 'core_tools',
-                'preferred_tools': ['explain_analysis_methodology'],
-                'reason': 'Methodology explanation request'
-            }
-        
-        # DEFAULT - Use conversational approach with all tools
-        return {
-            'strategy': 'conversational',
-            'preferred_tools': 'all',
-            'reason': 'General conversational request'
-        }
-    
-    def _get_available_functions(self, preferred_tools=None) -> List[Dict]:
-        """Get available tools as OpenAI-style functions."""
+        # Convert tools to OpenAI function format
         functions = []
+        for tool_name, tool_func in self.tools.items():
+            functions.append({
+                'name': tool_name,
+                'description': tool_func.__doc__ or f"Execute {tool_name}",
+                'parameters': self._get_tool_parameters(tool_name)
+            })
         
-        # Core Analysis Functions
-        functions.extend([
-            {
-                "name": "run_complete_analysis",
-                "description": "Execute both composite and PCA analysis with optional custom variables",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "composite_variables": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Custom variables for composite analysis"
-                        },
-                        "pca_variables": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Custom variables for PCA analysis"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "run_composite_analysis",
-                "description": "Run composite risk scoring with custom variables - allows variable selection and weighting",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "variables": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Variables to include (e.g., TPR, elevation, flood_risk, population_density)"
-                        },
-                        "weights": {
-                            "type": "object",
-                            "description": "Optional custom weights for variables (default: equal weights)",
-                            "additionalProperties": {"type": "number"}
-                        }
-                    }
-                }
-            },
-            {
-                "name": "run_pca_analysis",
-                "description": "Run Principal Component Analysis with custom variables",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "variables": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Variables to include in PCA analysis"
-                        }
-                    }
-                }
-            }
-        ])
+        # Single LLM call
+        response = self.llm_manager.generate_with_functions(
+            messages=[{"role": "user", "content": user_message}],
+            system_prompt=system_prompt,
+            functions=functions,
+            temperature=0.7,
+            session_id=session_id
+        )
         
-        # Essential Visualization Functions
-        functions.extend([
-            {
-                "name": "create_vulnerability_map",
-                "description": "Generate choropleth vulnerability maps",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "method": {
-                            "type": "string",
-                            "enum": ["composite", "pca", "auto"],
-                            "description": "Analysis method to visualize"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "execute_data_query",
-                "description": "Execute data queries and create visualizations using conversational data access. Can create scatter plots, histograms, correlations, descriptive statistics, and more.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Natural language description of the analysis or visualization needed (e.g., 'scatter plot of elevation vs pfpr', 'histogram of rainfall values', 'correlation between temperature and pfpr')"
-                        },
-                        "code": {
-                            "type": "string",
-                            "description": "Optional Python code to execute for the analysis. If not provided, will be generated from the query."
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }
-        ])
-        
-        # Data Processing Functions
-        functions.extend([
-            {
-                "name": "get_ward_information",
-                "description": "Get comprehensive information about a specific ward",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "ward_name": {
-                            "type": "string",
-                            "description": "Name of the ward to analyze"
-                        }
-                    },
-                    "required": ["ward_name"]
-                }
-            },
-            {
-                "name": "get_top_risk_wards",
-                "description": "Get top N highest risk wards for prioritization or find low-risk wards for deprioritization",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "top_n": {
-                            "type": "integer",
-                            "description": "Number of wards to return",
-                            "default": 10
-                        },
-                        "method": {
-                            "type": "string",
-                            "enum": ["composite", "pca", "both"],
-                            "description": "Analysis method to use",
-                            "default": "both"
-                        },
-                        "risk_level": {
-                            "type": "string",
-                            "enum": ["highest", "lowest", "decile", "quintile"],
-                            "description": "Risk level to retrieve",
-                            "default": "highest"
-                        }
-                    }
-                }
-            }
-        ])
-        
-        # Knowledge Functions
-        functions.extend([
-            {
-                "name": "explain_analysis_methodology",
-                "description": "Explain the composite and PCA analysis methods, including reprioritization concepts",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "methods": {
-                            "type": "array",
-                            "items": {"type": "string", "enum": ["composite", "pca", "reprioritization", "deprioritization"]},
-                            "description": "Methods or concepts to explain"
-                        },
-                        "technical_level": {
-                            "type": "string",
-                            "enum": ["basic", "intermediate", "advanced"],
-                            "description": "Level of technical detail",
-                            "default": "intermediate"
-                        }
-                    }
-                }
-            }
-        ])
-        
-        # Fork Management Functions
-        functions.extend([
-            {
-                "name": "create_scenario_fork",
-                "description": "Create a new scenario fork for what-if analysis",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "scenario_name": {
-                            "type": "string",
-                            "description": "Name for the scenario being explored"
-                        },
-                        "description": {
-                            "type": "string",
-                            "description": "Description of what will be tested in this scenario"
-                        }
-                    },
-                    "required": ["scenario_name"]
-                }
-            },
-            {
-                "name": "return_to_main_conversation",
-                "description": "Return to the main conversation from a scenario fork",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "save_insights": {
-                            "type": "boolean",
-                            "description": "Whether to save insights from the fork",
-                            "default": False
-                        }
-                    }
-                }
-            },
-            {
-                "name": "list_scenario_forks",
-                "description": "List all scenario forks created during this conversation",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
-        ])
-        
-        # Filter functions based on preferred tools
-        if preferred_tools and preferred_tools != 'all':
-            if isinstance(preferred_tools, list):
-                # Filter to only include preferred tools
-                filtered_functions = []
-                for func in functions:
-                    if func['name'] in preferred_tools:
-                        filtered_functions.append(func)
-                return filtered_functions
-            else:
-                # Single tool preference
-                for func in functions:
-                    if func['name'] == preferred_tools:
-                        return [func]
-                return []
-        
-        return functions
+        # Process response
+        return self._process_llm_response(response, user_message, session_id)
     
-    def _build_conversation_messages(self, user_message: str, session_context: Dict, session_id: str) -> List[Dict]:
-        """Build message array for conversation."""
-        messages = []
+    def _stream_with_tools(self, user_message: str, session_context: Dict, session_id: str):
+        """Stream LLM response with tools."""
+        system_prompt = self._build_system_prompt(session_context)
         
-        # Add recent conversation history
-        history = session_context.get('conversation_history', [])
-        if history:
-            # Add last 5 exchanges to maintain context
-            for exchange in history[-5:]:
-                messages.append({"role": "user", "content": exchange.get('user', '')})
-                messages.append({"role": "assistant", "content": exchange.get('assistant', '')})
+        functions = []
+        for tool_name, tool_func in self.tools.items():
+            functions.append({
+                'name': tool_name,
+                'description': tool_func.__doc__ or f"Execute {tool_name}",
+                'parameters': self._get_tool_parameters(tool_name)
+            })
         
-        # Add current user message
-        messages.append({"role": "user", "content": user_message})
-        
-        return messages
+        for chunk in self.llm_manager.generate_with_functions_streaming(
+            messages=[{"role": "user", "content": user_message}],
+            system_prompt=system_prompt,
+            functions=functions,
+            temperature=0.7,
+            session_id=session_id
+        ):
+            if chunk.get('function_call'):
+                # Execute tool
+                function_name = chunk['function_call']['name']
+                print(f"\n🛠️  TOOL CALL DETECTED: {function_name}")
+                print(f"📋 Arguments: {chunk['function_call']['arguments']}")
+                
+                if function_name in self.tools:
+                    try:
+                        args = json.loads(chunk['function_call']['arguments'])
+                        args['session_id'] = session_id  # Ensure session_id is included
+                        
+                        print(f"🚀 Executing tool: {function_name}")
+                        result = self.tools[function_name](**args)
+                        print(f"✅ Tool {function_name} completed")
+                        
+                        # Handle structured responses from tools
+                        if isinstance(result, dict) and 'response' in result:
+                            # Tool returned structured response with visualizations
+                            yield {
+                                'content': result['response'],
+                                'status': result.get('status', 'success'),
+                                'visualizations': result.get('visualizations', []),
+                                'tools_used': result.get('tools_used', [function_name]),
+                                'done': True
+                            }
+                            response_content = result['response']
+                        else:
+                            # Tool returned simple string response
+                            yield {
+                                'content': result,
+                                'status': 'success',
+                                'tools_used': [function_name],
+                                'done': True
+                            }
+                            response_content = result
+                        
+                        self._store_conversation(session_id, user_message, response_content)
+                        return
+                    except Exception as e:
+                        yield {
+                            'content': f"Error executing {function_name}: {str(e)}",
+                            'status': 'error',
+                            'done': True
+                        }
+                        return
+            
+            if chunk.get('done'):
+                content = chunk.get('content', '')
+                yield {
+                    'content': content,
+                    'status': 'success',
+                    'done': True
+                }
+                self._store_conversation(session_id, user_message, content)
+                return
+            else:
+                yield {
+                    'content': chunk.get('content', ''),
+                    'status': 'success',
+                    'done': False
+                }
     
     def _process_llm_response(self, response: Dict, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Process LLM response with function calls."""
-        try:
-            # Check if LLM called functions
-            if response.get('function_call'):
-                # Execute the function
-                function_name = response['function_call']['name']
-                function_args = json.loads(response['function_call']['arguments'])
-                
-                # Enhanced: Parse custom analysis variables from natural language
-                if function_name in ['run_complete_analysis', 'run_composite_analysis', 'run_pca_analysis']:
-                    function_args = self._enhance_analysis_arguments(function_args, user_message, session_id)
-                
-                logger.info(f"Executing function: {function_name} with args: {function_args}")
-                
-                # Execute tool
-                tool_result = self.execute_tool_with_registry(function_name, session_id, **function_args)
-                
-                # Format response
-                if tool_result.get('status') == 'success':
-                    response_text = tool_result.get('message', tool_result.get('response', 'Analysis completed successfully'))
-                    visualizations = []
+        """Process LLM response and execute tools if needed."""
+        if 'function_call' in response and response['function_call']:
+            function_name = response['function_call']['name']
+            
+            if function_name in self.tools:
+                try:
+                    args = json.loads(response['function_call']['arguments'])
+                    args['session_id'] = session_id  # Ensure session_id is included
                     
-                    # Extract visualizations if any
-                    if 'web_path' in tool_result:
-                        visualizations.append({
-                            'type': tool_result.get('chart_type', function_name),
-                            'url': tool_result['web_path'],
-                            'title': tool_result.get('message', 'Visualization'),
-                            'tool': function_name
-                        })
-                        
-                        # UNIVERSAL VISUALIZATION EXPLANATION (py-sidebot approach)
-                        # Automatically explain ANY visualization using image analysis
-                        explanation = self._explain_visualization_universally(
-                            viz_path=tool_result.get('file_path', tool_result['web_path']),
-                            viz_type=tool_result.get('map_type', function_name),
-                            session_id=session_id
-                        )
-                        
-                        # Prepend explanation to response (explanation appears first in chat)
-                        response_text = f"{explanation}\n\n{response_text}"
+                    result = self.tools[function_name](**args)
                     
-                    return {
-                        'status': 'success',
-                        'response': response_text,
-                        'visualizations': visualizations,
-                        'tools_used': [function_name]
-                    }
-                else:
-                    return {
-                        'status': 'error',
-                        'response': f"I encountered an issue with the {function_name} analysis: {tool_result.get('message', 'Unknown error')}",
-                        'visualizations': []
-                    }
-            
-            # No function call - pure conversational response
-            return {
-                'status': 'success',
-                'response': response.get('content', response.get('message', 'I can help you with malaria risk analysis. What would you like to explore?')),
-                'visualizations': [],
-                'tools_used': []
-            }
-            
-        except Exception as e:
-            logger.error(f"Error processing LLM response: {e}")
-            return {
-                'status': 'error',
-                'response': f'I encountered an issue processing your request: {str(e)}',
-                'visualizations': []
-            }
-    
-    def _enhance_analysis_arguments(self, function_args: Dict, user_message: str, session_id: str) -> Dict:
-        """Enhance analysis function arguments with intelligent variable parsing."""
-        try:
-            from ..tools.custom_analysis_parser import parse_custom_analysis
-            from flask import session
-            
-            # Get available variables from session data
-            available_vars = []
-            if hasattr(self, 'data_service') and self.data_service:
-                data_handler = self.data_service.get_data_handler(session_id)
-                if data_handler and hasattr(data_handler, 'cleaned_data') and data_handler.cleaned_data is not None:
-                    available_vars = list(data_handler.cleaned_data.columns)
-            
-            if not available_vars:
-                # Try to get from session
-                available_vars = session.get('available_variables', [])
-            
-            if available_vars:
-                # Parse custom analysis request
-                parse_result = parse_custom_analysis(user_message, available_vars)
-                
-                if parse_result['is_custom_request']:
-                    logger.info(f"🎯 Custom analysis detected with confidence: {parse_result['confidence']:.0%}")
-                    
-                    # Update function arguments based on parsing results
-                    if parse_result['unified_variables']:
-                        # Same variables for both methods
-                        if 'composite_variables' in function_args or 'variables' in function_args:
-                            function_args['composite_variables'] = parse_result['unified_variables']
-                        if 'pca_variables' in function_args:
-                            function_args['pca_variables'] = parse_result['unified_variables']
-                        if 'variables' in function_args:
-                            function_args['variables'] = parse_result['unified_variables']
+                    # Handle structured responses from tools
+                    if isinstance(result, dict) and 'response' in result:
+                        # Tool returned structured response with visualizations
+                        return {
+                            'response': result['response'],
+                            'visualizations': result.get('visualizations', []),
+                            'tools_used': result.get('tools_used', [function_name]),
+                            'status': result.get('status', 'success')
+                        }
                     else:
-                        # Method-specific variables
-                        if parse_result['composite_variables'] and 'composite_variables' in function_args:
-                            function_args['composite_variables'] = parse_result['composite_variables']
-                        if parse_result['composite_variables'] and 'variables' in function_args:
-                            function_args['variables'] = parse_result['composite_variables']
-                        if parse_result['pca_variables'] and 'pca_variables' in function_args:
-                            function_args['pca_variables'] = parse_result['pca_variables']
-                    
-                    logger.info(f"🔧 Enhanced arguments: {function_args}")
-            
-        except Exception as e:
-            logger.warning(f"Could not enhance analysis arguments: {e}")
+                        # Tool returned simple string response
+                        return {
+                            'response': result,
+                            'tools_used': [function_name],
+                            'status': 'success'
+                        }
+                except Exception as e:
+                    return {
+                        'response': f"Error executing {function_name}: {str(e)}",
+                        'tools_used': [],
+                        'status': 'error'
+                    }
         
-        return function_args
-    
-    def _is_confirmation_message(self, user_message: str) -> bool:
-        """Check if user message is a confirmation for running analysis."""
-        confirmation_patterns = [
-            'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'proceed', 'go ahead', 
-            'run', 'start', 'analyze', 'do it', 'continue', 'confirm', 'agreed',
-            'composite', 'pca', 'analysis', 'first run'
-        ]
-        
-        # Comprehensive analysis patterns
-        comprehensive_patterns = [
-            'comprehensive analysis', 'complete analysis', 'full analysis',
-            'run comprehensive analysis', 'proceed with analysis',
-            'ready to analyze', 'run the analysis', 'start analysis',
-            'comprehensive malaria risk analysis', 'ready for analysis'
-        ]
-        
-        user_lower = user_message.lower().strip()
-        
-        # Check for comprehensive analysis phrases first
-        if any(pattern in user_lower for pattern in comprehensive_patterns):
-            return True
-        
-        # Direct confirmation words
-        if any(pattern in user_lower for pattern in confirmation_patterns):
-            return True
-            
-        # Negative patterns to avoid false positives
-        negative_patterns = ['no', 'not', "don't", 'stop', 'cancel', 'wait']
-        if any(pattern in user_lower for pattern in negative_patterns):
-            return False
-            
-        return False
-    
-    def _execute_automatic_analysis(self, session_id: str) -> Dict[str, Any]:
-        """Execute automatic complete analysis when user confirms."""
-        try:
-            result = self.execute_tool_with_registry('runcompleteanalysis', session_id)
-            
-            if result.get('status') == 'success':
-                return {
-                    'status': 'success',
-                    'response': result.get('message', 'Analysis completed successfully'),
-                    'visualizations': [],
-                    'tools_used': ['runcompleteanalysis']
-                }
-            else:
-                return {
-                    'status': 'error',
-                    'response': f"Analysis failed: {result.get('message', 'Unknown error')}",
-                    'visualizations': []
-                }
-                
-        except Exception as e:
-            logger.error(f"Error in automatic analysis: {e}")
-            return {
-                'status': 'error',
-                'response': f'Failed to run analysis: {str(e)}',
-                'visualizations': []
-            }
-    
-    def _generate_automatic_data_description(self, session_id: str) -> Dict[str, Any]:
-        """Generate automatic data description (disabled - handled by frontend)."""
-        from flask import session
-        
-        logger.info(f"Automatic data description disabled - handled by frontend for session {session_id}")
-        
-        # Set flag for analysis permission handling
-        session['should_ask_analysis_permission'] = True
-        
+        # Pure conversational response
         return {
-            'status': 'success',
-            'response': '',  # Empty response - frontend handles the display
-            'visualizations': [],
-            'automatic_workflow': 'data_description_complete'
+            'response': response.get('content', 'No response'),
+            'tools_used': [],
+            'status': 'success'
         }
     
-    def _update_conversation_history(self, session_id: str, user_message: str, assistant_response: str):
-        """Update conversation history in session."""
+    # Tool Functions - These are the actual functions registered as tools
+    def _run_complete_analysis(self, session_id: str, variables: Optional[List[str]] = None):
+        """Run complete dual-method malaria risk analysis (composite scoring + PCA)."""
         try:
-            from flask import session
+            result = self.analysis_service.run_complete_analysis(session_id, variables=variables)
+            message = result.get('message', 'Complete analysis finished successfully')
             
-            if 'conversation_history' not in session:
-                session['conversation_history'] = []
+            # Auto-explain any visualizations
+            if result.get('visualizations'):
+                explanations = []
+                for viz in result['visualizations']:
+                    if viz.get('file_path'):
+                        explanation = self._explain_visualization_universally(
+                            viz['file_path'], viz.get('type', 'visualization'), session_id
+                        )
+                        explanations.append(explanation)
+                if explanations:
+                    message += "\\n\\n" + "\\n\\n".join(explanations)
             
-            session['conversation_history'].append({
-                'user': user_message,
-                'assistant': assistant_response,
-                'timestamp': time.time()
-            })
-            
-            # Keep only last 10 exchanges
-            if len(session['conversation_history']) > 10:
-                session['conversation_history'] = session['conversation_history'][-10:]
-                
+            return message
         except Exception as e:
-            logger.error(f"Error updating conversation history: {e}")
+            return f"Error running complete analysis: {str(e)}"
     
-    def _store_conversation_in_memory(self, user_message: str, ai_response: str, 
-                                    tools_used: List[str], response_time: float, 
-                                    success: bool):
-        """Store conversation turn in unified memory."""
-        if not self.memory:
-            return
-            
+    def _run_composite_analysis(self, session_id: str, variables: Optional[List[str]] = None):
+        """Run composite scoring malaria risk analysis with equal weights."""
         try:
-            self.memory.add_conversation_turn(
-                user_message=user_message,
-                ai_response=ai_response,
-                metadata={
-                    'tools_used': tools_used,
-                    'response_time': response_time,
-                    'success': success,
-                    'timestamp': time.time()
-                }
-            )
+            result = self.analysis_service.run_composite_analysis(session_id, variables=variables)
+            return result.get('message', 'Composite analysis completed successfully')
         except Exception as e:
-            logger.error(f"Failed to store conversation in memory: {e}")
+            return f"Error running composite analysis: {str(e)}"
     
-    def execute_tool_with_registry(self, tool_name: str, session_id: str, **parameters):
-        """Execute a tool using the tiered loading system."""
-        
-        # Handle fork management functions directly
-        if tool_name == 'create_scenario_fork':
-            return self._handle_create_scenario_fork(session_id, **parameters)
-        elif tool_name == 'return_to_main_conversation':
-            return self._handle_return_to_main(session_id, **parameters)
-        elif tool_name == 'list_scenario_forks':
-            return self._handle_list_forks(session_id, **parameters)
-        elif tool_name == 'execute_data_query':
-            return self._handle_execute_data_query(session_id, **parameters)
-        
-        # Regular tool execution
-        logger.info(f"🚀 Executing tool '{tool_name}' via tiered loader")
-        return self.tiered_loader.execute_tool(tool_name, session_id, **parameters)
-    
-    def _handle_create_scenario_fork(self, session_id: str, **parameters) -> Dict[str, Any]:
-        """Handle creating a scenario fork."""
-        scenario_name = parameters.get('scenario_name', 'exploration')
-        description = parameters.get('description', '')
-        
-        fork_id = self.fork_conversation(session_id, scenario_name)
-        
-        if fork_id:
-            return {
-                'status': 'success',
-                'message': f"🔀 Created scenario fork: **{scenario_name}**\n\n{description}\n\nYou can now explore this scenario safely. Use 'return_to_main_conversation' to go back to your original analysis.",
-                'fork_id': fork_id,
-                'scenario_name': scenario_name
-            }
-        else:
-            return {
-                'status': 'error',
-                'message': 'Failed to create scenario fork. Please try again.',
-                'fork_id': None
-            }
-    
-    def _handle_return_to_main(self, session_id: str, **parameters) -> Dict[str, Any]:
-        """Handle returning to main conversation."""
-        from flask import session
-        
-        # Get parent session ID
-        parent_session_id = session.get('parent_session_id')
-        
-        if parent_session_id:
-            success = self.return_to_main_session(parent_session_id)
-            
-            if success:
-                return {
-                    'status': 'success',
-                    'message': "🔙 Returned to main conversation. Your original analysis is restored.",
-                    'returned_to': parent_session_id
-                }
-            else:
-                return {
-                    'status': 'error',
-                    'message': 'Failed to return to main conversation. Please try again.',
-                    'returned_to': None
-                }
-        else:
-            return {
-                'status': 'error',
-                'message': 'You are already in the main conversation.',
-                'returned_to': None
-            }
-    
-    def _handle_list_forks(self, session_id: str, **parameters) -> Dict[str, Any]:
-        """Handle listing scenario forks."""
-        forks = self.get_conversation_forks(session_id)
-        
-        if forks:
-            fork_list = []
-            for fork in forks:
-                fork_list.append(f"• **{fork['scenario']}** (created {time.strftime('%H:%M:%S', time.localtime(fork['created_at']))})")
-            
-            message = f"🔀 **Scenario Forks Created:**\n\n" + "\n".join(fork_list)
-            message += f"\n\n*Total: {len(forks)} scenario forks*"
-        else:
-            message = "No scenario forks have been created yet. Say 'what if...' to explore alternatives!"
-        
-        return {
-            'status': 'success',
-            'message': message,
-            'forks': forks
-        }
-    
-    def fork_conversation(self, session_id: str, scenario_name: str = None) -> str:
-        """Fork conversation for scenario exploration like py-sidebot."""
+    def _run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None):
+        """Run PCA malaria risk analysis."""
         try:
-            from flask import session
-            import os
-            import shutil
-            
-            # Generate fork ID
-            timestamp = int(time.time())
-            scenario_suffix = f"_{scenario_name}" if scenario_name else ""
-            fork_id = f"{session_id}_fork{scenario_suffix}_{timestamp}"
-            
-            logger.info(f"🔀 Forking conversation: {session_id} → {fork_id}")
-            
-            # Copy session data to fork
-            original_session_data = dict(session)
-            
-            # Create fork session data
-            fork_session_data = original_session_data.copy()
-            fork_session_data.update({
-                'parent_session_id': session_id,
-                'is_fork': True,
-                'fork_scenario': scenario_name or 'exploration',
-                'fork_created_at': timestamp,
-                'session_id': fork_id  # Update session ID
-            })
-            
-            # Copy uploaded files if they exist
-            original_upload_dir = f"instance/uploads/{session_id}"
-            fork_upload_dir = f"instance/uploads/{fork_id}"
-            
-            if os.path.exists(original_upload_dir):
-                logger.info(f"📁 Copying session files: {original_upload_dir} → {fork_upload_dir}")
-                shutil.copytree(original_upload_dir, fork_upload_dir)
-            
-            # Store fork session data (we'll set it when user switches to fork)
-            if not hasattr(self, '_fork_sessions'):
-                self._fork_sessions = {}
-            self._fork_sessions[fork_id] = fork_session_data
-            
-            # Add fork to parent session tracking
-            if 'conversation_forks' not in session:
-                session['conversation_forks'] = []
-            session['conversation_forks'].append({
-                'fork_id': fork_id,
-                'scenario': scenario_name or 'exploration',
-                'created_at': timestamp
-            })
-            
-            logger.info(f"✅ Fork created successfully: {fork_id}")
-            return fork_id
-            
+            result = self.analysis_service.run_pca_analysis(session_id, variables=variables)
+            return result.get('message', 'PCA analysis completed successfully')
         except Exception as e:
-            logger.error(f"❌ Error forking conversation: {e}")
-            return None
+            return f"Error running PCA analysis: {str(e)}"
     
-    def switch_to_fork(self, fork_id: str) -> bool:
-        """Switch to a forked session."""
+    def _create_vulnerability_map(self, session_id: str, method: str = 'composite'):
+        """Create vulnerability choropleth map for malaria risk visualization."""
         try:
-            from flask import session
+            result = self.visualization_service.create_vulnerability_map(session_id, method=method)
+            message = result.get('message', f'Vulnerability map created using {method} method')
             
-            if hasattr(self, '_fork_sessions') and fork_id in self._fork_sessions:
-                # Store current session as backup
-                if not hasattr(self, '_session_backup'):
-                    self._session_backup = {}
-                self._session_backup[session.get('session_id', 'unknown')] = dict(session)
-                
-                # Switch to fork session
-                fork_data = self._fork_sessions[fork_id]
-                session.clear()
-                session.update(fork_data)
-                
-                logger.info(f"🔄 Switched to fork: {fork_id}")
-                return True
-            else:
-                logger.warning(f"⚠️ Fork not found: {fork_id}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"❌ Error switching to fork: {e}")
-            return False
-    
-    def return_to_main_session(self, main_session_id: str) -> bool:
-        """Return to main session from fork."""
-        try:
-            from flask import session
-            
-            if hasattr(self, '_session_backup') and main_session_id in self._session_backup:
-                # Restore main session
-                main_session_data = self._session_backup[main_session_id]
-                session.clear()
-                session.update(main_session_data)
-                
-                logger.info(f"🔙 Returned to main session: {main_session_id}")
-                return True
-            else:
-                logger.warning(f"⚠️ Main session backup not found: {main_session_id}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"❌ Error returning to main session: {e}")
-            return False
-    
-    def get_conversation_forks(self, session_id: str) -> List[Dict]:
-        """Get list of conversation forks for a session."""
-        from flask import session
-        return session.get('conversation_forks', [])
-    
-    def _detect_fork_intent(self, user_message: str) -> Dict[str, Any]:
-        """Detect if user wants to fork conversation for what-if scenarios."""
-        fork_indicators = [
-            'what if', 'suppose', 'let\'s try', 'how about', 'alternatively', 
-            'what would happen if', 'let me explore', 'can we try', 'test this scenario',
-            'hypothetically', 'for comparison', 'different approach', 'another way'
-        ]
-        
-        message_lower = user_message.lower()
-        
-        for indicator in fork_indicators:
-            if indicator in message_lower:
-                return {
-                    'should_fork': True,
-                    'trigger_phrase': indicator,
-                    'scenario_name': self._extract_scenario_name(user_message, indicator)
-                }
-        
-        return {'should_fork': False}
-    
-    def _extract_scenario_name(self, user_message: str, trigger_phrase: str) -> str:
-        """Extract scenario name from user message."""
-        # Simple extraction - could be enhanced
-        message_lower = user_message.lower()
-        
-        if 'variable' in message_lower:
-            return 'custom_variables'
-        elif 'threshold' in message_lower:
-            return 'threshold_test'
-        elif 'method' in message_lower:
-            return 'method_comparison'
-        elif 'ward' in message_lower:
-            return 'ward_focus'
-        else:
-            return 'exploration'
-    
-    # Legacy methods for backward compatibility
-    def parse_request(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Legacy method - redirects to new conversational processing."""
-        logger.info("Using legacy parse_request - redirecting to conversational processing")
-        result = self.process_message(user_message, session_id)
-        
-        # Convert to legacy format for compatibility
-        if result.get('status') == 'success':
-            return {
-                'status': 'success',
-                'parsed_intent': {
-                    'intent_type': 'data_analysis',
-                    'primary_goal': 'Conversational processing',
-                    'tool_calls': [],
-                    'requires_session_data': True
-                }
-            }
-        else:
-            return {
-                'status': 'error',
-                'message': result.get('response', 'Error in conversational processing')
-            }
-    
-    def execute_intent(self, parsed_intent: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Legacy method - maintained for backward compatibility."""
-        logger.info("Using legacy execute_intent - this should be replaced with conversational processing")
-        return {
-            'status': 'success',
-            'message': 'Legacy method - use conversational processing instead',
-            'results': []
-        }
-    
-    def format_response(self, execution_results: Dict[str, Any], user_message: str, session_id: str = None) -> Dict[str, Any]:
-        """Legacy method - maintained for backward compatibility."""
-        logger.info("Using legacy format_response - this should be replaced with conversational processing")
-        return {
-            'status': 'success',
-            'response': 'Legacy method - use conversational processing instead',
-            'visualizations': []
-        }
-    
-    def _generate_simple_response(self, user_message: str, session_id: str) -> Dict[str, Any]:
-        """Generate a simple LLM response without Flask session dependencies for streaming."""
-        try:
-            # Simple system prompt without session-specific workflows
-            system_prompt = """You are ChatMRPT, a specialized assistant for malaria risk assessment and urban microstratification.
-
-You help with:
-- Malaria risk analysis using composite scoring and PCA
-- Urban settlement analysis and intervention targeting  
-- Data interpretation and visualization
-- Epidemiological insights and recommendations
-
-Provide helpful, conversational responses about malaria analysis and public health topics."""
-
-            # Simple message structure
-            messages = [
-                {"role": "user", "content": user_message}
-            ]
-            
-            # Generate response using LLM manager
-            try:
-                logger.info("Calling LLM manager for simple response...")
-                response = self.llm_manager.generate_response(
-                    prompt=user_message,
-                    system_message=system_prompt,
-                    temperature=0.7,
-                    session_id=session_id
+            # Auto-explain the visualization if file_path exists
+            if result.get('file_path'):
+                explanation = self._explain_visualization_universally(
+                    result['file_path'], 'vulnerability_map', session_id
                 )
-                logger.info(f"LLM response received: {len(response)} characters")
-            except Exception as llm_error:
-                logger.error(f"LLM call failed: {llm_error}")
-                # Fallback to a simple response
-                response = f"I'm ChatMRPT, your malaria risk analysis assistant. I encountered a technical issue but I'm here to help with malaria analysis, risk assessment, and intervention planning. How can I assist you?"
+                message += f"\\n\\n{explanation}"
             
-            return {
-                'status': 'success',
-                'response': response,
-                'visualizations': [],
-                'tools_used': [],
-                'intent_type': 'conversational',
-                'fallback': True
+            # Return structured response if successful
+            if result.get('status') == 'success' and result.get('web_path'):
+                return {
+                    'response': message,
+                    'visualizations': [{
+                        'type': result.get('visualization_type', 'vulnerability_map'),
+                        'file_path': result.get('file_path', ''),
+                        'path': result.get('web_path', ''),
+                        'url': result.get('web_path', ''),
+                        'title': f"Vulnerability Map ({method.title()} Method)",
+                        'description': f"Ward vulnerability classification using {method} method"
+                    }],
+                    'tools_used': ['create_vulnerability_map'],
+                    'status': 'success'
+                }
+            else:
+                return f"Error creating vulnerability map: {result.get('message', 'Unknown error')}"
+        except Exception as e:
+            return f"Error creating vulnerability map: {str(e)}"
+    
+    def _create_box_plot(self, session_id: str, method: str = 'composite'):
+        """Create box plots showing vulnerability score distributions."""
+        try:
+            result = self.visualization_service.create_box_plot(session_id, method=method)
+            message = result.get('message', f'Box plot created for {method} scores')
+            
+            # Auto-explain the visualization if file_path exists
+            if result.get('file_path'):
+                explanation = self._explain_visualization_universally(
+                    result['file_path'], 'box_plot', session_id
+                )
+                message += f"\\n\\n{explanation}"
+            
+            # Return structured response if successful
+            if result.get('status') == 'success' and result.get('web_path'):
+                return {
+                    'response': message,
+                    'visualizations': [{
+                        'type': result.get('visualization_type', 'box_plot'),
+                        'file_path': result.get('file_path', ''),
+                        'path': result.get('web_path', ''),
+                        'url': result.get('web_path', ''),
+                        'title': f"Box Plot ({method.title()} Method)",
+                        'description': f"Vulnerability score distribution using {method} method"
+                    }],
+                    'tools_used': ['create_box_plot'],
+                    'status': 'success'
+                }
+            else:
+                return f"Error creating box plot: {result.get('message', 'Unknown error')}"
+        except Exception as e:
+            return f"Error creating box plot: {str(e)}"
+    
+    def _create_pca_map(self, session_id: str):
+        """Create PCA-based vulnerability map."""
+        try:
+            result = self.visualization_service.create_pca_map(session_id)
+            message = result.get('message', 'PCA vulnerability map created')
+            
+            # Auto-explain the visualization if file_path exists
+            if result.get('file_path'):
+                explanation = self._explain_visualization_universally(
+                    result['file_path'], 'pca_map', session_id
+                )
+                message += f"\\n\\n{explanation}"
+            
+            # Return structured response if successful
+            if result.get('status') == 'success' and result.get('web_path'):
+                return {
+                    'response': message,
+                    'visualizations': [{
+                        'type': result.get('visualization_type', 'pca_map'),
+                        'file_path': result.get('file_path', ''),
+                        'path': result.get('web_path', ''),
+                        'url': result.get('web_path', ''),
+                        'title': "PCA Vulnerability Map",
+                        'description': "Ward vulnerability classification using PCA method"
+                    }],
+                    'tools_used': ['create_pca_map'],
+                    'status': 'success'
+                }
+            else:
+                return f"Error creating PCA map: {result.get('message', 'Unknown error')}"
+        except Exception as e:
+            return f"Error creating PCA map: {str(e)}"
+    
+    def _create_variable_distribution(self, session_id: str, variable_name: str):
+        """Create spatial distribution map for any variable from the dataset."""
+        try:
+            from app.tools.variable_distribution import VariableDistribution
+            
+            # Create the tool instance
+            tool = VariableDistribution(variable_name=variable_name)
+            
+            # Execute the tool
+            result = tool.execute(session_id)
+            
+            if result.success:
+                message = result.message
+                
+                # Auto-explain the visualization if it was created
+                if result.data and result.data.get('file_path'):
+                    explanation = self._explain_visualization_universally(
+                        result.data['file_path'], 'variable_distribution', session_id
+                    )
+                    message += f"\n\n{explanation}"
+                
+                # Return structured response with visualization data
+                return {
+                    'response': message,
+                    'visualizations': [{
+                        'type': result.data.get('chart_type', 'variable_distribution'),
+                        'file_path': result.data.get('file_path', ''),
+                        'path': result.data.get('web_path', ''),  # Frontend expects 'path' key
+                        'url': result.data.get('web_path', ''),   # Also provide 'url' for compatibility
+                        'title': f"{result.data.get('variable', 'Variable')} Distribution",
+                        'description': f"Spatial distribution of {result.data.get('variable', 'variable')} across study area"
+                    }] if result.data else [],
+                    'tools_used': ['create_variable_distribution'],
+                    'status': 'success'
+                }
+            else:
+                return f"Error creating variable distribution: {result.message}"
+        except Exception as e:
+            return f"Error creating variable distribution: {str(e)}"
+    
+    def _execute_data_query(self, session_id: str, query: str, code: Optional[str] = None):
+        """Execute data queries, generate plots, and perform statistical analysis on the malaria data."""
+        try:
+            # Check if data is available via data service first
+            data_handler = self.data_service.get_handler(session_id)
+            if not data_handler or not hasattr(data_handler, 'csv_data') or data_handler.csv_data is None:
+                return "Error executing query: No data available. Please upload data first."
+            
+            # Initialize conversational data access for this session
+            # Always create a new instance to ensure proper session context
+            logger.info(f"Creating ConversationalDataAccess for session: {session_id}")
+            from app.services.conversational_data_access import ConversationalDataAccess
+            conversational_data_access = ConversationalDataAccess(session_id, self.llm_manager)
+            
+            if code:
+                logger.info(f"Executing provided code: {code}")
+                result = conversational_data_access.execute_code(code)
+            else:
+                logger.info(f"Processing query: {query}")
+                result = conversational_data_access.process_query(query)
+            
+            if result.get('success'):
+                # Get the formatted output from the executed code
+                output = result.get('output', '').strip()
+                plot_data = result.get('plot_data')
+                
+                # Return structured response with visualizations
+                response_data = {
+                    'response': output if output else f"Query executed successfully: {query}",
+                    'visualizations': [],
+                    'tools_used': ['execute_data_query'],
+                    'status': 'success'
+                }
+                
+                # Add visualization if plot was generated
+                if plot_data:
+                    # Determine specific chart type from query context
+                    viz_type = self._determine_chart_type_from_query(query)
+                    response_data['visualizations'].append({
+                        'type': viz_type,
+                        'data': plot_data,
+                        'title': f'Analysis Visualization - {query[:50]}...' if len(query) > 50 else f'Analysis Visualization - {query}'
+                    })
+                
+                return response_data
+            else:
+                error_msg = f"Error executing query: {result.get('error', 'Unknown error')}"
+                return error_msg
+        except Exception as e:
+            return f"Error in data query: {str(e)}"
+    
+    def _determine_chart_type_from_query(self, query: str) -> str:
+        """Determine specific chart type from user query to avoid visualization conflicts."""
+        query_lower = query.lower()
+        
+        # Check for specific chart types mentioned in the query
+        if 'scatter' in query_lower:
+            return 'scatter_plot'
+        elif 'histogram' in query_lower or 'hist' in query_lower:
+            return 'histogram'
+        elif ('distribution' in query_lower and 'plot' in query_lower) or 'distplot' in query_lower:
+            return 'histogram'  # Most distribution plots are histograms
+        elif 'box plot' in query_lower or 'boxplot' in query_lower:
+            return 'box_plot'
+        elif 'bar chart' in query_lower or 'bar plot' in query_lower or 'barplot' in query_lower:
+            return 'bar_chart'
+        elif 'line chart' in query_lower or 'line plot' in query_lower or 'lineplot' in query_lower:
+            return 'line_plot'
+        elif 'pie chart' in query_lower or 'pie plot' in query_lower:
+            return 'pie_chart'
+        elif 'heatmap' in query_lower or 'heat map' in query_lower:
+            return 'heatmap'
+        elif 'density' in query_lower and 'plot' in query_lower:
+            return 'density_plot'
+        elif 'violin' in query_lower:
+            return 'violin_plot'
+        elif 'correlation' in query_lower and 'plot' in query_lower:
+            return 'scatter_plot'  # Correlation plots are usually scatter plots
+        else:
+            # Return a unique type for each general plot to prevent conflicts
+            import time
+            return f'conversational_plot_{int(time.time())}'
+    
+    def _explain_analysis_methodology(self, session_id: str, method: str = 'both'):
+        """Explain how malaria risk analysis methodologies work (composite scoring, PCA, or both)."""
+        try:
+            # Use LLM to generate methodology explanation
+            if method == 'composite':
+                explanation = """**Composite Scoring Methodology**
+
+Composite scoring combines multiple malaria risk indicators into a single vulnerability score:
+
+1. **Variable Selection**: Selects scientifically-validated variables based on Nigerian geopolitical zones
+2. **Normalization**: Standardizes all variables to 0-1 scale for fair comparison
+3. **Equal Weighting**: All variables contribute equally to the final score
+4. **Aggregation**: Sums normalized values to create composite vulnerability score
+5. **Ranking**: Ranks wards from highest to lowest risk for intervention targeting
+
+This method is transparent, interpretable, and follows WHO guidelines for malaria stratification."""
+            
+            elif method == 'pca':
+                explanation = """**Principal Component Analysis (PCA) Methodology**
+
+PCA reduces dimensionality while preserving variance in malaria risk data:
+
+1. **Data Standardization**: Centers and scales all variables
+2. **Covariance Analysis**: Identifies relationships between variables
+3. **Component Extraction**: Finds principal components that explain maximum variance
+4. **Weight Calculation**: Automatically determines variable importance
+5. **Score Generation**: Creates data-driven vulnerability scores
+6. **Interpretation**: First component typically captures overall malaria risk
+
+This method is statistically robust and reveals hidden patterns in the data."""
+            
+            else:  # both
+                explanation = """**Dual-Method Malaria Risk Analysis**
+
+ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
+
+**Composite Scoring**: Transparent, equal-weighted approach following WHO guidelines
+- Pros: Interpretable, policy-friendly, scientifically grounded
+- Use when: Clear intervention priorities needed
+
+**PCA Analysis**: Statistical approach revealing data patterns
+- Pros: Objective, captures complex relationships, statistically robust
+- Use when: Exploring underlying risk structures
+
+**Comparison**: Both methods often agree on high-risk areas but may differ in rankings. Use both for robust decision-making and to validate findings."""
+            
+            return explanation
+        except Exception as e:
+            return f"Error explaining methodology: {str(e)}"
+    
+    # Helper Methods
+    def _get_tool_parameters(self, tool_name: str) -> Dict[str, Any]:
+        """Get parameter schema for a tool."""
+        base_params = {
+            'type': 'object',
+            'properties': {
+                'session_id': {'type': 'string', 'description': 'Session identifier'}
+            },
+            'required': ['session_id']
+        }
+        
+        if 'analysis' in tool_name:
+            base_params['properties']['variables'] = {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': 'Optional custom variables for analysis'
             }
+        
+        if 'map' in tool_name or 'plot' in tool_name:
+            base_params['properties']['method'] = {
+                'type': 'string',
+                'enum': ['composite', 'pca'],
+                'description': 'Analysis method to visualize'
+            }
+        
+        if tool_name == 'execute_data_query':
+            base_params['properties'].update({
+                'query': {'type': 'string', 'description': 'Natural language query about the data'},
+                'code': {'type': 'string', 'description': 'Optional Python code to execute'}
+            })
+            base_params['required'].append('query')
+        
+        if tool_name == 'explain_analysis_methodology':
+            base_params['properties']['method'] = {
+                'type': 'string',
+                'enum': ['composite', 'pca', 'both'],
+                'description': 'Which methodology to explain'
+            }
+        
+        if tool_name == 'create_variable_distribution':
+            base_params['properties']['variable_name'] = {
+                'type': 'string',
+                'description': 'Name of the variable to visualize (e.g., pfpr, rainfall, housing_quality)'
+            }
+            base_params['required'].append('variable_name')
+        
+        return base_params
+    
+    def _build_system_prompt(self, session_context: Dict) -> str:
+        """Build system prompt with session context."""
+        base_prompt = """You are a specialized malaria epidemiologist embedded in ChatMRPT, a malaria risk assessment system.
+
+## Your Expertise
+- Malaria transmission dynamics and vector ecology
+- Urban microstratification for intervention targeting
+- Statistical analysis (composite scoring, PCA)
+- Nigerian health systems and geopolitical zones
+- WHO guidelines for malaria program planning
+
+## Current Session"""
+        
+        context_info = f"""
+- Geographic Area: {session_context.get('state_name', 'Not specified')}
+- Data Status: {session_context.get('current_data', 'No data uploaded')}
+- Analysis Complete: {session_context.get('analysis_complete', False)}
+"""
+        
+        if session_context.get('data_schema'):
+            context_info += f"- {session_context['data_schema']}\\n"
+        
+        tool_guidance = """
+## Available Tools
+Use the appropriate tool based on user requests:
+
+- **run_complete_analysis**: For full dual-method analysis
+- **run_composite_analysis**: For composite scoring only  
+- **run_pca_analysis**: For PCA analysis only
+- **create_vulnerability_map**: For choropleth risk maps
+- **create_box_plot**: For vulnerability score distributions
+- **create_variable_distribution**: For spatial distribution maps of any variable
+- **execute_data_query**: For data questions, plots, statistics
+- **explain_analysis_methodology**: For methodology explanations
+
+Always provide malaria epidemiology context and intervention guidance with your responses."""
+        
+        return f"{base_prompt}{context_info}{tool_guidance}"
+    
+    def _simple_conversational_response(self, user_message: str, session_context: Dict) -> Dict[str, Any]:
+        """Simple conversational response when no data available."""
+        system_prompt = self._build_system_prompt(session_context)
+        
+        response = self.llm_manager.generate_response(
+            prompt=user_message,
+            system_message=system_prompt,
+            temperature=0.7
+        )
+        
+        return {
+            'response': response,
+            'tools_used': [],
+            'status': 'success'
+        }
+    
+    def _get_session_context(self, session_id: str, session_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Get comprehensive session context."""
+        try:
+            # Use provided session data or try to get from Flask session
+            if session_data is None:
+                try:
+                    from flask import session
+                    session_data = dict(session)
+                except RuntimeError:
+                    # Working outside of request context, use empty session
+                    session_data = {}
+            
+            # Check data availability
+            data_loaded = session_data.get('data_loaded', False) or session_data.get('csv_loaded', False)
+            
+            context = {
+                'data_loaded': data_loaded,
+                'state_name': session_data.get('state_name', 'Not specified'),
+                'current_data': f"CSV loaded: {session_data.get('csv_loaded', False)}, Shapefile: {session_data.get('shapefile_loaded', False)}" if data_loaded else "No data uploaded",
+                'analysis_complete': session_data.get('analysis_complete', False),
+                'ward_column': session_data.get('ward_column', 'Not identified'),
+                'variables_used': session_data.get('variables_used', []),
+                'conversation_history': self.conversation_history.get(session_id, [])
+            }
+            
+            # Add data schema if available
+            if data_loaded and self.data_service:
+                try:
+                    data_handler = self.data_service.get_handler(session_id)
+                    if data_handler and hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None:
+                        df = data_handler.csv_data
+                        context['data_schema'] = f"Dataset: {len(df)} rows, {len(df.columns)} columns"
+                except Exception as e:
+                    logger.debug(f"Could not get data schema: {e}")
+            
+            # Add memory context if available
+            if self.memory:
+                try:
+                    memory_context = self.memory.get_context(session_id)
+                    if memory_context:
+                        context['recent_topics'] = getattr(memory_context, 'entities_mentioned', [])[:5]
+                except Exception as e:
+                    logger.debug(f"Memory context error: {e}")
+            
+            return context
             
         except Exception as e:
-            logger.error(f"Error in simple response generation: {e}")
+            logger.error(f"Error getting session context: {e}")
+            return {'data_loaded': False, 'state_name': 'Not specified'}
+    
+    def _handle_special_workflows(self, user_message: str, session_id: str, session_data: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+        """Handle special workflows like permissions and forks."""
+        if session_data is None:
+            try:
+                from flask import session
+                session_data = dict(session)
+            except RuntimeError:
+                # Working outside of request context
+                session_data = {}
+        
+        # Analysis permission workflow
+        if session_data.get('should_ask_analysis_permission', False):
+            if self._is_confirmation_message(user_message):
+                # Note: session state updates would need to be handled differently in streaming context
+                return self._execute_automatic_analysis(session_id)
+        
+        # Data description workflow
+        if session_data.get('should_describe_data', False):
+            result = self._generate_automatic_data_description(session_id)
+            self._store_conversation(session_id, user_message, result.get('response', ''))
+            return result
+        
+        # Fork detection for what-if scenarios
+        if 'what if' in user_message.lower() or 'suppose' in user_message.lower():
+            fork_id = f"{session_id}_fork_{int(time.time())}"
             return {
-                'status': 'error', 
-                'response': f'I encountered an issue processing your request: {str(e)}', 
-                'visualizations': [],
-                'fallback': True
+                'response': f"🔀 **Exploring scenario**: {user_message}\\n\\nLet me help you explore this what-if scenario...",
+                'status': 'success',
+                'forked': True,
+                'fork_id': fork_id
             }
+        
+        return None
     
-    # ========================================================================
-    # PY-SIDEBOT LIGHTWEIGHT MEMORY IMPLEMENTATION
-    # ========================================================================
-    
-    def _store_conversation_simple(self, session_id: str, user_message: str, assistant_response: str):
-        """Store conversation in simple in-memory history (py-sidebot approach)."""
+    def _store_conversation(self, session_id: str, user_message: str, response: str):
+        """Store conversation with memory integration."""
         if session_id not in self.conversation_history:
             self.conversation_history[session_id] = []
         
         self.conversation_history[session_id].append({
             'user': user_message,
-            'assistant': assistant_response,
+            'assistant': response,
             'timestamp': time.time()
         })
         
-        # Keep only last 10 exchanges per session to prevent memory bloat
+        # Keep only last 10 exchanges
         if len(self.conversation_history[session_id]) > 10:
             self.conversation_history[session_id] = self.conversation_history[session_id][-10:]
-    
-    def _get_session_context(self, session_id: str) -> Dict:
-        """Get session context including conversation history and data schema."""
-        context = {
-            'session_id': session_id,
-            'conversation_history': self.conversation_history.get(session_id, []),
-            'data_schema': None,
-            'current_data': None,
-            'conversational_data_access': True
-        }
         
-        # Initialize conversational data access for this session
-        try:
-            from app.services.conversational_data_access import get_conversational_data_access
-            self.conversational_data_access = get_conversational_data_access(session_id, self.llm_manager)
-            
-            # Get comprehensive data schema
-            schema = self.conversational_data_access.generate_comprehensive_schema()
-            if 'error' not in schema:
-                context['data_schema'] = schema
-                context['current_data'] = f"Dataset with {schema['dataset_info']['total_rows']} rows, {schema['dataset_info']['total_columns']} columns"
-                context['analysis_stage'] = schema['dataset_info']['stage']
-            else:
-                context['data_error'] = schema['error']
-        except Exception as e:
-            logger.debug(f"Could not get conversational data context: {e}")
-        
-        return context
-    
-    def _generate_data_schema(self, df) -> str:
-        """Generate data schema description like py-sidebot's df_to_schema."""
-        try:
-            schema_parts = []
-            schema_parts.append(f"Dataset: {len(df)} rows, {len(df.columns)} columns")
-            
-            # Column information
-            for col in df.columns:
-                dtype = str(df[col].dtype)
-                non_null = df[col].notna().sum()
-                
-                if df[col].dtype == 'object':
-                    unique_count = df[col].nunique()
-                    if unique_count <= 10:
-                        unique_vals = df[col].unique()[:5]
-                        schema_parts.append(f"- {col}: categorical ({non_null}/{len(df)} non-null, {unique_count} unique values: {list(unique_vals)})")
-                    else:
-                        schema_parts.append(f"- {col}: text ({non_null}/{len(df)} non-null, {unique_count} unique values)")
-                else:
-                    min_val = df[col].min()
-                    max_val = df[col].max()
-                    schema_parts.append(f"- {col}: numeric ({non_null}/{len(df)} non-null, range: {min_val} to {max_val})")
-            
-            return "\n".join(schema_parts)
-        except Exception as e:
-            logger.error(f"Error generating data schema: {e}")
-            return "Data schema unavailable"
+        # Store in memory if available
+        if self.memory:
+            try:
+                self.memory.store_conversation_turn(
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_response=response,
+                    timestamp=time.time()
+                )
+            except Exception as e:
+                logger.debug(f"Memory storage error: {e}")
     
     def _explain_visualization_universally(self, viz_path: str, viz_type: str, session_id: str) -> str:
-        """
-        Universal visualization explanation using py-sidebot approach.
-        
-        This method automatically explains ANY visualization by:
-        1. Converting it to an image
-        2. Sending to LLM for analysis
-        3. Getting malaria-specific interpretation
-        """
+        """Universal visualization explanation."""
         try:
-            # Import and initialize universal explainer
             from app.services.universal_viz_explainer import get_universal_viz_explainer
-            
             explainer = get_universal_viz_explainer(llm_manager=self.llm_manager)
-            
-            # Get automatic explanation
-            explanation = explainer.explain_visualization(
-                viz_path=viz_path,
-                viz_type=viz_type,
-                session_id=session_id
-            )
-            
-            return explanation
-            
+            return explainer.explain_visualization(viz_path, viz_type, session_id)
         except Exception as e:
-            logger.error(f"Error in universal visualization explanation: {e}")
-            # Fallback explanation
-            viz_name = viz_type.replace('_', ' ').title() if viz_type else 'Visualization'
-            return f"📊 **{viz_name} Created** - This visualization shows your malaria risk analysis results to guide intervention planning."
+            logger.error(f"Visualization explanation error: {e}")
+            viz_name = viz_type.replace('_', ' ').title()
+            return f"📊 **{viz_name} Created** - This visualization shows malaria risk analysis results for intervention planning."
     
-    def _handle_execute_data_query(self, session_id: str, **parameters) -> Dict[str, Any]:
-        """Handle data query execution using conversational data access."""
+    def _is_confirmation_message(self, message: str) -> bool:
+        """Check if message is confirmation."""
+        return message.lower().strip() in ['yes', 'y', 'ok', 'okay', 'sure', 'proceed', 'continue']
+    
+    def _execute_automatic_analysis(self, session_id: str) -> Dict[str, Any]:
+        """Execute automatic analysis after permission."""
         try:
-            query = parameters.get('query', '')
-            code = parameters.get('code', '')
-            
-            # Initialize conversational data access for this session
-            if not self.conversational_data_access:
-                from app.services.conversational_data_access import ConversationalDataAccess
-                self.conversational_data_access = ConversationalDataAccess(session_id, self.llm_manager)
-            
-            # Execute the query
-            if code:
-                # Use provided code directly
-                result = self.conversational_data_access.execute_code(code)
-            else:
-                # Generate code from natural language query
-                result = self.conversational_data_access.process_query(query)
-            
-            if result.get('success'):
-                response_message = result.get('response', f"Successfully executed: {query}")
-                
-                # Check if there's a plot/visualization
-                if result.get('plot_base64'):
-                    # Create visualization entry
-                    return {
-                        'status': 'success',
-                        'message': response_message,
-                        'response': response_message,
-                        'plot_data': result.get('plot_base64'),
-                        'plot_type': result.get('plot_type', 'visualization')
-                    }
-                else:
-                    return {
-                        'status': 'success',
-                        'message': response_message,
-                        'response': response_message,
-                        'data': result.get('data', {})
-                    }
-            else:
-                return {
-                    'status': 'error',
-                    'message': result.get('error', f"Failed to execute query: {query}"),
-                    'response': f"I encountered an error while processing your request: {result.get('error', 'Unknown error')}"
-                }
-            
-        except Exception as e:
-            logger.error(f"Error in execute_data_query: {e}")
+            result = self._run_complete_analysis(session_id)
             return {
+                'response': result,
+                'status': 'success',
+                'tools_used': ['run_complete_analysis']
+            }
+        except Exception as e:
+            return {
+                'response': f'Error running automatic analysis: {str(e)}',
                 'status': 'error',
-                'message': f"Error executing data query: {str(e)}",
-                'response': f"I encountered an error while processing your data query: {str(e)}"
+                'tools_used': []
             }
     
+    def _generate_automatic_data_description(self, session_id: str) -> Dict[str, Any]:
+        """Generate automatic data description."""
+        try:
+            result = self._execute_data_query(session_id, "Describe the uploaded dataset including number of wards, variables, and data quality")
+            return {
+                'response': result,
+                'status': 'success',
+                'tools_used': ['execute_data_query']
+            }
+        except Exception as e:
+            return {
+                'response': f'Error describing data: {str(e)}',
+                'status': 'error',
+                'tools_used': []
+            }

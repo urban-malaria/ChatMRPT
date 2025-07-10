@@ -29,29 +29,56 @@ export class VisualizationManager {
         if (response.visualizations && Array.isArray(response.visualizations) && response.visualizations.length > 0) {
             console.log('🎯 Processing visualizations:', response.visualizations);
             
-            // Filter for visualizations with valid paths before processing
+            // Filter for visualizations with valid data (paths OR base64 data)
             const validVisualizations = response.visualizations.filter(viz => {
                 const vizPath = viz.url || viz.path || viz.html;
-                return vizPath && vizPath.trim() !== '';
+                const vizData = viz.data; // base64 image data
+                const isValid = (vizPath && vizPath.trim() !== '') || (vizData && vizData.trim() !== '');
+                
+                console.log(`🔍 Checking visualization:`, {
+                    type: viz.type,
+                    title: viz.title,
+                    url: viz.url,
+                    path: viz.path,
+                    html: viz.html,
+                    dataLength: vizData ? vizData.length : 0,
+                    isValid: isValid
+                });
+                
+                return isValid;
             });
             
             if (validVisualizations.length > 0) {
                 console.log(`🎯 Found ${validVisualizations.length} valid visualizations to process`);
                 validVisualizations.forEach((viz, index) => {
                     const vizPath = viz.url || viz.path || viz.html;
-                    console.log(`🎯 Processing visualization ${index + 1}: ${vizPath}`);
+                    const vizData = viz.data; // base64 data
                     
-                    setTimeout(() => {
-                        this.addVisualization(
-                            vizPath,
-                            viz.title,
-                            viz.type,
-                            viz.metadata || {}
-                        );
-                    }, index * 500); // Stagger visualization loading
+                    if (vizPath) {
+                        console.log(`🎯 Processing file-based visualization ${index + 1}: ${vizPath}`);
+                        setTimeout(() => {
+                            this.addVisualization(
+                                vizPath,
+                                viz.title,
+                                viz.type,
+                                viz.metadata || {}
+                            );
+                        }, index * 500);
+                    } else if (vizData) {
+                        console.log(`🎯 Processing base64 visualization ${index + 1}: ${viz.type}`);
+                        setTimeout(() => {
+                            this.addBase64Visualization(
+                                vizData,
+                                viz.title,
+                                viz.type,
+                                viz.metadata || {}
+                            );
+                        }, index * 500);
+                    }
                 });
             } else {
-                console.log('⚠️ No valid visualizations found - all visualizations lack valid paths');
+                console.log('⚠️ No valid visualizations found - all visualizations lack valid paths or data');
+                console.log('🔍 Response structure:', response);
             }
         }
     }
@@ -111,7 +138,52 @@ export class VisualizationManager {
         
         // Create header with title and controls
         const header = this.createVisualizationHeader(title, pageInfo, vizType, vizData, vizPath);
-        const content = this.createVisualizationContent(vizPath);
+        const content = this.createVisualizationContent(vizPath, false);
+
+        container.appendChild(header);
+        container.appendChild(content);
+        contentDiv.appendChild(container);
+        messageDiv.appendChild(contentDiv);
+
+        // Add to chat
+        this.messageHandler.appendMessage(messageDiv);
+        this.messageHandler.scrollToBottom();
+    }
+
+    addBase64Visualization(base64Data, title, vizType, vizData = {}) {
+        if (!base64Data) {
+            console.error('❌ No base64 data provided!');
+            this.messageHandler.addSystemMessage('Error: No visualization data provided.');
+            return;
+        }
+        
+        console.log('🎨 Adding base64 visualization:', { title, vizType, dataLength: base64Data.length });
+        
+        // Remove existing visualization of the same type to prevent duplicates
+        this.removeExistingVisualization(vizType);
+        
+        const messageDiv = DOMHelpers.createElement('div', {
+            className: 'message assistant-message visualization-message new-message'
+        });
+
+        const contentDiv = DOMHelpers.createElement('div', {
+            className: 'message-content'
+        });
+
+        const pageInfo = this.extractPageInfo(title, vizData);
+        
+        const container = DOMHelpers.createElement('div', {
+            className: 'visualization-container'
+        });
+        
+        // Add essential data attributes for pagination functionality
+        container.dataset.vizType = vizType;
+        container.dataset.currentPage = pageInfo.currentPage.toString();
+        container.dataset.totalPages = pageInfo.totalPages.toString();
+        
+        // Create header with title and controls (without download for base64)
+        const header = this.createBase64VisualizationHeader(title, pageInfo, vizType, vizData, base64Data);
+        const content = this.createVisualizationContent(base64Data, true); // true = isBase64
 
         container.appendChild(header);
         container.appendChild(content);
@@ -124,7 +196,26 @@ export class VisualizationManager {
     }
 
     removeExistingVisualization(vizType) {
-        // Find and remove any existing visualization of the same type
+        // Only remove visualizations for specific system-managed types
+        const systemManagedTypes = [
+            'composite_map', 
+            'vulnerability_map', 
+            'vulnerability_plot', 
+            'boxplot',
+            'urban_extent_map',
+            'decision_tree',
+            'variable_distribution',
+            'spatial_distribution_map'
+        ];
+        
+        // For user-generated chart types (scatter_plot, histogram, etc.), 
+        // allow multiple instances to coexist
+        if (!systemManagedTypes.includes(vizType)) {
+            console.log(`✅ Allowing multiple instances of ${vizType} to coexist`);
+            return;
+        }
+        
+        // Find and remove any existing visualization of system-managed types
         const chatContainer = this.messageHandler.chatContainer;
         if (!chatContainer) return;
         
@@ -184,52 +275,129 @@ export class VisualizationManager {
         return header;
     }
 
-    createVisualizationContent(vizPath) {
+    createBase64VisualizationHeader(title, pageInfo, vizType, vizData, base64Data) {
+        const header = DOMHelpers.createElement('div', {
+            className: 'visualization-header'
+        });
+
+        const titleElement = DOMHelpers.createElement('h4', {
+            className: 'visualization-title'
+        }, `📊 ${title}`);
+
+        const controls = DOMHelpers.createElement('div', {
+            className: 'visualization-controls'
+        });
+
+        // Add pagination controls if multi-page visualization
+        if (pageInfo.totalPages > 1) {
+            const paginationControls = this.createPaginationControls(pageInfo, vizType, vizData);
+            controls.appendChild(paginationControls);
+        }
+
+        // Add expand and download buttons for base64 images
+        const expandBtn = this.createControlButton('fas fa-expand', 'View Fullscreen');
+        const downloadBtn = this.createControlButton('fas fa-download', 'Download Image');
+
+        // Add event listeners for the buttons
+        expandBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.openBase64Fullscreen(base64Data, title);
+        });
+
+        downloadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.downloadBase64Image(base64Data, title);
+        });
+
+        controls.appendChild(expandBtn);
+        controls.appendChild(downloadBtn);
+        
+        header.appendChild(titleElement);
+        header.appendChild(controls);
+
+        return header;
+    }
+
+    createVisualizationContent(vizPath, isBase64 = false) {
         const content = DOMHelpers.createElement('div', {
             className: 'visualization-content'
         });
 
-        const iframe = DOMHelpers.createElement('iframe', {
-            src: vizPath,
-            className: 'visualization-iframe',
-            frameborder: '0',
-            style: 'width: 100%; height: 600px; border: none; border-radius: 8px; min-height: 400px;'
-        });
-
-        const loadingDiv = DOMHelpers.createElement('div', {
-            className: 'visualization-loading',
-            style: 'display: flex; align-items: center; justify-content: center; height: 400px; color: var(--text-secondary);'
-        }, '<i class="fas fa-spinner fa-spin"></i> <span style="margin-left: 8px;">Loading visualization...</span>');
-
-        content.appendChild(loadingDiv);
-        content.appendChild(iframe);
-
-        // Enhanced iframe load handling with responsive sizing
-        iframe.addEventListener('load', () => {
-            loadingDiv.style.display = 'none';
-            iframe.style.display = 'block';
-            
-            // Auto-adjust iframe height based on content
-            this.adjustIframeHeight(iframe);
-            
-            // Enable interactive features in iframe
-            this.enableIframeInteractivity(iframe);
-        });
-
-        iframe.addEventListener('error', () => {
-            loadingDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="margin-left: 8px;">Error loading visualization</span>';
-            loadingDiv.style.color = 'var(--error-color, #dc2626)';
-        });
-
-        // Add resize observer for responsive behavior
-        if (window.ResizeObserver) {
-            const resizeObserver = new ResizeObserver(() => {
-                this.adjustIframeHeight(iframe);
+        if (isBase64) {
+            // Handle base64 image data
+            const img = DOMHelpers.createElement('img', {
+                src: `data:image/png;base64,${vizPath}`,
+                className: 'visualization-image',
+                style: 'width: 100%; height: auto; max-height: 600px; border: none; border-radius: 8px; object-fit: contain;'
             });
-            resizeObserver.observe(content);
-        }
 
-        return content;
+            const loadingDiv = DOMHelpers.createElement('div', {
+                className: 'visualization-loading',
+                style: 'display: flex; align-items: center; justify-content: center; height: 400px; color: var(--text-secondary);'
+            }, '<i class="fas fa-spinner fa-spin"></i> <span style="margin-left: 8px;">Loading visualization...</span>');
+
+            content.appendChild(loadingDiv);
+            content.appendChild(img);
+
+            img.addEventListener('load', () => {
+                loadingDiv.style.display = 'none';
+                img.style.display = 'block';
+                console.log('✅ Base64 visualization loaded successfully');
+            });
+
+            img.addEventListener('error', () => {
+                loadingDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="margin-left: 8px;">Error loading visualization</span>';
+                loadingDiv.style.color = 'var(--error-color, #dc2626)';
+                console.error('❌ Failed to load base64 visualization');
+            });
+
+            return content;
+        } else {
+            // Handle file-based visualizations (existing iframe logic)
+            const iframe = DOMHelpers.createElement('iframe', {
+                src: vizPath,
+                className: 'visualization-iframe',
+                frameborder: '0',
+                style: 'width: 100%; height: 600px; border: none; border-radius: 8px; min-height: 400px;'
+            });
+
+            const loadingDiv = DOMHelpers.createElement('div', {
+                className: 'visualization-loading',
+                style: 'display: flex; align-items: center; justify-content: center; height: 400px; color: var(--text-secondary);'
+            }, '<i class="fas fa-spinner fa-spin"></i> <span style="margin-left: 8px;">Loading visualization...</span>');
+
+            content.appendChild(loadingDiv);
+            content.appendChild(iframe);
+
+            // Enhanced iframe load handling with responsive sizing
+            iframe.addEventListener('load', () => {
+                loadingDiv.style.display = 'none';
+                iframe.style.display = 'block';
+                
+                // Auto-adjust iframe height based on content
+                this.adjustIframeHeight(iframe);
+                
+                // Enable interactive features in iframe
+                this.enableIframeInteractivity(iframe);
+            });
+
+            iframe.addEventListener('error', () => {
+                loadingDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="margin-left: 8px;">Error loading visualization</span>';
+                loadingDiv.style.color = 'var(--error-color, #dc2626)';
+            });
+
+            // Add resize observer for responsive behavior
+            if (window.ResizeObserver) {
+                const resizeObserver = new ResizeObserver(() => {
+                    this.adjustIframeHeight(iframe);
+                });
+                resizeObserver.observe(content);
+            }
+
+            return content;
+        }
     }
 
     createControlButton(iconClass, title) {
@@ -761,5 +929,183 @@ export class VisualizationManager {
                 }
             }, 300);
         }, 3000);
+    }
+
+    /**
+     * Open base64 image in fullscreen mode
+     */
+    openBase64Fullscreen(base64Data, title) {
+        try {
+            console.log('🔍 Opening fullscreen base64 visualization');
+            
+            const modal = this.createBase64FullscreenModal(base64Data, title);
+            document.body.appendChild(modal);
+            
+            // Show modal with animation
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                modal.classList.add('show');
+            }, 10);
+            
+            // Focus trap and ESC key handler
+            this.setupModalKeyHandling(modal);
+            
+        } catch (error) {
+            console.error('Error opening base64 fullscreen:', error);
+            this.showToast('Error opening fullscreen view', 'error');
+        }
+    }
+
+    /**
+     * Create fullscreen modal for base64 image
+     */
+    createBase64FullscreenModal(base64Data, title) {
+        const modal = DOMHelpers.createElement('div', {
+            className: 'visualization-modal',
+            style: `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.95);
+                z-index: 10000;
+                display: flex;
+                flex-direction: column;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `
+        });
+
+        // Modal header
+        const header = DOMHelpers.createElement('div', {
+            className: 'modal-header',
+            style: `
+                padding: 1rem 2rem;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                color: white;
+            `
+        });
+
+        const titleElement = DOMHelpers.createElement('h3', {
+            style: 'margin: 0; font-size: 1.2rem;'
+        }, title || 'Visualization');
+
+        const closeButton = DOMHelpers.createElement('button', {
+            className: 'modal-close-btn',
+            style: `
+                background: none;
+                border: none;
+                color: white;
+                font-size: 1.5rem;
+                cursor: pointer;
+                padding: 0.5rem;
+                border-radius: 50%;
+                transition: all 0.2s ease;
+            `,
+            title: 'Close (ESC)'
+        }, '<i class="fas fa-times"></i>');
+
+        closeButton.addEventListener('click', () => this.closeFullscreen(modal));
+        closeButton.addEventListener('mouseenter', () => {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        });
+        closeButton.addEventListener('mouseleave', () => {
+            closeButton.style.background = 'none';
+        });
+
+        header.appendChild(titleElement);
+        header.appendChild(closeButton);
+
+        // Modal content
+        const content = DOMHelpers.createElement('div', {
+            className: 'modal-content',
+            style: `
+                flex: 1;
+                padding: 1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `
+        });
+
+        const img = DOMHelpers.createElement('img', {
+            src: `data:image/png;base64,${base64Data}`,
+            style: `
+                max-width: 100%;
+                max-height: 100%;
+                border: none;
+                border-radius: 8px;
+                object-fit: contain;
+            `,
+            alt: title || 'Visualization'
+        });
+
+        content.appendChild(img);
+        modal.appendChild(header);
+        modal.appendChild(content);
+
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeFullscreen(modal);
+            }
+        });
+
+        return modal;
+    }
+
+    /**
+     * Download base64 image as PNG file
+     */
+    downloadBase64Image(base64Data, title) {
+        try {
+            console.log('📥 Downloading base64 image');
+            
+            // Convert base64 to blob
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'image/png' });
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = this.generateImageFilename(title);
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up
+            URL.revokeObjectURL(url);
+            
+            this.showToast('Image download started', 'success');
+            
+        } catch (error) {
+            console.error('Error downloading base64 image:', error);
+            this.showToast('Error downloading image', 'error');
+        }
+    }
+
+    /**
+     * Generate appropriate filename for image download
+     */
+    generateImageFilename(title) {
+        // Clean title for filename
+        const cleanTitle = (title || 'visualization')
+            .replace(/[^a-zA-Z0-9\s-]/g, '')
+            .replace(/\s+/g, '_')
+            .toLowerCase();
+        
+        return `${cleanTitle}.png`;
     }
 } 
