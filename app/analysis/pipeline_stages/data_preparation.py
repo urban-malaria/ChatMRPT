@@ -416,22 +416,20 @@ def run_normalization_stage(data_handler, metadata, pipeline_step_id, rerun_stag
                 }
             
             # Determine which columns to exclude from normalization
-            exclude_cols = None
+            # CRITICAL FIX: Always normalize ALL variables, selection happens at scoring stage
+            # The previous approach excluded custom variables from normalization which broke custom analysis
+            exclude_cols = None  # Don't exclude any variables from normalization
+            
             if selected_variables is not None:
-                # For custom analysis: exclude all variables NOT in selected_variables
-                all_vars = [col for col in data_handler.cleaned_data.columns 
-                           if col != 'WardName' and is_numeric_column(data_handler.cleaned_data, col)]
-                exclude_cols = [var for var in all_vars if var not in selected_variables]
-                logger.info(f"Custom analysis: normalizing only selected variables {selected_variables}, excluding {len(exclude_cols)} others")
+                logger.info(f"Custom analysis: normalizing ALL variables, will select {selected_variables} for scoring later")
             else:
-                # For standard analysis: normalize all available variables
                 logger.info("Standard analysis: normalizing all available variables")
             
-            # Normalize the data using the original pipeline logic
+            # Normalize ALL available variables - this ensures custom variables are available for scoring
             normalized_data = normalize_data(
                 data_handler.cleaned_data,
                 data_handler.variable_relationships,
-                exclude_cols,  # Exclude non-selected variables for custom analysis
+                exclude_cols,  # None - normalize everything
                 -1,  # Use all available cores
                 metadata
             )

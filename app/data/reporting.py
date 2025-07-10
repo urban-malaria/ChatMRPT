@@ -21,6 +21,7 @@ from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 
 # Set up logging
+from app.services.variable_resolution_service import variable_resolver
 logger = logging.getLogger(__name__)
 
 

@@ -8,6 +8,7 @@ from collections import defaultdict
 import concurrent.futures
 
 # Set up logging
+from app.services.variable_resolution_service import variable_resolver
 logger = logging.getLogger(__name__)
 
 

@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Set up logging
+from app.services.variable_resolution_service import variable_resolver
 logger = logging.getLogger(__name__)
 
 

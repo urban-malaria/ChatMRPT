@@ -498,88 +498,53 @@ def send_message_streaming():
                 with app.app_context():
                     logger.info(f"Processing streaming message: '{user_message[:100]}...'")
                     
-                    # Use the full conversational data access system for streaming
-                    # This ensures users get the same capabilities in streaming mode
-                    logger.info("Using full conversational data access system for streaming")
-                    result = request_interpreter.process_message(user_message, session_id, session_data)
+                    # Use the real streaming system for proper formatting
+                    logger.info("Using real streaming system with proper line break preservation")
                     
-                    # Simulate streaming by breaking response into chunks
-                    response_text = result.get('response', '')
-                    words = response_text.split()
-                    chunk_size = 5  # words per chunk
+                    # Track streaming result for logging
+                    final_chunk = None
+                    response_content = ""
                     
-                    for i in range(0, len(words), chunk_size):
-                        chunk_words = words[i:i + chunk_size]
-                        chunk_text = ' '.join(chunk_words)
+                    # Use the actual streaming method
+                    for chunk in request_interpreter.process_message_streaming(user_message, session_id, session_data):
+                        # Accumulate content for logging
+                        if chunk.get('content'):
+                            response_content += chunk.get('content', '')
                         
-                        chunk = {
-                            'content': chunk_text + (' ' if i + chunk_size < len(words) else ''),
-                            'status': 'streaming'
-                        }
+                        # Track final chunk
+                        if chunk.get('done'):
+                            final_chunk = chunk
+                            
                         chunk_json = json.dumps(chunk)
-                        logger.debug(f"Sending chunk: {chunk_json}")
+                        logger.debug(f"Sending streaming chunk: {chunk_json}")
                         yield f"data: {chunk_json}\n\n"
+                    
+                    # Log completion using final chunk data
+                    if final_chunk:
+                        tools_used = final_chunk.get('tools_used', [])
+                        if any(tool in tools_used for tool in ['run_composite_analysis', 'run_pca_analysis', 'runcompleteanalysis']):
+                            if 'runcompleteanalysis' in tools_used:
+                                analysis_type = 'dual_method'
+                            elif 'run_composite_analysis' in tools_used:
+                                analysis_type = 'composite'
+                            else:
+                                analysis_type = 'pca'
+                            logger.info(f"Session {session_id}: Analysis completed via streaming ({analysis_type})")
                         
-                        # Small delay for better UX
-                        import time
-                        time.sleep(0.1)
-                    
-                    # Send final chunk with complete data
-                    final_chunk = {
-                        'content': '',  # No additional content
-                        'status': result.get('status', 'success'),
-                        'visualizations': result.get('visualizations', []),
-                        'tools_used': result.get('tools_used', []),
-                        'done': True
-                    }
-                    
-                    # Send final chunk
-                    final_json = json.dumps(final_chunk)
-                    logger.debug(f"Sending final chunk: {final_json}")
-                    yield f"data: {final_json}\n\n"
-                    
-                    # Log completion
-                    tools_used = result.get('tools_used', [])
-                    if any(tool in tools_used for tool in ['run_composite_analysis', 'run_pca_analysis', 'runcompleteanalysis']):
-                        if 'runcompleteanalysis' in tools_used:
-                            analysis_type = 'dual_method'
-                        elif 'run_composite_analysis' in tools_used:
-                            analysis_type = 'composite'
-                        else:
-                            analysis_type = 'pca'
-                        logger.info(f"Session {session_id}: Analysis completed via streaming ({analysis_type})")
-                    
-                    # Log completion with enhanced timing
-                    if hasattr(app, 'services') and app.services.interaction_logger:
-                        interaction_logger = app.services.interaction_logger
-                        detailed_timing = result.get('timing_breakdown', {})
-                        performance_metrics = result.get('performance_metrics', {})
-                        
-                        interaction_logger.log_message(
-                            session_id=session_id,
-                            sender='assistant',
-                            content=response_text,
-                            intent=result.get('intent_type'),
-                            entities={
-                                'streaming': True,
-                                'tools_used': tools_used,
-                                'status': result.get('status', 'success'),
-                                'timing_breakdown': {
-                                    'context_retrieval_ms': detailed_timing.get('context_retrieval', 0) * 1000,
-                                    'prompt_building_ms': detailed_timing.get('prompt_building', 0) * 1000,
-                                    'llm_processing_ms': detailed_timing.get('llm_processing', 0) * 1000,
-                                    'tool_execution_ms': detailed_timing.get('tool_execution', 0) * 1000,
-                                    'response_formatting_ms': detailed_timing.get('response_formatting', 0) * 1000,
-                                    'total_duration_ms': detailed_timing.get('total_duration', 0) * 1000
-                                },
-                                'performance_metrics': {
-                                    'llm_percentage': performance_metrics.get('llm_percentage', 0),
-                                    'tool_percentage': performance_metrics.get('tool_percentage', 0),
-                                    'context_percentage': performance_metrics.get('context_percentage', 0),
-                                    'bottleneck': performance_metrics.get('bottleneck', 'unknown')
+                        # Simplified logging for streaming
+                        if hasattr(app, 'services') and app.services.interaction_logger:
+                            interaction_logger = app.services.interaction_logger
+                            interaction_logger.log_message(
+                                session_id=session_id,
+                                sender='assistant',
+                                content=response_content,
+                                intent=final_chunk.get('intent_type', 'streaming'),
+                                entities={
+                                    'streaming': True,
+                                    'tools_used': tools_used,
+                                    'status': final_chunk.get('status', 'success')
                                 }
-                            }
-                        )
+                            )
                             
             except Exception as e:
                 logger.error(f"Error in streaming processing: {e}")

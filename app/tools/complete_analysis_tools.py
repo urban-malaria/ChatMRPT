@@ -622,8 +622,18 @@ class RunCompleteAnalysis(DataAnalysisTool):
         """Generate comprehensive user-friendly analysis summary with rankings and actionable insights"""
         try:
             # Load the unified dataset to get detailed rankings
-            from ..data.unified_dataset_builder import load_unified_dataset
-            gdf = load_unified_dataset(session_id)
+            try:
+                from ..data.unified_dataset_builder import load_unified_dataset
+                gdf = load_unified_dataset(session_id)
+            except Exception as load_error:
+                logger.warning(f"Failed to load unified dataset: {load_error}")
+                # Try alternative: load from tools base
+                try:
+                    from .base import get_session_unified_dataset
+                    gdf = get_session_unified_dataset(session_id)
+                except Exception as alt_error:
+                    logger.warning(f"Alternative unified dataset load failed: {alt_error}")
+                    gdf = None
             
             # 🔍 DEBUG: Check unified dataset structure
             if gdf is not None:
@@ -647,27 +657,34 @@ class RunCompleteAnalysis(DataAnalysisTool):
             logger.info(f"🔍 UNIFIED DATASET DEBUG: Available columns: {list(gdf.columns)}")
             logger.info(f"🔍 UNIFIED DATASET DEBUG: Dataset shape: {gdf.shape}")
             
-            # Dynamically detect column names for composite and PCA scores
-            composite_score_col = None
-            pca_score_col = None
-            ward_name_col = None
+            # Use variable resolver for robust column detection
+            from app.services.variable_resolution_service import variable_resolver
             
             # Find composite score column
-            for col in gdf.columns:
-                if 'composite' in col.lower() and 'score' in col.lower():
-                    composite_score_col = col
+            composite_candidates = ['composite_score', 'composite', 'comp_score']
+            composite_score_col = None
+            for candidate in composite_candidates:
+                exists, resolved = variable_resolver.check_column_exists(candidate, list(gdf.columns))
+                if exists:
+                    composite_score_col = resolved
                     break
             
             # Find PCA score column
-            for col in gdf.columns:
-                if 'pca' in col.lower() and 'score' in col.lower():
-                    pca_score_col = col
+            pca_candidates = ['pca_score', 'pc1_risk_score', 'pca', 'pc1_score']
+            pca_score_col = None
+            for candidate in pca_candidates:
+                exists, resolved = variable_resolver.check_column_exists(candidate, list(gdf.columns))
+                if exists:
+                    pca_score_col = resolved
                     break
             
             # Find ward name column
-            for col in gdf.columns:
-                if col.lower() in ['wardname', 'ward_name', 'ward']:
-                    ward_name_col = col
+            ward_candidates = ['WardName', 'ward_name', 'ward', 'Ward']
+            ward_name_col = None
+            for candidate in ward_candidates:
+                exists, resolved = variable_resolver.check_column_exists(candidate, list(gdf.columns))
+                if exists:
+                    ward_name_col = resolved
                     break
             
             logger.info(f"🔍 COLUMN DETECTION: Composite={composite_score_col}, PCA={pca_score_col}, Ward={ward_name_col}")
@@ -907,8 +924,112 @@ class RunCompleteAnalysis(DataAnalysisTool):
             return "\n".join(summary_parts)
             
         except Exception as e:
-            logger.warning(f"Failed to generate comprehensive summary: {e}")
-            return f"✅ **Analysis Complete** in {execution_time:.1f} seconds! Both composite score and PCA analyses completed successfully. Use the visualizations and rankings to guide your ITN distribution strategy."
+            logger.error(f"Failed to generate comprehensive summary: {e}", exc_info=True)
+            # Provide a better fallback that includes what we can extract from the results
+            fallback_parts = [f"✅ **Analysis Complete** in {execution_time:.1f} seconds!"]
+            
+            # Try to extract basic info from results
+            if composite_result and 'data' in composite_result:
+                comp_data = composite_result['data']
+                if 'wards_analyzed' in comp_data:
+                    fallback_parts.append(f"**Analyzed:** {comp_data['wards_analyzed']} wards")
+            
+            fallback_parts.append("**Methods:** Composite Score + Principal Component Analysis")
+            fallback_parts.append("**Status:** Both analyses completed successfully")
+            fallback_parts.append("")
+            fallback_parts.append("⚠️ *Detailed summary generation failed. Check the visualization results above for rankings and maps.*")
+            fallback_parts.append("")
+            fallback_parts.append("**Next Steps:**")
+            fallback_parts.append("- Review the generated maps and charts")
+            fallback_parts.append("- Ask for specific ward rankings")
+            fallback_parts.append("- Request additional visualizations")
+            
+            return "\n".join(fallback_parts)
+
+    def _generate_summary_from_analysis_results(self, composite_result, pca_result, comparison_summary, execution_time):
+        """Generate summary from analysis results when unified dataset is not available"""
+        try:
+            summary_parts = [f"✅ **Analysis Complete** in {execution_time:.1f} seconds!"]
+            summary_parts.append("")
+            
+            # Extract basic information from results
+            total_wards = "N/A"
+            if composite_result and 'data' in composite_result:
+                comp_data = composite_result['data']
+                if 'wards_analyzed' in comp_data:
+                    total_wards = comp_data['wards_analyzed']
+            
+            summary_parts.append(f"**Analyzed:** {total_wards} wards")
+            summary_parts.append("**Methods:** Composite Score + Principal Component Analysis")
+            summary_parts.append("")
+            
+            # Try to extract top wards from results
+            composite_top = []
+            pca_top = []
+            
+            if composite_result and 'data' in composite_result:
+                comp_data = composite_result['data']
+                if 'top_vulnerable_wards' in comp_data:
+                    composite_top = comp_data['top_vulnerable_wards'][:5]
+            
+            if pca_result and 'data' in pca_result:
+                pca_data = pca_result['data']
+                if 'top_vulnerable_wards' in pca_data:
+                    pca_top = pca_data['top_vulnerable_wards'][:5]
+            
+            # Show top wards from each method
+            if composite_top:
+                summary_parts.append("### 🎯 Top 5 Highest Risk (Composite Method)")
+                for i, ward in enumerate(composite_top, 1):
+                    ward_name = ward.get('ward_name', ward.get('WardName', 'Unknown'))
+                    score = ward.get('composite_score', ward.get('score', 'N/A'))
+                    if isinstance(score, float):
+                        summary_parts.append(f"{i}. **{ward_name}** (Score: {score:.3f})")
+                    else:
+                        summary_parts.append(f"{i}. **{ward_name}** (Score: {score})")
+                summary_parts.append("")
+            
+            if pca_top:
+                summary_parts.append("### 📊 Top 5 Highest Risk (PCA Method)")
+                for i, ward in enumerate(pca_top, 1):
+                    ward_name = ward.get('ward_name', ward.get('WardName', 'Unknown'))
+                    score = ward.get('pca_score', ward.get('pc1_risk_score', ward.get('score', 'N/A')))
+                    if isinstance(score, float):
+                        summary_parts.append(f"{i}. **{ward_name}** (Score: {score:.3f})")
+                    else:
+                        summary_parts.append(f"{i}. **{ward_name}** (Score: {score})")
+                summary_parts.append("")
+            
+            # Calculate consensus if both methods have results
+            if composite_top and pca_top:
+                comp_names = set([w.get('ward_name', w.get('WardName', '')) for w in composite_top])
+                pca_names = set([w.get('ward_name', w.get('WardName', '')) for w in pca_top])
+                consensus = comp_names.intersection(pca_names)
+                
+                if consensus:
+                    summary_parts.append("### 🤝 Consensus High-Risk Wards")
+                    summary_parts.append("*Identified as high-risk by both methods:*")
+                    for ward in sorted(consensus):
+                        if ward:  # Skip empty names
+                            summary_parts.append(f"• **{ward}**")
+                    summary_parts.append("")
+                
+                agreement_pct = (len(consensus) / len(comp_names.union(pca_names))) * 100 if comp_names.union(pca_names) else 0
+                summary_parts.append(f"**Method Agreement:** {agreement_pct:.0f}% consensus on high-risk areas")
+                summary_parts.append("")
+            
+            # Add next steps
+            summary_parts.append("### 💡 Next Steps")
+            summary_parts.append("- Review the generated visualizations above")
+            summary_parts.append("- Ask for specific ward comparisons")
+            summary_parts.append("- Request additional analysis or maps")
+            summary_parts.append("- Export results for intervention planning")
+            
+            return "\n".join(summary_parts)
+            
+        except Exception as e:
+            logger.error(f"Failed to generate summary from analysis results: {e}", exc_info=True)
+            return f"✅ **Analysis Complete** in {execution_time:.1f} seconds! Both methods completed successfully. Check the visualizations above for detailed results."
 
     def _extract_region_info(self, gdf):
         """Extract region information for contextualized recommendations"""

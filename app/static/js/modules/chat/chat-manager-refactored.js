@@ -78,24 +78,16 @@ export class ChatManager {
     transitionToNormalChat() {
         if (!this.isInitialState || !this.chatContainerElement) return;
         
-        // CRITICAL FIX: Store scroll position before transition
-        const messagesContainer = document.getElementById('chat-messages');
-        const scrollTop = messagesContainer ? messagesContainer.scrollTop : 0;
-        
         this.isInitialState = false;
         this.chatContainerElement.classList.add('transitioning');
         
+        // FIXED: Simplified transition without scroll interference
         setTimeout(() => {
             this.chatContainerElement.classList.remove('initial-state');
             setTimeout(() => {
                 this.chatContainerElement.classList.remove('transitioning');
-                
-                // CRITICAL FIX: Restore scroll position after transition
-                if (messagesContainer) {
-                    messagesContainer.scrollTop = scrollTop;
-                    // Ensure messages are still scrollable after transition
-                    this.messageHandler.scrollToBottom();
-                }
+                // FIXED: No forced scrolling after transition - let natural scroll behavior work
+                // The first message will automatically scroll to bottom via appendMessage logic
             }, 400);
         }, 100);
     }

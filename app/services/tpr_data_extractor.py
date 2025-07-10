@@ -16,6 +16,7 @@ from datetime import datetime
 from ..data.tpr_parser import TPRParser
 from .variable_extractor_real import RealVariableExtractor
 from .shapefile_fetcher import ShapefileFetcher
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -387,7 +388,8 @@ class TPRDataExtractor:
                 
                 convergence_data = pd.DataFrame()
                 for col in base_columns:
-                    if col in state_gdf.columns:
+                    exists, resolved_col = variable_resolver.check_column_exists(col, list(state_gdf.columns))
+                    if exists:
                         convergence_data[col] = state_gdf[col]
                     else:
                         # Fill missing columns with defaults
@@ -419,7 +421,8 @@ class TPRDataExtractor:
                 merged_data = merged_data.drop('WardName_clean', axis=1)
                 
                 # Step 4: Add TPR data
-                if 'avg_tpr' not in merged_data.columns:
+                exists, resolved_col = variable_resolver.check_column_exists('avg_tpr', list(merged_data.columns))
+        if not exists:
                     tpr_columns = [col for col in merged_data.columns if 'tpr' in col.lower()]
                     if tpr_columns:
                         merged_data['avg_tpr'] = merged_data[tpr_columns[0]]
@@ -447,7 +450,8 @@ class TPRDataExtractor:
                 # Build final column order: identifiers -> base info -> tpr -> ALL environmental variables
                 final_columns = []
                 for col in identifier_columns + base_info_columns + tpr_columns:
-                    if col in merged_data.columns:
+                    exists, resolved_col = variable_resolver.check_column_exists(col, list(merged_data.columns))
+                    if exists:
                         final_columns.append(col)
                 final_columns.extend(sorted(all_env_columns))
                 

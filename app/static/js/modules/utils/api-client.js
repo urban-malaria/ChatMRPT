@@ -50,7 +50,37 @@ class APIClient {
      */
     sendMessageStreaming(message, language = 'en', onChunk, onComplete) {
         console.log('🔥 API CLIENT: sendMessageStreaming called');
-        // First, send the message to initiate streaming
+        
+        // FIXED: Add response buffering and better error handling
+        let responseBuffer = '';
+        let isComplete = false;
+        let timeoutId = null;
+        
+        // FIXED: Add timeout protection to prevent hanging requests
+        const REQUEST_TIMEOUT = 30000; // 30 seconds
+        
+        const cleanup = () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+            isComplete = true;
+        };
+        
+        // FIXED: Set request timeout
+        timeoutId = setTimeout(() => {
+            if (!isComplete) {
+                console.warn('🚨 Streaming request timed out');
+                cleanup();
+                if (onComplete) onComplete({ 
+                    error: 'Request timed out', 
+                    status: 'timeout',
+                    content: responseBuffer || 'Request timed out. Please try again.'
+                });
+            }
+        }, REQUEST_TIMEOUT);
+        
+        // Send the message to initiate streaming
         fetch('/send_message_streaming', {
             method: 'POST',
             headers: this.defaultHeaders,
@@ -69,42 +99,86 @@ class APIClient {
             let buffer = '';
             
             const processChunk = async () => {
-                const { done, value } = await reader.read();
-                
-                if (done) {
-                    if (onComplete) onComplete();
-                    return;
-                }
-                
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (onChunk) onChunk(data);
-                            
-                            if (data.done) {
-                                if (onComplete) onComplete(data);
-                                return;
+                try {
+                    const { done, value } = await reader.read();
+                    
+                    if (done || isComplete) {
+                        cleanup();
+                        if (!isComplete && onComplete) {
+                            onComplete({ 
+                                content: responseBuffer,
+                                status: 'success'
+                            });
+                        }
+                        return;
+                    }
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                // FIXED: Buffer all content to prevent cutoffs
+                                if (data.content) {
+                                    responseBuffer += data.content;
+                                }
+                                
+                                // Pass chunk to handler
+                                if (onChunk && !isComplete) {
+                                    onChunk(data);
+                                }
+                                
+                                // Check for completion
+                                if (data.done) {
+                                    cleanup();
+                                    if (onComplete) {
+                                        onComplete({
+                                            ...data,
+                                            content: responseBuffer,  // FIXED: Always send complete buffered content
+                                            status: data.status || 'success'
+                                        });
+                                    }
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing streaming chunk:', e, 'Line:', line);
+                                // Continue processing other chunks even if one fails
                             }
-                        } catch (e) {
-                            console.error('Error parsing streaming chunk:', e);
                         }
                     }
+                    
+                    // Continue reading if not complete
+                    if (!isComplete) {
+                        processChunk();
+                    }
+                } catch (error) {
+                    console.error('Error reading streaming chunk:', error);
+                    cleanup();
+                    if (onComplete) {
+                        onComplete({ 
+                            error: error.message, 
+                            status: 'error',
+                            content: responseBuffer || 'Error reading response'
+                        });
+                    }
                 }
-                
-                // Continue reading
-                processChunk();
             };
             
             processChunk();
         }).catch(error => {
             console.error('Error with streaming message:', error);
-            if (onComplete) onComplete({ error: error.message, status: 'error' });
-            // Don't re-throw to prevent global error handler cascade
+            cleanup();
+            if (onComplete) {
+                onComplete({ 
+                    error: error.message, 
+                    status: 'error',
+                    content: responseBuffer || 'Connection error. Please try again.'
+                });
+            }
         });
     }
 

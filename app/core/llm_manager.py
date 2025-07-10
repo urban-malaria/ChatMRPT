@@ -441,7 +441,7 @@ STYLE: Clear, professional, friendly. Provide direct explanations for "what is" 
     def generate_with_functions_streaming(self, messages: List[Dict], system_prompt: str, 
                                         functions: List[Dict], temperature: float = 0.7, 
                                         session_id: Optional[str] = None):
-        """Generate streaming response with OpenAI function calling for better UX."""
+        """Generate streaming response with sentence-based chunking (FIXED)."""
         if not self.client:
             if not self.api_key:
                 yield {'content': "Error: No API key available", 'function_call': None, 'done': True}
@@ -482,41 +482,43 @@ STYLE: Clear, professional, friendly. Provide direct explanations for "what is" 
                 stream=True
             )
             
-            # Collect chunks for function calls
-            collected_chunks = []
-            collected_messages = []
+            # FIXED: Sentence-based chunking instead of word-by-word
+            collected_content = ""
+            sentence_buffer = ""
+            tool_calls_data = []
             
-            # Process streaming chunks
             for chunk in response:
-                collected_chunks.append(chunk)
-                
-                # Check if this chunk has content
+                # Collect content
                 if chunk.choices[0].delta.content:
-                    yield {
-                        'content': chunk.choices[0].delta.content,
-                        'function_call': None,
-                        'done': False
-                    }
+                    collected_content += chunk.choices[0].delta.content
+                    sentence_buffer += chunk.choices[0].delta.content
+                    
+                    # FIXED: Send complete sentences/paragraphs, not individual words
+                    # Check for sentence endings or double newlines (paragraph breaks)
+                    if any(ending in sentence_buffer for ending in ['. ', '.\n', '!\n', '?\n', '\n\n']):
+                        yield {
+                            'content': sentence_buffer,
+                            'function_call': None,
+                            'done': False
+                        }
+                        sentence_buffer = ""
                 
-                # Check if function call is starting
+                # Collect tool calls
                 if chunk.choices[0].delta.tool_calls:
-                    # Function call detected - we need to pause streaming
-                    break
+                    tool_calls_data.extend(chunk.choices[0].delta.tool_calls)
             
-            # Reconstruct the full message from collected chunks
-            full_message = ""
-            tool_calls = []
+            # Send any remaining content
+            if sentence_buffer.strip():
+                yield {
+                    'content': sentence_buffer,
+                    'function_call': None,
+                    'done': False
+                }
             
-            for chunk in collected_chunks:
-                if chunk.choices[0].delta.content:
-                    full_message += chunk.choices[0].delta.content
-                if chunk.choices[0].delta.tool_calls:
-                    tool_calls.extend(chunk.choices[0].delta.tool_calls)
-            
-            # If function was called, handle it
-            if tool_calls:
-                # Get the first tool call
-                first_tool_call = tool_calls[0]
+            # Handle tool calls if present
+            if tool_calls_data:
+                # Get the first complete tool call
+                first_tool_call = tool_calls_data[0]
                 
                 # Log the interaction
                 if self.interaction_logger and session_id:
@@ -524,23 +526,23 @@ STYLE: Clear, professional, friendly. Provide direct explanations for "what is" 
                     self.interaction_logger.log_llm_interaction(
                         session_id=session_id,
                         prompt_type="streaming_function_calling",
-                        prompt=messages[-1].get('content', ''),
+                        prompt=messages[-1].get('content', '') if messages else '',
                         prompt_context=system_prompt,
-                        response=f"Function call: {first_tool_call.function.name}",
+                        response=f"Function call: {first_tool_call.function.name if hasattr(first_tool_call, 'function') else 'unknown'}",
                         tokens_used=None,
                         latency=latency
                     )
                 
                 yield {
-                    'content': full_message,
+                    'content': '',  # No additional content for function calls
                     'function_call': {
                         'name': first_tool_call.function.name,
                         'arguments': first_tool_call.function.arguments
-                    },
+                    } if hasattr(first_tool_call, 'function') else None,
                     'done': True
                 }
             else:
-                # No function call, just conversational response
+                # No function call, conversational response complete
                 
                 # Log the interaction
                 if self.interaction_logger and session_id:
@@ -548,15 +550,15 @@ STYLE: Clear, professional, friendly. Provide direct explanations for "what is" 
                     self.interaction_logger.log_llm_interaction(
                         session_id=session_id,
                         prompt_type="streaming_conversational",
-                        prompt=messages[-1].get('content', ''),
+                        prompt=messages[-1].get('content', '') if messages else '',
                         prompt_context=system_prompt,
-                        response=full_message,
+                        response=collected_content,
                         tokens_used=None,
                         latency=latency
                     )
                 
                 yield {
-                    'content': full_message,
+                    'content': '',  # Final completion marker
                     'function_call': None,
                     'done': True
                 }

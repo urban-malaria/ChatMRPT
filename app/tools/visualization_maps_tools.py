@@ -27,6 +27,7 @@ from .base import (
     BaseTool, ToolExecutionResult, ToolCategory,
     get_session_unified_dataset, validate_session_data_exists
 )
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +91,13 @@ class CreateVulnerabilityMap(BaseTool):
                 return self._create_error_result("No data available for analysis")
             
             # Check for composite scores or vulnerability classifications
-            if 'composite_score' not in gdf.columns:
-                return self._create_error_result("No composite scores found. Please run analysis first.")
+            exists, resolved_col = variable_resolver.check_column_exists('composite_score', list(gdf.columns))
+            if not exists:
+                error_msg = variable_resolver.create_variable_error_message(
+                    'composite_score', list(gdf.columns), 
+                    context="for vulnerability mapping. Please run composite analysis first"
+                )
+                return self._create_error_result(error_msg)
             
             # Check for geometry
             if not hasattr(gdf, 'geometry') or gdf.geometry.isnull().all():
@@ -194,8 +200,24 @@ class CreatePCAMap(BaseTool):
                 return self._create_error_result("No data available for analysis")
             
             # Check for PCA scores
-            if 'pca_score' not in gdf.columns:
-                return self._create_error_result("PCA scores not found. Please run PCA analysis first.")
+            exists, resolved_col = variable_resolver.check_column_exists('pca_score', list(gdf.columns))
+            if not exists:
+                # Try alternative PCA score column names
+                alt_names = ['pc1_risk_score', 'pca_risk_score', 'pc1_score']
+                found_alt = False
+                for alt_name in alt_names:
+                    alt_exists, alt_resolved = variable_resolver.check_column_exists(alt_name, list(gdf.columns))
+                    if alt_exists:
+                        resolved_col = alt_resolved
+                        found_alt = True
+                        break
+                
+                if not found_alt:
+                    error_msg = variable_resolver.create_variable_error_message(
+                        'pca_score', list(gdf.columns),
+                        context="for PCA mapping. Please run PCA analysis first"
+                    )
+                    return self._create_error_result(error_msg)
             
             # Check for geometry
             if not hasattr(gdf, 'geometry') or gdf.geometry.isnull().all():
@@ -489,8 +511,13 @@ class CreateCompositeScoreMaps(BaseTool):
                 return self._create_error_result("No data available for analysis")
             
             # Check for composite scores
-            if 'composite_score' not in gdf.columns:
-                return self._create_error_result("Composite scores not found. Please run analysis first.")
+            exists, resolved_col = variable_resolver.check_column_exists('composite_score', list(gdf.columns))
+            if not exists:
+                error_msg = variable_resolver.create_variable_error_message(
+                    'composite_score', list(gdf.columns),
+                    context="for analysis. Please run composite analysis first"
+                )
+                return self._create_error_result(error_msg)
             
             # Import the agent function
             from app.services.agents.visualizations import create_agent_composite_score_maps
@@ -578,8 +605,13 @@ class CreateBoxPlot(BaseTool):
                 return self._create_error_result("No data available for analysis")
             
             # Check for composite scores
-            if 'composite_score' not in gdf.columns:
-                return self._create_error_result("Composite scores not found. Please run analysis first.")
+            exists, resolved_col = variable_resolver.check_column_exists('composite_score', list(gdf.columns))
+            if not exists:
+                error_msg = variable_resolver.create_variable_error_message(
+                    'composite_score', list(gdf.columns),
+                    context="for analysis. Please run composite analysis first"
+                )
+                return self._create_error_result(error_msg)
             
             # Import the agent function
             from app.services.agents.visualizations import create_agent_box_plot_ranking
@@ -675,8 +707,13 @@ class CreateInterventionMap(BaseTool):
                 return self._create_error_result("No data available for analysis")
             
             # Check for composite scores
-            if 'composite_score' not in gdf.columns:
-                return self._create_error_result("Composite scores not found. Please run analysis first.")
+            exists, resolved_col = variable_resolver.check_column_exists('composite_score', list(gdf.columns))
+            if not exists:
+                error_msg = variable_resolver.create_variable_error_message(
+                    'composite_score', list(gdf.columns),
+                    context="for analysis. Please run composite analysis first"
+                )
+                return self._create_error_result(error_msg)
             
             # Simple intervention gap analysis
             df_analysis = gdf.copy()

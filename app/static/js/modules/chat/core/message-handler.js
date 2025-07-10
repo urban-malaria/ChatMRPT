@@ -81,9 +81,11 @@ export class MessageHandler {
                             streamingContent += chunk.content;
                             const contentDiv = streamingMessageElement.querySelector('.message-content');
                             if (contentDiv) {
-                                const parsedContent = this.parseMarkdownContent(streamingContent);
-                                contentDiv.innerHTML = parsedContent;
-                                this.scrollToBottom();
+                                // FIXED: Only show raw content during streaming, parse markdown at end
+                                // This prevents performance issues from re-parsing on every chunk
+                                contentDiv.textContent = streamingContent;
+                                // FIXED: Remove redundant scroll calls during streaming
+                                // Scroll is handled by appendMessage when element is created
                             }
                         }
                         
@@ -96,6 +98,13 @@ export class MessageHandler {
                     (finalData) => {
                         if (streamingMessageElement) {
                             streamingMessageElement.classList.remove('streaming');
+                            
+                            // FIXED: Now parse markdown only once at completion
+                            const contentDiv = streamingMessageElement.querySelector('.message-content');
+                            if (contentDiv && streamingContent) {
+                                const parsedContent = this.parseMarkdownContent(streamingContent);
+                                contentDiv.innerHTML = parsedContent;
+                            }
                         }
                         
                         // Prepare final response object
@@ -133,33 +142,53 @@ export class MessageHandler {
             }
         } catch (error) {
             this.hideTypingIndicator();
-            this.addSystemMessage('Sorry, there was an error processing your request. Please try again.');
+            this.isWaitingForResponse = false;
+            
+            // FIXED: Better error messages based on error type
+            let errorMessage = 'Sorry, there was an error processing your request.';
+            
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorMessage = 'Connection failed. Please check your internet connection and try again.';
+            } else if (error.message.includes('timeout')) {
+                errorMessage = 'Request timed out. The server might be busy. Please try again.';
+            } else if (error.message.includes('429')) {
+                errorMessage = 'Too many requests. Please wait a moment and try again.';
+            } else if (error.message.includes('5')) {
+                errorMessage = 'Server error. Our team has been notified. Please try again in a few minutes.';
+            }
+            
+            this.addSystemMessage(`
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${errorMessage}</span>
+                    <button class="btn btn-sm btn-outline-primary retry-btn" onclick="document.getElementById('message-input').focus()">
+                        Try Again
+                    </button>
+                </div>
+            `);
+            
             console.error('Error sending message:', error);
             // Don't re-throw error to prevent global error handler spam
             return { status: 'error', message: error.message };
-        } finally {
-            if (!window.chatStreamingEnabled || window.chatStreamingEnabled === false) {
-                this.isWaitingForResponse = false;
-            }
         }
     }
 
     addUserMessage(message) {
         const messageElement = this.createMessageElement('user', message, 'user-message');
         this.appendMessage(messageElement);
-        this.scrollToBottom();
+        // FIXED: Remove redundant scroll call - appendMessage handles it
     }
 
     addAssistantMessage(message) {
         const messageElement = this.createMessageElement('assistant', message, 'assistant-message');
         this.appendMessage(messageElement);
-        this.scrollToBottom();
+        // FIXED: Remove redundant scroll call - appendMessage handles it
     }
 
     addSystemMessage(message) {
         const messageElement = this.createMessageElement('system', message, 'system-message');
         this.appendMessage(messageElement);
-        this.scrollToBottom();
+        // FIXED: Remove redundant scroll call - appendMessage handles it
     }
 
     createMessageElement(sender, content, className) {
@@ -230,19 +259,17 @@ export class MessageHandler {
 
     appendMessage(messageElement) {
         if (this.chatContainer) {
-            // CRITICAL FIX: Store scroll position before adding message
+            // FIXED: Simplified scroll logic - single source of truth
             const wasScrolledToBottom = this.isScrolledToBottom();
-            const scrollTop = this.chatContainer.scrollTop;
             
             this.chatContainer.appendChild(messageElement);
             
-            // CRITICAL FIX: Only auto-scroll if user was already at bottom
+            // FIXED: Direct scroll control without redundant checks
             if (wasScrolledToBottom) {
-                this.scrollToBottom();
-            } else {
-                // Preserve scroll position for users reading history
-                this.chatContainer.scrollTop = scrollTop;
+                // User was at bottom, maintain that position
+                DOMHelpers.scrollToBottom(this.chatContainer);
             }
+            // If user was not at bottom, let them stay where they were (don't interfere)
             
             setTimeout(() => {
                 DOMHelpers.removeClass(messageElement, 'new-message');
@@ -280,10 +307,9 @@ export class MessageHandler {
 
     scrollToBottom() {
         if (this.chatContainer) {
-            // Only auto-scroll if user is near bottom or this is a new message
-            if (this.isScrolledToBottom()) {
-                DOMHelpers.scrollToBottom(this.chatContainer);
-            }
+            // FIXED: Simplified - just scroll to bottom when called
+            // All logic moved to appendMessage for centralized control
+            DOMHelpers.scrollToBottom(this.chatContainer);
         }
     }
     

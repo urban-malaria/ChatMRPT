@@ -18,6 +18,7 @@ import geopandas as gpd
 from typing import Dict, Any, List, Optional, Union
 
 # Set up logging
+from app.services.variable_resolution_service import variable_resolver
 logger = logging.getLogger(__name__)
 
 
@@ -789,7 +790,8 @@ class DataValidator:
                 return True
         
         # Also check if it's a non-numeric column with many unique values
-        if column_name in df.columns:
+        exists, resolved_col = variable_resolver.check_column_exists(column_name, list(df.columns))
+        if exists:
             col = df[column_name]
             
             # If it's a string column with lots of unique values relative to row count

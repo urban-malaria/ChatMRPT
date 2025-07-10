@@ -34,16 +34,16 @@ class UniversalVisualizationExplainer:
     def __init__(self, llm_manager=None):
         self.llm_manager = llm_manager
         self.instructions = """
-        Interpret this visualization, which shows malaria risk analysis results.
+        Analyze this specific visualization and provide concrete insights about what you observe.
         
-        As a malaria epidemiologist, provide a clear explanation covering:
-        1. What this visualization shows (patterns, trends, distributions)
-        2. How to interpret the colors, values, or categories
-        3. Epidemiological significance for malaria control
-        4. Actionable recommendations for public health officials
+        Focus on making specific observations about THIS data:
+        1. What is the most important pattern or finding you see in this visualization?
+        2. Which specific areas, values, or data points stand out and why?
+        3. What does this pattern suggest for immediate action or decision-making?
+        4. What is one unexpected or noteworthy insight from this specific data?
         
-        Be specific about malaria transmission patterns and intervention implications.
-        Keep explanations practical and focused on public health decision-making.
+        Be concrete and data-specific. Avoid generic interpretation guidance.
+        Talk about what you actually see in THIS visualization, not how to interpret visualizations in general.
         """.strip()
     
     def explain_visualization(self, viz_path: str, viz_type: str = None, session_id: str = None) -> str:
@@ -232,23 +232,26 @@ class UniversalVisualizationExplainer:
             img_url = f"data:image/png;base64,{img_b64}"
             
             # Enhanced instructions for malaria context
-            malaria_instructions = f"""
+            # Create focused instructions for this specific visualization
+            focused_instructions = f"""
             {self.instructions}
             
-            Visualization type: {viz_type or 'malaria risk analysis'}
+            Visualization context: {viz_type or 'data analysis'}
             
-            Focus on:
-            - Spatial patterns and risk hotspots
-            - Intervention targeting implications
-            - Public health decision-making guidance
-            - Epidemiological interpretation
+            Analyze what you actually see in this specific image. Make observations about:
+            - The specific patterns, clusters, or distributions visible
+            - Which regions/areas show the highest and lowest values
+            - Any surprising outliers or unexpected patterns
+            - Practical implications of what this data reveals
+            
+            Be specific to THIS visualization, not general advice.
             """
             
             # Check if LLM supports vision
             if hasattr(self.llm_manager, 'generate_with_image'):
                 # Use vision-enabled LLM
                 explanation = self.llm_manager.generate_with_image(
-                    prompt=malaria_instructions,
+                    prompt=focused_instructions,
                     image_url=img_url,
                     session_id=session_id
                 )

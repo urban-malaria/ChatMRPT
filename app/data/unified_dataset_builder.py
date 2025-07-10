@@ -15,6 +15,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Union, Tuple
 import logging
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -528,13 +529,15 @@ class UnifiedDatasetBuilder:
         
         # Look for ward name column
         for col in ['WardName', 'ward_name', 'Ward', 'ward']:
-            if col in df.columns:
+            exists, resolved_col = variable_resolver.check_column_exists(col, list(df.columns))
+            if exists:
                 ward_name_col = col
                 break
         
         # Look for ward code column
         for col in ['WardCode', 'ward_code', 'wardcode']:
-            if col in df.columns:
+            exists, resolved_col = variable_resolver.check_column_exists(col, list(df.columns))
+            if exists:
                 ward_code_col = col
                 break
         
@@ -632,9 +635,11 @@ class UnifiedDatasetBuilder:
         shp_wardcode_col = None
         
         for col in ['WardCode', 'ward_code', 'WardCode_x', 'WardCode_y']:
-            if col in csv_df.columns:
+            exists, resolved_col = variable_resolver.check_column_exists(col, list(csv_df.columns))
+            if exists:
                 csv_wardcode_col = col
-            if col in shp_gdf.columns:
+            exists, resolved_col = variable_resolver.check_column_exists(col, list(shp_gdf.columns))
+            if exists:
                 shp_wardcode_col = col
         
         if csv_wardcode_col and shp_wardcode_col:
@@ -787,7 +792,8 @@ class UnifiedDatasetBuilder:
         # Look for standard ward name columns
         name_candidates = ['WardName', 'ward_name', 'Ward', 'ward']
         for candidate in name_candidates:
-            if candidate in df.columns:
+            exists, resolved_col = variable_resolver.check_column_exists(candidate, list(df.columns))
+            if exists:
                 duplicate_count = df[candidate].duplicated().sum()
                 if duplicate_count == 0:
                     print(f"🔑 Using '{candidate}' for merge (unique names)")
@@ -857,7 +863,8 @@ class UnifiedDatasetBuilder:
                 # Apply column mappings (rename to standard names)
                 mapped_cols = []
                 for orig_col, std_col in column_mappings.items():
-                    if orig_col in comp_df_mapped.columns:
+                    exists, resolved_col = variable_resolver.check_column_exists(orig_col, list(comp_df_mapped.columns))
+                    if exists:
                         comp_df_mapped = comp_df_mapped.rename(columns={orig_col: std_col})
                         mapped_cols.append(f"{orig_col}→{std_col}")
                         print(f"✅ Mapped column: {orig_col} → {std_col}")
@@ -1174,7 +1181,8 @@ class UnifiedDatasetBuilder:
                 # Get top contributing variables for first 3 components
                 for pc_num in range(1, 4):  # PC1, PC2, PC3
                     loading_col = f'loading_pc{pc_num}'
-                    if loading_col in pca_loadings.columns:
+                    exists, resolved_col = variable_resolver.check_column_exists(loading_col, list(pca_loadings.columns))
+                    if exists:
                         # Get top 3 variables for each component
                         top_vars = pca_loadings.nlargest(3, loading_col)['variable'].tolist()
                         gdf[f'pca_top3_variables_pc{pc_num}'] = ','.join(top_vars)
@@ -1193,7 +1201,8 @@ class UnifiedDatasetBuilder:
                     # Cumulative variance for first 3 components
                     for pc_num in range(1, 4):
                         variance_col = f'explained_variance_pc{pc_num}'
-                        if variance_col in pca_loadings.columns:
+                        exists, resolved_col = variable_resolver.check_column_exists(variance_col, list(pca_loadings.columns))
+                        if exists:
                             gdf[f'pca_variance_pc{pc_num}'] = pca_loadings[variance_col].iloc[0] if len(pca_loadings) > 0 else 0
                 
                 print(f"📊 Enhanced PCA metadata: {len(pca_loadings)} variables with component-wise breakdowns")
@@ -1555,7 +1564,8 @@ class UnifiedDatasetBuilder:
         categorical_cols = []
         for col in gdf.columns:
             if 'category' in col.lower() or 'agreement' in col.lower() or 'priority' in col.lower():
-                if col in gdf.columns:
+                exists, resolved_col = variable_resolver.check_column_exists(col, list(gdf.columns))
+                if exists:
                     categorical_cols.append(col)
         
         for col in categorical_cols:

@@ -16,6 +16,7 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +137,11 @@ def prepare_unified_dataset(unified_dataset: gpd.GeoDataFrame,
         # Validate required columns
         missing_columns = []
         if required_columns:
-            missing_columns = [col for col in required_columns 
-                             if col not in prepared_data.columns]
+            missing_columns = []
+        for col in required_columns:
+            exists, _ = variable_resolver.check_column_exists(col, list(df.columns))
+            if not exists:
+                missing_columns.append(col)
         
         if missing_columns:
             return {

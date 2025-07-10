@@ -14,6 +14,7 @@ import logging
 from pydantic import Field
 
 from app.tools.base import BaseTool, ToolCategory, ToolExecutionResult
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +64,35 @@ class VariableDistribution(BaseTool):
                     error_details="Missing shapefile data"
                 )
             
-            # Validate variable exists
-            if self.variable_name not in csv_data.columns:
-                available_vars = ', '.join(csv_data.columns[:10])
+            # Validate and resolve variable using intelligent matching
+            resolution = variable_resolver.resolve_variable(
+                self.variable_name, 
+                list(csv_data.columns),
+                threshold=0.7,
+                return_suggestions=True
+            )
+            
+            if not resolution['matched']:
+                # Create helpful error message with suggestions
+                error_msg = variable_resolver.create_variable_error_message(
+                    self.variable_name,
+                    list(csv_data.columns),
+                    context="in the uploaded CSV data"
+                )
                 return ToolExecutionResult(
                     success=False,
-                    message=f"Variable '{self.variable_name}' not found. Available variables include: {available_vars}",
+                    message=error_msg,
                     error_details=f"Variable not found: {self.variable_name}"
                 )
             
+            # Use the resolved variable name
+            resolved_variable = resolution['matched']
+            if resolution['confidence'] < 1.0:
+                logger.info(f"Using fuzzy matched variable: '{self.variable_name}' → '{resolved_variable}' "
+                           f"(confidence: {resolution['confidence']:.0%})")
+            
             # Create spatial distribution map
-            map_result = self._create_spatial_distribution_map(csv_data, shapefile_data, self.variable_name, session_id)
+            map_result = self._create_spatial_distribution_map(csv_data, shapefile_data, resolved_variable, session_id)
             if not map_result:
                 return ToolExecutionResult(
                     success=False,
@@ -82,15 +101,19 @@ class VariableDistribution(BaseTool):
                 )
             
             # Generate summary statistics
-            stats_text = self._generate_statistics(csv_data, self.variable_name)
+            stats_text = self._generate_statistics(csv_data, resolved_variable)
             
             # Track distribution viewing for workflow awareness
-            self._track_exploration_activity(session_id, self.variable_name)
+            self._track_exploration_activity(session_id, resolved_variable)
             workflow_guidance = self._generate_workflow_guidance(session_id)
             
-            # Generate response
-            response_text = f"**{self.variable_name.upper()} Spatial Distribution**\n\n{stats_text}"
-            response_text += f"\n\nI've created a spatial distribution map showing how **{self.variable_name}** varies across your study area."
+            # Generate response - show both user's variable and resolved name if different
+            display_name = resolved_variable
+            if resolution['confidence'] < 1.0:
+                response_text = f"**{resolved_variable.upper()} Spatial Distribution** (matched from '{self.variable_name}')\n\n{stats_text}"
+            else:
+                response_text = f"**{resolved_variable.upper()} Spatial Distribution**\n\n{stats_text}"
+            response_text += f"\n\nI've created a spatial distribution map showing how **{resolved_variable}** varies across your study area."
             
             # Add workflow guidance if appropriate
             if workflow_guidance.get('show_guidance', False):

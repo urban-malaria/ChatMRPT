@@ -18,6 +18,7 @@ from pathlib import Path
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 

@@ -52,21 +52,35 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
             norm_cols = [col for col in data_handler.normalized_data.columns if col.startswith('normalization_')]
             all_variables = [col.replace('normalization_', '') for col in norm_cols]
             
-            # Match coordinator variables to normalized variables
+            # Import variable resolver for intelligent matching
+            from app.services.variable_resolution_service import variable_resolver
+            
+            # Match coordinator variables to normalized variables using intelligent resolution
             matched_variables = []
             for var in final_variables:
-                # Case-insensitive matching against available normalized variables
+                # First try exact case-insensitive matching
                 matched_var = None
                 for norm_var in all_variables:
                     if var.lower() == norm_var.lower():
                         matched_var = norm_var
                         break
                 
+                # If no exact match, try fuzzy matching
+                if not matched_var:
+                    resolution = variable_resolver.resolve_variable(var, all_variables, threshold=0.7)
+                    if resolution['matched']:
+                        matched_var = resolution['matched']
+                        logger.info(f"🔍 FUZZY COMPOSITE MATCH: '{var}' → '{matched_var}' (confidence: {resolution['confidence']:.0%})")
+                
                 if matched_var:
                     matched_variables.append(matched_var)
                     logger.info(f"✅ COMPOSITE MATCH: '{var}' → '{matched_var}'")
                 else:
                     logger.warning(f"❌ COMPOSITE MISSING: '{var}' not found in normalized data")
+                    # Show available variables for debugging
+                    similar_vars = variable_resolver.suggest_similar_variables(var, all_variables, max_suggestions=3)
+                    if similar_vars:
+                        logger.info(f"   💡 Similar variables available: {similar_vars}")
             
             if not matched_variables:
                 logger.error("⚠️ COMPOSITE METHOD: No coordinator variables found in normalized data")

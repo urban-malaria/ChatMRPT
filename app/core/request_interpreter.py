@@ -225,6 +225,17 @@ class RequestInterpreter:
                                 'done': True
                             }
                             response_content = result['response']
+                        elif hasattr(result, 'get_display_message'):
+                            # Tool returned ToolExecutionResult with auto-formatting
+                            formatted_message = result.get_display_message()
+                            yield {
+                                'content': formatted_message,
+                                'status': 'success' if result.success else 'error',
+                                'visualizations': [result.web_path] if result.web_path else [],
+                                'tools_used': [function_name],
+                                'done': True
+                            }
+                            response_content = formatted_message
                         else:
                             # Tool returned simple string response
                             yield {
@@ -336,9 +347,23 @@ class RequestInterpreter:
         try:
             result = self.analysis_service.run_composite_analysis(session_id, variables=variables)
             
-            # Get the detailed message (which contains comprehensive summary)
-            if hasattr(result, 'message'):
-                return result.message  # ToolExecutionResult.message
+            # Format the analysis result properly using response formatter
+            from app.services.response_formatter import response_formatter
+            
+            if hasattr(result, 'message') and result.message:
+                # If it's already a detailed message, format it
+                if hasattr(result, 'data') and result.data:
+                    formatted_result = response_formatter.format_analysis_result(
+                        {'message': result.message, 'data': result.data}, 
+                        'composite'
+                    )
+                    return formatted_result
+                else:
+                    return result.message
+            elif isinstance(result, dict):
+                # Format dictionary result
+                formatted_result = response_formatter.format_analysis_result(result, 'composite')
+                return formatted_result
             else:
                 return result.get('message', 'Composite analysis completed successfully')
         except Exception as e:
@@ -348,7 +373,15 @@ class RequestInterpreter:
         """Run PCA malaria risk analysis."""
         try:
             result = self.analysis_service.run_pca_analysis(session_id, variables=variables)
-            return result.get('message', 'PCA analysis completed successfully')
+            
+            # Format PCA results properly
+            from app.services.response_formatter import response_formatter
+            
+            if isinstance(result, dict):
+                formatted_result = response_formatter.format_analysis_result(result, 'pca')
+                return formatted_result
+            else:
+                return result.get('message', 'PCA analysis completed successfully')
         except Exception as e:
             return f"Error running PCA analysis: {str(e)}"
     

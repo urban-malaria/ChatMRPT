@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any, Union
 import concurrent.futures
 
 # Set up logging
+from app.services.variable_resolution_service import variable_resolver
 logger = logging.getLogger(__name__)
 
 
@@ -88,7 +89,8 @@ def compute_composite_scores(normalized_data, selected_vars=None, method='mean',
             )
         
         # Make sure WardName column is present
-        if 'WardName' not in normalized_data.columns:
+        exists, resolved_col = variable_resolver.check_column_exists('WardName', list(normalized_data.columns))
+        if not exists:
             raise ValueError("WardName column must be present in normalized data")
         
         # Get normalized columns (starting with "normalization_")
@@ -407,7 +409,8 @@ def get_scoring_summary(composite_scores, vulnerability_analysis=None):
         
         # Calculate statistics for each model
         for col in model_cols:
-            if col in scores_df.columns:
+            exists, resolved_col = variable_resolver.check_column_exists(col, list(scores_df.columns))
+            if exists:
                 summary['score_statistics'][col] = {
                     'min': float(scores_df[col].min()),
                     'max': float(scores_df[col].max()),
@@ -470,7 +473,8 @@ def validate_scoring_inputs(normalized_data, selected_vars=None):
             return validation_results
         
         # Check for WardName column
-        if 'WardName' not in normalized_data.columns:
+        exists, resolved_col = variable_resolver.check_column_exists('WardName', list(normalized_data.columns))
+        if not exists:
             validation_results['is_valid'] = False
             validation_results['warnings'].append("WardName column is required but not found")
         

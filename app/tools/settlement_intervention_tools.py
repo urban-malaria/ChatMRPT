@@ -20,6 +20,7 @@ import logging
 
 from .base import BaseTool, ToolExecutionResult, VisualizationTool
 from ..data.unified_dataset_builder import load_unified_dataset
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,8 @@ class CreateSettlementAnalysisMap(VisualizationTool):
         ))
         
         # Add quality categories if we can determine them
-        if housing_col in gdf.columns:
+        exists, resolved_col = variable_resolver.check_column_exists(housing_col, list(gdf.columns))
+        if exists:
             # Create quality categories based on quartiles
             quality_quartiles = gdf[housing_col].quantile([0.25, 0.5, 0.75])
             

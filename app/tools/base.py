@@ -39,7 +39,7 @@ class ToolCategory(str, Enum):
 
 
 class ToolExecutionResult(BaseModel):
-    """Standardized result format for all tool executions"""
+    """Standardized result format for all tool executions with automatic formatting"""
     success: bool = Field(..., description="Whether the tool execution was successful")
     message: str = Field(..., description="Human-readable message about the result")
     data: Optional[Dict[str, Any]] = Field(None, description="Tool-specific result data")
@@ -48,9 +48,46 @@ class ToolExecutionResult(BaseModel):
     web_path: Optional[str] = Field(None, description="Path to generated web visualization")
     chart_type: Optional[str] = Field(None, description="Type of chart/visualization created")
     error_details: Optional[str] = Field(None, description="Detailed error information")
+    formatted_message_cache: Optional[str] = Field(None, description="Auto-formatted message cache")
 
     class Config:
         extra = "allow"  # Allow additional fields for tool-specific data
+        arbitrary_types_allowed = True  # Allow complex types
+
+    @property
+    def formatted_message(self) -> str:
+        """
+        Get the automatically formatted message using the response formatter.
+        
+        Returns the formatted markdown version of the message for consistent
+        presentation across all tools.
+        """
+        if self.formatted_message_cache is not None:
+            return self.formatted_message_cache
+            
+        try:
+            # Import here to avoid circular imports
+            from app.services.response_formatter import response_formatter
+            
+            # Format the message using the response formatter
+            self.formatted_message_cache = response_formatter.format_tool_result(
+                self.message, 
+                self.data, 
+                self.metadata
+            )
+            return self.formatted_message_cache
+        except Exception as e:
+            logger.warning(f"Failed to format message: {e}")
+            # Fallback to original message
+            return self.message
+    
+    def get_display_message(self) -> str:
+        """
+        Get the message for display - automatically formatted.
+        This method should be used instead of accessing .message directly
+        for user-facing output.
+        """
+        return self.formatted_message
 
 
 class BaseTool(BaseModel, ABC):

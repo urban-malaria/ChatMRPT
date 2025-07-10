@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import requests
 import json
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +275,8 @@ class ShapefileFetcher:
             for req_col, variations in column_variations.items():
                 found = False
                 for var in variations:
-                    if var in gdf.columns:
+                    exists, resolved_col = variable_resolver.check_column_exists(var, list(gdf.columns))
+                    if exists:
                         column_mapping[req_col] = var
                         found = True
                         break

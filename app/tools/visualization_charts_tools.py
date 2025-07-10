@@ -33,6 +33,7 @@ from .base import (
     BaseTool, ToolExecutionResult, ToolCategory,
     get_session_unified_dataset, validate_session_data_exists
 )
+from app.services.variable_resolution_service import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -2403,11 +2404,13 @@ class CreateBubbleMap(BaseTool):
             lat_col = None
             lon_col = None
             for lat in ['centroid_lat', 'latitude', 'lat', 'Latitude']:
-                if lat in df.columns:
+                exists, resolved_col = variable_resolver.check_column_exists(lat, list(df.columns))
+                if exists:
                     lat_col = lat
                     break
             for lon in ['centroid_lon', 'longitude', 'lon', 'Longitude']:
-                if lon in df.columns:
+                exists, resolved_col = variable_resolver.check_column_exists(lon, list(df.columns))
+                if exists:
                     lon_col = lon
                     break
             
@@ -2522,11 +2525,13 @@ class CreateCoordinatePlot(BaseTool):
             lat_col = None
             lon_col = None
             for lat in ['centroid_lat', 'latitude', 'lat', 'Latitude']:
-                if lat in df.columns:
+                exists, resolved_col = variable_resolver.check_column_exists(lat, list(df.columns))
+                if exists:
                     lat_col = lat
                     break
             for lon in ['centroid_lon', 'longitude', 'lon', 'Longitude']:
-                if lon in df.columns:
+                exists, resolved_col = variable_resolver.check_column_exists(lon, list(df.columns))
+                if exists:
                     lon_col = lon
                     break
             
