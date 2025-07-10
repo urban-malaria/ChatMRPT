@@ -207,10 +207,20 @@ class RequestInterpreter:
                 
                 if function_name in self.tools:
                     try:
-                        args = json.loads(chunk['function_call']['arguments'])
+                        # CRITICAL FIX: Handle empty or malformed function arguments
+                        args_str = chunk['function_call']['arguments'] or '{}'
+                        args = json.loads(args_str) if args_str.strip() else {}
                         args['session_id'] = session_id  # Ensure session_id is included
                         
                         print(f"🚀 Executing tool: {function_name}")
+                        print(f"🔧 Arguments provided: {args}")
+                        
+                        # Special handling for execute_data_query missing arguments
+                        if function_name == 'execute_data_query' and 'query' not in args:
+                            # Extract intent from the user message as fallback
+                            args['query'] = user_message
+                            print(f"🔧 Added missing query argument from user message")
+                        
                         result = self.tools[function_name](**args)
                         print(f"✅ Tool {function_name} completed")
                         
@@ -247,7 +257,7 @@ class RequestInterpreter:
                             response_content = result
                         
                         self._store_conversation(session_id, user_message, response_content)
-                        return
+                        return  # Tool execution completed successfully
                     except Exception as e:
                         yield {
                             'content': f"Error executing {function_name}: {str(e)}",
@@ -279,8 +289,15 @@ class RequestInterpreter:
             
             if function_name in self.tools:
                 try:
-                    args = json.loads(response['function_call']['arguments'])
+                    # CRITICAL FIX: Handle empty or malformed function arguments
+                    args_str = response['function_call']['arguments'] or '{}'
+                    args = json.loads(args_str) if args_str.strip() else {}
                     args['session_id'] = session_id  # Ensure session_id is included
+                    
+                    # Special handling for execute_data_query missing arguments
+                    if function_name == 'execute_data_query' and 'query' not in args:
+                        # Extract intent from the user message as fallback
+                        args['query'] = user_message
                     
                     result = self.tools[function_name](**args)
                     
@@ -347,27 +364,43 @@ class RequestInterpreter:
         try:
             result = self.analysis_service.run_composite_analysis(session_id, variables=variables)
             
-            # Format the analysis result properly using response formatter
-            from app.services.response_formatter import response_formatter
-            
-            if hasattr(result, 'message') and result.message:
-                # If it's already a detailed message, format it
-                if hasattr(result, 'data') and result.data:
-                    formatted_result = response_formatter.format_analysis_result(
-                        {'message': result.message, 'data': result.data}, 
-                        'composite'
+            if isinstance(result, dict) and result.get('status') == 'success':
+                # Run PCA analysis too for comprehensive comparison
+                pca_result = self.analysis_service.run_pca_analysis(session_id, variables=variables)
+                
+                # Use your proper summary function
+                try:
+                    from app.tools.complete_analysis_tools import RunCompleteAnalysis
+                    
+                    analysis_tool = RunCompleteAnalysis()
+                    summary = analysis_tool._generate_comprehensive_summary(
+                        result, pca_result, {}, 0.0, session_id
                     )
-                    return formatted_result
-                else:
-                    return result.message
-            elif isinstance(result, dict):
-                # Format dictionary result
-                formatted_result = response_formatter.format_analysis_result(result, 'composite')
-                return formatted_result
+                    
+                    return summary
+                        
+                except Exception as summary_error:
+                    logger.error(f"Error calling _generate_summary_from_analysis_results: {summary_error}")
+                    logger.error(f"Composite result structure: {result.keys() if result else 'None'}")
+                    logger.error(f"PCA result structure: {pca_result.keys() if pca_result else 'None'}")
+                    import traceback
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    return "✅ Composite analysis completed successfully. Results are available - please ask for detailed rankings."
             else:
-                return result.get('message', 'Composite analysis completed successfully')
+                # Use your existing error formatter
+                from app.services.response_formatter import response_formatter
+                return response_formatter.format_error_message(
+                    result.get('message', 'Composite analysis failed'),
+                    'composite_analysis',
+                    ['Check data quality', 'Verify variable selection', 'Review analysis parameters']
+                )
         except Exception as e:
-            return f"Error running composite analysis: {str(e)}"
+            from app.services.response_formatter import response_formatter
+            return response_formatter.format_error_message(
+                str(e),
+                'composite_analysis_execution',
+                ['Check data upload', 'Verify system configuration', 'Review error logs']
+            )
     
     def _run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None):
         """Run PCA malaria risk analysis."""

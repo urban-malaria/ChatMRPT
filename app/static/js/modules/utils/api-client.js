@@ -57,7 +57,7 @@ class APIClient {
         let timeoutId = null;
         
         // FIXED: Add timeout protection to prevent hanging requests
-        const REQUEST_TIMEOUT = 30000; // 30 seconds
+        const REQUEST_TIMEOUT = 120000; // 120 seconds for analysis
         
         const cleanup = () => {
             if (timeoutId) {

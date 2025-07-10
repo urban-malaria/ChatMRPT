@@ -137,11 +137,10 @@ def prepare_unified_dataset(unified_dataset: gpd.GeoDataFrame,
         # Validate required columns
         missing_columns = []
         if required_columns:
-            missing_columns = []
-        for col in required_columns:
-            exists, _ = variable_resolver.check_column_exists(col, list(df.columns))
-            if not exists:
-                missing_columns.append(col)
+            for col in required_columns:
+                exists, _ = variable_resolver.check_column_exists(col, list(prepared_data.columns))
+                if not exists:
+                    missing_columns.append(col)
         
         if missing_columns:
             return {
