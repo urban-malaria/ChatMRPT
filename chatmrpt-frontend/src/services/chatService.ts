@@ -1,12 +1,5 @@
 import api from './api';
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: Date;
-  streaming?: boolean;
-}
+import { ChatMessage } from '../utils/types';
 
 export interface ChatResponse {
   status: string;

@@ -38,7 +38,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex-1 flex items-end space-x-2">
+    <div className="flex items-end w-full">
       <textarea
         ref={textareaRef}
         value={message}
@@ -47,22 +47,18 @@ const MessageInput: React.FC<MessageInputProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                 bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                 disabled:opacity-50 disabled:cursor-not-allowed
-                 max-h-32 overflow-y-auto"
+        className="m-0 w-full resize-none border-0 bg-transparent p-0 pr-7 focus:ring-0 focus-visible:ring-0 dark:bg-transparent pl-2 md:pl-0"
+        style={{ maxHeight: '200px' }}
       />
       <button
-        type="submit"
+        onClick={handleSubmit}
         disabled={disabled || !message.trim()}
-        className="p-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 
-                 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="absolute p-1 rounded-md text-gray-500 bottom-1.5 md:bottom-2.5 hover:bg-gray-100 enabled:dark:hover:text-gray-400 dark:hover:bg-gray-900 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent right-1 md:right-2 disabled:opacity-40"
         title="Send message"
       >
-        <PaperAirplaneIcon className="h-5 w-5" />
+        <PaperAirplaneIcon className="h-4 w-4 rotate-90" />
       </button>
-    </form>
+    </div>
   );
 };
 

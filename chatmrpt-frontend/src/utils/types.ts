@@ -1,3 +1,12 @@
+// Chat types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
+  streaming?: boolean;
+}
+
 // Session types
 export interface SessionState {
   sessionId: string;

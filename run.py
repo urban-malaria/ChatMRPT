@@ -10,7 +10,6 @@ modern configuration and service architecture.
 import os
 import sys
 from app import create_app
-from flask import redirect, url_for
 
 # Production-ready startup with intelligent caching
 if '--disable-tool-scoring' in sys.argv:
@@ -34,11 +33,6 @@ if not openai_api_key:
 
 # Create application with specified configuration
 app = create_app(config_name)
-
-# Add a route to redirect root to the Tailwind UI by default
-@app.route('/')
-def index_redirect():
-    return redirect('/?use_tailwind=true')
 
 if __name__ == '__main__':
     # Development server settings

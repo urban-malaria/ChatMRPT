@@ -10,29 +10,26 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 shadow-sm">
-      <div className="flex items-center justify-between h-16 px-4">
-        <div className="flex items-center space-x-4">
+    <header className="sticky top-0 z-10 flex items-center justify-center border-b border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700 px-4 py-2 h-14">
+      <div className="flex items-center justify-between w-full max-w-3xl">
+        <div className="flex items-center space-x-3">
           <button
             onClick={handleSidebarToggle}
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             aria-label="Toggle sidebar"
           >
-            <Bars3Icon className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+            <Bars3Icon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
           </button>
           
-          <div className="flex flex-col">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              ChatMRPT
-            </h1>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              Malaria Risk Analysis
-            </span>
-          </div>
+          <h1 className="text-lg font-medium text-gray-900 dark:text-white">
+            ChatMRPT
+          </h1>
         </div>
         
-        <div className="flex items-center space-x-4">
-          {/* Additional header controls can go here */}
+        <div className="flex items-center">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            Malaria Risk Analysis
+          </span>
         </div>
       </div>
     </header>

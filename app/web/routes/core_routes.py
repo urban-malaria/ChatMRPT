@@ -112,65 +112,23 @@ def log_response_timing(response):
 @log_execution_time
 def index():
     """
-    Render the main application interface.
+    Root endpoint for the API.
     
-    Initializes a new session if one doesn't exist and handles
-    UI switching between Bootstrap and Tailwind versions.
+    Returns a simple JSON response indicating the API is running.
+    React frontend is served separately.
     """
-    # Initialize session data if needed
-    if 'session_id' not in session:
-        session['session_id'] = str(uuid.uuid4())
-        session['conversation_history'] = []
-        session['data_loaded'] = False
-        session['analysis_complete'] = False
-        session['csv_loaded'] = False
-        session['shapefile_loaded'] = False
-        session['current_language'] = 'en'
-        
-        # Initialize dialogue state tracking
-        session['pending_action'] = None
-        session['pending_variables'] = None
-        session['last_visualization'] = None
-        session['dialogue_context'] = {}
-        
-        # Log new session
-        if hasattr(current_app, 'services'):
-            interaction_logger = current_app.services.interaction_logger
-            if interaction_logger:
-                try:
-                    interaction_logger.log_session_start(
-                        session['session_id'], 
-                        request.user_agent.string, 
-                        request.remote_addr
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to log new session: {e}")
-                    
-                    # 🎯 LOG NEW SESSION ERRORS - DEMO MONITORING
-                    if hasattr(current_app, 'services') and current_app.services.interaction_logger:
-                        current_app.services.interaction_logger.log_error(
-                            session_id=session['session_id'],
-                            error_type=f'NewSessionError:{type(e).__name__}',
-                            error_message=str(e),
-                            stack_trace=traceback.format_exc()
-                        )
-    
-    # py-sidebot pattern: No complex background loading needed
-    # Request interpreter handles tool registration directly
-    logger.info(f"Session {session['session_id']} initialized with py-sidebot pattern")
-    
-    # Check for UI preference
-    use_tailwind = request.args.get('use_tailwind', 'false').lower() == 'true'
-    
-    # Select template based on preference
-    if use_tailwind:
-        template_name = 'index_tailwind.html'
-    else:
-        template_name = 'index.html'
-    
-    logger.info(f"Rendering {template_name} for session {session['session_id']}")
-    
-    return render_template(template_name)
+    return jsonify({
+        'status': 'ok',
+        'message': 'ChatMRPT API is running. Please use the React frontend at http://localhost:3000',
+        'version': '3.0',
+        'endpoints': {
+            'session': '/session_info',
+            'chat': '/send_message',
+            'upload': '/upload_both_files',
+            'analysis': '/run_analysis',
+            'clear': '/clear_session'
+        }
+    })
 
 
 @core_bp.route('/session_info')

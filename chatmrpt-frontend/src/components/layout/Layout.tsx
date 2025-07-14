@@ -15,17 +15,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Header />
-      
+    <div className="relative flex h-screen bg-gray-50 dark:bg-gray-800">
       <Sidebar 
         isOpen={state.sidebarOpen} 
         onClose={handleSidebarClose}
       />
       
-      <main className="transition-all duration-300">
-        {children}
-      </main>
+      <div className="flex flex-col flex-1">
+        <Header />
+        <main className="flex-1 overflow-hidden">
+          {children}
+        </main>
+      </div>
     </div>
   );
 };
