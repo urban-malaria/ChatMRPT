@@ -1,15 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import Layout from '../components/layout/Layout';
+import ChatContainer from '../components/chat/ChatContainer';
+import { useSession } from '../hooks/useSession';
 
 const Home: React.FC = () => {
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const { session } = useSession();
+
+  // Initialize session on mount
+  useEffect(() => {
+    console.log('Session initialized:', session.sessionId);
+  }, [session.sessionId]);
+
+  const handleUploadClick = () => {
+    setShowUploadModal(true);
+    // TODO: Implement upload modal
+  };
+
+  const handleReportClick = () => {
+    setShowReportModal(true);
+    // TODO: Implement report modal
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <h1 className="text-3xl font-bold text-center pt-10">
-        ChatMRPT - Malaria Risk Prioritization Tool
-      </h1>
-      <p className="text-center mt-4 text-gray-600">
-        React migration in progress...
-      </p>
-    </div>
+    <Layout>
+      <ChatContainer 
+        onUploadClick={handleUploadClick}
+        onReportClick={handleReportClick}
+      />
+      
+      {/* TODO: Add modals here */}
+    </Layout>
   );
 };
 

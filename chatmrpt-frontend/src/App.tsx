@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppProvider, useApp } from './store/AppContext';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import ReportBuilder from './pages/ReportBuilder';
@@ -17,16 +18,31 @@ const queryClient = new QueryClient({
   },
 });
 
+// Theme wrapper component
+const ThemeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { state } = useApp();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', state.theme);
+  }, [state.theme]);
+
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/admin/*" element={<Admin />} />
-          <Route path="/report_builder" element={<ReportBuilder />} />
-        </Routes>
-      </Router>
+      <AppProvider>
+        <ThemeWrapper>
+          <Router>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/admin/*" element={<Admin />} />
+              <Route path="/report_builder" element={<ReportBuilder />} />
+            </Routes>
+          </Router>
+        </ThemeWrapper>
+      </AppProvider>
     </QueryClientProvider>
   );
 }
