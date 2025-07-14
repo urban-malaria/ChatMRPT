@@ -9,6 +9,7 @@ export interface AppState {
   isLoading: boolean;
   error: string | null;
   sidebarOpen: boolean;
+  visualizationData: any | null;
 }
 
 // Action types
@@ -21,7 +22,8 @@ export type AppAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'TOGGLE_SIDEBAR' }
-  | { type: 'SET_SIDEBAR_OPEN'; payload: boolean };
+  | { type: 'SET_SIDEBAR_OPEN'; payload: boolean }
+  | { type: 'SET_VISUALIZATION_DATA'; payload: any | null };
 
 // Initial state
 const initialState: AppState = {
@@ -38,6 +40,7 @@ const initialState: AppState = {
   isLoading: false,
   error: null,
   sidebarOpen: false,
+  visualizationData: null,
 };
 
 // Reducer
@@ -100,6 +103,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         sidebarOpen: action.payload,
+      };
+    
+    case 'SET_VISUALIZATION_DATA':
+      return {
+        ...state,
+        visualizationData: action.payload,
       };
     
     default:

@@ -96,6 +96,20 @@ export const useChat = () => {
         });
         break;
       
+      case 'show_visualization':
+        dispatch({
+          type: 'SET_VISUALIZATION_DATA',
+          payload: {
+            mapUrl: data.map_url,
+            mapType: data.map_type || 'iframe',
+            chartData: data.chart_data,
+            wardRankings: data.ward_rankings,
+            tableData: data.table_data,
+            analysisResults: data.analysis_results,
+          }
+        });
+        break;
+      
       // Add more action handlers as needed
     }
   }, [dispatch]);

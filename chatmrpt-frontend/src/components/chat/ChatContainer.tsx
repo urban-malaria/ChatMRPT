@@ -14,7 +14,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   onUploadClick, 
   onReportClick 
 }) => {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const { sendMessage, isStreaming } = useChat();
   const [isInitialState, setIsInitialState] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,11 +33,9 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative flex flex-col h-screen overflow-hidden transition-all duration-500 ${
-        isInitialState ? 'justify-center' : ''
-      }`}
+      className="relative flex flex-col h-full bg-white dark:bg-[#212121]"
     >
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-32 scrollbar-thin">
         <MessageList 
           messages={state.messages}
           isInitialState={isInitialState}
@@ -45,41 +43,44 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
         />
       </div>
 
-      <div className="absolute bottom-0 left-0 w-full border-t md:border-t-0 dark:border-white/20 md:border-transparent md:dark:border-transparent bg-white dark:bg-gray-800 md:!bg-transparent">
-        <form className="stretch mx-2 flex flex-row gap-3 last:mb-2 md:mx-4 md:last:mb-6 lg:mx-auto lg:max-w-2xl xl:max-w-3xl">
-          <div className="relative flex h-full flex-1 items-stretch md:flex-col">
-            <div className="flex flex-col w-full py-2 flex-grow md:py-3 md:pl-4 relative border border-black/10 bg-white dark:border-gray-900/50 dark:text-white dark:bg-gray-700 rounded-md shadow-[0_0_10px_rgba(0,0,0,0.10)] dark:shadow-[0_0_15px_rgba(0,0,0,0.10)]">
-              <div className="flex items-center space-x-2 px-3">
-                <button
-                  type="button"
-                  onClick={onUploadClick}
-                  className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                  title="Upload Files"
-                >
-                  <PaperClipIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onReportClick}
-                  className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                  title="Generate Report"
-                >
-                  <DocumentTextIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                </button>
-              </div>
+      <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-[#212121]">
+        <div className="mx-auto max-w-2xl px-4 py-4">
+          <div className="relative flex items-center">
+            <MessageInput 
+              onSendMessage={handleSendMessage}
+              disabled={isStreaming}
+              placeholder="Message ChatMRPT..."
+              className="pr-24"
+            />
+            
+            <div className="absolute right-2 flex items-center space-x-1 z-10">
+              <button
+                type="button"
+                onClick={onUploadClick}
+                className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
+                title="Upload Files"
+                aria-label="Upload files"
+              >
+                <PaperClipIcon className="h-5 w-5 text-gray-400 group-hover:text-gray-600 dark:text-gray-400 dark:group-hover:text-gray-200 transition-colors" />
+              </button>
               
-              <MessageInput 
-                onSendMessage={handleSendMessage}
-                disabled={isStreaming}
-                placeholder={
-                  isInitialState 
-                    ? "Start by uploading your data or asking a question..."
-                    : "Ask me about malaria risk analysis..."
-                }
-              />
+              <button
+                type="button"
+                onClick={onReportClick}
+                className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
+                title="Generate Report"
+              >
+                <DocumentTextIcon className="h-5 w-5 text-gray-400 group-hover:text-gray-600 dark:text-gray-400 dark:group-hover:text-gray-200 transition-colors" />
+              </button>
             </div>
           </div>
-        </form>
+          
+          <div className="text-center mt-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              ChatMRPT can make mistakes. Consider checking important information.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

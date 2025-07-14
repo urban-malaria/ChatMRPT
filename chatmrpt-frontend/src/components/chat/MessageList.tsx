@@ -26,49 +26,28 @@ const MessageList: React.FC<MessageListProps> = ({
   if (isInitialState) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center max-w-2xl px-4">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            Welcome to ChatMRPT
+        <div className="text-center max-w-lg px-4">
+          <h1 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
+            ChatMRPT
           </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
-            Upload your malaria risk data to begin analysis, or ask me any questions
-            about malaria risk prioritization.
+          <p className="text-gray-600 dark:text-gray-400">
+            How can I help you today?
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-              <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
-                Quick Start
-              </h3>
-              <p className="text-sm text-blue-700 dark:text-blue-400">
-                Upload your CSV data and shapefile to get started with analysis
-              </p>
-            </div>
-            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-              <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
-                Sample Data
-              </h3>
-              <p className="text-sm text-green-700 dark:text-green-400">
-                Try our sample dataset to explore the tool's capabilities
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      <div className="flex-1 w-full">
-        {messages.map((message) => (
-          <Message 
-            key={message.id} 
-            message={message}
-            isStreaming={isStreaming && message.streaming}
-          />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+    <div className="flex-1 overflow-y-auto">
+      {messages.map((message) => (
+        <Message 
+          key={message.id} 
+          message={message}
+          isStreaming={isStreaming && message.streaming}
+        />
+      ))}
+      <div ref={messagesEndRef} className="h-32" />
     </div>
   );
 };

@@ -23,7 +23,11 @@ const ThemeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const { state } = useApp();
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', state.theme);
+    if (state.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, [state.theme]);
 
   return <>{children}</>;

@@ -9,20 +9,20 @@
   }
   
   .scrollbar-thin::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+    background: transparent;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+    @apply bg-gray-300 dark:bg-gray-700 rounded-full;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-500 dark:bg-gray-500;
+    @apply bg-gray-400 dark:bg-gray-600;
   }
 }
 
@@ -34,4 +34,34 @@
 /* Smooth transitions for theme changes */
 * {
   @apply transition-colors duration-200;
+}
+
+/* Hide spinner arrows from number inputs and textareas */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button,
+textarea::-webkit-inner-spin-button,
+textarea::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"],
+textarea {
+  -moz-appearance: textfield;
+}
+
+/* Hide scrollbar arrows */
+textarea::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* Hide resize handle */
+textarea {
+  resize: none;
+}
+
+/* Additional rules to hide any scroll indicators */
+textarea::-webkit-resizer {
+  display: none;
 }
