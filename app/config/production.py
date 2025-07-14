@@ -11,9 +11,7 @@ class ProductionConfig(BaseConfig):
     TESTING = False
     
     # Security settings
-    SECRET_KEY = os.environ.get('SECRET_KEY')
-    if not SECRET_KEY:
-        raise ValueError("SECRET_KEY environment variable is not set!")
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev_secret_key_please_change_this')
     
     # Secure session cookies
     SESSION_COOKIE_SECURE = True  # HTTPS only
@@ -40,13 +38,9 @@ class ProductionConfig(BaseConfig):
     
     # API Keys (from environment only)
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-    if not OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY environment variable is not set!")
     
     # Admin key (from environment only)
     ADMIN_KEY = os.environ.get('ADMIN_KEY')
-    if not ADMIN_KEY:
-        raise ValueError("ADMIN_KEY environment variable is not set!")
     
     # Logging
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
@@ -67,3 +61,38 @@ class ProductionConfig(BaseConfig):
             "connect-src 'self' https://tile.openstreetmap.org"
         )
     }
+    
+    @classmethod
+    def init_app(cls, app):
+        """Initialize production-specific settings and validate environment."""
+        super().init_app(app)
+        
+        # Validate critical environment variables for production
+        if not cls.SECRET_KEY or cls.SECRET_KEY == 'dev_secret_key_please_change_this':
+            raise ValueError("SECRET_KEY must be set for production!")
+        
+        if not cls.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY must be set for production!")
+        
+        if not cls.ADMIN_KEY:
+            raise ValueError("ADMIN_KEY must be set for production!")
+        
+        # Production-specific logging
+        import logging
+        from logging.handlers import RotatingFileHandler
+        
+        if not app.debug:
+            file_handler = RotatingFileHandler(
+                cls.LOG_FILE,
+                maxBytes=10240000,  # 10MB
+                backupCount=10
+            )
+            file_handler.setFormatter(logging.Formatter(
+                '%(asctime)s %(levelname)s: %(message)s '
+                '[in %(pathname)s:%(lineno)d]'
+            ))
+            file_handler.setLevel(getattr(logging, cls.LOG_LEVEL.upper()))
+            app.logger.addHandler(file_handler)
+            
+            app.logger.setLevel(getattr(logging, cls.LOG_LEVEL.upper()))
+            app.logger.info('ChatMRPT production startup')

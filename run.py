@@ -19,6 +19,7 @@ if '--disable-tool-scoring' in sys.argv:
 
 # Get configuration name from environment
 config_name = os.environ.get('FLASK_ENV', 'development')
+print(f"DEBUG: Using config_name = {config_name}")
 
 # Check for OpenAI API key
 openai_api_key = os.environ.get('OPENAI_API_KEY')
