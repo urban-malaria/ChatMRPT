@@ -318,6 +318,36 @@ ps aux | grep gunicorn | grep -v grep | wc -l
 htop
 ```
 
+#### AWS Backups (Last Updated: 2025-09-17)
+- **Current Stable Backups**:
+  - `ChatMRPT_stable_survey_20250917_112835.tar.gz` - Latest stable with survey button fix and complete survey module
+  - `ChatMRPT_backup_ITN_fixes_20250916_163329.tar.gz` - Instance 1 (ITN distribution fixes)
+  - `ChatMRPT_backup_ITN_fixes_20250916_163556.tar.gz` - Instance 2 (ITN distribution fixes)
+  - `ChatMRPT_COMPLETE_BACKUP_20250828.tar.gz` - Complete system backup (2.7GB)
+- **Latest Stable Features** (as of 2025-09-17):
+  - ✅ Survey module fully integrated with cognitive assessment questions
+  - ✅ Survey button correctly positioned at end of navigation
+  - ✅ CloudFront cache invalidation completed
+  - ✅ Both production instances synchronized
+  - ✅ All TPR analysis fixes and Word document generation
+- **Backup Strategy**: Keep 1-2 most recent stable backups per instance
+- **Backup Location**: `/home/ec2-user/` on each instance
+- **Backup Command**:
+  ```bash
+  tar -czf ChatMRPT_backup_$(date +%Y%m%d_%H%M%S).tar.gz ChatMRPT/ \
+    --exclude="ChatMRPT/instance/uploads/*" \
+    --exclude="ChatMRPT/chatmrpt_venv*" \
+    --exclude="ChatMRPT/venv*" \
+    --exclude="ChatMRPT/__pycache__" \
+    --exclude="*.pyc"
+  ```
+- **Restore Command**:
+  ```bash
+  # To restore from backup
+  tar -xzf ChatMRPT_stable_survey_20250917_112835.tar.gz
+  sudo systemctl restart chatmrpt
+  ```
+
 ## Malaria Domain Context
 - **Primary Use**: Epidemiological risk assessment for malaria intervention targeting
 - **Data Types**: Ward-level demographic, environmental, and health indicators
