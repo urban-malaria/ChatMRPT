@@ -1330,6 +1330,39 @@ Analyzing test data and generating visualizations..."""
             # Save TPR completion flag
             self.state_manager.update_state({'tpr_completed': True})
 
+            # Start background pre-computation of all TPR combinations
+            # This allows users to query any combination in standard flow
+            try:
+                import threading
+                from app.core.tpr_precompute import precompute_all_tpr_combinations
+
+                # Get the user's selected combination to exclude (already computed)
+                user_combination = {
+                    'facility_level': self.tpr_selections.get('facility_level', 'all'),
+                    'age_group': self.tpr_selections.get('age_group', 'all_ages')
+                }
+
+                def _precompute_background():
+                    try:
+                        logger.info(f"🔄 Background TPR pre-computation started for session {self.session_id}")
+                        result = precompute_all_tpr_combinations(
+                            session_id=self.session_id,
+                            data=self.uploaded_data.copy(),
+                            state=self.tpr_selections.get('state', ''),
+                            exclude_combination=user_combination
+                        )
+                        logger.info(f"✅ Background TPR pre-computation complete: {result['combinations_computed']} combinations")
+                    except Exception as e:
+                        logger.error(f"❌ Background TPR pre-computation failed: {e}")
+
+                # Start background thread (daemon=True so it doesn't block shutdown)
+                precompute_thread = threading.Thread(target=_precompute_background, daemon=True)
+                precompute_thread.start()
+                logger.info("🚀 Started background TPR pre-computation thread")
+
+            except Exception as e:
+                logger.warning(f"Could not start TPR pre-computation: {e}")
+
             # Calculate total time
             total_time = time.time() - start_time
             debug_info["total_time"] = total_time
