@@ -201,6 +201,3 @@ Verified working features:
 
 ================================================================================
 
-Questions? Contact Bernard or check the GitHub issues.
-
-Last updated: January 18, 2026

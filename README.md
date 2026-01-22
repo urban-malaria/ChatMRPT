@@ -65,7 +65,7 @@
    ```
 
 5. **Access the application**
-   Open your browser to: `http://localhost:5000`
+   Open your browser to: `http://127.0.0.1:5013`
 
 ## 💬 Usage Examples
 
@@ -267,7 +267,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 # Server configuration
 HOST=127.0.0.1  # Default: 127.0.0.1
-PORT=5000       # Default: 5000
+PORT=5013       # Default: 5013
 ```
 
 ### Data Configuration

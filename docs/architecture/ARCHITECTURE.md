@@ -347,7 +347,7 @@ OPENAI_API_KEY=your_api_key_here
 
 # Server Configuration
 HOST=127.0.0.1       # Default host
-PORT=5000            # Default port
+PORT=5013            # Default port
 ```
 
 ### Application Startup
