@@ -26,6 +26,10 @@ from app.utils.lga_boundaries import (
     get_reference_lga_geometries,
 )
 from app.utils.visualization_controls import inject_geographic_controls
+from app.utils.map_overlays import (
+    add_lga_boundary_overlay,
+    calculate_lga_averages,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -400,6 +404,11 @@ class VariableDistribution(BaseTool):
 
             plot_data = apply_lga_highlight(plot_data, highlight_codes, 'LGACode')
 
+            # Calculate LGA averages for enhanced hover (ward level only)
+            lga_averages = {}
+            if plot_level == 'ward':
+                lga_averages = calculate_lga_averages(clean_data, variable)
+
             # Create choropleth map using plotly graph_objects (like other ChatMRPT maps)
             fig = go.Figure()
 
@@ -416,18 +425,31 @@ class VariableDistribution(BaseTool):
                     })
                 return {'type': 'FeatureCollection', 'features': features}
 
+            def build_hover_text(df):
+                """Build hover text with LGA average included."""
+                texts = []
+                for idx, row in df.iterrows():
+                    name = row.get('LGAName') or row.get('WardName') or row.get('ward_name') or str(idx)
+                    val = row.get(variable)
+                    lga_code = row.get('LGACode')
+                    text = f"<b>{name}</b><br>{variable}: {val:.2f}" if pd.notna(val) else f"<b>{name}</b><br>{variable}: N/A"
+                    if lga_code and lga_code in lga_averages:
+                        text += f"<br>LGA Avg: {lga_averages[lga_code]:.2f}"
+                    texts.append(text)
+                return texts
+
             def add_trace(df, show_scale, opacity, colorscale_override=None, name_suffix=''):
                 if df.empty:
                     return
                 geojson = build_geojson(df)
-                label_series = df.get('LGAName', df.get('WardName', df.get('ward_name', df.get('LGACode', df.index))))
+                hover_texts = build_hover_text(df)
                 fig.add_trace(go.Choroplethmapbox(
                     geojson=geojson,
                     locations=df.index.astype(str),
                     z=df[variable],
                     colorscale=colorscale_override or color_scale,
-                    text=label_series,
-                    hovertemplate=f'<b>%{{text}}</b><br>{variable}: %{{z}}<extra></extra>',
+                    hovertext=hover_texts,
+                    hovertemplate='%{hovertext}<extra></extra>',
                     marker_opacity=opacity,
                     marker_line_width=1,
                     marker_line_color='white',
@@ -453,6 +475,10 @@ class VariableDistribution(BaseTool):
                 add_trace(highlighted, show_scale=True, opacity=0.85, name_suffix='Selected LGA')
             else:
                 add_trace(plot_data, show_scale=True, opacity=0.75)
+
+            # Add LGA boundary overlay for ward-level maps
+            if plot_level == 'ward':
+                add_lga_boundary_overlay(fig, clean_data)
 
             # Calculate map center
             bounds = plot_data.total_bounds

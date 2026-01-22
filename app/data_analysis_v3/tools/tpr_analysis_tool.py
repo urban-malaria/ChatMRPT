@@ -41,7 +41,7 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 from app.core.tpr_utils import (
-    is_tpr_data, 
+    is_tpr_data,
     calculate_ward_tpr,
     normalize_ward_name,
     extract_state_from_data,
@@ -49,6 +49,7 @@ from app.core.tpr_utils import (
     prepare_tpr_summary,
     validate_tpr_data
 )
+from app.utils.map_overlays import add_lga_boundary_overlay, calculate_lga_averages
 import plotly.graph_objects as go
 
 logger = logging.getLogger(__name__)
@@ -587,20 +588,34 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
             logger.warning(f"⚠️ Filtered out {null_geometry_count} wards with null geometries")
             logger.info(f"  Remaining wards for visualization: {len(merged_gdf)}")
 
-        # Create hover text
+        # Calculate LGA average TPR (volume-weighted: sum(positive)/sum(tested))
+        lga_avg_tpr = calculate_lga_averages(
+            merged_gdf, 'TPR',
+            numerator_col='Total_Positive',
+            denominator_col='Total_Tested'
+        )
+
+        # Create hover text with LGA average
         hover_text = []
         for _, row in merged_gdf.iterrows():
+            lga_code = row.get('LGACode')
+            lga_name = row.get('LGAName', 'Unknown')
+            lga_avg = lga_avg_tpr.get(lga_code)
             if pd.notna(row.get('TPR')):
                 text = f"<b>{row['WardName']}</b><br>"
-                text += f"LGA: {row.get('LGAName', 'Unknown')}<br>"
+                text += f"LGA: {lga_name}<br>"
                 text += f"<b style='color: green'>TPR: {row['TPR']:.1f}%</b><br>"
                 text += f"Tested: {int(row.get('Total_Tested', 0)):,}<br>"
                 text += f"Positive: {int(row.get('Total_Positive', 0)):,}"
+                if lga_avg is not None:
+                    text += f"<br><i>LGA Avg TPR: {lga_avg:.1f}%</i>"
             else:
                 text = f"<b>{row['WardName']}</b><br>"
-                text += f"LGA: {row.get('LGAName', 'Unknown')}<br>"
+                text += f"LGA: {lga_name}<br>"
                 text += f"<b style='color: gray'>No TPR data available</b><br>"
                 text += f"<i>Ward boundary shown for reference</i>"
+                if lga_avg is not None:
+                    text += f"<br><i>LGA Avg TPR: {lga_avg:.1f}%</i>"
             hover_text.append(text)
 
         # Reset index to ensure proper alignment with GeoJSON
@@ -660,7 +675,10 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
             zmax=100,  # Set max to 100
             showscale=True
         ))
-        
+
+        # Add LGA boundary overlay
+        add_lga_boundary_overlay(fig, merged_gdf)
+
         # Update layout
         center_lat = merged_gdf.geometry.centroid.y.mean()
         center_lon = merged_gdf.geometry.centroid.x.mean()

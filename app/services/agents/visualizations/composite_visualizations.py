@@ -31,6 +31,7 @@ from .core_utils import (
     create_geojson_from_gdf,
     calculate_data_statistics
 )
+from app.utils.map_overlays import add_lga_boundary_overlay, calculate_lga_averages
 
 logger = logging.getLogger(__name__)
 
@@ -453,8 +454,8 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             geojson=geojson,
             locations=gdf_valid.index,
             z=z_values[valid_geometry_mask],
-            colorscale=colorscale,  
-            marker_opacity=0.8,    
+            colorscale=colorscale,
+            marker_opacity=0.8,
             marker_line_width=0.5,
             marker_line_color='black',
             hovertemplate='%{hovertext}<extra></extra>',
@@ -474,7 +475,10 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             autocolorscale=False,
             zauto=False
         ))
-        
+
+        # Add LGA boundary overlay
+        add_lga_boundary_overlay(fig, gdf_valid)
+
         # Update layout
         current_method = 'composite'  
         method_display = "Composite Risk Analysis"
