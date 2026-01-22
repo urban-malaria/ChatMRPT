@@ -195,12 +195,30 @@ deployment/*.pem
 infrastructure/*.tfstate
 infrastructure/*.tfstate.backup
 
+# Claude Code Configuration
+# ==========================================
+# Track shared commands, skills, agents
+!.claude/
+!.claude/commands/
+!.claude/skills/
+!.claude/agents/
+# Ignore local overrides
+CLAUDE.local.md
+
 # Keep these files
 # ==========================================
 !.gitkeep
 !README.md
 !LICENSE
-CLAUDE.md
+!CLAUDE.md
 
 # Old/backup directories
 app/core/request_interpreter.OLD_WITH_DEBUG_BLOB/
+
+# Sensitive/temporary files
+aws_github_ssh_key.txt
+contxt.md
+*.txt.bak
+
+# Claude Code local settings (keep CLAUDE.md but not local settings)
+.claude/settings.local.json
