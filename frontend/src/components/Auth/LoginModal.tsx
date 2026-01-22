@@ -42,13 +42,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all">
+      <div className="bg-white dark:bg-dark-bg-secondary rounded-2xl shadow-2xl w-full max-w-md transform transition-all">
         {/* Header */}
         <div className="flex items-center justify-between p-8 pb-6">
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">Welcome Back</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-400 dark:to-blue-600 bg-clip-text text-transparent">Welcome Back</h2>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 hover:rotate-90 transition-all duration-200 p-1 rounded-lg hover:bg-gray-100"
+            className="text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text hover:rotate-90 transition-all duration-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -59,13 +59,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-8 pb-6 space-y-5">
           {error && (
-            <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg text-red-700 text-sm animate-shake">
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg text-red-700 dark:text-red-400 text-sm animate-shake">
               <p className="font-medium">{error}</p>
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-dark-text mb-2">
               Email
             </label>
             <input
@@ -74,14 +74,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg-tertiary text-gray-900 dark:text-dark-text rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
               placeholder="you@example.com"
               disabled={isLoading}
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-dark-text mb-2">
               Password
             </label>
             <div className="relative">
@@ -91,14 +91,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all pr-10"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg-tertiary text-gray-900 dark:text-dark-text rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all pr-10"
                 placeholder="••••••••"
                 disabled={isLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text"
               >
                 {showPassword ? (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,10 +133,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
+              <div className="w-full border-t border-gray-200 dark:border-dark-border"></div>
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-white text-gray-500 font-medium uppercase tracking-wider">Or continue with</span>
+              <span className="px-3 bg-white dark:bg-dark-bg-secondary text-gray-500 dark:text-dark-text-secondary font-medium uppercase tracking-wider">Or continue with</span>
             </div>
           </div>
 
@@ -147,7 +147,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
               window.location.href = '/auth/google';
             }}
             disabled={isLoading}
-            className="w-full px-4 py-3.5 bg-white text-gray-700 border-2 border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-md transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 group"
+            className="w-full px-4 py-3.5 bg-white dark:bg-dark-bg-tertiary text-gray-700 dark:text-dark-text border-2 border-gray-200 dark:border-dark-border rounded-xl hover:border-gray-300 dark:hover:border-dark-text-secondary hover:shadow-md transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 group"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -160,12 +160,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToSign
         </form>
 
         {/* Footer */}
-        <div className="px-8 py-6 bg-gradient-to-b from-white to-gray-50 border-t border-gray-100 rounded-b-2xl">
-          <p className="text-center text-sm text-gray-600">
+        <div className="px-8 py-6 bg-gradient-to-b from-white to-gray-50 dark:from-dark-bg-secondary dark:to-dark-bg-tertiary border-t border-gray-100 dark:border-dark-border rounded-b-2xl">
+          <p className="text-center text-sm text-gray-600 dark:text-dark-text-secondary">
             Don't have an account?{' '}
             <button
               onClick={handleSwitchToSignup}
-              className="text-blue-600 hover:text-blue-700 font-semibold hover:underline transition-all"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold hover:underline transition-all"
             >
               Sign up
             </button>

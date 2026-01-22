@@ -1,0 +1,104 @@
+/* Toolbar Button Styles for Survey and Pre/Post Test buttons */
+
+.toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #e5e7eb;
+    background-color: #ffffff;
+    color: #374151;
+}
+
+.toolbar-button:hover {
+    background-color: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.toolbar-button:active {
+    transform: scale(0.98);
+}
+
+.toolbar-button-icon {
+    font-size: 16px;
+}
+
+.toolbar-button-label {
+    white-space: nowrap;
+}
+
+/* Survey button specific styles */
+.toolbar-button--survey {
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+
+.toolbar-button--survey:hover {
+    background-color: #dbeafe;
+    border-color: #93c5fd;
+}
+
+/* Pre/Post Test button specific styles */
+.toolbar-button--prepost {
+    background-color: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #15803d;
+}
+
+.toolbar-button--prepost:hover {
+    background-color: #dcfce7;
+    border-color: #86efac;
+}
+
+/* Badge styles */
+.toolbar-badge {
+    display: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background-color: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+}
+
+.toolbar-badge--visible {
+    display: inline-block;
+}
+
+/* Active/accent state for survey button with pending surveys */
+.toolbar-button--accent-active {
+    background-color: #2563eb;
+    border-color: #2563eb;
+    color: white;
+}
+
+.toolbar-button--accent-active:hover {
+    background-color: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .toolbar-button {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+
+    .toolbar-button-label {
+        display: none;
+    }
+
+    .toolbar-button-icon {
+        font-size: 18px;
+    }
+}

@@ -102,31 +102,31 @@ const ChatContainer: React.FC = () => {
   };
   
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white dark:bg-dark-bg">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 animated-gradient">
+      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg animated-gradient">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full p-8">
             <div className="max-w-4xl w-full">
 
               {/* Dynamic Greeting */}
               <div className="text-center mb-16">
-                <p className="text-lg text-gray-500 font-light mb-3">
+                <p className="text-lg text-gray-500 dark:text-dark-text-secondary font-light mb-3">
                   {welcomeContent?.greeting || getGreeting()}
                 </p>
 
-                <h1 className="text-5xl font-light text-gray-900 mb-4">
+                <h1 className="text-5xl font-light text-gray-900 dark:text-dark-text mb-4">
                   {welcomeContent?.title || "Welcome to ChatMRPT"}
                 </h1>
 
-                <p className="text-lg text-gray-600 max-w-2xl mx-auto font-light">
+                <p className="text-lg text-gray-600 dark:text-dark-text-secondary max-w-2xl mx-auto font-light">
                   {welcomeContent?.subtitle || "Your AI assistant for malaria intervention planning"}
                 </p>
               </div>
 
               {/* What ChatMRPT Does - Clean Bullet Points */}
               <div className="max-w-2xl mx-auto mb-12">
-                <p className="text-base font-medium text-gray-700 mb-4">
+                <p className="text-base font-medium text-gray-700 dark:text-dark-text mb-4">
                   ChatMRPT helps you:
                 </p>
                 <ul className="space-y-3">
@@ -138,8 +138,8 @@ const ChatContainer: React.FC = () => {
                     // Handle both string and object formats
                     const text = typeof capability === 'string' ? capability : capability.title;
                     return (
-                      <li key={index} className="flex items-start text-gray-600">
-                        <span className="text-gray-900 mr-3 mt-1">•</span>
+                      <li key={index} className="flex items-start text-gray-600 dark:text-dark-text-secondary">
+                        <span className="text-gray-900 dark:text-dark-text mr-3 mt-1">•</span>
                         <span className="text-base font-light">{text}</span>
                       </li>
                     );
@@ -149,7 +149,7 @@ const ChatContainer: React.FC = () => {
 
               {/* Call to Action */}
               <div className="text-center mb-8">
-                <p className="text-base text-gray-600 mb-6 font-light">
+                <p className="text-base text-gray-600 dark:text-dark-text-secondary mb-6 font-light">
                   To begin, upload your malaria data (CSV file)
                 </p>
                 <button
@@ -161,8 +161,8 @@ const ChatContainer: React.FC = () => {
               </div>
 
               {/* Secondary Action */}
-              <div className="text-center mt-8 pt-8 border-t border-gray-200 max-w-2xl mx-auto">
-                <p className="text-sm text-gray-500 font-light">
+              <div className="text-center mt-8 pt-8 border-t border-gray-200 dark:border-dark-border max-w-2xl mx-auto">
+                <p className="text-sm text-gray-500 dark:text-dark-text-secondary font-light">
                   Or ask me anything about malaria analysis
                 </p>
               </div>
@@ -177,7 +177,7 @@ const ChatContainer: React.FC = () => {
       </div>
       
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-gray-200 sticky bottom-0 z-40 bg-white">
+      <div className="flex-shrink-0 border-t border-gray-200 dark:border-dark-border sticky bottom-0 z-40 bg-white dark:bg-dark-bg-secondary">
         <InputArea 
           value={inputValue}
           onChange={setInputValue}

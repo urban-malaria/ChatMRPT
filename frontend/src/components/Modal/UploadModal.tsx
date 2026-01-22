@@ -12,41 +12,16 @@ interface UploadModalProps {
 }
 
 const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'standard' | 'analysis' | 'download'>('standard');
+  const [activeTab, setActiveTab] = useState<'standard' | 'analysis'>('standard');
   const [isUploading, setIsUploading] = useState(false);
   const [selectedOption, setSelectedOption] = useState('');
   const [analysisType, setAnalysisType] = useState('');
-  const [availableDownloads, setAvailableDownloads] = useState<any[]>([]);
-  const [isLoadingDownloads, setIsLoadingDownloads] = useState(false);
   const session = useChatStore((state) => state.session);
   const setUploadedFiles = useChatStore((state) => state.setUploadedFiles);
   const addMessage = useChatStore((state) => state.addMessage);
   const updateSession = useChatStore((state) => state.updateSession);
   const { setCsvFile, setShapeFile, setDataAnalysisMode } = useAnalysisStore();
   const { sendMessage } = useMessageStreaming();
-  
-  // Fetch available downloads when Download tab is selected
-  React.useEffect(() => {
-    if (activeTab === 'download' && session.sessionId) {
-      setIsLoadingDownloads(true);
-      fetch(`/export/list/${session.sessionId}`, {
-        headers: {
-          'X-Conversation-ID': storage.ensureConversationId(),
-        },
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setAvailableDownloads(data.files || []);
-          }
-          setIsLoadingDownloads(false);
-        })
-        .catch(err => {
-          console.error('Error fetching downloads:', err);
-          setIsLoadingDownloads(false);
-        });
-    }
-  }, [activeTab, session.sessionId]);
   
   if (!isOpen) return null;
   
@@ -62,14 +37,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
       <div className="fixed inset-0 z-[9999] overflow-y-auto">
         <div className="flex min-h-full items-center justify-center p-4">
           {/* Modal panel */}
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl">
-            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="relative bg-white dark:bg-dark-bg-secondary rounded-lg shadow-xl w-full max-w-2xl">
+            <div className="bg-white dark:bg-dark-bg-secondary px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             {/* Modal Header */}
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Upload Files</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-dark-text">Upload Files</h3>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                className="text-gray-400 dark:text-dark-text-secondary hover:text-gray-500 dark:hover:text-dark-text focus:outline-none"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -78,14 +53,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
             </div>
             
             {/* Tabs */}
-            <div className="border-b border-gray-200 mb-4">
+            <div className="border-b border-gray-200 dark:border-dark-border mb-4">
               <nav className="-mb-px flex space-x-8">
                 <button
                   onClick={() => setActiveTab('standard')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'standard'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
                   }`}
                 >
                   I Have Complete Data
@@ -94,21 +69,11 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                   onClick={() => setActiveTab('analysis')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'analysis'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
                   }`}
                 >
                   I Have TPR Data Only
-                </button>
-                <button
-                  onClick={() => setActiveTab('download')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'download'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Download Results
                 </button>
               </nav>
             </div>
@@ -118,23 +83,23 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
               {/* Standard Upload Tab */}
               {activeTab === 'standard' && (
                 <div>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-4">
                     CSV with environmental variables + Shapefile
                   </p>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* CSV/Excel Upload */}
-                    <div className="border border-gray-200 rounded-lg p-4">
+                    <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4">
                       <div className="text-center">
                         <svg className="mx-auto h-10 w-10 text-green-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <h5 className="font-medium text-gray-900 mb-1">CSV / Excel Data</h5>
-                        <p className="text-xs text-gray-500 mb-3">Ward-level data (e.g., environmental factors, demographics)</p>
-                        <input 
-                          type="file" 
-                          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                          id="csv-upload" 
+                        <h5 className="font-medium text-gray-900 dark:text-dark-text mb-1">CSV / Excel Data</h5>
+                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-3">Ward-level data (e.g., environmental factors, demographics)</p>
+                        <input
+                          type="file"
+                          className="w-full text-sm text-gray-500 dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 dark:file:bg-green-900/30 file:text-green-700 dark:file:text-green-400 hover:file:bg-green-100 dark:hover:file:bg-green-900/50"
+                          id="csv-upload"
                           accept=".csv,.xlsx,.xls"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -145,19 +110,19 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                         />
                       </div>
                     </div>
-                    
+
                     {/* Shapefile Upload */}
-                    <div className="border border-gray-200 rounded-lg p-4">
+                    <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4">
                       <div className="text-center">
                         <svg className="mx-auto h-10 w-10 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                         </svg>
-                        <h5 className="font-medium text-gray-900 mb-1">Shapefile (ZIP)</h5>
-                        <p className="text-xs text-gray-500 mb-3">Geographical boundaries of wards (must be a .zip archive)</p>
-                        <input 
-                          type="file" 
-                          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                          id="shapefile-upload" 
+                        <h5 className="font-medium text-gray-900 dark:text-dark-text mb-1">Shapefile (ZIP)</h5>
+                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-3">Geographical boundaries of wards (must be a .zip archive)</p>
+                        <input
+                          type="file"
+                          className="w-full text-sm text-gray-500 dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50"
+                          id="shapefile-upload"
                           accept=".zip"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -267,12 +232,12 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
               {activeTab === 'analysis' && (
                 <div>
                   <div className="mb-4">
-                    <h4 className="text-lg font-bold text-gray-900">Upload Facility Testing Data</h4>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h4 className="text-lg font-bold text-gray-900 dark:text-dark-text">Upload Facility Testing Data</h4>
+                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">
                       Facility testing data only - We'll guide you through TPR calculation and add environmental data
                     </p>
                   </div>
-                  
+
                   <div className="max-w-md mx-auto">
                     <div className="text-center">
                       <div className="mb-4">
@@ -280,15 +245,15 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
-                      
-                      <h5 className="text-base font-medium text-gray-900 mb-2">Select Data File</h5>
-                      <p className="text-sm text-gray-500 mb-4">CSV, Excel, or JSON format</p>
-                      
+
+                      <h5 className="text-base font-medium text-gray-900 dark:text-dark-text mb-2">Select Data File</h5>
+                      <p className="text-sm text-gray-500 dark:text-dark-text-secondary mb-4">CSV, Excel, or JSON format</p>
+
                       <div className="mb-4">
-                        <input 
-                          type="file" 
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          id="data-analysis-file" 
+                        <input
+                          type="file"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg-tertiary text-gray-900 dark:text-dark-text rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          id="data-analysis-file"
                           accept=".csv,.xlsx,.xls,.json"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -439,75 +404,6 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                 </div>
               )}
               
-              {/* Download Processed Data Tab */}
-              {activeTab === 'download' && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Download your processed data and analysis results
-                  </p>
-                  
-                  {isLoadingDownloads ? (
-                    <div className="flex justify-center py-8">
-                      <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    </div>
-                  ) : availableDownloads.length > 0 ? (
-                    <div className="space-y-3">
-                      {/* Group downloads by category */}
-                      {['tpr', 'itn', 'analysis'].map(category => {
-                        const categoryFiles = availableDownloads.filter(f => f.category === category);
-                        if (categoryFiles.length === 0) return null;
-                        
-                        const categoryLabels = {
-                          tpr: '📊 TPR Analysis',
-                          itn: '🛏️ ITN Distribution',
-                          analysis: '📈 Risk Analysis'
-                        };
-                        
-                        return (
-                          <div key={category} className="mb-4">
-                            <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                              {categoryLabels[category as keyof typeof categoryLabels]}
-                            </h3>
-                            {categoryFiles.map((file, index) => (
-                              <div 
-                                key={index}
-                                className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 mb-2"
-                              >
-                                <div className="flex-1">
-                                  <p className="font-medium text-gray-900">{file.name}</p>
-                                  <p className="text-sm text-gray-500">{file.description}</p>
-                                </div>
-                                <a
-                                  href={file.url}
-                                  download={file.filename}
-                                  className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toast.success(`Downloading ${file.name}...`);
-                                  }}
-                                >
-                                  Download
-                                </a>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <svg className="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-sm">No processed data available yet</p>
-                      <p className="text-xs mt-1">Complete TPR analysis or ITN planning to generate downloadable files</p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>

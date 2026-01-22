@@ -32,10 +32,10 @@ const VotingButtons: React.FC<VotingButtonsProps> = ({ onVote, disabled }) => {
       bgColor: 'bg-red-600 hover:bg-red-700',
     },
   ];
-  
+
   return (
-    <div className="border-t border-gray-200 pt-6">
-      <h3 className="text-center text-lg font-semibold mb-4">
+    <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+      <h3 className="text-center text-lg font-semibold mb-4 text-gray-900 dark:text-dark-text">
         Which response is better?
       </h3>
       <div className="flex justify-center gap-3 flex-wrap">

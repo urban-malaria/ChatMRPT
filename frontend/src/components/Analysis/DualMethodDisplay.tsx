@@ -33,11 +33,11 @@ const DualMethodDisplay: React.FC<DualMethodDisplayProps> = ({
     <div className="w-full">
       {/* Header */}
       {(wardName || stateName) && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">
+        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-gray-200 dark:border-dark-border">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-dark-text">
             Analysis Results
           </h2>
-          <div className="flex items-center mt-1 text-sm text-gray-600">
+          <div className="flex items-center mt-1 text-sm text-gray-600 dark:text-dark-text-secondary">
             {wardName && (
               <>
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,25 +92,25 @@ const DualMethodDisplay: React.FC<DualMethodDisplayProps> = ({
       
       {/* Comparison Summary */}
       {data.pca && data.composite && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Method Comparison</h3>
+        <div className="mt-4 p-4 bg-gray-50 dark:bg-dark-bg-tertiary rounded-lg border border-gray-200 dark:border-dark-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Method Comparison</h3>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-gray-600">Score Difference:</span>
-              <span className="ml-2 font-medium">
+              <span className="text-gray-600 dark:text-dark-text-secondary">Score Difference:</span>
+              <span className="ml-2 font-medium dark:text-dark-text">
                 {Math.abs(data.pca.score - data.composite.score).toFixed(2)}
               </span>
             </div>
             <div>
-              <span className="text-gray-600">Ranking Difference:</span>
-              <span className="ml-2 font-medium">
+              <span className="text-gray-600 dark:text-dark-text-secondary">Ranking Difference:</span>
+              <span className="ml-2 font-medium dark:text-dark-text">
                 {Math.abs(data.pca.ranking - data.composite.ranking)} positions
               </span>
             </div>
           </div>
           {Math.abs(data.pca.ranking - data.composite.ranking) > 10 && (
-            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-              <p className="text-xs text-yellow-800">
+            <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+              <p className="text-xs text-yellow-800 dark:text-yellow-300">
                 ⚠️ Significant ranking difference detected. Consider reviewing both methodologies for this ward.
               </p>
             </div>

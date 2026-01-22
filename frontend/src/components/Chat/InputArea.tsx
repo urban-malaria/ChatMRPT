@@ -19,7 +19,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   placeholder = "Type your message...",
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [showSuggestions, setShowSuggestions] = useState(false); // Disabled for now
   const [showUploadModal, setShowUploadModal] = useState(false);
   const messages = useChatStore((state) => state.messages);
   const hasUploadedFiles = useChatStore((state) => state.session.hasUploadedFiles);
@@ -45,42 +45,42 @@ const InputArea: React.FC<InputAreaProps> = ({
   
   // Generate context-aware suggestions
   const getSuggestions = () => {
-    // No messages yet
+    // No messages yet - actionable first steps
     if (messages.length === 0) {
       return [
-        "What is ChatMRPT?",
-        "Help me analyze malaria risk",
-        "Load sample data",
-        "How do I upload my data?"
+        "Load Kano sample dataset",
+        "Calculate test positivity rate",
+        "What analyses can you perform?",
+        "Help me rank wards by malaria risk"
       ];
     }
-    
+
     // Has uploaded files but no analysis
     if (hasUploadedFiles && analysisResults.length === 0) {
       return [
-        "Run malaria risk analysis",
-        "Show me PCA analysis",
-        "Generate composite scores",
-        "What variables are available?"
+        "Run full risk analysis",
+        "Calculate composite vulnerability scores",
+        "Show data summary statistics",
+        "List available indicators"
       ];
     }
-    
+
     // Has analysis results
     if (analysisResults.length > 0) {
       return [
-        "Show top 10 high-risk wards",
-        "Create visualization map",
-        "Export analysis results",
-        "Compare PCA vs Composite"
+        "Show highest risk areas",
+        "Generate risk map",
+        "Export results to CSV",
+        "Explain the methodology"
       ];
     }
-    
-    // Default suggestions
+
+    // Default - conversation ongoing
     return [
-      "What can you help me with?",
-      "Upload new data",
-      "Explain the analysis methods",
-      "Show recent results"
+      "Run another analysis",
+      "Upload different data",
+      "Compare analysis methods",
+      "Summarize findings"
     ];
   };
   
@@ -93,15 +93,15 @@ const InputArea: React.FC<InputAreaProps> = ({
   };
   
   return (
-    <div className="border-t border-gray-200 bg-white">
+    <div className="border-t border-gray-200 dark:border-dark-border bg-white dark:bg-dark-bg-secondary">
       {/* Suggestion Buttons */}
       {showSuggestions && suggestions.length > 0 && value.length === 0 && (
         <div className="px-4 pt-3 pb-2 animate-fadeIn">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 font-medium">Suggestions</span>
+            <span className="text-xs text-gray-500 dark:text-dark-text-secondary font-medium">Suggestions</span>
             <button
               onClick={() => setShowSuggestions(false)}
-              className="text-xs text-gray-400 hover:text-gray-600"
+              className="text-xs text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text"
             >
               Hide
             </button>
@@ -111,7 +111,7 @@ const InputArea: React.FC<InputAreaProps> = ({
               <button
                 key={index}
                 onClick={() => handleSuggestionClick(suggestion)}
-                className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-all duration-200 hover:scale-105 animate-slideIn"
+                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-dark-bg-tertiary hover:bg-gray-200 dark:hover:bg-dark-border text-gray-700 dark:text-dark-text rounded-full transition-all duration-200 hover:scale-105 animate-slideIn"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 {suggestion}
@@ -133,7 +133,7 @@ const InputArea: React.FC<InputAreaProps> = ({
             placeholder={placeholder}
             disabled={isLoading}
             rows={1}
-            className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+            className="w-full resize-none rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg-tertiary text-gray-900 dark:text-dark-text px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-dark-bg disabled:text-gray-500 dark:disabled:text-dark-text-secondary placeholder-gray-400 dark:placeholder-gray-500"
             style={{ maxHeight: '200px' }}
           />
         </div>
@@ -150,7 +150,7 @@ const InputArea: React.FC<InputAreaProps> = ({
               setShowUploadModal(true);
             }}
             disabled={isLoading}
-            className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors"
+            className="p-2 text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text disabled:opacity-50 transition-colors"
             title="Upload files"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +207,7 @@ const InputArea: React.FC<InputAreaProps> = ({
         </div>
         
         {/* Helper Text */}
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 text-xs text-gray-500 dark:text-dark-text-secondary">
           Press Enter to send, Shift+Enter for new line
         </div>
       </div>

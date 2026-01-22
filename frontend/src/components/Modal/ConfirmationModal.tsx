@@ -25,10 +25,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   isLoading = false,
 }) => {
   const iconColors = {
-    danger: 'text-red-600 bg-red-100',
-    warning: 'text-yellow-600 bg-yellow-100',
-    info: 'text-blue-600 bg-blue-100',
-    success: 'text-green-600 bg-green-100',
+    danger: 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30',
+    warning: 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30',
+    info: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
+    success: 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30',
   };
   
   const buttonColors = {
@@ -75,11 +75,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           {icons[type]}
         </div>
         <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
-          <h3 className="text-lg font-medium text-gray-900">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-dark-text">
             {title}
           </h3>
           <div className="mt-2">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-dark-text-secondary">
               {message}
             </p>
           </div>
@@ -114,7 +114,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           type="button"
           onClick={onClose}
           disabled={isLoading}
-          className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-dark-border shadow-sm px-4 py-2 bg-white dark:bg-dark-bg-tertiary text-base font-medium text-gray-700 dark:text-dark-text hover:bg-gray-50 dark:hover:bg-dark-border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {cancelText}
         </button>

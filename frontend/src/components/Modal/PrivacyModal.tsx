@@ -36,7 +36,7 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
       {/* Modal */}
       <div className="fixed inset-0 z-[10001] overflow-y-auto">
         <div className="flex min-h-full items-center justify-center p-4">
-          <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl">
+          <div className="relative bg-white dark:bg-dark-bg-secondary rounded-lg shadow-2xl w-full max-w-2xl">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-lg">
               <h2 className="text-xl font-semibold text-white flex items-center">
@@ -49,17 +49,17 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
             
             {/* Content */}
             <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-4 text-gray-700">
+              <div className="space-y-4 text-gray-700 dark:text-dark-text-secondary">
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Welcome to ChatMRPT</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Welcome to ChatMRPT</h3>
                   <p className="text-sm">
-                    ChatMRPT is an AI-powered tool designed to assist with malaria risk analysis and 
+                    ChatMRPT is an AI-powered tool designed to assist with malaria risk analysis and
                     prioritization. Before you begin, please review how we handle your data.
                   </p>
                 </div>
-                
+
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Data Collection & Usage</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Data Collection & Usage</h4>
                   <ul className="text-sm space-y-2 list-disc list-inside">
                     <li>
                       <strong>Session Data:</strong> We create temporary session IDs to maintain your 
@@ -81,7 +81,7 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                 </div>
                 
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Data Security</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Data Security</h4>
                   <ul className="text-sm space-y-2 list-disc list-inside">
                     <li>All data transmission is encrypted using HTTPS</li>
                     <li>No personal health information is permanently stored</li>
@@ -89,27 +89,27 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                     <li>You can clear all data at any time using the Clear Session button</li>
                   </ul>
                 </div>
-                
+
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">AI Usage Disclosure</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">AI Usage Disclosure</h4>
                   <p className="text-sm">
-                    ChatMRPT uses advanced AI models to analyze data and generate insights. While we 
-                    strive for accuracy, AI-generated content should be reviewed by domain experts before 
+                    ChatMRPT uses advanced AI models to analyze data and generate insights. While we
+                    strive for accuracy, AI-generated content should be reviewed by domain experts before
                     making critical decisions.
                   </p>
                 </div>
-                
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800">
-                    <strong>Important:</strong> This tool is designed for research and planning purposes. 
+
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    <strong>Important:</strong> This tool is designed for research and planning purposes.
                     Always consult with public health professionals for official malaria intervention strategies.
                   </p>
                 </div>
-                
+
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Your Consent</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Your Consent</h4>
                   <p className="text-sm">
-                    By clicking "Accept and Continue", you acknowledge that you have read and understood 
+                    By clicking "Accept and Continue", you acknowledge that you have read and understood
                     this privacy notice and agree to the temporary processing of your data as described above.
                   </p>
                 </div>
@@ -117,9 +117,9 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
             </div>
             
             {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 rounded-b-lg">
+            <div className="bg-gray-50 dark:bg-dark-bg-tertiary px-6 py-4 rounded-b-lg">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
                   This notice is shown once per browser. You can review it anytime from the Settings menu.
                 </p>
                 <button

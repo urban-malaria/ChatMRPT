@@ -204,3 +204,10 @@
   background-size: 200% 200%;
   animation: gradientShift 8s ease infinite;
 }
+
+/* Dark mode gradient - neutral grays, no blue tint */
+.dark .animated-gradient {
+  background: linear-gradient(270deg, #1a1a1a, #242424, #2a2a2a);
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease infinite;
+}

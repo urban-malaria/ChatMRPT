@@ -62,7 +62,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
         className={`max-w-3xl rounded-lg px-4 py-3 ${
           isUser
             ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-800'
+            : 'bg-gray-100 dark:bg-dark-bg-tertiary text-gray-800 dark:text-dark-text'
         }`}
       >
         {/* Message Header */}
@@ -102,7 +102,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
           {!isUser ? (
             <>
               {topWarning && (
-                <div className="text-red-600 font-bold mb-2">{topWarning}</div>
+                <div className="text-red-600 dark:text-red-400 font-bold mb-2">{topWarning}</div>
               )}
               {/* Check if content starts with our styled HTML */}
               {restContent.startsWith('<span style="color: red') ? (
@@ -127,13 +127,13 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                                     </code>
                                   </pre>
                                 ) : (
-                                  <code className="bg-gray-200 px-1 rounded" {...props}>
+                                  <code className="bg-gray-200 dark:bg-dark-border px-1 rounded" {...props}>
                                     {children}
                                   </code>
                                 );
                               },
                               a: ({ ...props }) => (
-                                <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" />
+                                <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" />
                               ),
                             }}
                           >
@@ -158,13 +158,13 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                           </code>
                         </pre>
                       ) : (
-                        <code className="bg-gray-200 px-1 rounded" {...props}>
+                        <code className="bg-gray-200 dark:bg-dark-border px-1 rounded" {...props}>
                           {children}
                         </code>
                       );
                     },
                     a: ({ ...props }) => (
-                      <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" />
+                      <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" />
                     ),
                   }}
                 >

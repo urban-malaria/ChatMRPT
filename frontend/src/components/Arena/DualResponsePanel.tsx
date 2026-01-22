@@ -23,19 +23,19 @@ const DualResponsePanel: React.FC<DualResponsePanelProps> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       {/* Response A */}
-      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4 bg-gray-50 dark:bg-dark-bg-tertiary">
         <div className="mb-3 flex justify-between items-center">
-          <span className="font-semibold text-gray-700">{labelA}</span>
+          <span className="font-semibold text-gray-700 dark:text-dark-text">{labelA}</span>
           {modelA && (
-            <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">
+            <span className="text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">
               {modelA}
             </span>
           )}
         </div>
-        <div className="prose prose-sm max-w-none min-h-[200px] max-h-80 overflow-y-auto">
+        <div className="prose prose-sm dark:prose-invert max-w-none min-h-[200px] max-h-80 overflow-y-auto text-gray-800 dark:text-dark-text">
           {isLoading && !responseA ? (
             <div className="flex items-center justify-center h-32">
-              <svg className="animate-spin h-6 w-6 text-gray-400" viewBox="0 0 24 24">
+              <svg className="animate-spin h-6 w-6 text-gray-400 dark:text-dark-text-secondary" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"
                   cx="12"
@@ -57,21 +57,21 @@ const DualResponsePanel: React.FC<DualResponsePanelProps> = ({
           )}
         </div>
       </div>
-      
+
       {/* Response B */}
-      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4 bg-gray-50 dark:bg-dark-bg-tertiary">
         <div className="mb-3 flex justify-between items-center">
-          <span className="font-semibold text-gray-700">{labelB}</span>
+          <span className="font-semibold text-gray-700 dark:text-dark-text">{labelB}</span>
           {modelB && (
-            <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+            <span className="text-sm bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded">
               {modelB}
             </span>
           )}
         </div>
-        <div className="prose prose-sm max-w-none min-h-[200px] max-h-80 overflow-y-auto">
+        <div className="prose prose-sm dark:prose-invert max-w-none min-h-[200px] max-h-80 overflow-y-auto text-gray-800 dark:text-dark-text">
           {isLoading && !responseB ? (
             <div className="flex items-center justify-center h-32">
-              <svg className="animate-spin h-6 w-6 text-gray-400" viewBox="0 0 24 24">
+              <svg className="animate-spin h-6 w-6 text-gray-400 dark:text-dark-text-secondary" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"
                   cx="12"

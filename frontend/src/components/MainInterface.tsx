@@ -25,14 +25,14 @@ const MainInterface: React.FC = () => {
   };
   
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Toolbar with Clear, Export, Settings */}
-      <Toolbar onOpenSettings={() => setShowSettings(true)} />
-      
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex flex-col">
+      {/* Toolbar with New Chat, Export, Theme Toggle */}
+      <Toolbar />
+
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <Sidebar />
+        <Sidebar onOpenSettings={() => setShowSettings(true)} />
         
         {/* Chat Container */}
         <main className="flex-1 flex flex-col">
