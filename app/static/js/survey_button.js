@@ -70,29 +70,32 @@
                             document.querySelector('[class*="header"]') ||
                             document.querySelector('nav');
 
-                // Find both Clear and Export buttons to locate the navbar correctly
-                const clearButton = Array.from(document.querySelectorAll('button')).find(btn =>
-                    btn.textContent.includes('Clear')
+                // Find toolbar buttons to locate the navbar correctly
+                const newChatButton = Array.from(document.querySelectorAll('button')).find(btn =>
+                    btn.textContent.includes('New Chat') || btn.textContent.includes('Clear')
                 );
-                const exportButton = Array.from(document.querySelectorAll('button')).find(btn =>
-                    btn.textContent.includes('Export')
+                const downloadButton = Array.from(document.querySelectorAll('button')).find(btn =>
+                    btn.textContent.includes('Download') || btn.textContent.includes('Export')
                 );
 
-                console.log('🔵 SurveyButton: Found navBar?', !!navBar, 'Found Clear?', !!clearButton, 'Found Export?', !!exportButton);
+                console.log('🔵 SurveyButton: Found navBar?', !!navBar, 'Found NewChat?', !!newChatButton, 'Found Download?', !!downloadButton);
 
-                // Use the common parent of Clear and Export buttons as the navbar
-                if (clearButton && exportButton) {
+                // Use the common parent of toolbar buttons as the navbar
+                if (newChatButton && downloadButton) {
                     // Find common parent that contains both buttons
-                    let commonParent = exportButton.parentElement;
-                    while (commonParent && !commonParent.contains(clearButton)) {
+                    let commonParent = downloadButton.parentElement;
+                    while (commonParent && !commonParent.contains(newChatButton)) {
                         commonParent = commonParent.parentElement;
                     }
                     if (commonParent) {
                         navBar = commonParent;
                     }
-                } else if (exportButton) {
-                    // Fallback to Export button's parent
-                    navBar = exportButton.parentElement;
+                } else if (downloadButton) {
+                    // Fallback to Download button's parent
+                    navBar = downloadButton.parentElement;
+                } else if (newChatButton) {
+                    // Fallback to New Chat button's parent
+                    navBar = newChatButton.parentElement;
                 }
 
                 const actionGroup = document.getElementById('toolbar-action-group');
