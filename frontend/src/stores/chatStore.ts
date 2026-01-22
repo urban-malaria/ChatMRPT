@@ -40,7 +40,7 @@ interface ChatState {
   completeArenaBattle: () => void;
   
   // Actions - Session
-  updateSession: (updates: Partial<SessionData>) => void;
+  updateSession: (updates: Partial<SessionData> & { preserveMessages?: boolean }) => void;
   incrementMessageCount: () => void;
   setUploadedFiles: (csv?: string, shapefile?: string) => void;
   resetSession: () => void;
@@ -185,7 +185,7 @@ export const useChatStore = create<ChatState>()(
               },
             };
 
-            if (sessionChanged) {
+            if (sessionChanged && !updates.preserveMessages) {
               nextState.messages = [];
               nextState.currentArena = null;
 
