@@ -316,6 +316,103 @@ class RequestInterpreter:
             'tools_used': ['list_dataset_columns']
         }
 
+    def _query_tpr_data(self, session_id: str, facility_level: str = 'all',
+                        age_group: str = 'all_ages', top_n: int = None,
+                        lga: str = None, sort_by: str = 'tpr') -> Dict[str, Any]:
+        """
+        Query pre-computed TPR data for a specific facility level and age group combination.
+
+        This tool allows users to explore different TPR combinations after completing
+        the initial TPR workflow without re-uploading data.
+        """
+        try:
+            from app.tools.tpr_query_tool import QueryTPRData
+
+            # Create tool instance with parameters
+            tool = QueryTPRData(
+                facility_level=facility_level,
+                age_group=age_group,
+                top_n=top_n,
+                lga=lga,
+                sort_by=sort_by
+            )
+
+            # Execute the tool
+            result = tool.execute(session_id)
+
+            if result.success:
+                return {
+                    'response': result.message,
+                    'status': 'success',
+                    'data': result.data,
+                    'tools_used': ['query_tpr_data']
+                }
+            else:
+                return {
+                    'response': result.message,
+                    'status': 'error',
+                    'error_details': result.error_details,
+                    'tools_used': ['query_tpr_data']
+                }
+
+        except Exception as e:
+            logger.error(f"Error in _query_tpr_data: {e}")
+            return {
+                'response': f"Failed to query TPR data: {str(e)}",
+                'status': 'error',
+                'tools_used': ['query_tpr_data']
+            }
+
+    def _switch_tpr_combination(self, session_id: str, facility_level: str = 'all',
+                                age_group: str = 'all_ages', generate_map: bool = True) -> Dict[str, Any]:
+        """
+        Switch to a different TPR combination and regenerate analysis files.
+
+        This tool rebuilds raw_data.csv, raw_shapefile.zip, and the TPR map for a new
+        combination using cached ward data. Use after completing the TPR workflow when
+        the user wants to analyze a different facility level or age group.
+
+        Examples of user requests that should trigger this tool:
+        - "Switch to TPR for pregnant women at secondary facilities"
+        - "Show TPR map for under 5s at primary facilities"
+        - "Use tertiary facility TPR"
+        - "Change to all ages at primary facilities"
+        - "Generate TPR map for over 5 age group"
+        """
+        try:
+            from app.tools.tpr_query_tool import SwitchTPRCombination
+
+            # Create tool instance with parameters
+            tool = SwitchTPRCombination(
+                facility_level=facility_level,
+                age_group=age_group,
+                generate_map=generate_map
+            )
+
+            # Execute the tool
+            result = tool.execute(session_id)
+
+            response = {
+                'response': result.message,
+                'status': 'success' if result.success else 'error',
+                'data': result.data,
+                'tools_used': ['switch_tpr_combination']
+            }
+
+            # Include visualization if present
+            if result.success and hasattr(result, 'visualizations') and result.visualizations:
+                response['visualizations'] = result.visualizations
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error in _switch_tpr_combination: {e}")
+            return {
+                'response': f"Failed to switch TPR combination: {str(e)}",
+                'status': 'error',
+                'tools_used': ['switch_tpr_combination']
+            }
+
     def _register_tools(self):
         """Register actual Python functions as tools - true py-sidebot style."""
         logger.info("Registering tools - py-sidebot pattern")
@@ -356,7 +453,13 @@ class RequestInterpreter:
 
         # Dataset exploration helpers
         self.tools['list_dataset_columns'] = self._list_dataset_columns
-        
+
+        # TPR query tool - allows querying pre-computed TPR combinations
+        self.tools['query_tpr_data'] = self._query_tpr_data
+
+        # TPR combination switch - regenerate analysis files for different facility/age group
+        self.tools['switch_tpr_combination'] = self._switch_tpr_combination
+
         logger.info(f"Registered {len(self.tools)} tools (4 redundant tools removed, now handled by analyze_data_with_python)")
 
     # ------------------------------------------------------------------

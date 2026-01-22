@@ -1090,6 +1090,22 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                                 "variables": list(env_data.columns),
                                 "rows": int(len(env_data))
                             }
+
+                            # Save ward cache for fast combination switching
+                            try:
+                                from app.core.tpr_ward_cache import save_ward_cache
+                                cache_saved = save_ward_cache(
+                                    session_id=session_id,
+                                    state_gdf=state_gdf,
+                                    env_data=env_data,
+                                    state_name=state_name
+                                )
+                                if cache_saved:
+                                    logger.info("✅ Ward cache saved for combination switching")
+                                    debug_stages["ward_cache"] = {"success": True}
+                            except Exception as cache_err:
+                                logger.warning(f"⚠️ Could not save ward cache: {cache_err}")
+                                debug_stages["ward_cache"] = {"success": False, "error": str(cache_err)}
                         except Exception as e:
                             logger.error(f"❌ Environmental extraction failed: {e}")
                             debug_stages["env_extraction"] = {"success": False, "error": str(e)}
