@@ -454,11 +454,61 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         else:
             lga_names = pd.Series('Unknown', index=gdf_valid.index)
 
-        # Clean format with proper labels
-        hover_text = ('<b>Ward:</b> ' + gdf_valid['WardName'].astype(str) + '<br>' +
-                     '<b>LGA:</b> ' + lga_names + '<br>' +
-                     '<br><b>Vulnerability Rank:</b> ' + gdf_valid['vulnerability_rank'].where(gdf_valid['vulnerability_rank'] != -1, 'Not ranked').astype(str) +
-                     '<br><b>Risk Category:</b> ' + gdf_valid['vulnerability_category'].fillna('Unknown').astype(str)).tolist()
+        # Calculate LGA-level rankings (average ward rank per LGA, then rank LGAs)
+        lga_col = 'LGAName' if 'LGAName' in gdf_valid.columns else ('LGA' if 'LGA' in gdf_valid.columns else 'lga_name')
+        if lga_col in gdf_valid.columns:
+            # Calculate mean rank per LGA (lower rank = higher risk)
+            lga_mean_ranks = gdf_valid.groupby(lga_col)['vulnerability_rank'].mean()
+            # Rank LGAs by their average ward rank (1 = highest risk LGA)
+            lga_rankings = lga_mean_ranks.rank(method='min').astype(int)
+            # Determine LGA category based on ranking
+            total_lgas = len(lga_rankings)
+            def get_lga_category(lga_rank, total):
+                if pd.isna(lga_rank):
+                    return 'unknown'
+                pct = lga_rank / total
+                if pct <= 0.25:
+                    return 'very high'
+                elif pct <= 0.50:
+                    return 'high'
+                elif pct <= 0.75:
+                    return 'medium'
+                else:
+                    return 'low'
+            lga_categories = {lga: get_lga_category(rank, total_lgas) for lga, rank in lga_rankings.items()}
+            # Map back to wards
+            gdf_valid['lga_rank'] = gdf_valid[lga_col].map(lga_rankings)
+            gdf_valid['lga_category'] = gdf_valid[lga_col].map(lga_categories)
+        else:
+            gdf_valid['lga_rank'] = pd.NA
+            gdf_valid['lga_category'] = 'unknown'
+
+        # Build hover text in user's requested format:
+        # Ward: Ndiagbo
+        # LGA: Mashegu
+        # Ward rank: 113 (medium risk)
+        # LGA rank: 8 (high)
+        hover_text = []
+        for idx, row in gdf_valid.iterrows():
+            ward_name = str(row['WardName'])
+            lga_name = str(row.get('LGAName', row.get('LGA', row.get('lga_name', 'Unknown'))))
+            ward_rank = row['vulnerability_rank']
+            ward_cat = str(row.get('vulnerability_category', 'Unknown')).lower()
+            lga_rank = row.get('lga_rank', pd.NA)
+            lga_cat = str(row.get('lga_category', 'unknown')).lower()
+
+            text = f"<b>Ward:</b> {ward_name}<br>"
+            text += f"<b>LGA:</b> {lga_name}<br>"
+
+            if pd.notna(ward_rank) and ward_rank != -1:
+                text += f"<b>Ward rank:</b> {int(ward_rank)} ({ward_cat})<br>"
+            else:
+                text += f"<b>Ward rank:</b> Not ranked<br>"
+
+            if pd.notna(lga_rank):
+                text += f"<b>LGA rank:</b> {int(lga_rank)} ({lga_cat})"
+
+            hover_text.append(text)
         
         # Convert geometry to geojson with proper serialization
         geojson = create_geojson_from_gdf(gdf_valid)
@@ -837,7 +887,35 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
             return prep_result
         
         merged_data = prep_result['data']
-        
+
+        # Calculate LGA-level rankings for hover text
+        lga_col = 'LGAName' if 'LGAName' in merged_data.columns else ('LGA' if 'LGA' in merged_data.columns else None)
+        if lga_col and 'overall_rank' in merged_data.columns:
+            # Calculate mean rank per LGA (lower rank = higher risk)
+            lga_mean_ranks = merged_data.groupby(lga_col)['overall_rank'].mean()
+            # Rank LGAs by their average ward rank (1 = highest risk LGA)
+            lga_rankings = lga_mean_ranks.rank(method='min').astype(int)
+            # Determine LGA category based on ranking
+            total_lgas = len(lga_rankings)
+            def get_lga_cat(lga_rank, total):
+                if pd.isna(lga_rank):
+                    return 'unknown'
+                pct = lga_rank / total
+                if pct <= 0.25:
+                    return 'very high'
+                elif pct <= 0.50:
+                    return 'high'
+                elif pct <= 0.75:
+                    return 'medium'
+                else:
+                    return 'low'
+            lga_categories = {lga: get_lga_cat(rank, total_lgas) for lga, rank in lga_rankings.items()}
+            merged_data['lga_rank'] = merged_data[lga_col].map(lga_rankings)
+            merged_data['lga_category'] = merged_data[lga_col].map(lga_categories)
+        else:
+            merged_data['lga_rank'] = pd.NA
+            merged_data['lga_category'] = 'unknown'
+
         # ORIGINAL: Create threshold field name
         meets_threshold_field = f'meets_{threshold}_threshold'
         
@@ -886,31 +964,33 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
                 tickvals = None
                 ticktext = None
                 
-            # ORIGINAL: Create hover text for threshold 0%
+            # Create hover text for threshold 0% in user's requested format
             hover_text = []
-            ward_names = merged_data['WardName'].astype(str)
-            urban_pcts = merged_data[urban_col].fillna(0).round(1).astype(str)
+            for idx in merged_data.index:
+                row = merged_data.loc[idx]
+                ward_name = str(row['WardName'])
+                lga_name = str(row.get('LGAName', row.get('LGA', 'Unknown')))
+                urban_pct = round(row.get(urban_col, 0), 1)
 
-            # Get LGA names
-            if 'LGAName' in merged_data.columns:
-                lga_names = merged_data['LGAName'].fillna('Unknown').astype(str)
-            elif 'LGA' in merged_data.columns:
-                lga_names = merged_data['LGA'].fillna('Unknown').astype(str)
-            else:
-                lga_names = pd.Series('Unknown', index=merged_data.index)
+                text = f"<b>Ward:</b> {ward_name}<br>"
+                text += f"<b>LGA:</b> {lga_name}<br>"
 
-            if 'overall_rank' in merged_data.columns:
-                for idx in merged_data.index:
-                    ward_name = ward_names.loc[idx]
-                    lga_name = lga_names.loc[idx]
-                    urban_pct = urban_pcts.loc[idx]
-                    rank_val = merged_data.loc[idx, 'overall_rank']
+                if 'overall_rank' in merged_data.columns:
+                    rank_val = row['overall_rank']
+                    ward_cat = str(row.get('vulnerability_category', 'unknown')).lower() if 'vulnerability_category' in merged_data.columns else 'unknown'
+                    lga_rank = row.get('lga_rank', pd.NA)
+                    lga_cat = str(row.get('lga_category', 'unknown')).lower()
+
                     if pd.notna(rank_val) and rank_val != -1:
-                        hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Vulnerability Rank:</b> {int(rank_val)}")
+                        text += f"<b>Ward rank:</b> {int(rank_val)} ({ward_cat})<br>"
                     else:
-                        hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%")
-            else:
-                hover_text = ('<b>Ward:</b> ' + ward_names + '<br><b>LGA:</b> ' + lga_names + '<br><br><b>Urban:</b> ' + urban_pcts + '%').tolist()
+                        text += f"<b>Ward rank:</b> Not ranked<br>"
+
+                    if pd.notna(lga_rank):
+                        text += f"<b>LGA rank:</b> {int(lga_rank)} ({lga_cat})<br>"
+
+                text += f"<b>Urban:</b> {urban_pct}%"
+                hover_text.append(text)
                 
         else:
             # ORIGINAL: Threshold > 0%: Show vulnerability map with non-urban areas greyed out
@@ -962,42 +1042,36 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
                 tickvals = None
                 ticktext = None
             
-            # ORIGINAL: Create hover text for threshold > 0%
+            # Create hover text for threshold > 0% in user's requested format
             hover_text = []
-            ward_names = merged_data['WardName'].astype(str)
-            urban_pcts = merged_data[urban_col].fillna(0).round(1).astype(str)
-            meets_threshold_vals = merged_data[meets_threshold_field]
+            for idx in merged_data.index:
+                row = merged_data.loc[idx]
+                ward_name = str(row['WardName'])
+                lga_name = str(row.get('LGAName', row.get('LGA', 'Unknown')))
+                urban_pct = round(row.get(urban_col, 0), 1)
+                meets_threshold = row[meets_threshold_field]
 
-            # Get LGA names
-            if 'LGAName' in merged_data.columns:
-                lga_names = merged_data['LGAName'].fillna('Unknown').astype(str)
-            elif 'LGA' in merged_data.columns:
-                lga_names = merged_data['LGA'].fillna('Unknown').astype(str)
-            else:
-                lga_names = pd.Series('Unknown', index=merged_data.index)
+                text = f"<b>Ward:</b> {ward_name}<br>"
+                text += f"<b>LGA:</b> {lga_name}<br>"
 
-            if 'overall_rank' in merged_data.columns:
-                for idx in merged_data.index:
-                    ward_name = ward_names.loc[idx]
-                    lga_name = lga_names.loc[idx]
-                    urban_pct = urban_pcts.loc[idx]
-                    meets_threshold = meets_threshold_vals.loc[idx]
+                if 'overall_rank' in merged_data.columns:
+                    rank_val = row['overall_rank']
+                    ward_cat = str(row.get('vulnerability_category', 'unknown')).lower() if 'vulnerability_category' in merged_data.columns else 'unknown'
+                    lga_rank = row.get('lga_rank', pd.NA)
+                    lga_cat = str(row.get('lga_category', 'unknown')).lower()
 
-                    if meets_threshold:
-                        rank_val = merged_data.loc[idx, 'overall_rank']
-                        if pd.notna(rank_val) and rank_val != -1:
-                            hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Vulnerability Rank:</b> {int(rank_val)}<br><b>Status:</b> Meets {threshold}% threshold")
-                        else:
-                            hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Status:</b> Meets {threshold}% threshold")
+                    if pd.notna(rank_val) and rank_val != -1:
+                        text += f"<b>Ward rank:</b> {int(rank_val)} ({ward_cat})<br>"
                     else:
-                        hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Status:</b> Below {threshold}% threshold")
-            else:
-                # No vulnerability data
-                status_labels = meets_threshold_vals.map({
-                    True: f'Meets {threshold}% threshold',
-                    False: f'Below {threshold}% threshold'
-                })
-                hover_text = ('<b>Ward:</b> ' + ward_names + '<br><b>LGA:</b> ' + lga_names + '<br><br><b>Urban:</b> ' + urban_pcts + '%<br><b>Status:</b> ' + status_labels).tolist()
+                        text += f"<b>Ward rank:</b> Not ranked<br>"
+
+                    if pd.notna(lga_rank):
+                        text += f"<b>LGA rank:</b> {int(lga_rank)} ({lga_cat})<br>"
+
+                text += f"<b>Urban:</b> {urban_pct}%<br>"
+                status = f"Meets {threshold}% threshold" if meets_threshold else f"Below {threshold}% threshold"
+                text += f"<b>Status:</b> {status}"
+                hover_text.append(text)
         
         # Create GeoJSON
         geojson = create_geojson_from_gdf(merged_data)

@@ -58,28 +58,68 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         # Create GeoJSON
         geojson = create_geojson_from_gdf(data)
         
-        # Create hover text with ward name, LGA, and PCA info
+        # Calculate LGA-level rankings (average ward rank per LGA, then rank LGAs)
+        lga_col = 'LGAName' if 'LGAName' in data.columns else ('LGA' if 'LGA' in data.columns else None)
+        if lga_col and lga_col in data.columns:
+            # Calculate mean rank per LGA (lower rank = higher risk)
+            lga_mean_ranks = data.groupby(lga_col)['pca_rank'].mean()
+            # Rank LGAs by their average ward rank (1 = highest risk LGA)
+            lga_rankings = lga_mean_ranks.rank(method='min').astype(int)
+            # Determine LGA category based on ranking
+            total_lgas = len(lga_rankings)
+            def get_lga_category(lga_rank, total):
+                if pd.isna(lga_rank):
+                    return 'unknown'
+                pct = lga_rank / total
+                if pct <= 0.25:
+                    return 'very high'
+                elif pct <= 0.50:
+                    return 'high'
+                elif pct <= 0.75:
+                    return 'medium'
+                else:
+                    return 'low'
+            lga_categories = {lga: get_lga_category(rank, total_lgas) for lga, rank in lga_rankings.items()}
+            # Map back to wards
+            data['lga_rank'] = data[lga_col].map(lga_rankings)
+            data['lga_category'] = data[lga_col].map(lga_categories)
+        else:
+            data['lga_rank'] = pd.NA
+            data['lga_category'] = 'unknown'
+
+        # Create hover text in user's requested format:
+        # Ward: Ndiagbo
+        # LGA: Mashegu
+        # Ward rank: 113 (medium risk)
+        # LGA rank: 8 (high)
         hover_text = []
         for _, row in data.iterrows():
-            # Handle NaN values in pca_rank and pca_score
-            pca_score_str = f"{row['pca_score']:.3f}" if pd.notna(row['pca_score']) else "N/A"
-            pca_rank_str = f"{int(row['pca_rank'])}" if pd.notna(row['pca_rank']) else "N/A"
-            pca_category_str = str(row['pca_category']) if pd.notna(row['pca_category']) else "N/A"
+            ward_name = str(row['WardName'])
 
             # Try multiple LGA column names
             if 'LGAName' in data.columns:
-                lga_name = row.get('LGAName', 'Unknown')
+                lga_name = str(row.get('LGAName', 'Unknown'))
             elif 'LGA' in data.columns:
-                lga_name = row.get('LGA', 'Unknown')
+                lga_name = str(row.get('LGA', 'Unknown'))
             else:
                 lga_name = 'Unknown'
 
-            # Clean format with proper labels
-            text = (f"<b>Ward:</b> {row['WardName']}<br>"
-                   f"<b>LGA:</b> {lga_name}<br>"
-                   f"<br><b>PCA Score:</b> {pca_score_str}<br>"
-                   f"<b>Vulnerability Rank:</b> {pca_rank_str}<br>"
-                   f"<b>Risk Category:</b> {pca_category_str}")
+            pca_rank = row['pca_rank']
+            pca_category = str(row.get('pca_category', 'Unknown')).lower()
+            lga_rank = row.get('lga_rank', pd.NA)
+            lga_cat = str(row.get('lga_category', 'unknown')).lower()
+
+            text = f"<b>Ward:</b> {ward_name}<br>"
+            text += f"<b>LGA:</b> {lga_name}<br>"
+
+            if pd.notna(pca_rank):
+                text += f"<b>Ward rank:</b> {int(pca_rank)} ({pca_category})<br>"
+            else:
+                text += f"<b>Ward rank:</b> Not ranked<br>"
+
+            if pd.notna(lga_rank):
+                text += f"<b>LGA rank:</b> {int(lga_rank)} ({lga_cat})"
+
             hover_text.append(text)
 
         # Get rank range for colorbar
