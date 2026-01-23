@@ -61,8 +61,8 @@ export default function useVisualization(content: string): Visualization[] {
     // Matches: session_abc123/file.html, abc-123/visualizations/file.html, uuid/tpr_map.html
     const filePathPattern = /(?:[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)+\.(?:html|png|jpg|jpeg|svg))/g;
     while ((match = filePathPattern.exec(content)) !== null) {
-      // Skip if it's already a full URL (starts with http or /)
-      if (match[0].startsWith('http') || match[0].startsWith('/')) {
+      // Skip if it's already a full URL (starts with http or /) or contains serve_viz_file
+      if (match[0].startsWith('http') || match[0].startsWith('/') || match[0].includes('serve_viz_file')) {
         continue;
       }
       const url = `/serve_viz_file/${match[0]}`;

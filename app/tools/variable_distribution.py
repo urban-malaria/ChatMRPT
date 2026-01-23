@@ -560,7 +560,6 @@ class VariableDistribution(BaseTool):
                 'file_path': file_path,  # Full path for backend processing
                 'web_path': web_path,
                 'description': f'Spatial distribution map of {variable} across study area',
-                'controls': controls_config,
             }
             
         except Exception as e:
