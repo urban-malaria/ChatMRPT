@@ -434,11 +434,21 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             logger.warning(f"Filtered out {len(gdf) - len(gdf_valid)} wards with null geometries")
         
         # Create hover text with ward name, LGA, rank, and category
-        lga_names = gdf_valid['LGAName'].fillna('Unknown').astype(str) if 'LGAName' in gdf_valid.columns else 'Unknown'
-        hover_text = ('<b>' + gdf_valid['WardName'].astype(str) + '</b><br>' +
-                     'LGA: ' + lga_names + '<br><br>' +
-                     'Rank: ' + gdf_valid['vulnerability_rank'].where(gdf_valid['vulnerability_rank'] != -1, 'Not ranked').astype(str) +
-                     '<br>Category: ' + gdf_valid['vulnerability_category'].fillna('Unknown').astype(str)).tolist()
+        # Try multiple possible LGA column names
+        if 'LGAName' in gdf_valid.columns:
+            lga_names = gdf_valid['LGAName'].fillna('Unknown').astype(str)
+        elif 'LGA' in gdf_valid.columns:
+            lga_names = gdf_valid['LGA'].fillna('Unknown').astype(str)
+        elif 'lga_name' in gdf_valid.columns:
+            lga_names = gdf_valid['lga_name'].fillna('Unknown').astype(str)
+        else:
+            lga_names = pd.Series('Unknown', index=gdf_valid.index)
+
+        # Clean format with proper labels
+        hover_text = ('<b>Ward:</b> ' + gdf_valid['WardName'].astype(str) + '<br>' +
+                     '<b>LGA:</b> ' + lga_names + '<br>' +
+                     '<br><b>Vulnerability Rank:</b> ' + gdf_valid['vulnerability_rank'].where(gdf_valid['vulnerability_rank'] != -1, 'Not ranked').astype(str) +
+                     '<br><b>Risk Category:</b> ' + gdf_valid['vulnerability_category'].fillna('Unknown').astype(str)).tolist()
         
         # Convert geometry to geojson with proper serialization
         geojson = create_geojson_from_gdf(gdf_valid)
@@ -864,18 +874,27 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
             hover_text = []
             ward_names = merged_data['WardName'].astype(str)
             urban_pcts = merged_data[urban_col].fillna(0).round(1).astype(str)
-            
+
+            # Get LGA names
+            if 'LGAName' in merged_data.columns:
+                lga_names = merged_data['LGAName'].fillna('Unknown').astype(str)
+            elif 'LGA' in merged_data.columns:
+                lga_names = merged_data['LGA'].fillna('Unknown').astype(str)
+            else:
+                lga_names = pd.Series('Unknown', index=merged_data.index)
+
             if 'overall_rank' in merged_data.columns:
                 for idx in merged_data.index:
                     ward_name = ward_names.loc[idx]
+                    lga_name = lga_names.loc[idx]
                     urban_pct = urban_pcts.loc[idx]
                     rank_val = merged_data.loc[idx, 'overall_rank']
                     if pd.notna(rank_val) and rank_val != -1:
-                        hover_text.append(f"{ward_name}<br>Urban: {urban_pct}%<br>Vulnerability Rank: {int(rank_val)}")
+                        hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Vulnerability Rank:</b> {int(rank_val)}")
                     else:
-                        hover_text.append(f"{ward_name}<br>Urban: {urban_pct}%<br>Status: Normal Vulnerability Map")
+                        hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%")
             else:
-                hover_text = (ward_names + '<br>Urban: ' + urban_pcts + '%<br>Status: Normal Vulnerability Map').tolist()
+                hover_text = ('<b>Ward:</b> ' + ward_names + '<br><b>LGA:</b> ' + lga_names + '<br><br><b>Urban:</b> ' + urban_pcts + '%').tolist()
                 
         else:
             # ORIGINAL: Threshold > 0%: Show vulnerability map with non-urban areas greyed out
@@ -926,28 +945,37 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
             ward_names = merged_data['WardName'].astype(str)
             urban_pcts = merged_data[urban_col].fillna(0).round(1).astype(str)
             meets_threshold_vals = merged_data[meets_threshold_field]
-            
+
+            # Get LGA names
+            if 'LGAName' in merged_data.columns:
+                lga_names = merged_data['LGAName'].fillna('Unknown').astype(str)
+            elif 'LGA' in merged_data.columns:
+                lga_names = merged_data['LGA'].fillna('Unknown').astype(str)
+            else:
+                lga_names = pd.Series('Unknown', index=merged_data.index)
+
             if 'overall_rank' in merged_data.columns:
                 for idx in merged_data.index:
                     ward_name = ward_names.loc[idx]
+                    lga_name = lga_names.loc[idx]
                     urban_pct = urban_pcts.loc[idx]
                     meets_threshold = meets_threshold_vals.loc[idx]
-                    
+
                     if meets_threshold:
                         rank_val = merged_data.loc[idx, 'overall_rank']
                         if pd.notna(rank_val) and rank_val != -1:
-                            hover_text.append(f"{ward_name}<br>Urban: {urban_pct}%<br>Vulnerability Rank: {int(rank_val)}<br>Status: Meets {threshold}% threshold")
+                            hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Vulnerability Rank:</b> {int(rank_val)}<br><b>Status:</b> Meets {threshold}% threshold")
                         else:
-                            hover_text.append(f"{ward_name}<br>Urban: {urban_pct}%<br>Status: Meets {threshold}% threshold")
+                            hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Status:</b> Meets {threshold}% threshold")
                     else:
-                        hover_text.append(f"{ward_name}<br>Urban: {urban_pct}%<br>Status: Below {threshold}% threshold (greyed out)")
+                        hover_text.append(f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br><br><b>Urban:</b> {urban_pct}%<br><b>Status:</b> Below {threshold}% threshold")
             else:
                 # No vulnerability data
                 status_labels = meets_threshold_vals.map({
-                    True: f'Meets {threshold}% threshold', 
-                    False: f'Below {threshold}% threshold (greyed out)'
+                    True: f'Meets {threshold}% threshold',
+                    False: f'Below {threshold}% threshold'
                 })
-                hover_text = (ward_names + '<br>Urban: ' + urban_pcts + '%<br>Status: ' + status_labels).tolist()
+                hover_text = ('<b>Ward:</b> ' + ward_names + '<br><b>LGA:</b> ' + lga_names + '<br><br><b>Urban:</b> ' + urban_pcts + '%<br><b>Status:</b> ' + status_labels).tolist()
         
         # Create GeoJSON
         geojson = create_geojson_from_gdf(merged_data)
