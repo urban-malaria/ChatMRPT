@@ -237,11 +237,16 @@ export const useChatStore = create<ChatState>()(
       }),
       {
         name: 'chat-storage',
-        storage: createJSONStorage(() => sessionStorage),
+        storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
-          // DON'T persist sessionId to prevent reuse across concurrent uploads
-          // sessionId: state.session.sessionId,  // REMOVED to fix data bleed issue
           messages: state.messages.slice(-50), // Keep last 50 messages
+          session: {
+            sessionId: state.session.sessionId,
+            startTime: state.session.startTime,
+            messageCount: state.session.messageCount,
+            hasUploadedFiles: state.session.hasUploadedFiles,
+            uploadedFiles: state.session.uploadedFiles,
+          },
         }),
       }
     )
