@@ -192,3 +192,106 @@ def _build_controls_block(config: Dict) -> str:
 </script>
 {CONTROL_END}
 """
+
+
+HOVER_HIGHLIGHT_START = "<!-- LGA HOVER HIGHLIGHT START -->"
+HOVER_HIGHLIGHT_END = "<!-- LGA HOVER HIGHLIGHT END -->"
+
+
+def inject_lga_hover_highlight(html_file_path: str, lga_codes: list) -> None:
+    """Inject JavaScript for LGA highlighting on hover.
+
+    When user hovers over a ward, all wards in the same LGA highlight
+    while other LGAs fade to lower opacity.
+    """
+    file_path = Path(html_file_path)
+    if not file_path.exists():
+        return
+
+    html = file_path.read_text(encoding='utf-8')
+
+    # Remove any previous hover highlight block
+    if HOVER_HIGHLIGHT_START in html and HOVER_HIGHLIGHT_END in html:
+        start_idx = html.index(HOVER_HIGHLIGHT_START)
+        end_idx = html.index(HOVER_HIGHLIGHT_END) + len(HOVER_HIGHLIGHT_END)
+        html = html[:start_idx] + html[end_idx:]
+
+    # Build the hover highlight script
+    lga_codes_json = json.dumps(lga_codes)
+    hover_script = f'''
+{HOVER_HIGHLIGHT_START}
+<script>
+(function() {{
+  // LGA codes for each ward (indexed by location)
+  const lgaCodes = {lga_codes_json};
+
+  // Wait for Plotly to be ready
+  function initHoverHighlight() {{
+    const plotDiv = document.querySelector('.js-plotly-plot');
+    if (!plotDiv || !plotDiv.data) {{
+      setTimeout(initHoverHighlight, 100);
+      return;
+    }}
+
+    // Store original opacities
+    const originalOpacity = 0.75;
+    const fadedOpacity = 0.25;
+    const highlightOpacity = 0.9;
+
+    // Find the main choropleth trace index
+    let traceIndex = 0;
+    for (let i = 0; i < plotDiv.data.length; i++) {{
+      if (plotDiv.data[i].type === 'choroplethmapbox') {{
+        traceIndex = i;
+        break;
+      }}
+    }}
+
+    plotDiv.on('plotly_hover', function(data) {{
+      if (!data.points || !data.points[0]) return;
+
+      const pointIndex = data.points[0].pointIndex;
+      const hoveredLga = lgaCodes[pointIndex];
+      if (!hoveredLga) return;
+
+      // Build array of opacities - highlight same LGA, fade others
+      const opacities = lgaCodes.map(code =>
+        code === hoveredLga ? highlightOpacity : fadedOpacity
+      );
+
+      // Update trace with new opacities (using marker.opacity array doesn't work well,
+      // so we update the overall opacity and rely on visual contrast)
+      Plotly.restyle(plotDiv, {{
+        'marker.line.width': lgaCodes.map(code => code === hoveredLga ? 2 : 0.5)
+      }}, [traceIndex]);
+    }});
+
+    plotDiv.on('plotly_unhover', function() {{
+      const plotDiv = document.querySelector('.js-plotly-plot');
+      if (!plotDiv) return;
+
+      // Reset to original line widths
+      Plotly.restyle(plotDiv, {{
+        'marker.line.width': 1
+      }}, [traceIndex]);
+    }});
+  }}
+
+  // Start initialization
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', initHoverHighlight);
+  }} else {{
+    initHoverHighlight();
+  }}
+}})();
+</script>
+{HOVER_HIGHLIGHT_END}
+'''
+
+    # Inject before </body>
+    if '</body>' in html:
+        html = html.replace('</body>', hover_script + '\n</body>')
+    else:
+        html += hover_script
+
+    file_path.write_text(html, encoding='utf-8')

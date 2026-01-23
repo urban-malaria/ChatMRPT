@@ -50,6 +50,7 @@ from app.core.tpr_utils import (
     validate_tpr_data
 )
 from app.utils.map_overlays import add_lga_boundary_overlay, calculate_lga_averages
+from app.utils.visualization_controls import inject_lga_hover_highlight
 import plotly.graph_objects as go
 
 logger = logging.getLogger(__name__)
@@ -763,6 +764,14 @@ console.log("=".repeat(60));
 
             with open(map_path, 'w') as f:
                 f.write(html_content)
+
+            # Inject LGA hover highlighting
+            try:
+                lga_codes = merged_gdf['LGACode'].fillna('').astype(str).tolist()
+                inject_lga_hover_highlight(map_path, lga_codes)
+                logger.info("✅ LGA hover highlight injected")
+            except Exception as hover_err:
+                logger.warning(f"Failed to inject LGA hover highlight: {hover_err}")
 
             # Verify file was created
             if os.path.exists(map_path):
