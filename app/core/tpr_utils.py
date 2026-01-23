@@ -520,8 +520,8 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
         return pd.DataFrame({
             'WardName': ['No data'],
             'LGA': ['No data'],
-            'TPR': [0],
-            'Total_Tested': [0],
+            'Burden': [0],
+            'Population': [0],
             'Total_Positive': [0]
         })
     

@@ -289,7 +289,7 @@ class TPRWorkflowHandler:
                     g = age_groups[key]
                     rows.append({
                         'Age Group': label,
-                        'TPR (%)': float(g.get('positivity_rate', 0.0))
+                        'Positivity (%)': float(g.get('positivity_rate', 0.0))
                     })
                     test_rows.append({
                         'Age Group': label,
@@ -361,23 +361,23 @@ class TPRWorkflowHandler:
             )
 
             # Chart 2: Positivity rates by age group (clean bar chart)
-            fig2 = px.bar(df, x='Age Group', y='TPR (%)',
+            fig2 = px.bar(df, x='Age Group', y='Positivity (%)',
                          title='Test positivity rate by age group',
                          color_discrete_sequence=['#636EFA'])  # Uniform blue
 
             fig2.update_traces(
-                text=df['TPR (%)'].apply(lambda x: f'{x:.1f}%'),
+                text=df['Positivity (%)'].apply(lambda x: f'{x:.1f}%'),
                 textposition='outside',
                 textfont=dict(size=14),
-                hovertemplate='<b>%{x}</b><br>TPR: %{y:.1f}%<extra></extra>'
+                hovertemplate='<b>%{x}</b><br>Positivity: %{y:.1f}%<extra></extra>'
             )
 
             fig2.update_layout(
                 showlegend=False,
                 autosize=True,  # Let it fit naturally
                 yaxis=dict(
-                    title='TPR (%)',
-                    range=[0, max(df['TPR (%)'].max() * 1.3, 40)],  # More headroom
+                    title='Positivity (%)',
+                    range=[0, max(df['Positivity (%)'].max() * 1.3, 40)],  # More headroom
                     showgrid=True,
                     gridcolor='rgba(0,0,0,0.1)',
                     gridwidth=1,
