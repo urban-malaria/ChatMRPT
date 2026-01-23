@@ -695,9 +695,11 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
 
             if pop_series is not None:
                 merged['Population'] = pop_series.values
-                # Calculate Burden = (Total_Positive / Population) * 1000
+                # Calculate Burden = (Total_Positive / Population) * 1000, capped at 1000
+                # Cap at 1000 because burden > 1000 per 1,000 population is epidemiologically impossible
+                # (would mean >100% of population tested positive, likely due to repeat testing)
                 merged['Burden'] = merged.apply(
-                    lambda r: round((r['Total_Positive'] / r['Population']) * 1000, 2)
+                    lambda r: min(round((r['Total_Positive'] / r['Population']) * 1000, 2), 1000.0)
                     if pd.notna(r.get('Total_Positive')) and r['Population'] > 0 else 0,
                     axis=1
                 )
@@ -849,7 +851,7 @@ def prepare_tpr_summary(tpr_df: pd.DataFrame) -> Dict[str, Any]:
         'std_burden': round(tpr_df['Burden'].std(), 2),
         'total_positive': int(tpr_df['Total_Positive'].sum()),
         'total_population': int(tpr_df['Population'].sum()) if 'Population' in tpr_df.columns else 0,
-        'overall_burden': round(tpr_df['Total_Positive'].sum() / tpr_df['Population'].sum() * 1000, 2)
+        'overall_burden': min(round(tpr_df['Total_Positive'].sum() / tpr_df['Population'].sum() * 1000, 2), 1000.0)
                           if 'Population' in tpr_df.columns and tpr_df['Population'].sum() > 0 else 0
     }
 
