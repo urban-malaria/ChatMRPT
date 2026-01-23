@@ -10,7 +10,7 @@ import os
 import sqlite3
 import logging
 import pandas as pd
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -79,11 +79,15 @@ def init_precompute_db(session_id: str) -> str:
     return db_path
 
 
+ProgressCallback = Optional[Callable[[str, str, str, Dict[str, Any]], None]]
+
+
 def precompute_all_tpr_combinations(
     session_id: str,
     data: pd.DataFrame,
     state: str,
-    exclude_combination: Optional[Dict[str, str]] = None
+    exclude_combination: Optional[Dict[str, str]] = None,
+    progress_callback: ProgressCallback = None
 ) -> Dict[str, Any]:
     """
     Pre-compute all 16 TPR combinations and store in SQLite.
@@ -123,10 +127,24 @@ def precompute_all_tpr_combinations(
                     age_group == exclude_combination.get('age_group')):
                     logger.info(f"Skipping user-selected combination: {facility_level}/{age_group}")
                     results['combinations_skipped'] += 1
+                    if progress_callback:
+                        progress_callback(
+                            facility_level,
+                            age_group,
+                            'skipped',
+                            {'reason': 'user_selected'}
+                        )
                     continue
 
             try:
                 logger.info(f"Computing TPR for {facility_level}/{age_group}")
+                if progress_callback:
+                    progress_callback(
+                        facility_level,
+                        age_group,
+                        'started',
+                        {}
+                    )
 
                 # Calculate TPR for this combination
                 tpr_df = calculate_ward_tpr(
@@ -166,11 +184,25 @@ def precompute_all_tpr_combinations(
                 conn.commit()
                 results['combinations_computed'] += 1
                 logger.info(f"Stored {len(tpr_df)} wards for {facility_level}/{age_group}")
+                if progress_callback:
+                    progress_callback(
+                        facility_level,
+                        age_group,
+                        'completed',
+                        {'wards': len(tpr_df)}
+                    )
 
             except Exception as e:
                 error_msg = f"Error computing {facility_level}/{age_group}: {str(e)}"
                 logger.error(error_msg)
                 results['errors'].append(error_msg)
+                if progress_callback:
+                    progress_callback(
+                        facility_level,
+                        age_group,
+                        'error',
+                        {'error': error_msg}
+                    )
 
     conn.close()
 

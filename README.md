@@ -64,7 +64,12 @@
    python run.py
    ```
 
-5. **Access the application**
+5. **Start the TPR pre-compute worker** (required for background TPR combinations)
+   ```bash
+   python scripts/tpr_precompute_worker.py
+   ```
+
+6. **Access the application**
    Open your browser to: `http://127.0.0.1:5013`
 
 ## 💬 Usage Examples

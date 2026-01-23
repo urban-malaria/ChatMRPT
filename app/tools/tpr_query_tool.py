@@ -7,6 +7,8 @@ combination after completing the initial TPR workflow.
 
 import logging
 from typing import Optional
+import pandas as pd
+import geopandas as gpd
 from pydantic import Field
 
 from .base import DataAnalysisTool, ToolExecutionResult, ToolCategory
@@ -80,14 +82,28 @@ class QueryTPRData(DataAnalysisTool):
     def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
         """Execute the TPR query and return formatted results."""
         from app.core.tpr_precompute import query_precomputed_tpr, is_tpr_precomputed
+        from app.core.tpr_precompute_service import get_precompute_status
+
+        status = get_precompute_status(session_id)
 
         # Check if pre-computed data exists
         if not is_tpr_precomputed(session_id):
+            message = "Pre-computed TPR data is not available for this session."
+            state = status.get('state')
+            if state in {'queued', 'running'}:
+                message = (
+                    "I'm still preparing the other facility/age combinations in the background. "
+                    "Please give me a bit more time and try again."
+                )
+            elif state == 'error':
+                error_detail = status.get('error', 'Unknown error')
+                message = (
+                    "Background pre-computation failed. "
+                    f"Details: {error_detail}. You can ask me to retry the TPR pre-computation."
+                )
             return self._create_error_result(
-                message="No pre-computed TPR data found for this session. "
-                        "Please complete the TPR workflow first by uploading TPR data "
-                        "and selecting your state, facility level, and age group.",
-                error_details="TPR pre-computation not available"
+                message=message,
+                error_details=status.get('error', 'TPR pre-computation not available')
             )
 
         # Query the data

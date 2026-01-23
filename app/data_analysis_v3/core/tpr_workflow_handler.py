@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 from enum import Enum
 
+from app.core.tpr_precompute_service import schedule_precompute
+
 from .state_manager import DataAnalysisStateManager, ConversationStage
 from .tpr_data_analyzer import TPRDataAnalyzer
 from .tpr_language_interface import TPRLanguageInterface
@@ -1330,38 +1332,18 @@ Analyzing test data and generating visualizations..."""
             # Save TPR completion flag
             self.state_manager.update_state({'tpr_completed': True})
 
-            # Start background pre-computation of all TPR combinations
-            # This allows users to query any combination in standard flow
-            try:
-                import threading
-                from app.core.tpr_precompute import precompute_all_tpr_combinations
-
-                # Get the user's selected combination to exclude (already computed)
-                user_combination = {
-                    'facility_level': self.tpr_selections.get('facility_level', 'all'),
-                    'age_group': self.tpr_selections.get('age_group', 'all_ages')
-                }
-
-                def _precompute_background():
-                    try:
-                        logger.info(f"🔄 Background TPR pre-computation started for session {self.session_id}")
-                        result = precompute_all_tpr_combinations(
-                            session_id=self.session_id,
-                            data=self.uploaded_data.copy(),
-                            state=self.tpr_selections.get('state', ''),
-                            exclude_combination=user_combination
-                        )
-                        logger.info(f"✅ Background TPR pre-computation complete: {result['combinations_computed']} combinations")
-                    except Exception as e:
-                        logger.error(f"❌ Background TPR pre-computation failed: {e}")
-
-                # Start background thread (daemon=True so it doesn't block shutdown)
-                precompute_thread = threading.Thread(target=_precompute_background, daemon=True)
-                precompute_thread.start()
-                logger.info("🚀 Started background TPR pre-computation thread")
-
-            except Exception as e:
-                logger.warning(f"Could not start TPR pre-computation: {e}")
+            # Start background pre-computation of all TPR combinations via queue
+            user_combination = {
+                'facility_level': self.tpr_selections.get('facility_level', 'all'),
+                'age_group': self.tpr_selections.get('age_group', 'all_ages')
+            }
+            schedule_info = schedule_precompute(
+                session_id=self.session_id,
+                state=self.tpr_selections.get('state', ''),
+                data_path=data_path,
+                exclude_combination=user_combination
+            )
+            debug_info.setdefault('stages', {})['precompute'] = schedule_info
 
             # Calculate total time
             total_time = time.time() - start_time
@@ -1380,7 +1362,8 @@ Analyzing test data and generating visualizations..."""
             logger.info("🚀 Calling trigger_risk_analysis() to transition to standard workflow")
             transition_result = self.trigger_risk_analysis()
 
-            # Check if transition succeeded
+            # Prepare final response based on transition status
+            response: Dict[str, Any]
             if transition_result.get('success'):
                 logger.info("✅ Auto-transition successful - combining TPR results with menu")
                 logger.info(f"🔍 CRITICAL: visualizations before creating response: {visualizations}")
@@ -1411,15 +1394,6 @@ Analyzing test data and generating visualizations..."""
 
                 logger.info(f"🔍 CRITICAL: response['visualizations'] = {response.get('visualizations')}")
                 logger.info(f"🔍 CRITICAL: Complete response keys: {list(response.keys())}")
-
-                # Save debug info to file
-                debug_file = os.path.join(self.session_folder, 'tpr_debug.json')
-                with open(debug_file, 'w') as f:
-                    json.dump(debug_info, f, indent=2)
-                logger.info(f"💾 Debug info saved to {debug_file}")
-
-                logger.info(f"📤 Returning combined TPR+transition response")
-                return response
             else:
                 logger.error(f"❌ Auto-transition failed: {transition_result.get('message')}")
                 logger.warning("⚠️ Falling back to TPR results without transition")
@@ -1444,17 +1418,8 @@ Analyzing test data and generating visualizations..."""
                     }
                 }
 
-                # Save debug info to file
-                debug_file = os.path.join(self.session_folder, 'tpr_debug.json')
-                with open(debug_file, 'w') as f:
-                    json.dump(debug_info, f, indent=2)
-                logger.info(f"💾 Debug info saved to {debug_file}")
-
-                logger.info(f"📤 Returning TPR results (auto-transition failed)")
-                return response
-
             # Generate export documents for TPR results
-            download_links = []
+            download_links: List[Dict[str, Any]] = []
             try:
                 logger.info(f"Generating TPR export documents for session {self.session_id}")
                 
@@ -1594,17 +1559,22 @@ Analyzing test data and generating visualizations..."""
                 logger.error(f"Error generating TPR export documents: {e}")
                 # Continue without exports - don't fail the main operation
             
+            if download_links:
+                response['download_links'] = download_links
+
             # Save debug info to file
             debug_file = os.path.join(self.session_folder, 'tpr_debug.json')
             with open(debug_file, 'w') as f:
                 json.dump(debug_info, f, indent=2)
             logger.info(f"💾 Debug info saved to {debug_file}")
-            
+
+            logger.info("📤 Returning TPR response (success path)")
+            return response
+
         except Exception as e:
-            import traceback
             error_trace = traceback.format_exc()
             logger.error(f"❌ Error calculating TPR: {e}\n{error_trace}")
-            
+
             debug_info["stages"]["error"] = {
                 "message": str(e),
                 "trace": error_trace
@@ -1617,30 +1587,29 @@ Analyzing test data and generating visualizations..."""
             
             message = f"Error calculating TPR: {str(e)}"
             visualizations = []
-            download_links = []
 
-        # Add debug info to response for browser console visibility
-        # CRITICAL FIX: Even if there's an error, we MUST exit Data Analysis mode
-        response = {
-            "success": True,
-            "message": message,
-            "session_id": self.session_id,
-            "workflow": "tpr",
-            "stage": "complete",
-            "visualizations": visualizations,
-            "exit_data_analysis_mode": True,  # ✅ CRITICAL: Exit even on error
-            "debug": {
-                "selections": self.tpr_selections,
-                "files_created": files_status if 'files_status' in locals() else {},
-                "total_time": total_time if 'total_time' in locals() else 0,
-                "has_map": len(visualizations) > 0,
-                "debug_file": "tpr_debug.json",
-                "error_occurred": True
+            # Add debug info to response for browser console visibility
+            # CRITICAL FIX: Even if there's an error, we MUST exit Data Analysis mode
+            response = {
+                "success": True,
+                "message": message,
+                "session_id": self.session_id,
+                "workflow": "tpr",
+                "stage": "complete",
+                "visualizations": visualizations,
+                "exit_data_analysis_mode": True,  # ✅ CRITICAL: Exit even on error
+                "debug": {
+                    "selections": self.tpr_selections,
+                    "files_created": files_status if 'files_status' in locals() else {},
+                    "total_time": total_time if 'total_time' in locals() else 0,
+                    "has_map": len(visualizations) > 0,
+                    "debug_file": "tpr_debug.json",
+                    "error_occurred": True
+                }
             }
-        }
-        
-        logger.info(f"📤 Returning response with debug info: {json.dumps(response['debug'], indent=2)}")
-        return response
+
+            logger.info(f"📤 Returning response with debug info: {json.dumps(response['debug'], indent=2)}")
+            return response
     
     def trigger_risk_analysis(self) -> Dict[str, Any]:
         """
