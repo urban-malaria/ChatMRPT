@@ -415,6 +415,7 @@ class VariableDistribution(BaseTool):
             from shapely.geometry import mapping
 
             # Determine variable label and unit (used for hover text and colorbar)
+            # Comprehensive mapping based on raster database in data/geospatial/rasters/
             var_lower = variable.lower()
             if 'burden' in var_lower:
                 var_label = "Malaria Burden"
@@ -422,28 +423,49 @@ class VariableDistribution(BaseTool):
             elif 'tpr' in var_lower or 'positivity' in var_lower:
                 var_label = variable.replace('_', ' ').title()
                 var_unit = "%"
-            elif 'population' in var_lower:
+            elif 'pfpr' in var_lower or 'parasite' in var_lower:
+                # Plasmodium falciparum parasite rate
+                var_label = variable.replace('_', ' ').title()
+                var_unit = "%"
+            elif 'population' in var_lower and 'density' not in var_lower:
                 var_label = "Population"
                 var_unit = ""
             elif 'distance' in var_lower:
                 # Distance variables (e.g., DistanceToWaterbodies, distance_to_health_facility)
                 var_label = variable.replace('_', ' ').title()
                 var_unit = " m"
-            elif 'elevation' in var_lower or 'altitude' in var_lower:
+            elif 'elevation' in var_lower or 'altitude' in var_lower or var_lower in ['ele', 'dem']:
                 var_label = variable.replace('_', ' ').title()
                 var_unit = " m"
             elif 'rainfall' in var_lower or 'precipitation' in var_lower:
                 var_label = variable.replace('_', ' ').title()
                 var_unit = " mm"
-            elif 'temperature' in var_lower or 'temp' in var_lower:
+            elif 'temperature' in var_lower or 'temp' in var_lower or 'lst' in var_lower:
                 var_label = variable.replace('_', ' ').title()
                 var_unit = " °C"
-            elif 'humidity' in var_lower:
+            elif 'humidity' in var_lower or 'wetness' in var_lower or 'soil' in var_lower:
+                # Surface soil wetness, relative humidity
                 var_label = variable.replace('_', ' ').title()
                 var_unit = "%"
             elif 'density' in var_lower:
                 var_label = variable.replace('_', ' ').title()
                 var_unit = " per km²"
+            elif 'flood' in var_lower:
+                # Flood extent (percentage or binary)
+                var_label = variable.replace('_', ' ').title()
+                var_unit = "%"
+            elif 'ntl' in var_lower or 'night' in var_lower or 'light' in var_lower:
+                # Night time lights radiance
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " nW/cm²/sr"
+            elif 'housing' in var_lower:
+                # Housing quality index (0-1 scale)
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " (index)"
+            elif 'evi' in var_lower or 'ndvi' in var_lower or 'ndmi' in var_lower or 'ndwi' in var_lower:
+                # Vegetation/moisture indices are unitless but scaled
+                var_label = variable.replace('_', ' ').upper()
+                var_unit = ""  # Unitless indices
             else:
                 var_label = variable.replace('_', ' ').title()
                 var_unit = ""
