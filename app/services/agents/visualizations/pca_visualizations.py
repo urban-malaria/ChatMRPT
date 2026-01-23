@@ -65,23 +65,39 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             pca_score_str = f"{row['pca_score']:.3f}" if pd.notna(row['pca_score']) else "N/A"
             pca_rank_str = f"{int(row['pca_rank'])}" if pd.notna(row['pca_rank']) else "N/A"
             pca_category_str = str(row['pca_category']) if pd.notna(row['pca_category']) else "N/A"
-            lga_name = row.get('LGAName', 'Unknown') if 'LGAName' in data.columns else 'Unknown'
 
-            text = (f"<b>{row['WardName']}</b><br>"
-                   f"LGA: {lga_name}<br><br>"
-                   f"PCA Score: {pca_score_str}<br>"
-                   f"Rank: {pca_rank_str}<br>"
-                   f"Category: {pca_category_str}")
+            # Try multiple LGA column names
+            if 'LGAName' in data.columns:
+                lga_name = row.get('LGAName', 'Unknown')
+            elif 'LGA' in data.columns:
+                lga_name = row.get('LGA', 'Unknown')
+            else:
+                lga_name = 'Unknown'
+
+            # Clean format with proper labels
+            text = (f"<b>Ward:</b> {row['WardName']}<br>"
+                   f"<b>LGA:</b> {lga_name}<br>"
+                   f"<br><b>PCA Score:</b> {pca_score_str}<br>"
+                   f"<b>Vulnerability Rank:</b> {pca_rank_str}<br>"
+                   f"<b>Risk Category:</b> {pca_category_str}")
             hover_text.append(text)
-        
+
+        # Get rank range for colorbar
+        min_rank = data['pca_rank'].min()
+        max_rank = data['pca_rank'].max()
+        median_rank = data['pca_rank'].median()
+
+        # Invert z-values so highest risk (rank 1) appears at TOP of colorbar
+        z_inverted = max_rank + 1 - data['pca_rank']
+
         # Create choropleth with custom colors based on vulnerability categories
         fig = go.Figure(go.Choroplethmapbox(
             geojson=geojson,
             locations=data.index,
-            z=data['pca_rank'],  # Use rank for coloring (lower rank = higher risk)
-            colorscale=[[0, vuln_colors['Low']], 
-                       [0.33, vuln_colors['Medium']], 
-                       [0.66, vuln_colors['High']], 
+            z=z_inverted,  # Inverted: higher value = higher risk (at top)
+            colorscale=[[0, vuln_colors['Low']],
+                       [0.33, vuln_colors['Medium']],
+                       [0.66, vuln_colors['High']],
                        [1, vuln_colors['Very High']]],
             marker_line_color='black',
             marker_line_width=0.5,
@@ -93,11 +109,12 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
                     font=dict(size=12)
                 ),
                 tickmode='array',
-                tickvals=[data['pca_rank'].min(), data['pca_rank'].median(), data['pca_rank'].max()],
-                ticktext=["High Risk", "Medium Risk", "Low Risk"]
+                # Inverted tickvals: bottom=1 (low risk), top=max_rank (high risk)
+                tickvals=[1, max_rank + 1 - median_rank, max_rank],
+                ticktext=[f"Low Risk ({int(max_rank)})", f"Medium ({int(median_rank)})", f"High Risk ({int(min_rank)})"]
             ),
-            zmin=data['pca_rank'].min(),
-            zmax=data['pca_rank'].max()
+            zmin=1,
+            zmax=max_rank
         ))
         
         # Add LGA boundary overlay
