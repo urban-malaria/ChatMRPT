@@ -24,17 +24,6 @@ def _cleanup_previous_session(session_id: Optional[str]) -> None:
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.warning("Failed to clear data service cache for %s: %s", session_id, exc)
 
-    # Clear TPR workflow handlers
-    try:
-        from app.tpr_module.integration.tpr_handler import cleanup_tpr_handler  # type: ignore
-
-        cleanup_tpr_handler(session_id)
-    except ImportError:
-        # TPR module not always available in all deployments
-        pass
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.debug("TPR cleanup for %s raised %s", session_id, exc)
-
 
 def establish_authenticated_session(user, token: str, method: str, *, remember: bool = False) -> None:
     """Reset Flask session state for a freshly authenticated user.
