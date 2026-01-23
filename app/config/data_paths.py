@@ -39,6 +39,12 @@ INSTANCE_DIR = os.environ.get('CHATMRPT_INSTANCE_DIR',
 UPLOAD_DIR = os.environ.get('CHATMRPT_UPLOAD_DIR',
                             os.path.join(INSTANCE_DIR, 'uploads'))
 
+# Population rasters for burden calculation
+GEOSPATIAL_DIR = os.path.join(PROJECT_ROOT, 'data', 'geospatial')
+POP_TOTAL_RASTER = os.path.join(GEOSPATIAL_DIR, 'nigeria.tif')
+POP_U5_RASTER = os.path.join(GEOSPATIAL_DIR, 'NGA_population_v2_0_agesex_under5.tif')
+POP_F15_49_RASTER = os.path.join(GEOSPATIAL_DIR, 'NGA_population_v2_0_agesex', 'NGA_population_v2_0_agesex_f15_49.tif')
+
 
 def get_raster_path(raster_name: str) -> str:
     """

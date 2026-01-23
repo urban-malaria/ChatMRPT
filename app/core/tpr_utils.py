@@ -1,17 +1,109 @@
 """
-TPR (Test Positivity Rate) Utility Functions
+Malaria Burden Utility Functions
 
-This module provides core functionality for detecting TPR data and calculating
-test positivity rates using the production logic from the deleted TPR module.
+This module provides core functionality for detecting malaria data and calculating
+burden per 1,000 population using ward-level case data and population rasters.
 """
 
 import pandas as pd
 import numpy as np
+import geopandas as gpd
 import re
+import os
 from typing import Tuple, Dict, List, Optional, Any
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def load_state_shapefile(state_name: str):
+    """Load Nigeria shapefile and filter to a specific state.
+
+    Args:
+        state_name: Name of the state to filter to
+
+    Returns:
+        GeoDataFrame filtered to the state, or None if not found
+    """
+    try:
+        from app.config.data_paths import NIGERIA_SHAPEFILE
+    except ImportError:
+        NIGERIA_SHAPEFILE = None
+
+    # Try configured path first, then fallbacks
+    candidates = []
+    if NIGERIA_SHAPEFILE:
+        candidates.append(NIGERIA_SHAPEFILE)
+    candidates.append(os.path.join('www', 'complete_names_wards', 'wards.shp'))
+
+    gdf = None
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                gdf = gpd.read_file(path)
+                logger.info(f"Loaded shapefile from {path} with {len(gdf)} wards")
+                break
+            except Exception as e:
+                logger.error(f"Error loading shapefile from {path}: {e}")
+
+    if gdf is None:
+        logger.error("Could not load Nigeria shapefile")
+        return None
+
+    # Filter to state - try StateName column first, then check other columns
+    state_name_lower = state_name.lower()
+    state_gdf = None
+
+    for col in ['StateName', 'State', 'state', 'ADM1_EN']:
+        if col in gdf.columns:
+            state_gdf = gdf[gdf[col].str.lower() == state_name_lower].copy()
+            if not state_gdf.empty:
+                logger.info(f"Filtered to {len(state_gdf)} wards for {state_name}")
+                return state_gdf
+
+    logger.warning(f"Could not filter shapefile to state {state_name}")
+    return None
+
+
+def extract_ward_population(ward_gdf, age_group: str = 'all_ages'):
+    """Extract population from rasters for each ward using zonal statistics.
+
+    Args:
+        ward_gdf: GeoDataFrame with ward geometries
+        age_group: Age group for population ('all_ages', 'u5', 'o5', 'pw')
+
+    Returns:
+        pandas Series with population values, or None if extraction fails
+    """
+    try:
+        from rasterstats import zonal_stats
+        from app.config.data_paths import POP_TOTAL_RASTER, POP_U5_RASTER, POP_F15_49_RASTER
+    except ImportError as e:
+        logger.error(f"Missing required imports for population extraction: {e}")
+        return None
+
+    # Select appropriate raster based on age group
+    if age_group == 'u5':
+        raster = POP_U5_RASTER
+    elif age_group == 'pw':
+        raster = POP_F15_49_RASTER
+    elif age_group == 'o5':
+        # O5 = Total - U5
+        if not os.path.exists(POP_TOTAL_RASTER) or not os.path.exists(POP_U5_RASTER):
+            logger.warning("Population rasters not found for O5 calculation")
+            return None
+        total_stats = zonal_stats(ward_gdf, POP_TOTAL_RASTER, stats=['sum'])
+        u5_stats = zonal_stats(ward_gdf, POP_U5_RASTER, stats=['sum'])
+        return pd.Series([(t['sum'] or 0) - (u['sum'] or 0) for t, u in zip(total_stats, u5_stats)])
+    else:  # all_ages
+        raster = POP_TOTAL_RASTER
+
+    if not os.path.exists(raster):
+        logger.warning(f"Population raster not found: {raster}")
+        return None
+
+    stats = zonal_stats(ward_gdf, raster, stats=['sum'])
+    return pd.Series([s['sum'] or 0 for s in stats])
 
 
 def is_tpr_data(df: pd.DataFrame) -> Tuple[bool, Dict[str, Any]]:
@@ -211,30 +303,26 @@ def fix_column_encoding(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages', 
+def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                       test_method: str = 'both', facility_level: str = 'all') -> pd.DataFrame:
     """
-    Calculate Test Positivity Rate using production logic with user selections.
-    
-    Production logic (from deleted tpr_calculator.py):
-    - All ages: Calculate TPR for each method (RDT, Microscopy), then take max(TPR)
-    - Specific age: Take max at facility level first, then aggregate
-    
+    Calculate Malaria Burden per 1,000 population.
+
+    Aggregates positive cases by ward, matches with shapefile to get geometries,
+    extracts population from rasters, and calculates burden = (positives / population) * 1000.
+
     Args:
-        df: DataFrame with TPR data
-        age_group: Age group to calculate for ('all_ages', 'u5', 'o5', 'pw')
-                  - 'all_ages': All age groups combined
-                  - 'u5': Under 5 years
-                  - 'o5': Over 5 years  
-                  - 'pw': Pregnant women
+        df: DataFrame with malaria case data
+        age_group: Age group for calculation and population denominator
+                  - 'all_ages': All age groups (total population)
+                  - 'u5': Under 5 years (U5 population)
+                  - 'o5': Over 5 years (Total - U5 population)
+                  - 'pw': Pregnant women (Women 15-49 population)
         test_method: Test method to use ('rdt', 'microscopy', 'both')
-                    - 'rdt': RDT only
-                    - 'microscopy': Microscopy only
-                    - 'both': Max of RDT and Microscopy (default)
         facility_level: Facility level to include ('all', 'primary', 'secondary', 'tertiary')
-        
+
     Returns:
-        DataFrame with columns: WardName, LGA, TPR, Total_Tested, Total_Positive
+        DataFrame with columns: WardName, LGA, Burden, Total_Positive, Population
     """
     # Fix encoding issues first
     df = fix_column_encoding(df)
@@ -472,39 +560,21 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                     if col in group.columns:
                         micro_positive += group[col].fillna(0).sum()
             
-            # Calculate TPR based on method
+            # Determine total_positive based on test method
             if test_method == 'rdt':
-                final_tpr = (rdt_positive / rdt_tested * 100) if rdt_tested > 0 else 0
-                total_tested = rdt_tested
                 total_positive = rdt_positive
             elif test_method == 'microscopy':
-                final_tpr = (micro_positive / micro_tested * 100) if micro_tested > 0 else 0
-                total_tested = micro_tested
                 total_positive = micro_positive
-            else:  # both - use max TPR logic
-                rdt_tpr = (rdt_positive / rdt_tested * 100) if rdt_tested > 0 else 0
-                micro_tpr = (micro_positive / micro_tested * 100) if micro_tested > 0 else 0
-                final_tpr = max(rdt_tpr, micro_tpr)
-                total_tested = max(rdt_tested, micro_tested)
-                total_positive = rdt_positive if rdt_tpr > micro_tpr else micro_positive
-            
-            # Only include RDT/Microscopy TPR if we calculated both
-            result_dict = {
+            else:  # both - use positives from method with higher rate
+                rdt_rate = (rdt_positive / rdt_tested) if rdt_tested > 0 else 0
+                micro_rate = (micro_positive / micro_tested) if micro_tested > 0 else 0
+                total_positive = rdt_positive if rdt_rate >= micro_rate else micro_positive
+
+            results.append({
                 'WardName': ward,
                 'LGA': lga,
-                'TPR': round(final_tpr, 2),
-                'Total_Tested': int(total_tested),
                 'Total_Positive': int(total_positive)
-            }
-            
-            # Add method-specific TPR if using 'both'
-            if test_method == 'both':
-                rdt_tpr = (rdt_positive / rdt_tested * 100) if rdt_tested > 0 else 0
-                micro_tpr = (micro_positive / micro_tested * 100) if micro_tested > 0 else 0
-                result_dict['RDT_TPR'] = round(rdt_tpr, 2)
-                result_dict['Microscopy_TPR'] = round(micro_tpr, 2)
-            
-            results.append(result_dict)
+            })
     
     else:  # specific_age method
         # For specific age groups: Max at facility level, then sum
@@ -513,7 +583,7 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
         # Check if we have the necessary columns for specific age calculation
         if not rdt_tested_cols and not micro_tested_cols:
             logger.warning(f"No test data found for age group '{age_group}', returning empty results")
-            return pd.DataFrame(columns=['WardName', 'LGA', 'TPR', 'Total_Tested', 'Total_Positive'])
+            return pd.DataFrame(columns=['WardName', 'LGA', 'Total_Positive'])
         
         # Need facility column for this method (but make it optional)
         facility_cols = [col for col in df.columns if 'facility' in col.lower()]
@@ -540,21 +610,11 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                     tested = max(tested, micro_tested)
                     positive = max(positive, micro_positive) if micro_tested > 0 else positive
                 
-                tpr = (positive / tested * 100) if tested > 0 else 0
-                
                 results.append({
                     'WardName': ward,
                     'LGA': lga,
-                    'TPR': round(tpr, 2),
-                    'Total_Tested': int(tested),
                     'Total_Positive': int(positive)
                 })
-            
-            # Convert to DataFrame and return
-            result_df = pd.DataFrame(results)
-            if not result_df.empty:
-                result_df = result_df.sort_values('TPR', ascending=False)
-            return result_df
         
         facility_col = facility_cols[0]
         
@@ -590,34 +650,77 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
             ward_data[ward]['tested'] += facility_tested
             ward_data[ward]['positive'] += facility_positive
         
-        # Calculate TPR for each ward
+        # Collect results for each ward
         for ward, data in ward_data.items():
-            tpr = (data['positive'] / data['tested'] * 100) if data['tested'] > 0 else 0
-            # Clamp to [0, 100] to enforce valid percentage range
-            if tpr < 0:
-                logger.warning(f"Negative TPR computed for ward '{ward}': {tpr:.2f}%. Clamping to 0%.")
-                tpr = 0
-            if tpr > 100:
-                logger.warning(f"TPR > 100% computed for ward '{ward}': {tpr:.2f}%. Clamping to 100%.")
-                tpr = 100
-
             results.append({
                 'WardName': ward,
                 'LGA': data['lga'],
-                'TPR': round(tpr, 2),
-                'Total_Tested': int(data['tested']),
                 'Total_Positive': int(data['positive'])
             })
-    
+
     # Convert to DataFrame
     result_df = pd.DataFrame(results)
-    
-    # Sort by TPR descending
-    if not result_df.empty:
-        result_df = result_df.sort_values('TPR', ascending=False)
-    
-    logger.info(f"Calculated TPR for {len(result_df)} wards using {age_group} age group")
-    
+
+    if result_df.empty:
+        logger.warning("No results to calculate burden")
+        return pd.DataFrame(columns=['WardName', 'LGA', 'Burden', 'Total_Positive', 'Population'])
+
+    # Extract state from original data for shapefile loading
+    state_name = extract_state_from_data(df)
+    if state_name == 'Unknown':
+        logger.warning("Could not determine state from data, burden calculation may fail")
+
+    # Load shapefile and match wards to get geometries for population extraction
+    state_gdf = load_state_shapefile(state_name)
+
+    if state_gdf is not None and not state_gdf.empty:
+        # Normalize ward names for matching
+        result_df['WardName_norm'] = result_df['WardName'].apply(normalize_ward_name)
+
+        # Determine shapefile ward column
+        ward_col = None
+        for col in ['WardName', 'Ward', 'ADM3_EN']:
+            if col in state_gdf.columns:
+                ward_col = col
+                break
+
+        if ward_col:
+            state_gdf['WardName_norm'] = state_gdf[ward_col].apply(normalize_ward_name)
+
+            # Merge to get geometries
+            merged = state_gdf.merge(result_df, on='WardName_norm', how='left', suffixes=('_shp', ''))
+
+            # Extract population based on age group
+            pop_series = extract_ward_population(merged, age_group)
+
+            if pop_series is not None:
+                merged['Population'] = pop_series.values
+                # Calculate Burden = (Total_Positive / Population) * 1000
+                merged['Burden'] = merged.apply(
+                    lambda r: round((r['Total_Positive'] / r['Population']) * 1000, 2)
+                    if pd.notna(r.get('Total_Positive')) and r['Population'] > 0 else 0,
+                    axis=1
+                )
+
+                # Extract result columns
+                result_df = merged[['WardName', 'LGA', 'Burden', 'Total_Positive', 'Population']].copy()
+                result_df = result_df.dropna(subset=['WardName'])
+                result_df = result_df.sort_values('Burden', ascending=False)
+
+                logger.info(f"Calculated burden for {len(result_df)} wards using {age_group} age group")
+                return result_df
+            else:
+                logger.warning("Population extraction failed, returning results without burden")
+        else:
+            logger.warning("Could not find ward column in shapefile")
+    else:
+        logger.warning(f"Could not load shapefile for {state_name}")
+
+    # Fallback: return with zero burden if population extraction failed
+    result_df['Burden'] = 0
+    result_df['Population'] = 0
+    logger.info(f"Returning {len(result_df)} wards without burden calculation (population data unavailable)")
+
     return result_df
 
 
@@ -717,67 +820,64 @@ def get_geopolitical_zone(state: str) -> str:
 
 def prepare_tpr_summary(tpr_df: pd.DataFrame) -> Dict[str, Any]:
     """
-    Prepare a summary of TPR results for reporting.
-    
+    Prepare a summary of burden results for reporting.
+
     Args:
-        tpr_df: DataFrame with TPR results
-        
+        tpr_df: DataFrame with burden results (Burden, Total_Positive, Population)
+
     Returns:
         Dictionary with summary statistics
     """
     if tpr_df.empty:
         return {
             'total_wards': 0,
-            'mean_tpr': 0,
-            'median_tpr': 0,
-            'max_tpr': 0,
-            'min_tpr': 0,
+            'mean_burden': 0,
+            'median_burden': 0,
+            'max_burden': 0,
+            'min_burden': 0,
             'high_risk_wards': [],
-            'total_tested': 0,
-            'total_positive': 0
+            'total_positive': 0,
+            'total_population': 0
         }
-    
+
     summary = {
         'total_wards': len(tpr_df),
-        'mean_tpr': round(tpr_df['TPR'].mean(), 2),
-        'median_tpr': round(tpr_df['TPR'].median(), 2),
-        'max_tpr': round(tpr_df['TPR'].max(), 2),
-        'min_tpr': round(tpr_df['TPR'].min(), 2),
-        'std_tpr': round(tpr_df['TPR'].std(), 2),
-        'total_tested': int(tpr_df['Total_Tested'].sum()),
+        'mean_burden': round(tpr_df['Burden'].mean(), 2),
+        'median_burden': round(tpr_df['Burden'].median(), 2),
+        'max_burden': round(tpr_df['Burden'].max(), 2),
+        'min_burden': round(tpr_df['Burden'].min(), 2),
+        'std_burden': round(tpr_df['Burden'].std(), 2),
         'total_positive': int(tpr_df['Total_Positive'].sum()),
-        'overall_tpr': round(tpr_df['Total_Positive'].sum() / tpr_df['Total_Tested'].sum() * 100, 2) 
-                       if tpr_df['Total_Tested'].sum() > 0 else 0
+        'total_population': int(tpr_df['Population'].sum()) if 'Population' in tpr_df.columns else 0,
+        'overall_burden': round(tpr_df['Total_Positive'].sum() / tpr_df['Population'].sum() * 1000, 2)
+                          if 'Population' in tpr_df.columns and tpr_df['Population'].sum() > 0 else 0
     }
-    
-    # Identify high-risk wards dynamically based on data distribution
-    # Use median as the baseline threshold
-    threshold = summary['median_tpr']
 
-    # If mean is significantly higher than median, use a value between them
-    if summary['mean_tpr'] > summary['median_tpr'] * 1.5:
-        threshold = (summary['mean_tpr'] + summary['median_tpr']) / 2
+    # Identify high-burden wards dynamically based on data distribution
+    threshold = summary['median_burden']
 
-    # If median is very low, use mean instead
-    if summary['median_tpr'] < 10 and summary['mean_tpr'] > 15:
-        threshold = summary['mean_tpr']
+    if summary['mean_burden'] > summary['median_burden'] * 1.5:
+        threshold = (summary['mean_burden'] + summary['median_burden']) / 2
 
-    high_risk = tpr_df[tpr_df['TPR'] > threshold].copy()
+    if summary['median_burden'] < 5 and summary['mean_burden'] > 10:
+        threshold = summary['mean_burden']
+
+    high_risk = tpr_df[tpr_df['Burden'] > threshold].copy()
     if not high_risk.empty:
-        high_risk = high_risk.nlargest(10, 'TPR')
-        summary['high_risk_wards'] = high_risk[['WardName', 'LGA', 'TPR']].to_dict('records')
-        summary['risk_threshold'] = round(threshold, 1)  # Store the dynamic threshold
+        high_risk = high_risk.nlargest(10, 'Burden')
+        summary['high_risk_wards'] = high_risk[['WardName', 'LGA', 'Burden']].to_dict('records')
+        summary['risk_threshold'] = round(threshold, 1)
     else:
         summary['high_risk_wards'] = []
         summary['risk_threshold'] = round(threshold, 1)
-    
+
     # Add LGA summary
     lga_summary = tpr_df.groupby('LGA').agg({
-        'TPR': 'mean',
-        'Total_Tested': 'sum',
-        'Total_Positive': 'sum'
+        'Burden': 'mean',
+        'Total_Positive': 'sum',
+        'Population': 'sum'
     }).round(2)
-    
+
     summary['lga_summary'] = lga_summary.to_dict('index')
-    
+
     return summary

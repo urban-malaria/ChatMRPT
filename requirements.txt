@@ -39,6 +39,9 @@ scikit-learn>=1.0.0
 
 # SQL execution on DataFrames
 duckdb>=0.10.0
+
+# Zonal statistics for raster population extraction
+rasterstats>=0.19.0
 # Redis support for session management
 redis==5.0.1
 

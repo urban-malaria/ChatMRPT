@@ -346,62 +346,65 @@ def extract_environmental_variables(ward_geometries: gpd.GeoDataFrame, state_nam
 def match_and_merge_data(tpr_df: pd.DataFrame, state_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Match TPR data with shapefile using ward name normalization.
-    
+
     Args:
-        tpr_df: DataFrame with TPR results
+        tpr_df: DataFrame with burden results (Burden, Total_Positive, Population)
         state_gdf: GeoDataFrame with state ward boundaries
-        
+
     Returns:
         Merged GeoDataFrame
     """
-    logger.info(f"🔄 Starting ward matching: {len(tpr_df)} TPR records, {len(state_gdf)} shapefile wards")
-    
+    logger.info(f"🔄 Starting ward matching: {len(tpr_df)} burden records, {len(state_gdf)} shapefile wards")
+
     # Normalize ward names in both datasets
     tpr_df['WardName_norm'] = tpr_df['WardName'].apply(normalize_ward_name)
     state_gdf['WardName_norm'] = state_gdf['WardName'].apply(normalize_ward_name)
-    
+
     # Log sample normalized names for debugging
-    logger.debug(f"Sample TPR ward names: {list(tpr_df['WardName_norm'].head(3))}")
+    logger.debug(f"Sample burden ward names: {list(tpr_df['WardName_norm'].head(3))}")
     logger.debug(f"Sample shapefile ward names: {list(state_gdf['WardName_norm'].head(3))}")
-    
+
     # Try exact match first
     merged = state_gdf.merge(
         tpr_df,
         on='WardName_norm',
         how='left',
-        suffixes=('', '_tpr')
+        suffixes=('', '_burden')
     )
-    
-    # Check match rate
-    matched = merged['TPR'].notna().sum()
+
+    # Check match rate using Burden column
+    burden_col = 'Burden' if 'Burden' in merged.columns else 'Total_Positive'
+    matched = merged[burden_col].notna().sum()
     total = len(merged)
     match_rate = matched / total * 100 if total > 0 else 0
-    
+
     logger.info(f"📊 Initial ward matching: {matched}/{total} ({match_rate:.1f}%) matched")
-    
+
     # If match rate is low, try fuzzy matching
     if match_rate < 80:
         from difflib import get_close_matches
-        
-        unmatched_shapefile = merged[merged['TPR'].isna()]['WardName_norm'].unique()
-        unmatched_tpr = tpr_df['WardName_norm'].unique()
-        
+
+        unmatched_shapefile = merged[merged[burden_col].isna()]['WardName_norm'].unique()
+        unmatched_burden = tpr_df['WardName_norm'].unique()
+
         fuzzy_matches = {}
         for ward in unmatched_shapefile:
-            matches = get_close_matches(ward, unmatched_tpr, n=1, cutoff=0.8)
+            matches = get_close_matches(ward, unmatched_burden, n=1, cutoff=0.8)
             if matches:
                 fuzzy_matches[ward] = matches[0]
-        
+
         # Apply fuzzy matches
-        for shapefile_ward, tpr_ward in fuzzy_matches.items():
-            tpr_data = tpr_df[tpr_df['WardName_norm'] == tpr_ward].iloc[0]
-            merged.loc[merged['WardName_norm'] == shapefile_ward, 'TPR'] = tpr_data['TPR']
-            merged.loc[merged['WardName_norm'] == shapefile_ward, 'Total_Tested'] = tpr_data['Total_Tested']
-            merged.loc[merged['WardName_norm'] == shapefile_ward, 'Total_Positive'] = tpr_data['Total_Positive']
-        
-        new_matched = merged['TPR'].notna().sum()
+        for shapefile_ward, burden_ward in fuzzy_matches.items():
+            burden_data = tpr_df[tpr_df['WardName_norm'] == burden_ward].iloc[0]
+            if 'Burden' in burden_data:
+                merged.loc[merged['WardName_norm'] == shapefile_ward, 'Burden'] = burden_data['Burden']
+            if 'Population' in burden_data:
+                merged.loc[merged['WardName_norm'] == shapefile_ward, 'Population'] = burden_data['Population']
+            merged.loc[merged['WardName_norm'] == shapefile_ward, 'Total_Positive'] = burden_data['Total_Positive']
+
+        new_matched = merged[burden_col].notna().sum()
         logger.info(f"After fuzzy matching: {new_matched}/{total} matched")
-    
+
     return merged
 
 
@@ -564,20 +567,20 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
         
         logger.info(f"✅ Found {len(state_gdf)} wards for {state_name}")
         
-        # Match and merge TPR data with shapefile
-        logger.info("🔄 Matching TPR data with shapefile...")
+        # Match and merge burden data with shapefile
+        logger.info("🔄 Matching burden data with shapefile...")
         merged_gdf = match_and_merge_data(tpr_results, state_gdf)
-        
+
         # Log matching results
-        matched = merged_gdf['TPR'].notna().sum()
+        matched = merged_gdf['Burden'].notna().sum() if 'Burden' in merged_gdf.columns else 0
         total_wards = len(merged_gdf)
         unmatched = total_wards - matched
         match_rate = (matched / total_wards * 100) if total_wards > 0 else 0
 
         logger.info(f"📊 Matching Results:")
         logger.info(f"  Total wards in shapefile: {total_wards}")
-        logger.info(f"  Wards with TPR data: {matched}")
-        logger.info(f"  Wards without TPR data: {unmatched}")
+        logger.info(f"  Wards with burden data: {matched}")
+        logger.info(f"  Wards without burden data: {unmatched}")
         logger.info(f"  Match rate: {match_rate:.1f}%")
 
         # Filter out null geometries before creating the map
@@ -589,11 +592,11 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
             logger.warning(f"⚠️ Filtered out {null_geometry_count} wards with null geometries")
             logger.info(f"  Remaining wards for visualization: {len(merged_gdf)}")
 
-        # Calculate LGA average TPR (volume-weighted: sum(positive)/sum(tested))
-        lga_avg_tpr = calculate_lga_averages(
-            merged_gdf, 'TPR',
+        # Calculate LGA average burden (volume-weighted: sum(positive)/sum(population)*1000)
+        lga_avg_burden = calculate_lga_averages(
+            merged_gdf, 'Burden',
             numerator_col='Total_Positive',
-            denominator_col='Total_Tested'
+            denominator_col='Population'
         )
 
         # Create hover text with LGA average and comparison
@@ -601,28 +604,28 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
         for _, row in merged_gdf.iterrows():
             lga_code = row.get('LGACode')
             lga_name = row.get('LGAName', 'Unknown')
-            lga_avg = lga_avg_tpr.get(lga_code)
+            lga_avg = lga_avg_burden.get(lga_code)
             ward_name = row.get('WardName', 'Unknown Ward')
 
-            if pd.notna(row.get('TPR')):
-                ward_tpr = row['TPR']
+            if pd.notna(row.get('Burden')):
+                ward_burden = row['Burden']
                 text = f"<b>{ward_name}</b><br>"
                 text += f"LGA: {lga_name}<br><br>"
-                text += f"<b>Ward TPR: {ward_tpr:.1f}%</b><br>"
+                text += f"<b>Malaria Burden: {ward_burden:.1f} per 1,000</b><br>"
                 if lga_avg is not None:
-                    diff = ward_tpr - lga_avg
+                    diff = ward_burden - lga_avg
                     diff_sign = '+' if diff > 0 else ''
                     diff_color = '#e74c3c' if diff > 0 else '#27ae60' if diff < 0 else '#666'
-                    text += f"LGA Avg: {lga_avg:.1f}% <span style='color:{diff_color}'>({diff_sign}{diff:.1f}%)</span><br>"
+                    text += f"LGA Avg: {lga_avg:.1f} <span style='color:{diff_color}'>({diff_sign}{diff:.1f})</span><br>"
                 text += f"<br>"
-                text += f"<span style='color:#888'>Tested: {int(row.get('Total_Tested', 0)):,}</span><br>"
-                text += f"<span style='color:#888'>Positive: {int(row.get('Total_Positive', 0)):,}</span>"
+                text += f"<span style='color:#888'>Population: {int(row.get('Population', 0)):,}</span><br>"
+                text += f"<span style='color:#888'>Positive Cases: {int(row.get('Total_Positive', 0)):,}</span>"
             else:
                 text = f"<b>{ward_name}</b><br>"
                 text += f"LGA: {lga_name}<br><br>"
-                text += f"<span style='color:#999'><i>No TPR data</i></span>"
+                text += f"<span style='color:#999'><i>No malaria data available</i></span>"
                 if lga_avg is not None:
-                    text += f"<br>LGA Avg: {lga_avg:.1f}%"
+                    text += f"<br>LGA Average: {lga_avg:.1f} per 1,000 pop"
             hover_text.append(text)
 
         # Reset index to ensure proper alignment with GeoJSON
@@ -636,7 +639,7 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
 
         # Single trace approach with proper handling of missing data
         # Fill NaN values with a specific value for display
-        z_values = merged_gdf['TPR'].fillna(-999).values  # Use -999 for missing data
+        z_values = merged_gdf['Burden'].fillna(-999).values if 'Burden' in merged_gdf.columns else np.full(len(merged_gdf), -999)
 
         # Log z values for debugging
         logger.info(f"🔍 Z values debug:")
@@ -645,36 +648,37 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
         logger.info(f"  Missing (-999): {(z_values == -999).sum()}")
         if (z_values != -999).any():
             valid_z = z_values[z_values != -999]
-            logger.info(f"  Valid TPR range: {valid_z.min():.1f} to {valid_z.max():.1f}")
+            logger.info(f"  Valid burden range: {valid_z.min():.1f} to {valid_z.max():.1f} per 1,000")
 
         # Create custom colorscale that shows gray for missing data
+        # Burden scale: 0-100+ per 1,000 population
         fig.add_trace(go.Choroplethmapbox(
             geojson=geojson,
             locations=merged_gdf.index,
             z=z_values,
             colorscale=[
-                [0.0, '#d3d3d3'],    # Light gray for missing data (-999 normalized to 0)
+                [0.0, '#d3d3d3'],    # Light gray for missing data
                 [0.001, '#d3d3d3'],  # Still gray
-                [0.01, '#2ecc71'],   # Green for low TPR (0%)
-                [0.2, '#f1c40f'],    # Yellow (20%)
-                [0.4, '#e67e22'],    # Orange (40%)
-                [0.6, '#e74c3c'],    # Red (60%)
-                [0.8, '#c0392b'],    # Dark red (80%)
-                [1.0, '#9b59b6']     # Purple for very high TPR (100%)
+                [0.01, '#2ecc71'],   # Green for low burden (0 per 1,000)
+                [0.2, '#f1c40f'],    # Yellow (20 per 1,000)
+                [0.4, '#e67e22'],    # Orange (40 per 1,000)
+                [0.6, '#e74c3c'],    # Red (60 per 1,000)
+                [0.8, '#c0392b'],    # Dark red (80 per 1,000)
+                [1.0, '#9b59b6']     # Purple for very high burden (100+ per 1,000)
             ],
             marker_opacity=0.8,
-            marker_line_width=1.5,  # Make borders more visible
-            marker_line_color='#333333',  # Dark borders for all wards
+            marker_line_width=1.5,
+            marker_line_color='#333333',
             hovertemplate='%{hovertext}<extra></extra>',
             hovertext=hover_text,
             colorbar=dict(
                 title=dict(
-                    text="TPR (%)",
+                    text="Malaria Burden<br>(per 1,000 pop)",
                     font=dict(size=12)
                 ),
                 tickmode='array',
                 tickvals=[0, 20, 40, 60, 80, 100],
-                ticktext=['0%', '20%', '40%', '60%', '80%', '100%'],
+                ticktext=['0', '20', '40', '60', '80', '100+'],
                 len=0.8,
                 y=0.5
             ),
@@ -695,7 +699,7 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
 
         fig.update_layout(
             title=dict(
-                text=f"TPR Distribution - {state_name}{debug_text}",
+                text=f"Malaria Burden per 1,000 - {state_name}{debug_text}",
                 font=dict(size=16, family="Arial, sans-serif"),
                 x=0.5,
                 xanchor='center'
@@ -1026,9 +1030,9 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
 
             # We'll update ward count after we match with shapefile to show ALL wards
             # Simplified result with the clean menu
-            result = f"""## TPR Analysis Complete
+            result = f"""## Malaria Burden Analysis Complete
 
-**{state_name}**: {summary['mean_tpr']}% average TPR"""
+**{state_name}**: {summary['mean_burden']:.1f} cases per 1,000 population (average)"""
 
             # AUTOMATICALLY PREPARE FOR RISK ANALYSIS (production approach)
             logger.info("🚀 Starting automatic preparation for risk analysis")
@@ -1103,10 +1107,10 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                                 "match_rate": match_rate
                             }
 
-                            # Update result with TOTAL ward count (from shapefile), not just TPR wards
-                            result = f"""## TPR Analysis Complete
+                            # Update result with TOTAL ward count (from shapefile)
+                            result = f"""## Malaria Burden Analysis Complete
 
-**{state_name}**: {summary['mean_tpr']}% average across {total_count} wards"""
+**{state_name}**: {summary['mean_burden']:.1f} cases per 1,000 population across {total_count} wards"""
                         except Exception as e:
                             logger.error(f"❌ Ward matching failed: {e}")
                             debug_stages["ward_matching"] = {"success": False, "error": str(e)}
@@ -1301,11 +1305,11 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                 formatted_vars = [v.replace('_', ' ').title() for v in zone_variables]
 
                 result += f"""\n
-🎉 **TPR Analysis Successfully Completed!**
+🎉 **Malaria Burden Analysis Successfully Completed!**
 
 **What Just Happened:**
-I've calculated ward-level Test Positivity Rates for **{state_name}** and created a unified dataset combining:
-• TPR data ({summary['mean_tpr']}% average across {total_count} wards)
+I've calculated ward-level malaria burden per 1,000 population for **{state_name}** and created a unified dataset combining:
+• Malaria burden data ({summary['mean_burden']:.1f} cases per 1,000 population across {total_count} wards)
 • Geographic boundaries (ward shapefiles)
 • Environmental variables for **{geopolitical_zone}** zone: {', '.join(formatted_vars)}
 
@@ -1314,8 +1318,8 @@ You now have a complete geospatial dataset ready for malaria risk analysis and i
 
 **Recommended Next Steps:**
 
-📍 **Step 1: Visualize TPR Distribution**
-Try: "**map TPR distribution**" to see malaria burden patterns
+📍 **Step 1: Visualize Malaria Burden**
+Try: "**map malaria burden distribution**" to see case patterns across wards
 
 🌍 **Step 2: Explore Environmental Factors**
 Available variables for your region ({geopolitical_zone}):
