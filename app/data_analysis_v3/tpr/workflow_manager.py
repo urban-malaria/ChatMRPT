@@ -64,13 +64,21 @@ class TPRWorkflowHandler:
             'pw': 'pregnant women',
             'all_ages': 'all age groups',
         }
+        # Population denominator description
+        pop_map = {
+            'u5': 'under-5 population',
+            'o5': 'over-5 population',
+            'pw': 'women 15-49 population',
+            'all_ages': 'total population',
+        }
 
         facility_text = facility_map.get(facility_level, 'all facility levels')
         age_text = age_map.get(age_group, 'all age groups')
+        pop_text = pop_map.get(age_group, 'total population')
 
         return (
-            f"Using {facility_text} and focusing on {age_text}, I based the calculations on "
-            "the strongest signal between RDT and microscopy results."
+            f"Using {facility_text} and focusing on {age_text}, I calculated malaria burden "
+            f"as cases per 1,000 {pop_text} using WorldPop estimates."
         )
     
     def set_data(self, data):
@@ -760,9 +768,9 @@ class TPRWorkflowHandler:
             formatter = MessageFormatter(self.session_id)
             message = formatter.format_tool_tpr_results(result)
 
-            if message and message.startswith("## TPR Analysis Complete"):
+            if message and message.startswith("## Malaria Burden Analysis Complete"):
                 summary_line = self._describe_selections(facility_level, age_group)
-                marker = "## TPR Analysis Complete\n\n"
+                marker = "## Malaria Burden Analysis Complete\n\n"
                 if message.startswith(marker):
                     message = message.replace(marker, f"{marker}{summary_line}\n\n", 1)
 
@@ -808,14 +816,15 @@ class TPRWorkflowHandler:
             state_info = f"**States detected:** {', '.join(states)}"
 
         # Create introduction message
-        intro_message = f"""## Test Positivity Rate (TPR) Analysis Workflow
+        intro_message = f"""## Malaria Burden Analysis Workflow
 
-Great! Let's analyze your malaria testing data to calculate ward-level Test Positivity Rates.
+Great! Let's analyze your malaria testing data to calculate ward-level Malaria Burden per 1,000 population.
 
 **What This Workflow Does:**
 
 Your uploaded data contains malaria testing records from health facilities. This workflow will:
-- Calculate TPR for each ward: (Positive tests ÷ Total tests) × 100
+- Calculate Malaria Burden for each ward: (Positive cases ÷ Ward Population) × 1,000
+- Use WorldPop population data matched to your selected age group
 - Help identify high-burden areas for targeted interventions
 
 **Three Simple Steps:**
@@ -826,12 +835,12 @@ Your uploaded data contains malaria testing records from health facilities. This
 
 {state_info}
 
-**After TPR Calculation:**
+**After Burden Calculation:**
 
-Once we calculate ward-level TPR, the system will:
+Once we calculate ward-level malaria burden, the system will:
 - Extract ward boundary shapefiles from our database for your state
 - Add relevant environmental variables (rainfall, vegetation, water indices, etc.) specific to your geopolitical zone
-- Create a unified dataset combining TPR with environmental factors
+- Create a unified dataset combining burden data with environmental factors
 - Output: Ready-to-use dataset for comprehensive risk analysis and ward ranking for resource allocation
 
 **Ready to begin?** Just type **'yes'** when you're ready, or ask me any questions about the workflow.
@@ -865,8 +874,8 @@ Once we calculate ward-level TPR, the system will:
         formatter = MessageFormatter(self.session_id)
 
         # Create conversational workflow introduction
-        intro_message = "## Welcome to TPR Analysis\n\n"
-        intro_message += "I'll guide you through calculating Test Positivity Rates to identify high-burden areas for intervention.\n\n"
+        intro_message = "## Welcome to Malaria Burden Analysis\n\n"
+        intro_message += "I'll guide you through calculating Malaria Burden per 1,000 population to identify high-burden areas for intervention.\n\n"
         intro_message += "**The process has 3 simple steps:**\n"
         intro_message += "1. Select State (if multiple)\n"
         intro_message += "2. Choose Facility Level\n"
@@ -1015,13 +1024,13 @@ Once we calculate ward-level TPR, the system will:
         summary = results.get('summary') or results.get('data', {}).get('summary')
         if summary:
             return (
-                "TPR Analysis Complete\n\n"
+                "Malaria Burden Analysis Complete\n\n"
                 f"{selections_summary}\n\n"
                 f"{summary}"
             )
 
         return (
-            "TPR analysis completed successfully. "
+            "Malaria burden analysis completed successfully. "
             "If you'd like more detail, ask me to break down the results or visualize the distribution."
         )
 

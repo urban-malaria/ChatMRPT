@@ -376,48 +376,55 @@ class TPRHandler:
                 'response': f'Analysis failed: {str(e)}. Please check your data and try again.'
             }
     
-    def _generate_completion_message(self, 
-                                   state: str, 
+    def _generate_completion_message(self,
+                                   state: str,
                                    results: Dict[str, Any],
                                    analysis_time: float) -> str:
         """Generate a completion message for the user."""
         wards_analyzed = results.get('wards_analyzed', 0)
-        mean_tpr = results.get('mean_tpr', 0)
-        high_tpr_wards = results.get('high_tpr_wards', 0)
-        
-        message = f"""
-## TPR Analysis Complete for {state}! 🎉
+        summary_stats = results.get('summary_stats', {})
 
-I've successfully analyzed the Test Positivity Rate data for **{wards_analyzed} wards** in {state}.
+        # Get Burden stats (new metric) with fallback to old TPR stats
+        mean_burden = summary_stats.get('mean_burden', summary_stats.get('mean_tpr', 0))
+        high_burden_wards = summary_stats.get('high_burden_wards', summary_stats.get('high_tpr_wards', 0))
+        total_population = summary_stats.get('total_population', 0)
+        total_positive = summary_stats.get('total_positive', 0)
+
+        message = f"""
+## Malaria Burden Analysis Complete for {state}!
+
+I've successfully analyzed the malaria burden data for **{wards_analyzed} wards** in {state}.
 
 ### Key Results:
-- **Average TPR**: {mean_tpr:.1f}%
-- **High TPR Wards** (>50%): {high_tpr_wards} wards
+- **Average Malaria Burden**: {mean_burden:.1f} cases per 1,000 population
+- **High Burden Wards** (>50 per 1,000): {high_burden_wards} wards
+- **Total Positive Cases**: {total_positive:,}
+- **Total Population**: {total_population:,}
 - **Analysis Time**: {analysis_time:.2f} seconds
 
 ### Generated Files:
-1. **TPR Analysis CSV** - Detailed TPR calculations for each ward
-2. **Main Analysis CSV** - TPR combined with environmental variables  
+1. **Burden Analysis CSV** - Detailed malaria burden calculations for each ward
+2. **Main Analysis CSV** - Burden data combined with environmental variables
 3. **Shapefile** - Geographic boundaries with all data
 
 The environmental variables were selected based on {state}'s geopolitical zone, ensuring the most relevant factors for malaria risk assessment in your region.
 
 You can download these files using the links below. The data is ready for further analysis, mapping, or integration with your existing workflows.
 
-Your data is now ready for risk analysis! The TPR results have been integrated with environmental variables.
+Your data is now ready for risk analysis! The malaria burden results have been integrated with environmental variables.
 
 ---
 
 **What would you like to do next?**
 • Run malaria risk analysis to rank wards for ITN distribution
-• Explore the TPR data in more detail
-• Map variable distributions
+• Explore the burden data in more detail
+• Map malaria burden distribution
 • Check data quality
 • Something else
 
 Just tell me what you're interested in!
 """
-        
+
         return message
     
     def _generate_download_links(self, output_paths: Dict[str, str]) -> Dict[str, str]:
@@ -541,7 +548,7 @@ Just tell me what you're interested in!
             map_path = viz_service.create_tpr_distribution_map(
                 tpr_df=tpr_df,
                 state_name=selected_state,
-                title=f"TPR Distribution - {selected_state} ({age_group.upper()})"
+                title=f"Malaria Burden per 1,000 - {selected_state} ({age_group.upper()})"
             )
             
             # Create download links
@@ -606,21 +613,21 @@ Just tell me what you're interested in!
                 logger.warning("Average TPR is 0 despite having wards - possible data issue")
             
             # Prepare response message
-            response_message = f"""## TPR Analysis Complete! 🎉
+            response_message = f"""## Malaria Burden Analysis Complete!
 
-I've successfully calculated TPR for **{selected_state}** using **{facility_level}** facilities for the **{age_group}** age group.
+I've successfully calculated malaria burden for **{selected_state}** using **{facility_level}** facilities for the **{age_group}** age group.
 
 ### Summary Results:
 - **Total Wards Analyzed**: {summary_stats.get('total_wards', 0)}
-- **Average TPR**: {summary_stats.get('average_tpr', 0):.1f}%
-- **Highest TPR**: {summary_stats.get('max_tpr', 0):.1f}%
-- **Lowest TPR**: {summary_stats.get('min_tpr', 0):.1f}%
+- **Average Burden**: {summary_stats.get('average_tpr', 0):.1f} cases per 1,000 population
+- **Highest Burden**: {summary_stats.get('max_tpr', 0):.1f} per 1,000
+- **Lowest Burden**: {summary_stats.get('min_tpr', 0):.1f} per 1,000
 
 ### Generated Files:
 Your analysis files are ready for download:
 
-1. **TPR Analysis CSV** - Detailed ward-level TPR calculations
-2. **Complete Analysis CSV** - TPR with environmental variables  
+1. **Burden Analysis CSV** - Detailed ward-level malaria burden calculations
+2. **Complete Analysis CSV** - Burden data with environmental variables
 3. **Shapefile** - Geographic data for mapping
 4. **HTML Report** - Comprehensive analysis report for sharing
 5. **Summary Report** - Analysis summary and metadata
@@ -632,7 +639,7 @@ Your data is now ready for the next steps in malaria intervention planning! The 
 - All files are ready for download
 
 ---
-**Next Step:** I've finished the TPR analysis. Would you like to proceed to the risk analysis to rank wards and plan for ITN distribution?
+**Next Step:** I've finished the burden analysis. Would you like to proceed to the risk analysis to rank wards and plan for ITN distribution?
 """
             
             # Store download links in session
@@ -675,7 +682,7 @@ Your data is now ready for the next steps in malaria intervention planning! The 
             visualization = {
                 'type': 'iframe',
                 'url': map_path,
-                'title': f'TPR Distribution - {selected_state}',
+                'title': f'Malaria Burden per 1,000 - {selected_state}',
                 'height': 600
             }
             

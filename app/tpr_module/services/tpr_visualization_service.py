@@ -61,19 +61,30 @@ class TPRVisualizationService:
             if 'DataCompleteness' not in tpr_df.columns:
                 tpr_df['DataCompleteness'] = 0
 
-            logger.info(f"Creating TPR distribution map for {state_name}")
-            
+            logger.info(f"Creating malaria burden distribution map for {state_name}")
+
+            # Check if we have Burden column (new metric) or TPR (legacy)
+            use_burden = 'Burden' in tpr_df.columns
+            value_col = 'Burden' if use_burden else 'TPR'
+
             # Load shapefile for the state
             state_shapefile = self.shapefile_extractor._filter_state_data(state_name)
-            
+
             if state_shapefile is None or state_shapefile.empty:
                 logger.warning(f"No shapefile data for {state_name}, creating table view instead")
                 return self._create_table_view(tpr_df, state_name, title)
-            
-            # Merge TPR data with shapefile using fuzzy matching
+
+            # Build columns list for merge
+            merge_cols = ['WardName', value_col]
+            for col in ['Tested', 'Positive', 'DataCompleteness', 'Population']:
+                if col in tpr_df.columns:
+                    merge_cols.append(col)
+
+            # Merge burden/TPR data with shapefile using fuzzy matching
             merged_gdf = self._fuzzy_merge_tpr_shapefile(
                 state_shapefile,
-                tpr_df[['WardName', 'TPR', 'Tested', 'Positive', 'DataCompleteness']]
+                tpr_df[merge_cols],
+                value_col=value_col
             )
 
             # Remove features without a usable geometry before rendering.
@@ -89,52 +100,74 @@ class TPRVisualizationService:
                 logger.error("All geometries are missing after filtering; falling back to table view")
                 return self._create_table_view(tpr_df, state_name, title)
             
-            # Create hover text
+            # Create hover text - adapt to Burden or TPR column
             hover_text = []
             for _, row in merged_gdf.iterrows():
-                if pd.notna(row.get('TPR')):
+                if pd.notna(row.get(value_col)):
                     text = f"<b>{row['WardName']}</b><br>"
                     text += f"LGA: {row.get('LGAName', 'Unknown')}<br>"
-                    text += f"TPR: {row['TPR']:.1f}%<br>"
-                    text += f"Tested: {int(row.get('Tested', 0)):,}<br>"
+                    if use_burden:
+                        text += f"Malaria Burden: {row[value_col]:.1f} per 1,000<br>"
+                        if 'Population' in row and pd.notna(row['Population']):
+                            text += f"Population: {int(row['Population']):,}<br>"
+                    else:
+                        text += f"TPR: {row[value_col]:.1f}%<br>"
                     text += f"Positive: {int(row.get('Positive', 0)):,}<br>"
+                    if 'Tested' in row and pd.notna(row.get('Tested')):
+                        text += f"Tested: {int(row['Tested']):,}<br>"
                     text += f"Data Quality: {row.get('DataCompleteness', 0):.0f}%"
                 else:
-                    text = f"<b>{row['WardName']}</b><br>No TPR data available"
+                    text = f"<b>{row['WardName']}</b><br>No data available"
                 hover_text.append(text)
             
             # Convert to GeoJSON
             geojson = merged_gdf.__geo_interface__
             
             # Determine color scale and ranges
-            tpr_values = merged_gdf['TPR'].dropna()
-            if len(tpr_values) > 0:
-                min_tpr = tpr_values.min()
-                max_tpr = tpr_values.max()
+            values = merged_gdf[value_col].dropna()
+            if len(values) > 0:
+                min_val = values.min()
+                max_val = values.max()
             else:
-                min_tpr, max_tpr = 0, 50
-            
+                min_val = 0
+                max_val = 100 if use_burden else 50
+
             # Prepare plain Python lists for Plotly to avoid typed-array serialization
             location_ids = merged_gdf.index.astype(str).tolist()
-            tpr_values_list = merged_gdf['TPR'].apply(
+            values_list = merged_gdf[value_col].apply(
                 lambda value: float(value) if pd.notna(value) else None
             ).tolist()
 
             # Create figure
             fig = go.Figure()
             
+            # Configure colorbar based on metric type
+            if use_burden:
+                # Burden per 1,000 - typical range 0-200
+                colorbar_title = "Malaria Burden<br>(per 1,000 pop)"
+                # Dynamic max based on data, but at least 50
+                z_max = max(150, max_val * 1.1) if max_val > 0 else 150
+                tick_vals = [0, 30, 60, 90, 120, 150]
+                tick_text = ['0', '30', '60', '90', '120', '150+']
+            else:
+                # TPR % - range 0-100
+                colorbar_title = "TPR (%)"
+                z_max = 100
+                tick_vals = [0, 20, 40, 60, 80, 100]
+                tick_text = ['0%', '20%', '40%', '60%', '80%', '100%']
+
             # Add choropleth layer
             fig.add_trace(go.Choroplethmapbox(
                 geojson=geojson,
                 locations=location_ids,
                 featureidkey="id",
-                z=tpr_values_list,
+                z=values_list,
                 colorscale=[
-                    [0, '#2ecc71'],      # Green for low TPR
+                    [0, '#2ecc71'],      # Green for low burden
                     [0.2, '#f1c40f'],    # Yellow
                     [0.4, '#e67e22'],    # Orange
                     [0.6, '#e74c3c'],    # Red
-                    [1.0, '#9b59b6']     # Purple for very high TPR
+                    [1.0, '#9b59b6']     # Purple for very high burden
                 ],
                 marker_opacity=0.8,
                 marker_line_width=0.5,
@@ -143,24 +176,27 @@ class TPRVisualizationService:
                 hovertext=hover_text,
                 colorbar=dict(
                     title=dict(
-                        text="TPR (%)",
+                        text=colorbar_title,
                         font=dict(size=12)
                     ),
                     tickmode='array',
-                    tickvals=[0, 20, 40, 60, 80, 100],
-                    ticktext=['0%', '20%', '40%', '60%', '80%', '100%']
+                    tickvals=tick_vals,
+                    ticktext=tick_text
                 ),
                 zmin=0,
-                zmax=100  # Show full TPR range up to 100%
+                zmax=z_max
             ))
             
             # Update layout
             center_lat = merged_gdf.geometry.centroid.y.mean()
             center_lon = merged_gdf.geometry.centroid.x.mean()
             
+            # Default title based on metric type
+            default_title = f"Malaria Burden per 1,000 - {state_name}" if use_burden else f"TPR Distribution - {state_name}"
+
             fig.update_layout(
                 title=dict(
-                    text=title or f"TPR Distribution - {state_name}",
+                    text=title or default_title,
                     font=dict(size=16, family="Arial, sans-serif"),
                     x=0.5,
                     xanchor='center'
@@ -189,25 +225,27 @@ class TPRVisualizationService:
             logger.error(f"Error creating TPR distribution map: {e}")
             return self._create_error_view(str(e))
     
-    def _fuzzy_merge_tpr_shapefile(self, shapefile_gdf: gpd.GeoDataFrame, 
-                                   tpr_df: pd.DataFrame, 
-                                   similarity_threshold: float = 0.85) -> gpd.GeoDataFrame:
+    def _fuzzy_merge_tpr_shapefile(self, shapefile_gdf: gpd.GeoDataFrame,
+                                   tpr_df: pd.DataFrame,
+                                   similarity_threshold: float = 0.85,
+                                   value_col: str = 'TPR') -> gpd.GeoDataFrame:
         """
-        Merge TPR data with shapefile using fuzzy string matching for ward names.
-        
+        Merge burden/TPR data with shapefile using fuzzy string matching for ward names.
+
         Args:
             shapefile_gdf: GeoDataFrame from shapefile
-            tpr_df: DataFrame with TPR data
+            tpr_df: DataFrame with burden/TPR data
             similarity_threshold: Minimum similarity score for matching (0-1)
-            
+            value_col: Name of the value column ('Burden' or 'TPR')
+
         Returns:
             Merged GeoDataFrame
         """
         # First try exact merge
         merged = shapefile_gdf.merge(tpr_df, on='WardName', how='left')
-        
-        # Find unmatched wards (where TPR is null after merge)
-        unmatched_mask = merged['TPR'].isna()
+
+        # Find unmatched wards (where value column is null after merge)
+        unmatched_mask = merged[value_col].isna()
         unmatched_wards = merged.loc[unmatched_mask, 'WardName'].unique()
         
         if len(unmatched_wards) > 0:
@@ -241,22 +279,22 @@ class TPRVisualizationService:
                 # If we found a good match, update the merged data
                 if best_match:
                     logger.debug(f"Fuzzy matched '{shp_ward}' to '{best_match}' (score: {best_score:.2f})")
-                    
-                    # Get the TPR data for the matched ward
-                    tpr_data = tpr_df[tpr_df['WardName'] == best_match].iloc[0]
-                    
-                    # Update the merged dataframe
+
+                    # Get the data for the matched ward
+                    matched_data = tpr_df[tpr_df['WardName'] == best_match].iloc[0]
+
+                    # Update the merged dataframe - include value_col and other available columns
                     mask = merged['WardName'] == shp_ward
-                    for col in ['TPR', 'Tested', 'Positive', 'DataCompleteness']:
-                        if col in tpr_data:
-                            merged.loc[mask, col] = tpr_data[col]
+                    for col in [value_col, 'Tested', 'Positive', 'DataCompleteness', 'Population']:
+                        if col in matched_data.index:
+                            merged.loc[mask, col] = matched_data[col]
                 else:
                     logger.warning(f"No fuzzy match found for ward: {shp_ward}")
-            
+
             # Report matching statistics
-            still_unmatched = merged['TPR'].isna().sum()
+            still_unmatched = merged[value_col].isna().sum()
             matched = len(unmatched_wards) - still_unmatched + (len(merged) - len(unmatched_wards))
-            logger.info(f"Fuzzy matching complete: {matched}/{len(merged)} wards have TPR data")
+            logger.info(f"Fuzzy matching complete: {matched}/{len(merged)} wards have data")
         
         return merged
     
@@ -290,42 +328,63 @@ class TPRVisualizationService:
     def _create_table_view(self, tpr_df: pd.DataFrame, state_name: str, title: str) -> str:
         """Create a table view when map cannot be generated."""
         try:
-            # Sort by TPR descending
-            tpr_df_sorted = tpr_df.sort_values('TPR', ascending=False)
-            
+            # Determine which value column to use
+            use_burden = 'Burden' in tpr_df.columns
+            value_col = 'Burden' if use_burden else 'TPR'
+
+            # Sort by value column descending
+            tpr_df_sorted = tpr_df.sort_values(value_col, ascending=False)
+
+            # Build header and cell values dynamically
+            if use_burden:
+                headers = ['Ward', 'LGA', 'Burden (per 1,000)', 'Population', 'Positive', 'Data Quality (%)']
+                cell_values = [
+                    tpr_df_sorted['WardName'],
+                    tpr_df_sorted['LGA'],
+                    tpr_df_sorted['Burden'].round(1),
+                    tpr_df_sorted['Population'].astype(int) if 'Population' in tpr_df_sorted.columns else [0] * len(tpr_df_sorted),
+                    tpr_df_sorted['Positive'].astype(int) if 'Positive' in tpr_df_sorted.columns else [0] * len(tpr_df_sorted),
+                    tpr_df_sorted['DataCompleteness'].round(0) if 'DataCompleteness' in tpr_df_sorted.columns else [0] * len(tpr_df_sorted)
+                ]
+                default_title = f"Malaria Burden Results - {state_name}"
+            else:
+                headers = ['Ward', 'LGA', 'TPR (%)', 'Tested', 'Positive', 'Data Quality (%)']
+                cell_values = [
+                    tpr_df_sorted['WardName'],
+                    tpr_df_sorted['LGA'],
+                    tpr_df_sorted['TPR'].round(1),
+                    tpr_df_sorted['Tested'].astype(int) if 'Tested' in tpr_df_sorted.columns else [0] * len(tpr_df_sorted),
+                    tpr_df_sorted['Positive'].astype(int) if 'Positive' in tpr_df_sorted.columns else [0] * len(tpr_df_sorted),
+                    tpr_df_sorted['DataCompleteness'].round(0) if 'DataCompleteness' in tpr_df_sorted.columns else [0] * len(tpr_df_sorted)
+                ]
+                default_title = f"TPR Results - {state_name}"
+
             # Create plotly table
             fig = go.Figure(data=[go.Table(
                 header=dict(
-                    values=['Ward', 'LGA', 'TPR (%)', 'Tested', 'Positive', 'Data Quality (%)'],
+                    values=headers,
                     fill_color='paleturquoise',
                     align='left'
                 ),
                 cells=dict(
-                    values=[
-                        tpr_df_sorted['WardName'],
-                        tpr_df_sorted['LGA'],
-                        tpr_df_sorted['TPR'].round(1),
-                        tpr_df_sorted['Tested'].astype(int),
-                        tpr_df_sorted['Positive'].astype(int),
-                        tpr_df_sorted['DataCompleteness'].round(0)
-                    ],
+                    values=cell_values,
                     fill_color='lavender',
                     align='left'
                 )
             )])
-            
+
             fig.update_layout(
-                title=title or f"TPR Results - {state_name}",
+                title=title or default_title,
                 height=600
             )
-            
+
             filename = f"tpr_table_{state_name.lower().replace(' ', '_')}.html"
             filepath = self.output_dir / filename
-            
+
             fig.write_html(str(filepath))
-            
+
             return f"/serve_viz_file/{self.session_id}/visualizations/{filename}"
-            
+
         except Exception as e:
             logger.error(f"Error creating table view: {e}")
             return self._create_error_view(str(e))

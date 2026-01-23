@@ -191,9 +191,9 @@ class MessageFormatter:
         return message
     
     def format_tool_tpr_results(self, tool_output: str) -> str:
-        """Format TPR tool results for display."""
+        """Format Malaria Burden tool results for display."""
         # The tool already returns well-formatted text, just pass it through with minor enhancements
-        if "TPR Analysis Complete" in tool_output:
+        if "Malaria Burden Analysis Complete" in tool_output or "TPR Analysis Complete" in tool_output:
             # The tool output is already well formatted, just use it
             message = tool_output
 

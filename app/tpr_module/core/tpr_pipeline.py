@@ -22,6 +22,15 @@ from ..data.geopolitical_zones import STATE_TO_ZONE, ZONE_VARIABLES
 
 logger = logging.getLogger(__name__)
 
+# Import population extraction for Burden calculation
+try:
+    from rasterstats import zonal_stats
+    from app.config.data_paths import POP_TOTAL_RASTER, POP_U5_RASTER, POP_F15_49_RASTER
+    POPULATION_EXTRACTION_AVAILABLE = True
+except ImportError:
+    POPULATION_EXTRACTION_AVAILABLE = False
+    logger.warning("rasterstats or population rasters not available - Burden calculation disabled")
+
 class TPRPipeline:
     """Coordinate the complete TPR analysis pipeline."""
     
@@ -51,7 +60,51 @@ class TPRPipeline:
         self.output_generator = output_generator
         
         logger.info("TPR Pipeline initialized")
-    
+
+    def _extract_ward_populations(self, gdf: gpd.GeoDataFrame, age_group: str = 'all_ages') -> pd.Series:
+        """
+        Extract population from rasters for each ward using zonal statistics.
+
+        Args:
+            gdf: GeoDataFrame with ward geometries
+            age_group: Age group for population ('all_ages', 'u5', 'o5', 'pw')
+
+        Returns:
+            pandas Series with population values, or None if extraction fails
+        """
+        if not POPULATION_EXTRACTION_AVAILABLE:
+            logger.warning("Population extraction not available")
+            return None
+
+        import os
+
+        # Select appropriate raster based on age group
+        if age_group == 'u5':
+            raster = POP_U5_RASTER
+        elif age_group == 'pw':
+            raster = POP_F15_49_RASTER
+        elif age_group == 'o5':
+            # O5 = Total - U5
+            if not os.path.exists(POP_TOTAL_RASTER) or not os.path.exists(POP_U5_RASTER):
+                logger.warning("Population rasters not found for O5 calculation")
+                return None
+            total_stats = zonal_stats(gdf, POP_TOTAL_RASTER, stats=['sum'])
+            u5_stats = zonal_stats(gdf, POP_U5_RASTER, stats=['sum'])
+            return pd.Series([(t['sum'] or 0) - (u['sum'] or 0) for t, u in zip(total_stats, u5_stats)])
+        else:  # all_ages
+            raster = POP_TOTAL_RASTER
+
+        if not os.path.exists(raster):
+            logger.warning(f"Population raster not found: {raster}")
+            return None
+
+        try:
+            stats = zonal_stats(gdf, raster, stats=['sum'])
+            return pd.Series([s['sum'] or 0 for s in stats])
+        except Exception as e:
+            logger.error(f"Error extracting ward populations: {e}")
+            return None
+
     def run(self,
             nmep_data: pd.DataFrame,
             state_name: str,
@@ -122,12 +175,57 @@ class TPRPipeline:
                 ward_results, state_boundaries
             )
             
+            # Step 7.5: Extract population and calculate Burden
+            logger.info("Step 7.5: Extracting population and calculating Malaria Burden per 1,000")
+            if isinstance(matched_results, gpd.GeoDataFrame) and 'geometry' in matched_results.columns:
+                # Extract population based on age group
+                pop_series = self._extract_ward_populations(matched_results, age_group)
+
+                if pop_series is not None:
+                    matched_results['Population'] = pop_series.values
+
+                    # Get positive cases - from TPR calculation or raw data
+                    if 'Total_Positive' in matched_results.columns:
+                        positive_col = 'Total_Positive'
+                    elif 'Positive_Cases' in matched_results.columns:
+                        positive_col = 'Positive_Cases'
+                    else:
+                        # Calculate from TPR if we have it
+                        # TPR = (positive / tested) * 100 => positive = TPR * tested / 100
+                        if 'TPR' in matched_results.columns and 'Total_Tested' in matched_results.columns:
+                            matched_results['Total_Positive'] = (matched_results['TPR'] * matched_results['Total_Tested'] / 100).fillna(0)
+                            positive_col = 'Total_Positive'
+                        else:
+                            logger.warning("Could not find positive cases column for Burden calculation")
+                            positive_col = None
+
+                    if positive_col:
+                        # Calculate Burden = (positive / population) × 1000
+                        matched_results['Burden'] = matched_results.apply(
+                            lambda r: round((r[positive_col] / r['Population']) * 1000, 2)
+                            if pd.notna(r.get(positive_col)) and r['Population'] > 0 else 0,
+                            axis=1
+                        )
+                        logger.info(f"Calculated Malaria Burden for {len(matched_results)} wards")
+                        logger.info(f"Burden range: {matched_results['Burden'].min():.1f} - {matched_results['Burden'].max():.1f} per 1,000")
+                    else:
+                        matched_results['Burden'] = 0
+                        matched_results['Population'] = 0
+                else:
+                    logger.warning("Population extraction failed, setting Burden to 0")
+                    matched_results['Burden'] = 0
+                    matched_results['Population'] = 0
+            else:
+                logger.warning("No geometry available for population extraction")
+                matched_results['Burden'] = 0
+                matched_results['Population'] = 0
+
             # Step 8: Detect thresholds and recommendations
             logger.info("Step 8: Detecting thresholds")
             threshold_results = self.threshold_detector.detect_thresholds(
                 matched_results
             )
-            
+
             # Apply recommendations
             matched_results = self.threshold_detector.apply_recommendations(
                 matched_results, threshold_results
@@ -360,38 +458,64 @@ class TPRPipeline:
         return merged
     
     def _calculate_summary_stats(self, results: pd.DataFrame) -> Dict[str, Any]:
-        """Calculate summary statistics."""
+        """Calculate summary statistics for Malaria Burden per 1,000."""
         stats = {}
-        
-        if 'TPR' in results.columns:
+
+        # Check for Burden column first (new metric)
+        if 'Burden' in results.columns:
+            burden_values = results['Burden'].dropna()
+
+            stats['mean_burden'] = round(burden_values.mean(), 2) if len(burden_values) > 0 else 0
+            stats['median_burden'] = round(burden_values.median(), 2) if len(burden_values) > 0 else 0
+            stats['min_burden'] = round(burden_values.min(), 2) if len(burden_values) > 0 else 0
+            stats['max_burden'] = round(burden_values.max(), 2) if len(burden_values) > 0 else 0
+            stats['std_burden'] = round(burden_values.std(), 2) if len(burden_values) > 0 else 0
+
+            # Count high burden wards (per 1,000 - values typically 5-100)
+            stats['high_burden_wards'] = int((burden_values > 50).sum())
+            stats['very_high_burden_wards'] = int((burden_values > 100).sum())
+
+            # Keep backward compatibility with old keys
+            stats['mean_tpr'] = stats['mean_burden']
+            stats['high_tpr_wards'] = stats['high_burden_wards']
+
+            # Population stats
+            if 'Population' in results.columns:
+                stats['total_population'] = int(results['Population'].sum())
+            if 'Total_Positive' in results.columns:
+                stats['total_positive'] = int(results['Total_Positive'].sum())
+
+        # Fallback to TPR if Burden not available
+        elif 'TPR' in results.columns:
             tpr_values = results['TPR'].dropna()
-            
+
             stats['mean_tpr'] = tpr_values.mean()
             stats['median_tpr'] = tpr_values.median()
             stats['min_tpr'] = tpr_values.min()
             stats['max_tpr'] = tpr_values.max()
             stats['std_tpr'] = tpr_values.std()
-            
+
             # Count high TPR wards
             stats['high_tpr_wards'] = (tpr_values > 50).sum()
             stats['very_high_tpr_wards'] = (tpr_values > 70).sum()
-            
+
             # Method breakdown
             if 'Method' in results.columns:
                 method_counts = results['Method'].value_counts().to_dict()
                 stats['methods_used'] = method_counts
         else:
             stats = {
+                'mean_burden': 0,
+                'median_burden': 0,
+                'min_burden': 0,
+                'max_burden': 0,
+                'std_burden': 0,
+                'high_burden_wards': 0,
+                'very_high_burden_wards': 0,
                 'mean_tpr': 0,
-                'median_tpr': 0,
-                'min_tpr': 0,
-                'max_tpr': 0,
-                'std_tpr': 0,
-                'high_tpr_wards': 0,
-                'very_high_tpr_wards': 0,
-                'methods_used': {}
+                'high_tpr_wards': 0
             }
-        
+
         return stats
 
 
