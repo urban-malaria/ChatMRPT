@@ -1127,14 +1127,23 @@ def generate_itn_map(
     
     # Add wards without population data first (with distinct styling)
     if no_data_mask.any():
-        no_data_wards = shp_data_valid[no_data_mask]
+        no_data_wards = shp_data_valid[no_data_mask].copy()
+        # Get LGA names for hover
+        if 'LGAName' in no_data_wards.columns:
+            no_data_lga_names = no_data_wards['LGAName'].fillna('Unknown').astype(str)
+        elif 'LGA' in no_data_wards.columns:
+            no_data_lga_names = no_data_wards['LGA'].fillna('Unknown').astype(str)
+        else:
+            no_data_lga_names = pd.Series('Unknown', index=no_data_wards.index)
+
         fig.add_trace(go.Choroplethmapbox(
             geojson=no_data_wards.geometry.__geo_interface__,
             locations=no_data_wards.index,
             z=[0] * len(no_data_wards),
             colorscale=[[0, '#ffeeee'], [1, '#ffeeee']],  # Light red tint
             text=no_data_wards['WardName'],
-            hovertemplate='<b>%{text}</b><br>' +
+            hovertemplate='<b>Ward:</b> %{text}<br>' +
+                          '<b>LGA:</b> %{customdata[2]}<br>' +
                           '─────────────────<br>' +
                           '<b>Status:</b> ⚠️ No population data<br>' +
                           '<b>Estimated Pop:</b> %{customdata[0]:,.0f}<br>' +
@@ -1142,7 +1151,8 @@ def generate_itn_map(
                           '<extra></extra>',
             customdata=np.column_stack((
                 no_data_wards['Population'].fillna(0),
-                no_data_wards.get('urban_pct_display', 0).fillna(0)
+                no_data_wards.get('urban_pct_display', pd.Series([0]*len(no_data_wards))).fillna(0),
+                no_data_lga_names
             )),
             marker_opacity=0.6,  # Increased opacity for visibility
             marker_line_width=1.5,  # Thicker borders
@@ -1172,13 +1182,22 @@ def generate_itn_map(
 
         uncovered_data['no_alloc_reason'] = uncovered_data.apply(get_no_allocation_reason, axis=1)
 
+        # Get LGA names for hover
+        if 'LGAName' in uncovered_data.columns:
+            uncovered_lga_names = uncovered_data['LGAName'].fillna('Unknown').astype(str)
+        elif 'LGA' in uncovered_data.columns:
+            uncovered_lga_names = uncovered_data['LGA'].fillna('Unknown').astype(str)
+        else:
+            uncovered_lga_names = pd.Series('Unknown', index=uncovered_data.index)
+
         fig.add_trace(go.Choroplethmapbox(
             geojson=uncovered_data.geometry.__geo_interface__,
             locations=uncovered_data.index,
             z=[0] * len(uncovered_data),  # All zeros for consistent gray color
             colorscale=[[0, '#d0d0d0'], [1, '#d0d0d0']],  # More visible gray
             text=uncovered_data['WardName'],
-            hovertemplate='<b>%{text}</b><br>' +
+            hovertemplate='<b>Ward:</b> %{text}<br>' +
+                          '<b>LGA:</b> %{customdata[5]}<br>' +
                           '─────────────────<br>' +
                           '<b>Status:</b> No nets allocated<br>' +
                           '<b>Urban %:</b> %{customdata[3]:.1f}%<br>' +
@@ -1191,7 +1210,8 @@ def generate_itn_map(
                 uncovered_data['coverage_percent'],  # [1] coverage_percent
                 uncovered_data['allocation_phase'],  # [2] allocation_phase
                 uncovered_data['urban_pct_display'],  # [3] urban_pct_display
-                uncovered_data['no_alloc_reason']  # [4] dynamic reason
+                uncovered_data['no_alloc_reason'],  # [4] dynamic reason
+                uncovered_lga_names  # [5] LGA name
             )),
             marker_opacity=0.7,  # Increased opacity for visibility
             marker_line_width=1.5,  # Thicker borders for visibility
@@ -1218,6 +1238,15 @@ def generate_itn_map(
 
         covered_data['tier_display'] = covered_data.get('priority_tier', pd.Series([0]*len(covered_data))).apply(get_tier_label)
 
+        # Get LGA names for covered data
+        if 'LGAName' in covered_data.columns:
+            covered_lga_names = covered_data['LGAName'].fillna('Unknown').astype(str)
+        elif 'LGA' in covered_data.columns:
+            covered_lga_names = covered_data['LGA'].fillna('Unknown').astype(str)
+        else:
+            covered_lga_names = pd.Series('Unknown', index=covered_data.index)
+        covered_data['lga_display'] = covered_lga_names
+
         # Split covered data into rural (tier 1) and urban (tier 2)
         tier1_mask = covered_data.get('priority_tier', pd.Series([0]*len(covered_data))) == 1
         tier2_mask = covered_data.get('priority_tier', pd.Series([0]*len(covered_data))) == 2
@@ -1238,7 +1267,8 @@ def generate_itn_map(
                 ],
                 reversescale=False,
                 text=tier1_data['WardName'],
-                hovertemplate='<b>%{text}</b><br>' +
+                hovertemplate='<b>Ward:</b> %{text}<br>' +
+                              '<b>LGA:</b> %{customdata[6]}<br>' +
                               '─────────────────<br>' +
                               '<b>Allocation Status:</b> %{customdata[2]}<br>' +
                               '<b>Priority Tier:</b> %{customdata[5]}<br>' +
@@ -1256,7 +1286,8 @@ def generate_itn_map(
                     tier1_data['allocation_phase'],
                     tier1_data['urban_pct_display'].fillna(0),
                     tier1_data['nets_needed'].fillna(0),
-                    tier1_data['tier_display']
+                    tier1_data['tier_display'],
+                    tier1_data['lga_display']
                 )),
                 marker_opacity=0.9,
                 marker_line_width=2,
@@ -1288,7 +1319,8 @@ def generate_itn_map(
                 ],
                 reversescale=False,
                 text=tier2_data['WardName'],
-                hovertemplate='<b>%{text}</b><br>' +
+                hovertemplate='<b>Ward:</b> %{text}<br>' +
+                              '<b>LGA:</b> %{customdata[6]}<br>' +
                               '─────────────────<br>' +
                               '<b>Allocation Status:</b> %{customdata[2]}<br>' +
                               '<b>Priority Tier:</b> %{customdata[5]}<br>' +
@@ -1306,7 +1338,8 @@ def generate_itn_map(
                     tier2_data['allocation_phase'],
                     tier2_data['urban_pct_display'].fillna(0),
                     tier2_data['nets_needed'].fillna(0),
-                    tier2_data['tier_display']
+                    tier2_data['tier_display'],
+                    tier2_data['lga_display']
                 )),
                 marker_opacity=0.9,
                 marker_line_width=2,
@@ -1535,7 +1568,7 @@ def _build_lga_allocation_figure(
                 z=data['nets_allocated'],
                 colorscale=colorscale,
                 text=data['display_name'],
-                hovertemplate='<b>%{text}</b><br>' +
+                hovertemplate='<b>LGA:</b> %{text}<br>' +
                               '─────────────────<br>' +
                               '<b>Nets Allocated:</b> %{z:,.0f}<br>' +
                               '<b>Nets Needed:</b> %{customdata[0]:,.0f}<br>' +
