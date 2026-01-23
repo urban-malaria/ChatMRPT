@@ -426,15 +426,30 @@ class VariableDistribution(BaseTool):
                 return {'type': 'FeatureCollection', 'features': features}
 
             def build_hover_text(df):
-                """Build hover text with LGA average included."""
+                """Build hover text with ward name, LGA name, and LGA average."""
                 texts = []
                 for idx, row in df.iterrows():
-                    name = row.get('LGAName') or row.get('WardName') or row.get('ward_name') or str(idx)
+                    # Ward name first (not LGA name!)
+                    ward_name = row.get('WardName') or row.get('ward_name') or str(idx)
+                    lga_name = row.get('LGAName') or row.get('lga_name') or 'Unknown'
                     val = row.get(variable)
                     lga_code = row.get('LGACode')
-                    text = f"<b>{name}</b><br>{variable}: {val:.2f}" if pd.notna(val) else f"<b>{name}</b><br>{variable}: N/A"
-                    if lga_code and lga_code in lga_averages:
-                        text += f"<br>LGA Avg: {lga_averages[lga_code]:.2f}"
+
+                    # Build hover text with clear structure
+                    text = f"<b>{ward_name}</b><br>"
+                    text += f"LGA: {lga_name}<br><br>"
+
+                    if pd.notna(val):
+                        text += f"<b>{variable}: {val:.2f}</b>"
+                        if lga_code and lga_code in lga_averages:
+                            lga_avg = lga_averages[lga_code]
+                            diff = val - lga_avg
+                            diff_sign = '+' if diff > 0 else ''
+                            diff_color = '#e74c3c' if diff > 0 else '#27ae60' if diff < 0 else '#666'
+                            text += f"<br>LGA Avg: {lga_avg:.2f} <span style='color:{diff_color}'>({diff_sign}{diff:.2f})</span>"
+                    else:
+                        text += f"{variable}: N/A"
+
                     texts.append(text)
                 return texts
 

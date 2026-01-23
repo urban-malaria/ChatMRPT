@@ -595,27 +595,33 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
             denominator_col='Total_Tested'
         )
 
-        # Create hover text with LGA average
+        # Create hover text with LGA average and comparison
         hover_text = []
         for _, row in merged_gdf.iterrows():
             lga_code = row.get('LGACode')
             lga_name = row.get('LGAName', 'Unknown')
             lga_avg = lga_avg_tpr.get(lga_code)
+            ward_name = row.get('WardName', 'Unknown Ward')
+
             if pd.notna(row.get('TPR')):
-                text = f"<b>{row['WardName']}</b><br>"
-                text += f"LGA: {lga_name}<br>"
-                text += f"<b style='color: green'>TPR: {row['TPR']:.1f}%</b><br>"
-                text += f"Tested: {int(row.get('Total_Tested', 0)):,}<br>"
-                text += f"Positive: {int(row.get('Total_Positive', 0)):,}"
+                ward_tpr = row['TPR']
+                text = f"<b>{ward_name}</b><br>"
+                text += f"LGA: {lga_name}<br><br>"
+                text += f"<b>Ward TPR: {ward_tpr:.1f}%</b><br>"
                 if lga_avg is not None:
-                    text += f"<br><i>LGA Avg TPR: {lga_avg:.1f}%</i>"
+                    diff = ward_tpr - lga_avg
+                    diff_sign = '+' if diff > 0 else ''
+                    diff_color = '#e74c3c' if diff > 0 else '#27ae60' if diff < 0 else '#666'
+                    text += f"LGA Avg: {lga_avg:.1f}% <span style='color:{diff_color}'>({diff_sign}{diff:.1f}%)</span><br>"
+                text += f"<br>"
+                text += f"<span style='color:#888'>Tested: {int(row.get('Total_Tested', 0)):,}</span><br>"
+                text += f"<span style='color:#888'>Positive: {int(row.get('Total_Positive', 0)):,}</span>"
             else:
-                text = f"<b>{row['WardName']}</b><br>"
-                text += f"LGA: {lga_name}<br>"
-                text += f"<b style='color: gray'>No TPR data available</b><br>"
-                text += f"<i>Ward boundary shown for reference</i>"
+                text = f"<b>{ward_name}</b><br>"
+                text += f"LGA: {lga_name}<br><br>"
+                text += f"<span style='color:#999'><i>No TPR data</i></span>"
                 if lga_avg is not None:
-                    text += f"<br><i>LGA Avg TPR: {lga_avg:.1f}%</i>"
+                    text += f"<br>LGA Avg: {lga_avg:.1f}%"
             hover_text.append(text)
 
         # Reset index to ensure proper alignment with GeoJSON
