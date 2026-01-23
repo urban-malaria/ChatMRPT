@@ -25,17 +25,19 @@ const MainInterface: React.FC = () => {
   };
   
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex flex-col">
+    <div className="h-screen bg-gray-50 dark:bg-dark-bg flex flex-col overflow-hidden">
       {/* Toolbar with New Chat, Export, Theme Toggle */}
       <Toolbar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar onOpenSettings={() => setShowSettings(true)} />
-        
-        {/* Chat Container */}
-        <main className="flex-1 flex flex-col">
+      {/* Main Content Area - Fixed height container */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Sidebar - Fixed position, doesn't scroll with content */}
+        <div className="flex-shrink-0 h-full">
+          <Sidebar onOpenSettings={() => setShowSettings(true)} />
+        </div>
+
+        {/* Chat Container - This is the only scrollable area */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <ChatContainer />
         </main>
       </div>

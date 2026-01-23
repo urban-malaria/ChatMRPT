@@ -43,48 +43,54 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
           }}
         />
 
-        <div className="w-16 bg-gray-50 dark:bg-dark-bg-secondary border-r border-gray-200 dark:border-dark-border flex flex-col items-center py-4 transition-all duration-300 ease-in-out h-full">
-          <button
-            onClick={() => setIsCollapsed(false)}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-all duration-200 group text-gray-600 dark:text-dark-text-secondary"
-            title="Expand sidebar"
-          >
-            <svg className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
-          {/* Quick Actions in Collapsed State */}
-          <div className="mt-8 space-y-4">
+        <div className="w-16 bg-gray-50 dark:bg-dark-bg-secondary border-r border-gray-200 dark:border-dark-border flex flex-col items-center py-4 transition-all duration-300 ease-in-out h-full overflow-hidden">
+          {/* Top Section */}
+          <div className="flex-shrink-0">
             <button
-              className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
-              title="Recent Files"
-              onClick={() => {
-                setIsCollapsed(false);
-                setActiveSection('history');
-              }}
+              onClick={() => setIsCollapsed(false)}
+              className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-all duration-200 group text-gray-600 dark:text-dark-text-secondary"
+              title="Expand sidebar"
             >
-              <svg className="w-5 h-5 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
 
-            <button
-              className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
-              title="Sample Data"
-              onClick={() => {
-                setIsCollapsed(false);
-                setActiveSection('samples');
-              }}
-            >
-              <svg className="w-5 h-5 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </button>
+            {/* Quick Actions in Collapsed State */}
+            <div className="mt-8 space-y-4">
+              <button
+                className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
+                title="Recent Files"
+                onClick={() => {
+                  setIsCollapsed(false);
+                  setActiveSection('history');
+                }}
+              >
+                <svg className="w-5 h-5 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+
+              <button
+                className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
+                title="Sample Data"
+                onClick={() => {
+                  setIsCollapsed(false);
+                  setActiveSection('samples');
+                }}
+              >
+                <svg className="w-5 h-5 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* Bottom Section - Settings & Profile (collapsed) */}
-          <div className="mt-auto border-t border-gray-200 dark:border-dark-border pt-4 pb-4 space-y-3">
+          {/* Spacer to push bottom section down */}
+          <div className="flex-1" />
+
+          {/* Bottom Section - Settings & Profile (collapsed) - Pinned to bottom */}
+          <div className="flex-shrink-0 border-t border-gray-200 dark:border-dark-border pt-4 pb-4 space-y-3 w-full flex flex-col items-center">
             {/* Settings Icon */}
             <button
               onClick={onOpenSettings}
@@ -143,9 +149,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
         }}
       />
 
-      <div className="w-80 bg-gray-50 dark:bg-dark-bg-secondary border-r border-gray-200 dark:border-dark-border flex flex-col transition-all duration-300 ease-in-out h-full">
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-dark-border">
+      <div className="w-80 bg-gray-50 dark:bg-dark-bg-secondary border-r border-gray-200 dark:border-dark-border flex flex-col transition-all duration-300 ease-in-out h-full overflow-hidden">
+        {/* Sidebar Header - Fixed at top */}
+        <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-dark-border">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold text-gray-900 dark:text-dark-text">Data Management</h3>
           <button
@@ -262,8 +268,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
         )}
       </div>
 
-        {/* Bottom Section - Settings & Profile */}
-        <div className="mt-auto border-t border-gray-200 dark:border-dark-border">
+        {/* Bottom Section - Settings & Profile - Pinned to bottom */}
+        <div className="flex-shrink-0 border-t border-gray-200 dark:border-dark-border">
           {/* Settings Button */}
           <button
             onClick={onOpenSettings}
