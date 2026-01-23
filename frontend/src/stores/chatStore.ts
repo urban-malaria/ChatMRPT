@@ -220,8 +220,17 @@ export const useChatStore = create<ChatState>()(
           })),
         
         resetSession: () => {
+          // Clear old conversation ID and generate new one
           storage.clearConversationId();
           const newConversationId = storage.ensureConversationId();
+
+          // Clear persisted chat storage to start fresh
+          try {
+            localStorage.removeItem('chat-storage');
+          } catch (e) {
+            console.warn('Failed to clear chat storage:', e);
+          }
+
           return set({
             session: {
               sessionId: `session_${Date.now()}`,

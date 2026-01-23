@@ -80,24 +80,19 @@ const Toolbar: React.FC = () => {
       const response = await api.session.clearSession();
 
       if (response.data.status === 'success') {
-        // Clear frontend state after successful backend clear
-        clearMessages();
+        // Reset session completely - generates new conversation ID and clears messages
+        resetSession();
 
-        // Get the new session ID from backend
+        // Get the new conversation ID and update URL
+        const newConversationId = storage.ensureConversationId();
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('conversation_id', newConversationId);
+        window.history.replaceState({}, document.title, newUrl.toString());
+
+        // If backend provided a session ID, update it
         const newSessionId = response.data.new_session_id;
-
         if (newSessionId) {
-          // Don't call resetSession, instead manually reset with the backend's ID
-          updateSession({
-            sessionId: newSessionId,
-            startTime: new Date(),
-            messageCount: 0,
-            hasUploadedFiles: false,
-            uploadedFiles: undefined
-          });
-        } else {
-          // Fallback if backend doesn't provide new ID
-          resetSession();
+          updateSession({ sessionId: newSessionId, preserveMessages: true });
         }
 
         setShowClearConfirm(false);
@@ -112,8 +107,14 @@ const Toolbar: React.FC = () => {
       // Even if backend fails, we can still clear frontend for better UX
       // But notify user that backend might have issues
       if (window.confirm('Backend clear failed. Clear frontend data anyway?')) {
-        clearMessages();
         resetSession();
+
+        // Update URL with new conversation ID
+        const newConversationId = storage.ensureConversationId();
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('conversation_id', newConversationId);
+        window.history.replaceState({}, document.title, newUrl.toString());
+
         setShowClearConfirm(false);
         toast('Frontend cleared, but server data may persist', {
           icon: '⚠️',
