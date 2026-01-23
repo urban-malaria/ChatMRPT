@@ -141,7 +141,7 @@ const Toolbar: React.FC = () => {
           </span>
         </div>
         
-        <div className="flex items-center space-x-2">
+        <div id="toolbar-action-group" className="flex items-center space-x-2">
           {/* New Chat Button */}
           <button
             onClick={handleClearChat}
