@@ -32,6 +32,7 @@ from .core_utils import (
     calculate_data_statistics
 )
 from app.utils.map_overlays import add_lga_boundary_overlay, calculate_lga_averages
+from app.utils.visualization_controls import inject_lga_hover_highlight
 
 logger = logging.getLogger(__name__)
 
@@ -432,9 +433,11 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         if len(gdf_valid) < len(gdf):
             logger.warning(f"Filtered out {len(gdf) - len(gdf_valid)} wards with null geometries")
         
-        # Create hover text using vectorized string operations for valid geometries only
-        hover_text = (gdf_valid['WardName'].astype(str) + '<br>Rank: ' + 
-                     gdf_valid['vulnerability_rank'].where(gdf_valid['vulnerability_rank'] != -1, 'Not ranked').astype(str) + 
+        # Create hover text with ward name, LGA, rank, and category
+        lga_names = gdf_valid['LGAName'].fillna('Unknown').astype(str) if 'LGAName' in gdf_valid.columns else 'Unknown'
+        hover_text = ('<b>' + gdf_valid['WardName'].astype(str) + '</b><br>' +
+                     'LGA: ' + lga_names + '<br><br>' +
+                     'Rank: ' + gdf_valid['vulnerability_rank'].where(gdf_valid['vulnerability_rank'] != -1, 'Not ranked').astype(str) +
                      '<br>Category: ' + gdf_valid['vulnerability_category'].fillna('Unknown').astype(str)).tolist()
         
         # Convert geometry to geojson with proper serialization
@@ -509,7 +512,16 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         save_result = save_agent_visualization(
             fig, filename, session_id, 'vulnerability_maps'
         )
-        
+
+        # Inject LGA hover highlighting
+        if save_result.get('status') == 'success' and save_result.get('file_path'):
+            try:
+                lga_codes = gdf_valid['LGACode'].fillna('').astype(str).tolist() if 'LGACode' in gdf_valid.columns else []
+                if lga_codes:
+                    inject_lga_hover_highlight(save_result['file_path'], lga_codes)
+            except Exception as hover_err:
+                logger.warning(f"Failed to inject LGA hover highlight: {hover_err}")
+
         if save_result['status'] == 'success':
             # Create rich context for LLM
             ranked_wards = gdf[gdf['vulnerability_rank'] != -1]

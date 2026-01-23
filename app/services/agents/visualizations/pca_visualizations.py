@@ -23,6 +23,8 @@ from .core_utils import (
     create_geojson_from_gdf,
     calculate_data_statistics
 )
+from app.utils.map_overlays import add_lga_boundary_overlay
+from app.utils.visualization_controls import inject_lga_hover_highlight
 
 logger = logging.getLogger(__name__)
 
@@ -56,15 +58,17 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         # Create GeoJSON
         geojson = create_geojson_from_gdf(data)
         
-        # Create hover text - handle NaN values properly
+        # Create hover text with ward name, LGA, and PCA info
         hover_text = []
         for _, row in data.iterrows():
             # Handle NaN values in pca_rank and pca_score
             pca_score_str = f"{row['pca_score']:.3f}" if pd.notna(row['pca_score']) else "N/A"
             pca_rank_str = f"{int(row['pca_rank'])}" if pd.notna(row['pca_rank']) else "N/A"
             pca_category_str = str(row['pca_category']) if pd.notna(row['pca_category']) else "N/A"
-            
+            lga_name = row.get('LGAName', 'Unknown') if 'LGAName' in data.columns else 'Unknown'
+
             text = (f"<b>{row['WardName']}</b><br>"
+                   f"LGA: {lga_name}<br><br>"
                    f"PCA Score: {pca_score_str}<br>"
                    f"Rank: {pca_rank_str}<br>"
                    f"Category: {pca_category_str}")
@@ -96,6 +100,9 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             zmax=data['pca_rank'].max()
         ))
         
+        # Add LGA boundary overlay
+        add_lga_boundary_overlay(fig, data)
+
         # Update layout
         fig.update_layout(
             title={
@@ -122,7 +129,16 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         save_result = save_agent_visualization(
             fig, filename, session_id, 'vulnerability_map'
         )
-        
+
+        # Inject LGA hover highlighting
+        if save_result.get('status') == 'success' and save_result.get('file_path'):
+            try:
+                lga_codes = data['LGACode'].fillna('').astype(str).tolist() if 'LGACode' in data.columns else []
+                if lga_codes:
+                    inject_lga_hover_highlight(save_result['file_path'], lga_codes)
+            except Exception as hover_err:
+                logger.warning(f"Failed to inject LGA hover highlight: {hover_err}")
+
         if save_result['status'] == 'success':
             return {
                 'status': 'success',

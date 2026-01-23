@@ -11,6 +11,8 @@ from typing import Dict, Any, Optional, List, Tuple
 import plotly.graph_objects as go
 from pandas.api.types import is_datetime64_any_dtype
 from app.data.population_data.itn_population_loader import get_population_loader
+from app.utils.map_overlays import add_lga_boundary_overlay
+from app.utils.visualization_controls import inject_lga_hover_highlight
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 
@@ -807,6 +809,8 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
     # Add uncovered areas first (so they appear behind covered areas)
     if uncovered_mask.any():
         uncovered_data = shp_data_valid[uncovered_mask]
+        # Get LGA names for hover
+        uncovered_lga_names = uncovered_data['LGAName'].fillna('Unknown').astype(str) if 'LGAName' in uncovered_data.columns else ['Unknown'] * len(uncovered_data)
         fig.add_trace(go.Choroplethmapbox(
             geojson=uncovered_data.geometry.__geo_interface__,
             locations=uncovered_data.index,
@@ -814,6 +818,7 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
             colorscale=[[0, '#f0f0f0'], [1, '#f0f0f0']],  # Light gray
             text=uncovered_data['WardName'],
             hovertemplate='<b>%{text}</b><br>' +
+                          'LGA: %{customdata[4]}<br>' +
                           '─────────────────<br>' +
                           '<b>Status:</b> No nets allocated<br>' +
                           '<b>Urban %:</b> %{customdata[3]:.1f}%<br>' +
@@ -823,7 +828,8 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
                 uncovered_data['Population'].fillna(0),
                 uncovered_data['coverage_percent'],
                 uncovered_data['allocation_phase'],
-                uncovered_data['urban_pct_display'].fillna(0)
+                uncovered_data['urban_pct_display'].fillna(0),
+                uncovered_lga_names
             )),
             marker_opacity=0.3,  # Much lower opacity for uncovered areas
             marker_line_width=0.5,
@@ -835,6 +841,8 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
     # Add covered areas with prominent colors
     if covered_mask.any():
         covered_data = shp_data_valid[covered_mask]
+        # Get LGA names for hover
+        covered_lga_names = covered_data['LGAName'].fillna('Unknown').astype(str) if 'LGAName' in covered_data.columns else ['Unknown'] * len(covered_data)
         fig.add_trace(go.Choroplethmapbox(
             geojson=covered_data.geometry.__geo_interface__,
             locations=covered_data.index,
@@ -843,6 +851,7 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
             reversescale=False,   # Yellow for high allocation
             text=covered_data['WardName'],
             hovertemplate='<b>%{text}</b><br>' +
+                          'LGA: %{customdata[4]}<br>' +
                           '─────────────────<br>' +
                           '<b>Allocation Status:</b> %{customdata[2]}<br>' +
                           '<b>Urban %:</b> %{customdata[3]:.1f}%<br>' +
@@ -856,7 +865,8 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
                 covered_data['Population'].fillna(0),
                 covered_data['coverage_percent'],
                 covered_data['allocation_phase'],
-                covered_data['urban_pct_display'].fillna(0)
+                covered_data['urban_pct_display'].fillna(0),
+                covered_lga_names
             )),
             marker_opacity=0.9,  # High opacity for covered areas
             marker_line_width=1.5,
@@ -903,7 +913,10 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
             font=dict(size=11)
         )
     ]
-    
+
+    # Add LGA boundary overlay
+    add_lga_boundary_overlay(fig, shp_data_valid)
+
     # Update layout
     fig.update_layout(
         mapbox=dict(
@@ -1032,6 +1045,14 @@ def generate_itn_map(shp_data: gpd.GeoDataFrame, prioritized: pd.DataFrame, repr
     # Write the modified HTML back
     with open(path, 'w') as f:
         f.write(html_content)
-    
+
+    # Inject LGA hover highlighting
+    try:
+        lga_codes = shp_data_valid['LGACode'].fillna('').astype(str).tolist() if 'LGACode' in shp_data_valid.columns else []
+        if lga_codes:
+            inject_lga_hover_highlight(path, lga_codes)
+    except Exception as hover_err:
+        logger.warning(f"Failed to inject LGA hover highlight for ITN map: {hover_err}")
+
     # Return path to serve the file
     return f'/serve_viz_file/{session_id}/visualizations/{filename}'
