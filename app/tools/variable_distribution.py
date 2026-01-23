@@ -428,6 +428,22 @@ class VariableDistribution(BaseTool):
             def build_hover_text(df):
                 """Build hover text with ward name, LGA name, and LGA average."""
                 texts = []
+
+                # Variable-specific formatting
+                var_lower = variable.lower()
+                if 'burden' in var_lower:
+                    var_label = "Malaria Burden"
+                    var_unit = " per 1,000"
+                elif 'tpr' in var_lower or 'positivity' in var_lower:
+                    var_label = variable.replace('_', ' ').title()
+                    var_unit = "%"
+                elif 'population' in var_lower:
+                    var_label = "Population"
+                    var_unit = ""
+                else:
+                    var_label = variable.replace('_', ' ').title()
+                    var_unit = ""
+
                 for idx, row in df.iterrows():
                     # Ward name first (not LGA name!)
                     ward_name = row.get('WardName') or row.get('ward_name') or str(idx)
@@ -435,20 +451,39 @@ class VariableDistribution(BaseTool):
                     val = row.get(variable)
                     lga_code = row.get('LGACode')
 
-                    # Build hover text with clear structure
-                    text = f"<b>{ward_name}</b><br>"
-                    text += f"LGA: {lga_name}<br><br>"
+                    # Build hover text with clean structure
+                    text = f"<b>Ward:</b> {ward_name}<br>"
+                    text += f"<b>LGA:</b> {lga_name}<br>"
 
                     if pd.notna(val):
-                        text += f"<b>{variable}: {val:.2f}</b>"
+                        # Format value based on magnitude
+                        if abs(val) >= 1000:
+                            val_str = f"{val:,.0f}"
+                        elif abs(val) >= 10:
+                            val_str = f"{val:.1f}"
+                        else:
+                            val_str = f"{val:.2f}"
+
+                        text += f"<br><b>{var_label}:</b> {val_str}{var_unit}"
+
                         if lga_code and lga_code in lga_averages:
                             lga_avg = lga_averages[lga_code]
                             diff = val - lga_avg
                             diff_sign = '+' if diff > 0 else ''
+                            # Color: red if above average (higher burden = worse), green if below
                             diff_color = '#e74c3c' if diff > 0 else '#27ae60' if diff < 0 else '#666'
-                            text += f"<br>LGA Avg: {lga_avg:.2f} <span style='color:{diff_color}'>({diff_sign}{diff:.2f})</span>"
+
+                            if abs(lga_avg) >= 1000:
+                                avg_str = f"{lga_avg:,.0f}"
+                            elif abs(lga_avg) >= 10:
+                                avg_str = f"{lga_avg:.1f}"
+                            else:
+                                avg_str = f"{lga_avg:.2f}"
+
+                            text += f"<br><b>LGA Average:</b> {avg_str}{var_unit}"
+                            text += f" <span style='color:{diff_color}'>({diff_sign}{diff:.1f})</span>"
                     else:
-                        text += f"{variable}: N/A"
+                        text += f"<br><b>{var_label}:</b> No data"
 
                     texts.append(text)
                 return texts

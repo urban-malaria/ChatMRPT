@@ -609,23 +609,31 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
 
             if pd.notna(row.get('Burden')):
                 ward_burden = row['Burden']
-                text = f"<b>{ward_name}</b><br>"
-                text += f"LGA: {lga_name}<br><br>"
-                text += f"<b>Malaria Burden: {ward_burden:.1f} per 1,000</b><br>"
+                population = int(row.get('Population', 0))
+                positive_cases = int(row.get('Total_Positive', 0))
+
+                # Clean format with labels
+                text = f"<b>Ward:</b> {ward_name}<br>"
+                text += f"<b>LGA:</b> {lga_name}<br>"
+                text += f"<br><b>Malaria Burden:</b> {ward_burden:.1f} per 1,000"
+
                 if lga_avg is not None:
                     diff = ward_burden - lga_avg
                     diff_sign = '+' if diff > 0 else ''
+                    # Red if above average (worse), green if below (better)
                     diff_color = '#e74c3c' if diff > 0 else '#27ae60' if diff < 0 else '#666'
-                    text += f"LGA Avg: {lga_avg:.1f} <span style='color:{diff_color}'>({diff_sign}{diff:.1f})</span><br>"
-                text += f"<br>"
-                text += f"<span style='color:#888'>Population: {int(row.get('Population', 0)):,}</span><br>"
-                text += f"<span style='color:#888'>Positive Cases: {int(row.get('Total_Positive', 0)):,}</span>"
+                    text += f"<br><b>LGA Average:</b> {lga_avg:.1f} per 1,000"
+                    text += f" <span style='color:{diff_color}'>({diff_sign}{diff:.1f})</span>"
+
+                # Additional details in lighter color
+                text += f"<br><br><span style='color:#888'>Population: {population:,}</span>"
+                text += f"<br><span style='color:#888'>Positive Cases: {positive_cases:,}</span>"
             else:
-                text = f"<b>{ward_name}</b><br>"
-                text += f"LGA: {lga_name}<br><br>"
-                text += f"<span style='color:#999'><i>No malaria data available</i></span>"
+                text = f"<b>Ward:</b> {ward_name}<br>"
+                text += f"<b>LGA:</b> {lga_name}<br>"
+                text += f"<br><span style='color:#999'><i>No malaria data available</i></span>"
                 if lga_avg is not None:
-                    text += f"<br>LGA Average: {lga_avg:.1f} per 1,000 pop"
+                    text += f"<br><b>LGA Average:</b> {lga_avg:.1f} per 1,000"
             hover_text.append(text)
 
         # Reset index to ensure proper alignment with GeoJSON
