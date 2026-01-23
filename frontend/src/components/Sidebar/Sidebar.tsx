@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
+import { useUserStore } from '@/stores/userStore';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
 import ProfileSection from '@/components/Profile/ProfileSection';
+import UserAvatar from '@/components/Profile/UserAvatar';
 import LoginModal from '@/components/Auth/LoginModal';
 import SignupModal from '@/components/Auth/SignupModal';
 
@@ -15,9 +17,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   const [activeSection, setActiveSection] = useState<'history' | 'samples'>('history');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
-  
+
   const session = useChatStore((state) => state.session);
   const setUploadedFiles = useChatStore((state) => state.setUploadedFiles);
+  const { user, isAuthenticated } = useUserStore();
   
   if (isCollapsed) {
     return (
@@ -95,15 +98,25 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             </button>
 
             {/* Profile/Sign In Icon */}
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
-              title="Sign In"
-            >
-              <svg className="w-5 h-5 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </button>
+            {isAuthenticated && user ? (
+              <button
+                onClick={() => setIsCollapsed(false)}
+                className="p-1 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
+                title={user.username}
+              >
+                <UserAvatar username={user.username} size="sm" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
+                title="Sign In"
+              >
+                <svg className="w-5 h-5 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </>
