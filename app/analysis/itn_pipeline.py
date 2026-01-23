@@ -22,6 +22,7 @@ from app.utils.lga_boundaries import (
     annotate_with_lga_names,
     get_reference_lga_geometries,
 )
+from app.utils.map_overlays import add_lga_boundary_overlay
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 
@@ -1340,6 +1341,13 @@ def generate_itn_map(
         tier2_wards = len(tier2_data)
         tier2_nets = int(tier2_data['nets_allocated'].sum()) if len(tier2_data) > 0 else 0
 
+    # Add LGA boundary overlay for visual clarity
+    try:
+        add_lga_boundary_overlay(fig, shp_data_valid)
+        logger.info("✅ Added LGA boundary overlay to ITN map")
+    except Exception as lga_err:
+        logger.warning(f"Could not add LGA boundary overlay: {lga_err}")
+
     # Add annotations for threshold info
     annotations = [
         dict(
@@ -1388,7 +1396,7 @@ def generate_itn_map(
         ),
         margin={"r": 0, "t": 60, "l": 0, "b": 0},
         title=dict(
-            text=f"ITN Distribution Plan<br><sub>Highlighted areas receive bed nets | Faded areas have no allocation</sub>",
+            text=f"ITN Distribution Plan<br><sub>Highlighted areas receive bed nets | Grey areas have no allocation</sub>",
             x=0.5,
             xanchor='center',
             font=dict(size=18)
