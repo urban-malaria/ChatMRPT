@@ -25,7 +25,9 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
   
   // Check if message contains visualization URLs or has visualizations array
   const hasVisualization = !isUser && (
-    message.content.includes('/serve_viz_file/') || 
+    message.content.includes('/serve_viz_file/') ||
+    message.content.includes('/static/visualizations/') ||
+    message.content.includes('.html') ||
     (message.visualizations && message.visualizations.length > 0)
   );
   
