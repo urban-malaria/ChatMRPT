@@ -22,7 +22,6 @@ from app.utils.lga_boundaries import (
     annotate_with_lga_names,
     get_reference_lga_geometries,
 )
-from app.utils.visualization_controls import inject_geographic_controls
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 
@@ -1721,23 +1720,5 @@ def _save_itn_map_html(
 
     with open(path, 'w') as handle:
         handle.write(html_content)
-
-    controls_config = {
-        'viz_type': 'itn_distribution',
-        'session_id': session_id,
-        'current_level': current_level,
-        'selected_lgas': selected_lgas,
-        'available_lgas': available_lgas,
-        'viz_params': {
-            'method': method,
-            'total_nets': total_nets,
-            'avg_household_size': avg_household_size,
-            'urban_threshold': urban_threshold,
-        },
-    }
-    try:
-        inject_geographic_controls(path, controls_config)
-    except Exception as exc:
-        logger.warning(f"Failed to inject geographic controls into ITN map: {exc}")
 
     return f'/serve_viz_file/{session_id}/visualizations/{filename}'

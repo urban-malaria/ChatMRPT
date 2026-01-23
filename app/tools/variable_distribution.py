@@ -25,7 +25,7 @@ from app.utils.lga_boundaries import (
     annotate_with_lga_names,
     get_reference_lga_geometries,
 )
-from app.utils.visualization_controls import inject_geographic_controls, inject_lga_hover_highlight
+from app.utils.visualization_controls import inject_lga_hover_highlight
 from app.utils.map_overlays import (
     add_lga_boundary_overlay,
     calculate_lga_averages,
@@ -544,22 +544,6 @@ class VariableDistribution(BaseTool):
             
             # Generate web path for frontend
             web_path = f"/serve_viz_file/{session_id}/{filename}"
-
-            controls_config = {
-                'viz_type': 'variable_distribution',
-                'session_id': session_id,
-                'current_level': plot_level,
-                'selected_lgas': highlight_codes,
-                'available_lgas': available_lgas,
-                'viz_params': {
-                    'variable_name': variable,
-                },
-            }
-
-            try:
-                inject_geographic_controls(file_path, controls_config)
-            except Exception as inject_err:
-                logger.warning(f"Failed to inject geographic controls: {inject_err}")
 
             # Inject LGA hover highlighting for ward-level maps
             if plot_level == 'ward':
