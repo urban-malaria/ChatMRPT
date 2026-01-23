@@ -414,6 +414,43 @@ class VariableDistribution(BaseTool):
 
             from shapely.geometry import mapping
 
+            # Determine variable label and unit (used for hover text and colorbar)
+            var_lower = variable.lower()
+            if 'burden' in var_lower:
+                var_label = "Malaria Burden"
+                var_unit = " per 1,000"
+            elif 'tpr' in var_lower or 'positivity' in var_lower:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = "%"
+            elif 'population' in var_lower:
+                var_label = "Population"
+                var_unit = ""
+            elif 'distance' in var_lower:
+                # Distance variables (e.g., DistanceToWaterbodies, distance_to_health_facility)
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " m"
+            elif 'elevation' in var_lower or 'altitude' in var_lower:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " m"
+            elif 'rainfall' in var_lower or 'precipitation' in var_lower:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " mm"
+            elif 'temperature' in var_lower or 'temp' in var_lower:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " °C"
+            elif 'humidity' in var_lower:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = "%"
+            elif 'density' in var_lower:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = " per km²"
+            else:
+                var_label = variable.replace('_', ' ').title()
+                var_unit = ""
+
+            # Colorbar title with unit
+            colorbar_title = f"{var_label}{var_unit}" if var_unit else var_label
+
             def build_geojson(df: gpd.GeoDataFrame):
                 features = []
                 for idx, row in df.iterrows():
@@ -428,21 +465,6 @@ class VariableDistribution(BaseTool):
             def build_hover_text(df):
                 """Build hover text with ward name, LGA name, and LGA average."""
                 texts = []
-
-                # Variable-specific formatting
-                var_lower = variable.lower()
-                if 'burden' in var_lower:
-                    var_label = "Malaria Burden"
-                    var_unit = " per 1,000"
-                elif 'tpr' in var_lower or 'positivity' in var_lower:
-                    var_label = variable.replace('_', ' ').title()
-                    var_unit = "%"
-                elif 'population' in var_lower:
-                    var_label = "Population"
-                    var_unit = ""
-                else:
-                    var_label = variable.replace('_', ' ').title()
-                    var_unit = ""
 
                 for idx, row in df.iterrows():
                     # Ward name first (not LGA name!)
@@ -505,7 +527,7 @@ class VariableDistribution(BaseTool):
                     marker_line_color='white',
                     showscale=show_scale,
                     colorbar=dict(
-                        title=variable.replace('_', ' ').title(),
+                        title=colorbar_title,
                         thickness=15,
                         len=0.7
                     ) if show_scale else None,
