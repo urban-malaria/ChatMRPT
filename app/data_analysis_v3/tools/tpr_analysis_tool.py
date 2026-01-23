@@ -1094,8 +1094,8 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                         try:
                             merged_gdf = match_and_merge_data(tpr_results, state_gdf)
 
-                            # Count matches
-                            matched_count = int(merged_gdf['TPR'].notna().sum())
+                            # Count matches - use Burden column (new metric)
+                            matched_count = int(merged_gdf['Burden'].notna().sum()) if 'Burden' in merged_gdf.columns else 0
                             total_count = int(len(merged_gdf))
                             match_rate = (matched_count / total_count * 100) if total_count > 0 else 0
 
@@ -1115,7 +1115,9 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                             logger.error(f"❌ Ward matching failed: {e}")
                             debug_stages["ward_matching"] = {"success": False, "error": str(e)}
                             merged_gdf = state_gdf.copy()
-                            merged_gdf['TPR'] = 0
+                            merged_gdf['Burden'] = 0
+                            merged_gdf['Population'] = 0
+                            merged_gdf['Total_Positive'] = 0
                         
                         # Extract environmental variables (zone-specific)
                         logger.info("🌍 Extracting zone-specific environmental variables from rasters")
@@ -1163,11 +1165,10 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                         final_df['State'] = state_name
                         final_df['GeopoliticalZone'] = get_geopolitical_zone(state_name)
                         
-                        # Add TPR metrics
-                        final_df['TPR'] = merged_gdf['TPR'].fillna(0)
-                        # Fix: Convert to native Python int to avoid JSON serialization issues
-                        final_df['Total_Tested'] = merged_gdf['Total_Tested'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0)
-                        final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0)
+                        # Add Burden metrics (new calculation)
+                        final_df['Burden'] = merged_gdf['Burden'].fillna(0) if 'Burden' in merged_gdf.columns else 0
+                        final_df['Population'] = merged_gdf['Population'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Population' in merged_gdf.columns else 0
+                        final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Total_Positive' in merged_gdf.columns else 0
                         
                         # Add environmental variables
                         for col in env_data.columns:
@@ -1395,11 +1396,10 @@ Or ask me anything about your data - I'm here to help!
             final_df['State'] = state_name
             final_df['GeopoliticalZone'] = get_geopolitical_zone(state_name)
             
-            # Add TPR metrics
-            final_df['TPR'] = merged_gdf['TPR'].fillna(0)
-            # Fix: Convert to native Python int to avoid JSON serialization issues
-            final_df['Total_Tested'] = merged_gdf['Total_Tested'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0)
-            final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0)
+            # Add Burden metrics (new calculation)
+            final_df['Burden'] = merged_gdf['Burden'].fillna(0) if 'Burden' in merged_gdf.columns else 0
+            final_df['Population'] = merged_gdf['Population'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Population' in merged_gdf.columns else 0
+            final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Total_Positive' in merged_gdf.columns else 0
             
             # Add environmental variables
             for col in env_data.columns:
@@ -1436,24 +1436,24 @@ Or ask me anything about your data - I'm here to help!
                 graph_state['upload_type'] = 'csv_shapefile'
                 graph_state['tpr_completed'] = True
             
-            result = f"""✅ TPR Data Prepared for Risk Analysis!
+            result = f"""✅ Malaria Burden Data Prepared for Risk Analysis!
 
 State: {state_name}
 Wards: {len(final_df)}
-TPR Coverage: {(final_df['TPR'] > 0).sum()}/{len(final_df)} wards
+Burden Coverage: {(final_df['Burden'] > 0).sum()}/{len(final_df)} wards
 
 Files Created:
-1. raw_data.csv - Ward-level data with TPR and environmental variables
+1. raw_data.csv - Ward-level data with malaria burden and environmental variables
 2. raw_shapefile.zip - Geographic boundaries with attributes
 
 Data Summary:
 - Columns: {len(final_df.columns)}
 - Environmental variables: {sum(1 for col in env_data.columns if col != 'WardCode')}
-- Mean TPR: {final_df['TPR'].mean():.2f}%
-- Wards with data: {(final_df['Total_Tested'] > 0).sum()}
+- Mean Burden: {final_df['Burden'].mean():.2f} per 1,000 population
+- Wards with positive cases: {(final_df['Total_Positive'] > 0).sum()}
 
 ---
-**Next Step:** I've finished preparing the TPR data for analysis. Would you like to proceed to the risk analysis stage to rank wards and plan for ITN distribution?
+**Next Step:** I've finished preparing the burden data for analysis. Would you like to proceed to the risk analysis stage to rank wards and plan for ITN distribution?
 """
             return result
             

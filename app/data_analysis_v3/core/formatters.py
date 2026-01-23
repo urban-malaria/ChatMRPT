@@ -170,13 +170,12 @@ class MessageFormatter:
 
                 tests = group_data.get('total_tests', 0)
                 positive = group_data.get('total_positive', 0)
-                tpr = (positive / tests * 100) if tests > 0 else 0
 
                 # Add recommendation for u5
                 rec = " **(Recommended)**" if group_key == 'u5' else ""
 
                 message += f"- **{group_key}**{rec} - {group_name}\n"
-                message += f"  - {tests:,} tests, TPR: {tpr:.1f}%\n\n"
+                message += f"  - {positive:,} positive cases from {tests:,} tests\n\n"
 
             message += f"- **all** - All age groups combined\n"
             total_tests = analysis.get('total_tests', 0)
