@@ -388,20 +388,30 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         z_values = gdf['vulnerability_rank'].copy()
         # Set unranked (-1) to NaN so they appear gray
         z_values = z_values.where(z_values != -1, np.nan)
-        
-        # Choose continuous colorscale
-        colorscale = 'Plasma_r'  # Reverse plasma: high rank = dark
-        
-        # Compute colorbar ticks
+
+        # Compute colorbar ticks BEFORE inverting z-values
         if z_values.notna().sum() > 0:
             min_rank = int(z_values.min())
             max_rank = int(z_values.max())
             median_rank = int(z_values.median())
-            tickvals = [min_rank, median_rank, max_rank]
-            ticktext = [f"Highest Risk ({min_rank})", f"Mid-rank ({median_rank})", f"Lowest Risk ({max_rank})"]
+
+            # Invert z-values so highest risk (rank 1) appears at TOP of colorbar
+            # Transform: inverted = max_rank + 1 - original
+            z_values_inverted = max_rank + 1 - z_values
+            z_values = z_values_inverted
+
+            # Inverted tickvals (original ranks mapped to inverted positions)
+            # Original rank 1 (highest risk) -> inverted max_rank (top of colorbar)
+            # Original max_rank (lowest risk) -> inverted 1 (bottom of colorbar)
+            tickvals = [1, max_rank + 1 - median_rank, max_rank]
+            ticktext = [f"Lowest Risk ({max_rank})", f"Mid-rank ({median_rank})", f"Highest Risk ({min_rank})"]
         else:
             tickvals = []
             ticktext = []
+
+        # Choose continuous colorscale (Plasma: purple=low values, yellow=high values)
+        # After inversion: yellow = highest risk at top, purple = lowest risk at bottom
+        colorscale = 'Plasma'
         
         # Create hover text using vectorized operations
         ward_names = gdf['WardName'].astype(str)
@@ -482,8 +492,8 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
                 tickvals=tickvals,
                 ticktext=ticktext
             ),
-            zmin=min_rank if z_values.notna().sum() > 0 else 0,
-            zmax=max_rank if z_values.notna().sum() > 0 else 1,
+            zmin=1,  # Inverted: lowest risk at bottom
+            zmax=max_rank if z_values.notna().sum() > 0 else 1,  # Inverted: highest risk at top
             showscale=True,
             autocolorscale=False,
             zauto=False
@@ -848,19 +858,25 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
             if 'overall_rank' in merged_data.columns:
                 z_values = merged_data['overall_rank'].copy()
                 z_values = z_values.where(z_values != -1, np.nan)  # Handle unranked wards
-                colorscale = 'Plasma_r'  # ORIGINAL: Reverse plasma for vulnerability
                 colorbar_title = "Vulnerability Rank"
                 opacity_values = [0.8] * len(merged_data)  # Full opacity for all areas
-                
+
                 if z_values.notna().sum() > 0:
                     min_rank = int(z_values.min())
                     max_rank = int(z_values.max())
                     median_rank = int(z_values.median())
-                    tickvals = [min_rank, median_rank, max_rank]
-                    ticktext = [f"High ({min_rank})", f"Median ({median_rank})", f"Low ({max_rank})"]
+
+                    # Invert z-values so highest risk (rank 1) appears at TOP of colorbar
+                    z_values = max_rank + 1 - z_values
+
+                    # Inverted tickvals
+                    tickvals = [1, max_rank + 1 - median_rank, max_rank]
+                    ticktext = [f"Low ({max_rank})", f"Mid ({median_rank})", f"High ({min_rank})"]
+                    colorscale = 'Plasma'  # Yellow=high risk at top
                 else:
                     tickvals = []
                     ticktext = []
+                    colorscale = 'Plasma'
             else:
                 # No vulnerability data, use urban percentage
                 z_values = merged_data[urban_col]
@@ -902,7 +918,7 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
                 # Use vulnerability rankings but grey out non-urban areas
                 z_values = merged_data['overall_rank'].copy()
                 z_values = z_values.where(z_values != -1, np.nan)  # Handle unranked wards
-                
+
                 # ORIGINAL: Create opacity array: full opacity for urban areas, reduced for non-urban
                 opacity_values = []
                 for meets_threshold in merged_data[meets_threshold_field]:
@@ -910,19 +926,25 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
                         opacity_values.append(0.8)  # Full opacity for urban areas
                     else:
                         opacity_values.append(0.2)  # ORIGINAL: Very low opacity for non-urban areas (greyed out)
-                
-                colorscale = 'Plasma_r'  # ORIGINAL: Plasma_r for vulnerability
+
                 colorbar_title = "Vulnerability Rank"
-                
+
                 if z_values.notna().sum() > 0:
                     min_rank = int(z_values.min())
                     max_rank = int(z_values.max())
                     median_rank = int(z_values.median())
-                    tickvals = [min_rank, median_rank, max_rank]
-                    ticktext = [f"High ({min_rank})", f"Median ({median_rank})", f"Low ({max_rank})"]
+
+                    # Invert z-values so highest risk (rank 1) appears at TOP of colorbar
+                    z_values = max_rank + 1 - z_values
+
+                    # Inverted tickvals
+                    tickvals = [1, max_rank + 1 - median_rank, max_rank]
+                    ticktext = [f"Low ({max_rank})", f"Mid ({median_rank})", f"High ({min_rank})"]
+                    colorscale = 'Plasma'  # Yellow=high risk at top
                 else:
                     tickvals = []
                     ticktext = []
+                    colorscale = 'Plasma'
             else:
                 # No vulnerability data, use urban percentage
                 z_values = merged_data[urban_col].copy()
