@@ -19,7 +19,7 @@ const ChatContainer: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const setUploadedFiles = useChatStore((s) => s.setUploadedFiles);
 
-  const { sendMessage } = useMessageStreaming();
+  const { sendMessage, stopGeneration } = useMessageStreaming();
   const updateSession = useChatStore((state) => state.updateSession);
   
   // Auto-scroll to bottom when new messages arrive
@@ -178,11 +178,12 @@ const ChatContainer: React.FC = () => {
       
       {/* Input Area */}
       <div className="flex-shrink-0 border-t border-gray-200 dark:border-dark-border sticky bottom-0 z-40 bg-white dark:bg-dark-bg-secondary">
-        <InputArea 
+        <InputArea
           value={inputValue}
           onChange={setInputValue}
-          onSend={handleSendMessage} 
-          isLoading={isLoading} 
+          onSend={handleSendMessage}
+          onStop={stopGeneration}
+          isLoading={isLoading}
         />
       </div>
 

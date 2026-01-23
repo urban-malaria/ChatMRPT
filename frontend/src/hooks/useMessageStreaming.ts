@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import type { RegularMessage, ModelName } from '@/types';
@@ -13,6 +13,17 @@ const useMessageStreaming = () => {
     session,
     startArenaBattle,
   } = useChatStore();
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      console.log('🛑 Aborting generation...');
+      abortControllerRef.current.abort();
+      setLoading(false);
+      toast('Generation stopped', { icon: '🛑' });
+    }
+  }, [setLoading]);
   
   const sendMessage = useCallback(async (message: string, opts?: { silent?: boolean }) => {
     // Check if we're in data analysis mode
@@ -38,10 +49,14 @@ const useMessageStreaming = () => {
       addMessage(userMessage);
     }
     setLoading(true);
-    
+
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     try {
       // Determine endpoint based on mode
-      const endpoint = dataAnalysisMode 
+      const endpoint = dataAnalysisMode
         ? '/api/v1/data-analysis/chat'
         : '/send_message_streaming';
       
@@ -70,6 +85,7 @@ const useMessageStreaming = () => {
             message,
             session_id: session.sessionId,
           }),
+          signal,
         });
 
         if (!response.ok) {
@@ -157,6 +173,7 @@ const useMessageStreaming = () => {
           message,
           session_id: session.sessionId,
         }),
+        signal,
       });
 
       if (!response.ok) {
@@ -360,13 +377,18 @@ const useMessageStreaming = () => {
       setLoading(false);
       
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('🛑 Request aborted by user');
+        toast('Generation stopped', { icon: '🛑' });
+      } else {
+        console.error('Error sending message:', error);
+        toast.error('Failed to send message');
+      }
       setLoading(false);
     }
   }, [addMessage, setLoading, session.sessionId, startArenaBattle, updateStreamingContent]);
-  
-  return { sendMessage };
+
+  return { sendMessage, stopGeneration };
 };
 
 export default useMessageStreaming;

@@ -7,6 +7,7 @@ interface InputAreaProps {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  onStop?: () => void;
   isLoading: boolean;
   placeholder?: string;
 }
@@ -15,6 +16,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   value,
   onChange,
   onSend,
+  onStop,
   isLoading,
   placeholder = "Type your message...",
 }) => {
@@ -162,7 +164,23 @@ const InputArea: React.FC<InputAreaProps> = ({
               />
             </svg>
           </button>
-          
+
+          {/* Stop Button - shown when loading */}
+          {isLoading && onStop && (
+            <button
+              onClick={onStop}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+              title="Stop generation"
+            >
+              <div className="flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Stop
+              </div>
+            </button>
+          )}
+
           {/* Send Button */}
           <button
             onClick={onSend}
