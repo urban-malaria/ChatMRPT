@@ -416,17 +416,68 @@ class ToolIntentResolver:
         return 0.0, {}, False, [], True
 
     def _handle_itn_planning(self, text: str, tokens: Sequence[str]) -> Tuple[float, Dict[str, Any], bool, List[str], bool]:
+        """
+        Handle ITN (bed net) planning requests.
+
+        Triggers on:
+        - Explicit planning requests: "plan bed net distribution"
+        - Parameter provision: "I have 2 million nets, household size is 4"
+        """
         matched = []
         score = 0.0
+        inferred_args = {}
+
+        # Core trigger words
         trigger_words = {"itn", "bednet", "bed", "net", "nets", "mosquito"}
         if trigger_words.intersection(tokens):
             score += 1.4
             matched.append("itn")
+
+        # Action words for explicit planning requests
         action_words = {"plan", "allocate", "distribution", "distribute", "deploy", "share"}
         if action_words.intersection(tokens):
             score += 1.0
             matched.append("plan")
-        return score, {}, False, matched, True
+
+        # CRITICAL: Recognize parameter provision patterns
+        # User provides net count: "I have 2 million nets" or "50000 nets"
+        import re
+        net_count_pattern = r'(\d[\d,\.]*)\s*(million|thousand|k|m)?\s*(nets?|itns?|bednets?)'
+        net_match = re.search(net_count_pattern, text, re.IGNORECASE)
+        if net_match:
+            score += 1.5  # Strong signal for ITN planning
+            matched.append("net_count")
+            # Extract the number
+            num_str = net_match.group(1).replace(',', '')
+            multiplier = net_match.group(2)
+            try:
+                num = float(num_str)
+                if multiplier:
+                    mult_lower = multiplier.lower()
+                    if mult_lower in ('million', 'm'):
+                        num *= 1_000_000
+                    elif mult_lower in ('thousand', 'k'):
+                        num *= 1_000
+                inferred_args['total_nets'] = int(num)
+            except ValueError:
+                pass
+
+        # User provides household size: "household size is 4" or "average household of 4"
+        household_pattern = r'(household|hh)\s*(size|of)?\s*(is|=|:)?\s*(\d+\.?\d*)'
+        hh_match = re.search(household_pattern, text, re.IGNORECASE)
+        if hh_match:
+            score += 1.2
+            matched.append("household_size")
+            try:
+                inferred_args['avg_household_size'] = float(hh_match.group(4))
+            except ValueError:
+                pass
+
+        # If user provides BOTH parameters, this is definitely ITN planning
+        if 'net_count' in matched and 'household_size' in matched:
+            score += 1.0  # Bonus for complete parameter set
+
+        return score, inferred_args, bool(inferred_args), matched, True
 
     def _handle_query_data(self, text: str, tokens: Sequence[str]) -> Tuple[float, Dict[str, Any], bool, List[str], bool]:
         """

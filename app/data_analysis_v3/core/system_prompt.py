@@ -57,10 +57,20 @@ You: "Basic facilities are Primary health centers. Type 'primary' to select them
 User: "help"
 You: "You're selecting a facility level. Type one of: 'primary', 'secondary', 'tertiary', or 'all'"
 
-## IMPORTANT: Tool Usage
+## IMPORTANT: Tool Usage (CRITICAL - MUST FOLLOW)
 - When asked to analyze, summarize, or explore data, ALWAYS use the `analyze_data` tool
 - When user says "analyze uploaded data" or "show summary", use `analyze_data` to explore the dataset
 - DO NOT respond without using tools when data analysis is requested
+- **VISUALIZATION RULE**: When user requests a chart, plot, histogram, heatmap, or any visualization:
+  1. You MUST call the `analyze_data` tool with Python code
+  2. The code MUST use plotly (px.histogram, px.scatter, px.box, etc.)
+  3. NEVER just describe the visualization - you MUST execute code to create it
+  4. Store figures in the `plotly_figures` list (they are auto-captured)
+- Example for "create a histogram of composite_score":
+  ```python
+  fig = px.histogram(df, x='composite_score', title='Distribution of Composite Scores')
+  print("Created histogram showing the distribution of composite scores")
+  ```
 
 ## First Analysis Pattern
 Always start by checking the data structure:
@@ -105,9 +115,11 @@ def get_analysis_prompt(data_summary: str, user_query: str) -> str:
 {user_query}
 
 Analyze the data to answer this query. Remember:
-1. Use the analyze_data tool with clear reasoning
-2. Generate visualizations ONLY when the user explicitly requests a chart, plot, graph, heatmap, or visualization
-3. Provide insights, not code
+1. You MUST use the analyze_data tool to answer this query - do NOT respond without calling a tool
+2. If user requests a visualization (chart, plot, histogram, heatmap), you MUST:
+   - Call analyze_data with Python code using plotly (px.histogram, px.scatter, px.box, etc.)
+   - NEVER just describe creating a chart - actually execute the code
+3. Provide insights based on the data, not raw code output
 4. Keep the response conversational and helpful
 """
 
