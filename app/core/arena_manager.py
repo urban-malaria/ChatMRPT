@@ -516,7 +516,7 @@ class ArenaManager:
             # Create unique ID for this specific matchup (battle_id + round)
             matchup_id = f"{battle_id}_round{round_number}"
 
-            interaction_logger.log_arena_battle(
+            interaction_logger.event_logger.log_arena_battle(
                 battle_id=matchup_id,
                 session_id=session_id,
                 user_message=user_message,
