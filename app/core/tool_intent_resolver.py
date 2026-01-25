@@ -55,8 +55,9 @@ class ToolIntentResolver:
         "create_settlement_map": "create_settlement_map",
         "show_settlement_statistics": "show_settlement_statistics",
         "run_itn_planning": "plan_itn_distribution",
-        "analyze_data_with_python": "execute_data_query",
-        "list_dataset_columns": "describe_data",
+        # Two-layer data architecture
+        "query_data": "execute_data_query",  # Layer 1: SQL queries, returns text only
+        "analyze_data": "analyze_data_complex",  # Layer 2: Python analysis, charts when explicitly requested
     }
 
     _DEFAULT_THRESHOLD: float = 1.8
@@ -213,10 +214,11 @@ class ToolIntentResolver:
             return self._handle_settlement_stats(text, tokens)
         if tool_name == "run_itn_planning":
             return self._handle_itn_planning(text, tokens)
-        if tool_name == "analyze_data_with_python":
-            return self._handle_data_queries(text, tokens)
-        if tool_name == "list_dataset_columns":
-            return self._handle_list_columns(text, tokens)
+        # Two-layer data architecture routing
+        if tool_name == "query_data":
+            return self._handle_query_data(text, tokens)
+        if tool_name == "analyze_data":
+            return self._handle_analyze_data(text, tokens)
 
         # Default: no extra info
         return 0.0, {}, False, [], True
@@ -426,29 +428,98 @@ class ToolIntentResolver:
             matched.append("plan")
         return score, {}, False, matched, True
 
-    def _handle_data_queries(self, text: str, tokens: Sequence[str]) -> Tuple[float, Dict[str, Any], bool, List[str], bool]:
-        # Broad catch-all for analytical requests (top N, correlations, summaries, etc.)
-        ranking_words = {"top", "highest", "lowest", "rank", "sort", "order"}
-        analysis_words = {"correlation", "trend", "summary", "statistics", "compare", "difference", "mean", "average"}
+    def _handle_query_data(self, text: str, tokens: Sequence[str]) -> Tuple[float, Dict[str, Any], bool, List[str], bool]:
+        """
+        Handle routing to query_data (Layer 1: text-to-SQL, data only, NO charts).
+
+        Routes to query_data for:
+        - Data queries (top N, averages, counts, filters)
+        - Column/variable listings
+        - Statistics and summaries (without explicit viz request)
+        """
+        # Explicit visualization keywords -> DO NOT route here, use analyze_data instead
+        viz_keywords = {"chart", "plot", "graph", "heatmap", "histogram", "scatter",
+                       "bar chart", "box plot", "violin", "visualization", "visualize",
+                       "draw", "create a plot", "show me a chart", "generate a graph"}
+        if any(kw in text for kw in viz_keywords):
+            return -2.0, {}, False, [], True  # Strong negative score to avoid this tool
+
         matched = []
         score = 0.0
+
+        # Column/schema queries
+        column_words = {"columns", "variables", "fields", "headers", "features", "schema"}
+        question_words = {"what", "which", "show", "list", "available", "describe"}
+        if column_words.intersection(tokens) and question_words.intersection(tokens):
+            score += 2.5
+            matched.extend(list(column_words.intersection(tokens)))
+
+        # Data queries (rankings, filtering, aggregations)
+        ranking_words = {"top", "highest", "lowest", "rank", "sort", "order", "first", "last"}
         if ranking_words.intersection(tokens):
             matched.append("ranking")
-            score += 1.2
-        if analysis_words.intersection(tokens):
-            matched.append("analysis")
-            score += 1.0
-        if "python" in tokens or "code" in tokens:
-            score += 0.5
-            matched.append("python")
+            score += 2.5  # Increased to ensure threshold is met
+
+        # Statistics queries (without viz)
+        stats_words = {"average", "mean", "count", "total", "sum", "minimum", "maximum", "median"}
+        if stats_words.intersection(tokens):
+            matched.append("statistics")
+            score += 1.8
+
+        # Filtering queries
+        filter_words = {"where", "filter", "greater", "less", "above", "below", "between"}
+        if filter_words.intersection(tokens):
+            matched.append("filter")
+            score += 1.5
+
+        # Data-related questions
+        data_words = {"data", "wards", "ward", "value", "values", "record", "records", "rows"}
+        if data_words.intersection(tokens):
+            score += 0.8
+            matched.extend(list(data_words.intersection(tokens))[:2])
+
         return score, {"query": text}, False, matched, True
 
-    def _handle_list_columns(self, text: str, tokens: Sequence[str]) -> Tuple[float, Dict[str, Any], bool, List[str], bool]:
-        target_words = {"columns", "variables", "fields", "headers", "features", "schema"}
-        question_words = {"what", "which", "show", "list", "available"}
-        if target_words.intersection(tokens) and question_words.intersection(tokens):
-            return 2.0, {}, False, list(target_words.intersection(tokens)), True
-        return 0.0, {}, False, [], True
+    def _handle_analyze_data(self, text: str, tokens: Sequence[str]) -> Tuple[float, Dict[str, Any], bool, List[str], bool]:
+        """
+        Handle routing to analyze_data (Layer 2: Python execution, charts when explicitly requested).
+
+        Routes to analyze_data for:
+        - Explicit visualization requests (charts, plots, heatmaps)
+        - Complex statistical analysis (regression, ANOVA, clustering)
+        - Machine learning operations
+        """
+        matched = []
+        score = 0.0
+
+        # Explicit visualization keywords -> HIGH SCORE for this tool
+        viz_keywords = {"chart", "plot", "graph", "heatmap", "histogram", "scatter",
+                       "violin", "visualization", "visualize", "draw"}
+        viz_matches = [kw for kw in viz_keywords if kw in tokens or kw in text]
+        if viz_matches:
+            score += 3.0  # High score to ensure threshold is met
+            matched.extend(viz_matches[:3])
+
+        # Complex analysis keywords
+        complex_analysis = {"regression", "anova", "clustering", "kmeans", "pca",
+                          "machine learning", "model", "predict", "classify", "t-test"}
+        analysis_matches = [kw for kw in complex_analysis if kw in text]
+        if analysis_matches:
+            score += 2.0
+            matched.extend(analysis_matches[:2])
+
+        # Correlation with visualization
+        if "correlation" in tokens:
+            if viz_matches or "matrix" in tokens or "heatmap" in text:
+                score += 2.0
+                matched.append("correlation")
+
+        # Python/code keywords
+        if "python" in tokens or "code" in tokens:
+            score += 0.8
+            matched.append("python")
+
+        return score, {"query": text}, False, matched, True
 
     # ------------------------------------------------------------------
     # misc helpers
@@ -457,7 +528,11 @@ class ToolIntentResolver:
         data_loaded = bool(session_context.get("data_loaded"))
         analysis_complete = bool(session_context.get("analysis_complete"))
 
-        if tool_name in {"run_malaria_risk_analysis", "create_variable_distribution", "analyze_data_with_python", "list_dataset_columns", "run_itn_planning", "create_settlement_map", "show_settlement_statistics", "create_urban_extent_map"}:
+        # Two-layer data architecture tools
+        if tool_name in {"query_data", "analyze_data"}:
+            return data_loaded
+        # Other data-dependent tools
+        if tool_name in {"run_malaria_risk_analysis", "create_variable_distribution", "run_itn_planning", "create_settlement_map", "show_settlement_statistics", "create_urban_extent_map"}:
             return data_loaded
         if tool_name in {"create_vulnerability_map", "create_pca_map", "create_composite_score_maps", "create_composite_vulnerability_map", "create_decision_tree"}:
             return analysis_complete
@@ -478,11 +553,19 @@ class ToolIntentResolver:
         return base
 
     def _looks_like_smalltalk(self, text: str) -> bool:
-        smalltalk_phrases = [
-            "thank", "thanks", "hello", "hi", "good morning", "good afternoon",
-            "how are", "great", "awesome", "cool", "bye", "goodbye",
+        import re
+        # Use word boundary checks to avoid false positives like "hi" in "highest"
+        smalltalk_patterns = [
+            r"\bthank\b", r"\bthanks\b", r"\bhello\b", r"\bhi\b",
+            r"\bgood morning\b", r"\bgood afternoon\b",
+            r"\bhow are\b", r"\bgreat\b", r"\bawesome\b", r"\bcool\b",
+            r"\bbye\b", r"\bgoodbye\b",
         ]
-        return any(phrase in text for phrase in smalltalk_phrases)
+        # Only match if it's primarily smalltalk (short message or starts with greeting)
+        words = text.split()
+        if len(words) > 6:  # Longer messages are likely not just smalltalk
+            return False
+        return any(re.search(pattern, text) for pattern in smalltalk_patterns)
 
     def _phrase_in_text(self, phrase: str, text: str) -> bool:
         phrase = phrase.strip().lower()

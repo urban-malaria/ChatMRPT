@@ -86,14 +86,14 @@ class RequestInterpreter:
             self.prompt_builder = PromptBuilder()
             # Fallback mapping to legacy wrappers to retain compatibility
             self.tool_runner = ToolRunner(fallbacks={
-                # 'execute_data_query': self._execute_data_query,  # REMOVED - Tool #19 (analyze_data_with_python) replaces this
-                # 'execute_sql_query': self._execute_sql_query,  # REMOVED - Tool #19 (analyze_data_with_python) replaces this
-                # 'run_data_quality_check': self._run_data_quality_check,  # REMOVED - Tool #19 (analyze_data_with_python) replaces this
+                # Two-layer data architecture
+                'query_data': self._query_data,
+                'analyze_data': self._analyze_data_with_python,
+                # Specialized tools
                 'explain_analysis_methodology': self._explain_analysis_methodology,
                 'run_malaria_risk_analysis': self._run_malaria_risk_analysis,
                 'create_settlement_map': self._create_settlement_map,
                 'show_settlement_statistics': self._show_settlement_statistics,
-                'list_dataset_columns': self._list_dataset_columns,
                 'query_tpr_data': self._query_tpr_data,
                 'switch_tpr_combination': self._switch_tpr_combination,
             })
@@ -323,6 +323,135 @@ class RequestInterpreter:
             'tools_used': ['list_dataset_columns']
         }
 
+    def _query_data(self, session_id: str, query: str) -> Dict[str, Any]:
+        """
+        Simple text-to-SQL data query tool. Returns data only, NEVER generates charts.
+
+        Use this tool for ALL simple data queries including:
+        - "What are the top 10 highest risk wards?"
+        - "Show me wards with composite_score > 0.5"
+        - "What's the average TPR?"
+        - "List all columns in my data"
+        - "How many wards are in each LGA?"
+        - "What's the correlation between X and Y?"
+
+        This tool translates natural language to SQL and returns formatted text results.
+        For visualizations (charts, plots, heatmaps), use analyze_data instead.
+
+        Args:
+            session_id: Session identifier
+            query: Natural language data query
+
+        Returns:
+            Dict with formatted text response, no visualizations
+        """
+        logger.info(f"📊 TOOL: query_data called")
+        logger.info(f"  Session: {session_id}")
+        logger.info(f"  Query: {query[:100]}...")
+
+        try:
+            from app.services.conversational_data_access import ConversationalDataAccess
+            cda = ConversationalDataAccess(session_id, self.llm_manager)
+
+            # Check if query is asking for columns/variables
+            query_lower = query.lower()
+            is_column_query = any(term in query_lower for term in [
+                'columns', 'variables', 'fields', 'what data', 'what variables',
+                'list columns', 'show columns', 'available columns', 'dataset schema'
+            ])
+
+            if is_column_query:
+                # Get comprehensive schema instead of paginated list
+                schema = cda.generate_comprehensive_schema()
+                if 'error' in schema:
+                    return {
+                        'response': f"Could not retrieve columns: {schema['error']}",
+                        'status': 'error',
+                        'tools_used': ['query_data']
+                    }
+
+                # Format all columns nicely
+                columns = schema.get('columns', {})
+                total = len(columns)
+                lines = [f"**Your dataset has {total} columns:**\n"]
+
+                for col_name, col_info in columns.items():
+                    dtype = col_info.get('dtype', 'unknown')
+                    non_null = col_info.get('non_null_count', 'n/a')
+                    unique = col_info.get('unique_count', 'n/a')
+                    lines.append(f"- **{col_name}** [{dtype}] – {non_null} non-null, {unique} unique")
+
+                return {
+                    'response': "\n".join(lines),
+                    'status': 'success',
+                    'tools_used': ['query_data']
+                }
+
+            # Use LLM to convert natural language to SQL
+            schema = cda.generate_comprehensive_schema()
+            if 'error' in schema:
+                return {
+                    'response': f"No data available: {schema['error']}",
+                    'status': 'error',
+                    'tools_used': ['query_data']
+                }
+
+            # Build SQL generation prompt
+            columns_list = list(schema.get('columns', {}).keys())
+            sql_prompt = f"""Convert this natural language query to SQL. The table name is 'df'.
+
+Available columns: {', '.join(columns_list[:50])}
+
+User query: {query}
+
+Return ONLY the SQL query, nothing else. Use standard SQL syntax.
+Examples:
+- "top 10 highest risk wards" -> SELECT * FROM df ORDER BY composite_score DESC LIMIT 10
+- "average TPR" -> SELECT AVG(tpr_mean) as avg_tpr FROM df
+- "wards with score > 0.5" -> SELECT * FROM df WHERE composite_score > 0.5
+
+SQL:"""
+
+            # Generate SQL using LLM
+            sql_response = self.llm_manager.generate_response(
+                prompt=sql_prompt,
+                temperature=0.1,
+                max_tokens=200
+            )
+
+            # Clean the SQL response
+            sql_query = sql_response.strip()
+            if sql_query.startswith('```'):
+                lines_sql = sql_query.split('\n')
+                sql_query = '\n'.join(lines_sql[1:-1])
+            sql_query = sql_query.strip()
+
+            logger.info(f"Generated SQL: {sql_query}")
+
+            # Execute the SQL query
+            result = cda.process_sql_query(sql_query)
+
+            if result.get('success'):
+                return {
+                    'response': result.get('output', 'Query executed successfully'),
+                    'status': 'success',
+                    'tools_used': ['query_data']
+                }
+            else:
+                return {
+                    'response': f"Query error: {result.get('error', 'Unknown error')}",
+                    'status': 'error',
+                    'tools_used': ['query_data']
+                }
+
+        except Exception as e:
+            logger.error(f"Error in query_data: {e}", exc_info=True)
+            return {
+                'response': f"Error executing query: {str(e)}",
+                'status': 'error',
+                'tools_used': ['query_data']
+            }
+
     def _query_tpr_data(self, session_id: str, facility_level: str = 'all',
                         age_group: str = 'all_ages', top_n: int = None,
                         lga: str = None, sort_by: str = 'tpr') -> Dict[str, Any]:
@@ -444,22 +573,24 @@ class RequestInterpreter:
         self.tools['create_settlement_map'] = self._create_settlement_map
         self.tools['show_settlement_statistics'] = self._show_settlement_statistics
 
-        # REMOVED: Redundant data tools - Tool #19 (analyze_data_with_python) handles all of these
-        # self.tools['execute_data_query'] = self._execute_data_query  # Tool #19 does pandas queries
-        self.tools['execute_sql_query'] = self._execute_sql_query  # Tool #19 does SQL-equivalent (better!)
-        # self.tools['run_data_quality_check'] = self._run_data_quality_check  # Tool #19 does df.info(), df.describe()
-
         # Register explanation tools
         self.tools['explain_analysis_methodology'] = self._explain_analysis_methodology
 
         # NEW: ITN Planning Tool
         self.tools['run_itn_planning'] = self._run_itn_planning
 
-        # NEW: Python execution tool (Tool #19) - Replaces execute_data_query, execute_sql_query, run_data_quality_check, create_box_plot
-        self.tools['analyze_data_with_python'] = self._analyze_data_with_python
+        # TWO-LAYER DATA ARCHITECTURE:
+        # Layer 1: query_data - Simple text-to-SQL, returns data only, NO charts
+        self.tools['query_data'] = self._query_data
 
-        # Dataset exploration helpers
-        self.tools['list_dataset_columns'] = self._list_dataset_columns
+        # Layer 2: analyze_data - Complex Python analysis, generates charts ONLY when explicitly requested
+        self.tools['analyze_data'] = self._analyze_data_with_python
+
+        # REMOVED: Redundant data tools (folded into query_data and analyze_data)
+        # - execute_sql_query -> replaced by query_data
+        # - list_dataset_columns -> replaced by query_data
+        # - execute_data_query -> replaced by analyze_data
+        # - run_data_quality_check -> replaced by analyze_data
 
         # TPR query tool - allows querying pre-computed TPR combinations
         self.tools['query_tpr_data'] = self._query_tpr_data
@@ -467,7 +598,7 @@ class RequestInterpreter:
         # TPR combination switch - regenerate analysis files for different facility/age group
         self.tools['switch_tpr_combination'] = self._switch_tpr_combination
 
-        logger.info(f"Registered {len(self.tools)} tools (4 redundant tools removed, now handled by analyze_data_with_python)")
+        logger.info(f"Registered {len(self.tools)} tools (two-layer data architecture: query_data for SQL, analyze_data for Python)")
 
     # ------------------------------------------------------------------
     # Tool intent routing helpers

@@ -3,23 +3,50 @@ Tool Capabilities Definition for Semantic Routing
 
 This module defines what each tool DOES (not keywords to match).
 Used by the routing system to understand when tool execution is needed.
+
+TWO-LAYER DATA ARCHITECTURE:
+- query_data: Simple text-to-SQL for data queries (rankings, filtering, statistics)
+- analyze_data: Python execution for complex analysis and explicit visualizations
 """
 
 TOOL_CAPABILITIES = {
-    'describe_data': {
-        'purpose': 'Describe uploaded data including column names, types, and statistics',
-        'generates': 'Data overview with column information and summary statistics',
-        'requires': 'Uploaded CSV data file',
-        'execution_verbs': ['describe', 'tell', 'show', 'list', 'info'],
+    # =========================================================================
+    # TWO-LAYER DATA ARCHITECTURE
+    # =========================================================================
+    'execute_data_query': {
+        'purpose': 'Run simple data queries to extract rankings, filtered data, statistics, and column information',
+        'generates': 'Text-only results showing data, rankings, statistics, or column lists',
+        'requires': 'Uploaded data to query',
+        'execution_verbs': ['show', 'get', 'find', 'list', 'filter', 'rank', 'top', 'highest', 'lowest'],
         'example_queries': [
-            'tell me about the variables in my data',
-            'describe my data',
-            'show me the column names',
+            'what are the top 10 highest risk wards',
+            'show me wards with composite_score > 0.5',
+            'what is the average TPR',
+            'list all columns in my data',
+            'how many wards are in each LGA',
             'what variables do I have',
-            'list the data columns'
+            'describe my data columns'
         ]
     },
 
+    'analyze_data_complex': {
+        'purpose': 'Execute complex Python analysis and generate visualizations ONLY when explicitly requested',
+        'generates': 'Analysis results and charts/plots when user explicitly asks for visualization',
+        'requires': 'Uploaded data',
+        'execution_verbs': ['create', 'plot', 'chart', 'graph', 'heatmap', 'visualize', 'cluster', 'regression'],
+        'example_queries': [
+            'create a correlation heatmap',
+            'plot a histogram of TPR values',
+            'run a regression analysis',
+            'create a scatter plot of X vs Y',
+            'perform K-means clustering',
+            'visualize the distribution'
+        ]
+    },
+
+    # =========================================================================
+    # ANALYSIS TOOLS
+    # =========================================================================
     'run_malaria_risk_analysis': {
         'purpose': 'Execute new malaria risk analysis calculations on uploaded data',
         'generates': 'New risk scores, vulnerability rankings, and analysis results',
@@ -33,6 +60,33 @@ TOOL_CAPABILITIES = {
         ]
     },
 
+    'explain_analysis_methodology': {
+        'purpose': 'Generate explanation of analysis methods used',
+        'generates': 'Detailed methodology explanation',
+        'requires': 'Context about analysis type',
+        'execution_verbs': ['explain', 'describe', 'detail'],
+        'example_queries': [
+            'explain the methodology',
+            'how was this calculated',
+            'describe analysis approach'
+        ]
+    },
+
+    'generatecomprehensiveanalysissummary': {
+        'purpose': 'Generate comprehensive summary of all analysis results',
+        'generates': 'Complete analysis report with findings and recommendations',
+        'requires': 'Completed analysis results',
+        'execution_verbs': ['generate', 'create', 'summarize', 'compile'],
+        'example_queries': [
+            'generate comprehensive summary',
+            'create analysis report',
+            'summarize all findings'
+        ]
+    },
+
+    # =========================================================================
+    # MAP TOOLS (Specialized visualizations that remain as separate tools)
+    # =========================================================================
     'create_vulnerability_map': {
         'purpose': 'Generate a new interactive HTML map showing vulnerability scores',
         'generates': 'Interactive choropleth map visualization',
@@ -42,18 +96,6 @@ TOOL_CAPABILITIES = {
             'create a vulnerability map',
             'show me the risk map',
             'plot vulnerability scores on map'
-        ]
-    },
-
-    'create_box_plot': {
-        'purpose': 'Generate new box plot visualization for statistical distributions',
-        'generates': 'Box and whisker plot showing quartiles and outliers',
-        'requires': 'Uploaded data with numeric variables',
-        'execution_verbs': ['create', 'generate', 'plot', 'show'],
-        'example_queries': [
-            'create a box plot',
-            'show statistical distribution',
-            'plot quartiles'
         ]
     },
 
@@ -83,235 +125,15 @@ TOOL_CAPABILITIES = {
         ]
     },
 
-    'create_settlement_map': {
-        'purpose': 'Generate map showing settlement patterns and building footprints',
-        'generates': 'Settlement classification map with building types',
-        'requires': 'Settlement data or shapefile',
-        'execution_verbs': ['create', 'generate', 'map', 'visualize'],
+    'create_vulnerability_map_comparison': {
+        'purpose': 'Create side-by-side comparison of vulnerability maps',
+        'generates': 'Comparison map showing multiple methods',
+        'requires': 'Multiple analysis results to compare',
+        'execution_verbs': ['compare', 'create', 'show', 'contrast'],
         'example_queries': [
-            'show settlement patterns',
-            'map building footprints',
-            'visualize urban areas'
-        ]
-    },
-
-    'show_settlement_statistics': {
-        'purpose': 'Calculate and display settlement statistics',
-        'generates': 'Statistical summary of settlement types and counts',
-        'requires': 'Settlement data',
-        'execution_verbs': ['show', 'calculate', 'display', 'get'],
-        'example_queries': [
-            'show settlement statistics',
-            'get building counts',
-            'display urban percentages'
-        ]
-    },
-
-    'execute_data_query': {
-        'purpose': 'Run queries on uploaded data to extract and filter specific information like rankings',
-        'generates': 'Query results showing filtered data, rankings, or specific values',
-        'requires': 'Uploaded data to query (and analysis results for rankings)',
-        'execution_verbs': ['show', 'get', 'find', 'extract', 'list', 'filter', 'rank'],
-        'example_queries': [
-            'show me the top 10 highest risk wards',
-            'list wards with TPR > 50',
-            'find high risk areas',
-            'get ward rankings from composite score',
-            'show bottom 5 wards by vulnerability'
-        ]
-    },
-
-    'execute_sql_query': {
-        'purpose': 'Execute SQL queries on data for complex analysis',
-        'generates': 'SQL query results',
-        'requires': 'Data in queryable format',
-        'execution_verbs': ['query', 'select', 'execute', 'run'],
-        'example_queries': [
-            'SELECT * FROM data WHERE risk > 0.5',
-            'query wards by risk level',
-            'run SQL analysis'
-        ]
-    },
-
-    'run_data_quality_check': {
-        'purpose': 'Perform new data quality assessment on uploaded files',
-        'generates': 'Data quality report with issues and statistics',
-        'requires': 'Uploaded data to check',
-        'execution_verbs': ['check', 'assess', 'validate', 'verify', 'examine'],
-        'example_queries': [
-            'check data quality',
-            'validate my data',
-            'assess data completeness',
-            'find data issues'
-        ]
-    },
-
-    'explain_analysis_methodology': {
-        'purpose': 'Generate explanation of analysis methods used',
-        'generates': 'Detailed methodology explanation',
-        'requires': 'Context about analysis type',
-        'execution_verbs': ['explain', 'describe', 'detail'],
-        'example_queries': [
-            'explain the methodology',
-            'how was this calculated',
-            'describe analysis approach'
-        ]
-    },
-
-    'plan_itn_distribution': {
-        'purpose': 'Calculate optimal ITN (bed net) distribution plan',
-        'generates': 'Distribution plan with net allocations per ward',
-        'requires': 'Analysis results and net availability parameters',
-        'execution_verbs': ['plan', 'calculate', 'distribute', 'allocate'],
-        'example_queries': [
-            'plan bed net distribution',
-            'allocate ITNs to wards',
-            'distribute 10000 nets optimally',
-            'plan mosquito net campaign'
-        ]
-    },
-
-    'generatecomprehensiveanalysissummary': {
-        'purpose': 'Generate comprehensive summary of all analysis results',
-        'generates': 'Complete analysis report with findings and recommendations',
-        'requires': 'Completed analysis results',
-        'execution_verbs': ['generate', 'create', 'summarize', 'compile'],
-        'example_queries': [
-            'generate comprehensive summary',
-            'create analysis report',
-            'summarize all findings'
-        ]
-    },
-
-    'createhistogram': {
-        'purpose': 'Create histogram visualization for data distribution',
-        'generates': 'Histogram chart showing frequency distribution',
-        'requires': 'Data with numeric variable to plot',
-        'execution_verbs': ['create', 'plot', 'show', 'visualize'],
-        'example_queries': [
-            'create histogram of TPR values',
-            'show frequency distribution',
-            'plot data histogram'
-        ]
-    },
-
-    'createscatterplot': {
-        'purpose': 'Create scatter plot to show relationships between variables',
-        'generates': 'Scatter plot visualization',
-        'requires': 'Two numeric variables to compare',
-        'execution_verbs': ['create', 'plot', 'show', 'compare'],
-        'example_queries': [
-            'create scatter plot of TPR vs rainfall',
-            'plot relationship between variables',
-            'show correlation scatter plot'
-        ]
-    },
-
-    'createcorrelationheatmap': {
-        'purpose': 'Create correlation heatmap showing relationships between all variables',
-        'generates': 'Heatmap visualization of correlations',
-        'requires': 'Multiple numeric variables',
-        'execution_verbs': ['create', 'show', 'visualize', 'analyze'],
-        'example_queries': [
-            'show correlation heatmap',
-            'analyze variable relationships',
-            'create correlation matrix'
-        ]
-    },
-
-    'createbarchart': {
-        'purpose': 'Create bar chart for categorical comparisons',
-        'generates': 'Bar chart visualization',
-        'requires': 'Categorical and numeric data',
-        'execution_verbs': ['create', 'plot', 'show', 'compare'],
-        'example_queries': [
-            'create bar chart of ward scores',
-            'show comparison bar chart',
-            'plot ward rankings as bars'
-        ]
-    },
-
-    'createpiechart': {
-        'purpose': 'Create pie chart showing proportions',
-        'generates': 'Pie chart visualization',
-        'requires': 'Categorical data with values',
-        'execution_verbs': ['create', 'show', 'visualize'],
-        'example_queries': [
-            'create pie chart of risk categories',
-            'show proportion breakdown',
-            'visualize category distribution'
-        ]
-    },
-
-    'createviolinplot': {
-        'purpose': 'Create violin plot showing distribution shape',
-        'generates': 'Violin plot visualization',
-        'requires': 'Numeric data for distribution',
-        'execution_verbs': ['create', 'plot', 'show'],
-        'example_queries': [
-            'create violin plot',
-            'show distribution shape',
-            'plot violin chart'
-        ]
-    },
-
-    'createdensityplot': {
-        'purpose': 'Create density plot for continuous distributions',
-        'generates': 'Density plot visualization',
-        'requires': 'Continuous numeric data',
-        'execution_verbs': ['create', 'plot', 'show'],
-        'example_queries': [
-            'create density plot',
-            'show probability density',
-            'plot density distribution'
-        ]
-    },
-
-    'createpairplot': {
-        'purpose': 'Create pair plot matrix for multiple variables',
-        'generates': 'Matrix of scatter plots',
-        'requires': 'Multiple numeric variables',
-        'execution_verbs': ['create', 'plot', 'show'],
-        'example_queries': [
-            'create pair plot',
-            'show variable relationships',
-            'plot pairwise comparisons'
-        ]
-    },
-
-    'createregressionplot': {
-        'purpose': 'Create regression plot with fitted line',
-        'generates': 'Regression visualization with trend line',
-        'requires': 'Two numeric variables',
-        'execution_verbs': ['create', 'plot', 'fit', 'analyze'],
-        'example_queries': [
-            'create regression plot',
-            'fit trend line',
-            'analyze linear relationship'
-        ]
-    },
-
-    'createqqplot': {
-        'purpose': 'Create Q-Q plot for normality testing',
-        'generates': 'Quantile-quantile plot',
-        'requires': 'Numeric data for normality check',
-        'execution_verbs': ['create', 'test', 'check', 'plot'],
-        'example_queries': [
-            'create Q-Q plot',
-            'check normality',
-            'test distribution'
-        ]
-    },
-
-    'createinterventionmap': {
-        'purpose': 'Create map showing intervention targeting',
-        'generates': 'Map with intervention priorities',
-        'requires': 'Analysis results and intervention criteria',
-        'execution_verbs': ['create', 'map', 'show', 'plan'],
-        'example_queries': [
-            'create intervention map',
-            'map intervention targets',
-            'show priority areas for intervention'
+            'compare vulnerability maps',
+            'show PCA vs composite maps',
+            'create comparison visualization'
         ]
     },
 
@@ -339,46 +161,55 @@ TOOL_CAPABILITIES = {
         ]
     },
 
-    'create_vulnerability_map_comparison': {
-        'purpose': 'Create side-by-side comparison of vulnerability maps',
-        'generates': 'Comparison map showing multiple methods',
-        'requires': 'Multiple analysis results to compare',
-        'execution_verbs': ['compare', 'create', 'show', 'contrast'],
-        'example_queries': [
-            'compare vulnerability maps',
-            'show PCA vs composite maps',
-            'create comparison visualization'
-        ]
-    },
-
+    # =========================================================================
+    # SETTLEMENT TOOLS
+    # =========================================================================
     'create_settlement_map': {
-        'purpose': 'Create map showing settlement patterns',
-        'generates': 'Settlement distribution map',
-        'requires': 'Settlement data',
-        'execution_verbs': ['create', 'map', 'show', 'visualize'],
+        'purpose': 'Create map showing settlement patterns and building footprints',
+        'generates': 'Settlement classification map with building types',
+        'requires': 'Settlement data or shapefile',
+        'execution_verbs': ['create', 'generate', 'map', 'visualize'],
         'example_queries': [
-            'create settlement map',
-            'show building footprints',
-            'map settlement patterns'
+            'show settlement patterns',
+            'map building footprints',
+            'visualize urban areas'
         ]
     },
 
     'show_settlement_statistics': {
-        'purpose': 'Calculate and show settlement statistics',
-        'generates': 'Statistical summary of settlements',
+        'purpose': 'Calculate and display settlement statistics',
+        'generates': 'Statistical summary of settlement types and counts',
         'requires': 'Settlement data',
-        'execution_verbs': ['show', 'calculate', 'analyze', 'summarize'],
+        'execution_verbs': ['show', 'calculate', 'display', 'get'],
         'example_queries': [
             'show settlement statistics',
-            'analyze building types',
-            'summarize settlement data'
+            'get building counts',
+            'display urban percentages'
+        ]
+    },
+
+    # =========================================================================
+    # PLANNING TOOLS
+    # =========================================================================
+    'plan_itn_distribution': {
+        'purpose': 'Calculate optimal ITN (bed net) distribution plan',
+        'generates': 'Distribution plan with net allocations per ward',
+        'requires': 'Analysis results and net availability parameters',
+        'execution_verbs': ['plan', 'calculate', 'distribute', 'allocate'],
+        'example_queries': [
+            'plan bed net distribution',
+            'allocate ITNs to wards',
+            'distribute 10000 nets optimally',
+            'plan mosquito net campaign'
         ]
     }
 }
 
+
 def get_tool_capability(tool_name: str) -> dict:
     """Get capability description for a specific tool."""
     return TOOL_CAPABILITIES.get(tool_name, {})
+
 
 def get_all_capabilities_summary() -> str:
     """Get a summary of all tool capabilities for routing context."""
@@ -386,6 +217,7 @@ def get_all_capabilities_summary() -> str:
     for tool_name, cap in TOOL_CAPABILITIES.items():
         summary.append(f"- {tool_name}: {cap['purpose']}")
     return "\n".join(summary)
+
 
 def requires_tool_execution(message: str, context: dict) -> tuple[bool, str]:
     """

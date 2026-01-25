@@ -101,18 +101,17 @@ class AnalysisStateHandler:
         """Get list of tools available in current state."""
         if data_state.analysis_complete:
             return [
-                'execute_sql_query',
-                'execute_python_code',
+                'query_data',  # Layer 1: text-to-SQL queries
+                'analyze_data',  # Layer 2: Python analysis & explicit visualizations
                 'create_vulnerability_map',
-                'create_box_plot',
                 'create_decision_tree',
                 'create_urban_extent_map',
                 'generate_report'
             ]
         elif data_state.data_loaded:
             return [
-                'execute_sql_query',
-                'execute_python_code',
+                'query_data',
+                'analyze_data',
                 'run_analysis'
             ]
         else:

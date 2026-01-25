@@ -106,7 +106,7 @@ def get_analysis_prompt(data_summary: str, user_query: str) -> str:
 
 Analyze the data to answer this query. Remember:
 1. Use the analyze_data tool with clear reasoning
-2. Generate visualizations when helpful
+2. Generate visualizations ONLY when the user explicitly requests a chart, plot, graph, heatmap, or visualization
 3. Provide insights, not code
 4. Keep the response conversational and helpful
 """

@@ -100,7 +100,7 @@ from .visualization_maps_tools import (
     CreateUrbanExtentMap,
     CreateDecisionTree,
     CreateCompositeScoreMaps,
-    CreateBoxPlot,
+    # CreateBoxPlot,  # REMOVED - Now handled by analyze_data tool
     CreateInterventionMap
 )
 

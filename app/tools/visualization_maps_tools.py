@@ -958,100 +958,15 @@ class CreateCompositeScoreMaps(BaseTool):
             return self._create_error_result(f"Composite score maps creation failed: {str(e)}")
 
 
-class CreateBoxPlot(BaseTool):
-    """
-    Create box plot/vulnerability plot showing statistical distributions.
-    
-    Uses create_agent_box_plot_ranking() for ward ranking visualization.
-    """
-    
-    top_n_wards: int = Field(
-        20,
-        description="Number of top wards to show per page",
-        ge=5,
-        le=50
-    )
-    
-    page: int = Field(
-        1,
-        description="Page number to display",
-        ge=1
-    )
-    
-    @classmethod
-    def get_category(cls) -> ToolCategory:
-        return ToolCategory.VISUALIZATION
-    
-    @classmethod
-    def get_examples(cls) -> List[str]:
-        return [
-            "Create box plot",
-            "Show vulnerability plot",
-            "Generate ward rankings plot",
-            "Create statistical distribution chart"
-        ]
-    
-    def execute(self, session_id: str) -> ToolExecutionResult:
-        """Create box plot using existing agent function"""
-        try:
-            # Check if session has data
-            if not validate_session_data_exists(session_id):
-                return self._create_error_result(
-                    "No data available for this session. Please upload data first."
-                )
-            
-            # Get unified dataset with geometry required for map visualization
-            gdf = get_session_unified_dataset(session_id, require_geometry=True)
-            if gdf is None:
-                return self._create_error_result("No data available for analysis")
-            
-            # Check for composite scores
-            exists, resolved_col = variable_resolver.check_column_exists('composite_score', list(gdf.columns))
-            if not exists:
-                error_msg = variable_resolver.create_variable_error_message(
-                    'composite_score', list(gdf.columns),
-                    context="for analysis. Please run composite analysis first"
-                )
-                return self._create_error_result(error_msg)
-            
-            # Import the agent function
-            from app.services.agents.visualizations import create_agent_box_plot_ranking
-            
-            # Create box plot using existing agent function
-            plot_result = create_agent_box_plot_ranking(
-                unified_dataset=gdf,
-                session_id=session_id,
-                top_n_wards=self.top_n_wards,
-                page=self.page
-            )
-            
-            if plot_result.get('status') == 'error':
-                return self._create_error_result(
-                    f"Box plot creation failed: {plot_result.get('message', 'Unknown error')}"
-                )
-            
-            result_data = {
-                'top_n_wards': self.top_n_wards,
-                'current_page': self.page,
-                'total_pages': plot_result.get('total_pages', 1),
-                'wards_shown': plot_result.get('wards_shown', []),
-                'web_path': plot_result.get('web_path'),
-                'file_path': plot_result.get('file_path'),
-                'map_type': 'box_plot'
-            }
-            
-            message = f"Created box plot page {self.page} showing top {self.top_n_wards} wards"
-            
-            # Visualization will be rendered by frontend using web_path
-            
-            return self._create_success_result(
-                message=message,
-                data=result_data
-            )
-            
-        except Exception as e:
-            logger.error(f"Error creating box plot: {e}")
-            return self._create_error_result(f"Box plot creation failed: {str(e)}")
+# REMOVED: CreateBoxPlot - Now handled by analyze_data tool
+# Box plots can be generated via analyze_data with explicit "create box plot" request
+# class CreateBoxPlot(BaseTool):
+#     """
+#     Create box plot/vulnerability plot showing statistical distributions.
+#
+#     Uses create_agent_box_plot_ranking() for ward ranking visualization.
+#     """
+#     ... [class removed to reduce tool count]
 
 
 # Legacy intervention map - keeping for compatibility

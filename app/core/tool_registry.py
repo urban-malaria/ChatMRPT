@@ -467,10 +467,10 @@ class ToolRegistry:
         self._discovery_paths = [
             # Core Pydantic tools (100% converted and existing)
             'app.tools.risk_analysis_tools',
-            'app.tools.ward_data_tools', 
+            'app.tools.ward_data_tools',
             'app.tools.statistical_analysis_tools',
             'app.tools.visualization_maps_tools',
-            'app.tools.visualization_charts_tools',
+            # 'app.tools.visualization_charts_tools',  # REMOVED: Charts now handled by analyze_data tool
             'app.tools.intervention_targeting_tools',
             # 'app.tools.scenario_simulation_tools',  # Removed during streamlining
             'app.tools.smart_knowledge_tools',
