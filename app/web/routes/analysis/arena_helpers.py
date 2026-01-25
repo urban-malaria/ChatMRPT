@@ -90,8 +90,15 @@ def start_arena_battle(user_message: str, session_id: Optional[str] = None) -> D
         raise ArenaSetupError("Arena is disabled or GROQ_API_KEY not set")
 
     try:
-        from app.core.arena_manager import ArenaManager
-        arena_manager = ArenaManager()
+        # Use the shared arena_manager from arena_routes (not a new instance!)
+        from app.web.routes.arena_routes import arena_manager
+
+        if arena_manager is None:
+            # Initialize if not yet done
+            from flask import current_app
+            from app.web.routes.arena_routes import init_arena_system
+            init_arena_system(current_app)
+            from app.web.routes.arena_routes import arena_manager
 
         logger.info(f"Starting arena battle for session {session_id}: '{user_message[:50]}...'")
 
