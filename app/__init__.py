@@ -160,14 +160,13 @@ def create_app(config_name=None):
     # Register all functional route blueprints (core, upload, analysis, visualization, etc.)
     register_all_blueprints(app)
     
-    # --- Arena System DISABLED (GPU instance stopped to save costs) ---
-    # from .web.routes.arena_routes import init_arena_system
-    # try:
-    #     init_arena_system(app)
-    #     app.logger.info("✅ Arena system initialized successfully")
-    # except Exception as e:
-    #     app.logger.warning(f"Arena system initialization failed: {e}")
-    app.logger.info("⚠️  Arena system DISABLED - GPU instance stopped to save costs (~$200-400/month)")
+    # --- Arena System (Groq API - FREE) ---
+    from .web.routes.arena_routes import init_arena_system
+    try:
+        init_arena_system(app)
+        app.logger.info("✅ Arena system initialized successfully (Groq API)")
+    except Exception as e:
+        app.logger.warning(f"Arena system initialization failed: {e}")
     
     # --- Initialize Additional Routes ---
     from .routes import init_routes
