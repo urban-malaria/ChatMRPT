@@ -10,8 +10,8 @@ import traceback
 
 from flask import jsonify, current_app, session, request
 
-from ...core.exceptions import ValidationError
-from ...core.utils import convert_to_json_serializable
+from app.core.exceptions import ValidationError
+from app.core.utils import convert_to_json_serializable
 from . import logger
 from .arena_helpers import ArenaSetupError, is_arena_eligible_message, start_arena_battle, format_arena_response
 from .chat_routing import route_with_mistral

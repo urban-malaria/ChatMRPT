@@ -8,7 +8,7 @@ from flask import jsonify, request, session
 
 from app.auth.decorators import require_auth
 from app.config.arena import is_arena_available
-from ...core.decorators import handle_errors, validate_session
+from app.core.decorators import handle_errors, validate_session
 
 from . import analysis_bp
 

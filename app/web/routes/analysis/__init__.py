@@ -6,7 +6,7 @@ import logging
 from flask import Blueprint
 
 
-analysis_bp = Blueprint('analysis', __name__)
+analysis_bp = Blueprint('analysis_chat', __name__)
 logger = logging.getLogger(__name__)
 
 

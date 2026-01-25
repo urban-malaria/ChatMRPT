@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from flask import Response, current_app, jsonify, request, session
 
-from ...core.exceptions import ValidationError
+from app.core.exceptions import ValidationError
 from app.runtime.tpr.workflow import reset_tpr_handler_cache
 
 from . import logger
