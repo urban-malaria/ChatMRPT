@@ -13,11 +13,13 @@ Arena mode **automatically triggers** for general knowledge questions in the cha
 | General knowledge | **Yes** | "What causes malaria?" |
 | Educational/explanatory | **Yes** | "Explain PCA analysis" |
 | Methodology questions | **Yes** | "How does risk scoring work?" |
+| Knowledge + has data | **Yes** | "What is malaria transmission?" (even with uploaded data) |
 | Greetings | No | "hi", "hello" |
 | Pleasantries | No | "thanks", "ok", "bye" |
 | Short messages (<3 words) | No | "What is" |
 | Data analysis requests | No | "Run risk analysis on my data" |
 | Tool-based requests | No | "Create a vulnerability map" |
+| Questions about user's data | No | "What's in my uploaded data?" |
 
 ### Eligibility Logic
 
@@ -27,7 +29,11 @@ Arena only activates when:
 3. Routing decision is `can_answer` (no tools needed)
 4. Message is substantive (not greeting/pleasantry, 3+ words)
 
-Helper: `app/web/routes/analysis/arena_helpers.py` - `is_arena_eligible_message()`
+**Important:** Knowledge questions trigger arena even if user has uploaded data. The routing detects patterns like "what is", "how does", "explain", etc. and routes them to arena unless they explicitly reference the user's data ("my data", "uploaded", etc.).
+
+Helpers:
+- `app/web/routes/analysis/chat_routing.py` - Routing logic
+- `app/web/routes/analysis/arena_helpers.py` - Eligibility checking
 
 ## Architecture
 

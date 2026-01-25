@@ -30,6 +30,43 @@ async def route_with_mistral(message: str, session_context: dict) -> str:
     if message_lower in ['thanks', 'thank you', 'bye', 'goodbye', 'ok', 'okay', 'sure', 'yes', 'no']:
         return "can_answer"
 
+    # Detect knowledge/educational questions BEFORE tool routing
+    # These should go to arena even if user has uploaded data
+    knowledge_patterns = [
+        'what is', 'what are', 'what does', 'what causes',
+        'how does', 'how do', 'how is', 'how are', 'how can',
+        'why is', 'why does', 'why do', 'why are',
+        'explain', 'describe', 'tell me about', 'tell me more',
+        'what do you know about', 'can you explain',
+        'definition of', 'meaning of',
+        'difference between', 'compare',
+    ]
+    # Check if message starts with or contains knowledge patterns
+    is_knowledge_question = any(
+        message_lower.startswith(pattern) or f' {pattern}' in f' {message_lower}'
+        for pattern in knowledge_patterns
+    )
+
+    # Also detect questions about concepts (not specific to user's data)
+    concept_keywords = [
+        'malaria transmission', 'malaria prevention', 'malaria symptoms',
+        'malaria epidemiology', 'malaria control', 'malaria treatment',
+        'pca analysis', 'principal component', 'composite score',
+        'vulnerability index', 'risk assessment', 'risk factors',
+        'incidence rate', 'prevalence', 'mortality rate',
+        'vector control', 'anopheles', 'plasmodium',
+    ]
+    is_concept_question = any(concept in message_lower for concept in concept_keywords)
+
+    # If it's clearly a knowledge question, route to arena (can_answer)
+    # BUT only if it doesn't explicitly reference their data
+    data_references = ['my data', 'the data', 'my file', 'uploaded', 'my csv', 'in my']
+    references_user_data = any(ref in message_lower for ref in data_references)
+
+    if (is_knowledge_question or is_concept_question) and not references_user_data:
+        logger.info("Knowledge question detected - routing to arena: '%s...'", message[:50])
+        return "can_answer"
+
     if session_context.get('use_data_analysis_v3', False) or session_context.get('data_analysis_active', False):
         logger.info("🎯 Data Analysis V3 mode detected - routing to agent with tools")
         return "needs_tools"
