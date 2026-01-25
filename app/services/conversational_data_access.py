@@ -849,11 +849,23 @@ CODE:
                 'query': query
             }
     
-    def process_sql_query(self, sql_query: str) -> Dict[str, Any]:
-        """Process SQL query using DuckDB for fast execution."""
+    def process_sql_query(self, sql_query: str, original_query: str = "") -> Dict[str, Any]:
+        """
+        Process SQL query using DuckDB and unified formatting.
+
+        Args:
+            sql_query: The SQL query to execute
+            original_query: The original natural language query (for better intent detection)
+
+        Returns:
+            Dictionary with success status, formatted output, and metadata
+        """
         try:
             import duckdb
-            
+            from .query_intent_analyzer import QueryIntentAnalyzer
+            from .unified_formatter import UnifiedFormatter
+            from .query_result import QueryResult
+
             # Get the dataframe
             df, info = self.get_available_data()
             if df is None:
@@ -862,244 +874,67 @@ CODE:
                     'error': 'No data available for SQL query',
                     'query': sql_query
                 }
-            
+
             # Create DuckDB connection and register the DataFrame
             conn = duckdb.connect(':memory:')
             conn.register('df', df)
-            
+
             logger.info(f"Executing SQL query: {sql_query}")
-            
+
             # Execute the SQL query
             result_df = conn.execute(sql_query).fetchdf()
-            
-            # Format the output following the new guidelines (no tables, no code)
-            if result_df.empty:
-                output = "No results found for your query."
-            elif len(result_df) == 1 and len(result_df.columns) == 1:
-                # Single value result
-                value = result_df.iloc[0, 0]
-                output = f"Result: {value}"
-            elif 'LIMIT 1' in sql_query.upper() and len(result_df) == 1:
-                # Special handling for "show me variables" type queries
-                output = self._format_column_listing(result_df)
-            elif len(result_df) <= 10:
-                # Small result set - format as bullet points
-                output_parts = []
-                
-                # Determine if this is a ward-related query
-                is_ward_query = any(col.lower() in ['wardname', 'ward_name', 'ward'] for col in result_df.columns)
-                
-                # Check if this is a "why is X ward ranked" query
-                is_ranking_explanation = ('composite_score' in result_df.columns or 'composite_rank' in result_df.columns) and len(result_df) == 1
-                
-                if is_ranking_explanation:
-                    # Special handling for ward ranking explanations
-                    row = result_df.iloc[0]
-                    ward_name = None
-                    for col in result_df.columns:
-                        if 'ward' in col.lower():
-                            ward_name = row[col]
-                            break
-                    
-                    # Get the full dataset to calculate percentiles and comparisons
-                    try:
-                        full_df, _ = self.get_available_data()
-                        
-                        # Identify TOP 5 risk factors only (most important variables)
-                        risk_factors = []
 
-                        # Define key malaria risk variables to prioritize
-                        priority_vars = ['tpr_mean', 'TPR', 'rainfall', 'distance_to_waterbodies',
-                                       'urban_percentage', 'soil_wetness', 'elevation_mean',
-                                       'Total_Tested', 'Total_Positive']
+            # Analyze intent and result type
+            analyzer = QueryIntentAnalyzer()
+            intent, result_type = analyzer.analyze_full(result_df, sql_query, original_query)
 
-                        # Skip model_1 through model_26 variables and other technical columns
-                        skip_patterns = ['model_', 'LGACode', 'ward_id', 'geometry', '_rank', '_category', '_score']
+            # Create structured result
+            query_result = QueryResult(
+                data=result_df,
+                sql_query=sql_query,
+                original_query=original_query,
+                intent=intent,
+                result_type=result_type
+            )
 
-                        for col in result_df.columns:
-                            # Skip administrative/technical columns
-                            if col.lower() in ['wardname', 'ward_name', 'ward', 'composite_score',
-                                             'composite_rank', 'pca_score', 'pca_rank',
-                                             'composite_category', 'pca_category',
-                                             'vulnerability_category', 'overall_rank']:
-                                continue
+            # Format with unified formatter
+            formatter = UnifiedFormatter()
 
-                            # Skip model_X variables and technical columns
-                            if any(pattern in col for pattern in skip_patterns):
-                                continue
-
-                            value = row[col]
-                            if pd.notna(value) and col in full_df.columns:
-                                try:
-                                    if pd.api.types.is_numeric_dtype(full_df[col]):
-                                        col_values = full_df[col].dropna()
-                                        n_wards = len(col_values)
-
-                                        # Calculate percentile for importance
-                                        percentile = (col_values <= value).sum() / n_wards * 100
-
-                                        # Only include if it's a significant risk factor (>75th or <25th percentile)
-                                        if percentile > 75 or percentile < 25:
-                                            # Simple human-friendly name mapping
-                                            friendly_name = {
-                                                'tpr_mean': 'Test Positivity Rate',
-                                                'TPR': 'Test Positivity Rate',
-                                                'rainfall': 'Rainfall',
-                                                'distance_to_waterbodies': 'Distance to Water',
-                                                'urban_percentage': 'Urban Density',
-                                                'soil_wetness': 'Soil Wetness',
-                                                'elevation_mean': 'Elevation',
-                                                'Total_Tested': 'Testing Coverage',
-                                                'Total_Positive': 'Positive Cases'
-                                            }.get(col, col.replace('_', ' ').title())
-
-                                            # Determine if it's a risk or protective factor
-                                            if col in ['distance_to_waterbodies', 'elevation_mean']:
-                                                # Lower values = higher risk for these
-                                                is_risk = percentile < 25
-                                            else:
-                                                # Higher values = higher risk for most
-                                                is_risk = percentile > 75
-
-                                            risk_factors.append({
-                                                'name': friendly_name,
-                                                'value': value,
-                                                'percentile': percentile,
-                                                'is_risk': is_risk,
-                                                'priority': col in priority_vars
-                                            })
-                                except Exception as e:
-                                    logger.debug(f"Error processing {col}: {e}")
-
-                        # Sort risk factors by importance (priority factors first, then by percentile extremity)
-                        risk_factors.sort(key=lambda x: (not x['priority'], -abs(x['percentile'] - 50)), reverse=False)
-
-                        # Take only top 5 most important factors
-                        top_factors = risk_factors[:5]
-
-                        # Build user-friendly output
-                        if top_factors:
-                            # Get ranking information
-                            composite_rank = int(row['composite_rank']) if 'composite_rank' in row and pd.notna(row['composite_rank']) else None
-                            vulnerability_cat = row.get('vulnerability_category', row.get('composite_category', 'Unknown'))
-
-                            # Build the clean output with proper line breaks
-                            output_lines = []
-                            output_lines.append(f"{ward_name} ward is ranked #{composite_rank} ({vulnerability_cat})")
-                            output_lines.append("")
-                            output_lines.append("Top Risk Factors:")
-
-                            for factor in top_factors:
-                                if factor['is_risk']:
-                                    # Format value based on type
-                                    if factor['value'] < 1:
-                                        value_str = f"{factor['value']:.2f}"
-                                    elif factor['value'] > 1000:
-                                        value_str = f"{factor['value']:,.0f}"
-                                    else:
-                                        value_str = f"{factor['value']:.1f}"
-
-                                    # Simple description
-                                    if factor['percentile'] > 90:
-                                        level = "Very high"
-                                    elif factor['percentile'] > 75:
-                                        level = "High"
-                                    elif factor['percentile'] < 10:
-                                        level = "Very low"
-                                    else:
-                                        level = "Low"
-
-                                    output_lines.append(f"• {factor['name']}: {value_str} ({level})")
-
-                            # Simple actionable recommendation
-                            output_lines.append("")
-                            if composite_rank and composite_rank <= 20:
-                                output_lines.append("Recommendation: Priority area for immediate intervention - ITN distribution and vector control needed.")
-                            elif composite_rank and composite_rank <= 50:
-                                output_lines.append("Recommendation: High-priority area for malaria interventions.")
-                            else:
-                                output_lines.append("Recommendation: Monitor situation and maintain preventive measures.")
-
-                            output = "\n".join(output_lines)
-                        else:
-                            output = f"Risk analysis for {ward_name} ward."
-                        
-                    except Exception as e:
-                        logger.debug(f"Could not calculate percentiles: {e}")
-                        # Fallback to simple message
-                        output = f"Analyzing ranking for {ward_name} ward..."
-                    
-                elif is_ward_query:
-                    output_parts.append("**Results:**")
-                    output_parts.append("")
-                    
-                    for idx, row in result_df.iterrows():
-                        if len(result_df.columns) == 1:
-                            output_parts.append(f"• {row.iloc[0]}")
-                        else:
-                            # Format each row as a bullet point with key info
-                            row_info = []
-                            for col in result_df.columns:
-                                value = row[col]
-                                if isinstance(value, float):
-                                    row_info.append(f"{col}: {value:.3f}")
-                                else:
-                                    row_info.append(f"{col}: {value}")
-                            output_parts.append(f"• {' - '.join(row_info)}")
-                    
-                    output = "\n".join(output_parts)
-                else:
-                    # Default formatting for other queries
-                    for idx, row in result_df.iterrows():
-                        if len(result_df.columns) == 1:
-                            output_parts.append(f"• {row.iloc[0]}")
-                        else:
-                            # Format each row as a bullet point with key info
-                            row_info = []
-                            for col in result_df.columns:
-                                value = row[col]
-                                if isinstance(value, float):
-                                    row_info.append(f"{col}: {value:.3f}")
-                                else:
-                                    row_info.append(f"{col}: {value}")
-                            output_parts.append(f"• {' - '.join(row_info)}")
-                    
-                    output = "\n".join(output_parts)
+            # For ranking explanations, pass the full dataset for percentile calculations
+            if result_type.value == 'ranking' and len(result_df) == 1:
+                output = formatter._format_ranking_explanation(query_result, full_df=df)
             else:
-                # Large result set - summarize
-                output = f"Found {len(result_df)} results. Showing first 5:\n\n"
-                for idx, row in result_df.head(5).iterrows():
-                    output += f"• {', '.join([str(v) for v in row])}\n"
-                output += "\n*Use a more specific query to narrow down results.*"
-            
+                output = formatter.format(query_result)
+
             # Check if visualization would be helpful
             plot_data = None
             if 'group by' in sql_query.lower() and len(result_df) <= 20:
-                # Could create a bar chart for grouped data
                 plot_data = {
                     'type': 'bar',
                     'data': result_df.to_dict('records'),
                     'query': sql_query
                 }
-            
+
             return {
                 'success': True,
                 'output': output,
                 'plot_data': plot_data,
                 'query': sql_query,
-                'result_count': len(result_df)
+                'result_count': len(result_df),
+                'intent': intent.value,
+                'result_type': result_type.value
             }
-            
+
         except Exception as e:
             logger.error(f"SQL query error: {str(e)}")
-            
+
             if "no table" in str(e).lower():
                 error_msg = "Error: Table 'df' not found. Make sure data is loaded."
             elif "syntax" in str(e).lower():
                 error_msg = f"SQL syntax error: {str(e)}\n\nPlease check your SQL query syntax."
             else:
                 error_msg = f"Error executing SQL query: {str(e)}"
-            
+
             return {
                 'success': False,
                 'error': error_msg,

@@ -1,0 +1,194 @@
+# Output Formatting Configuration for ChatMRPT
+# This file drives all query result formatting through configuration rather than code
+
+# Column name aliases (case-insensitive matching)
+# Each alias type maps to a list of possible column names that mean the same thing
+column_aliases:
+  geographic_identifiers:
+    ward: [ward, wardname, ward_name, ward_id, WardName, Ward_Name]
+    lga: [lga, lganame, lga_name, lgacode, LGAName, LGA_Name]
+    state: [state, statename, state_name, statecode, StateName, State_Name]
+    region: [region, zone, area]
+
+  ranking_columns:
+    score: [composite_score, pca_score, risk_score, score, Composite_Score, PCA_Score]
+    rank: [composite_rank, pca_rank, overall_rank, rank, Composite_Rank, PCA_Rank]
+    category: [vulnerability_category, composite_category, pca_category, risk_category, category]
+
+  health_metrics:
+    tpr: [tpr_mean, tpr, test_positivity_rate, TPR, TPR_Mean]
+    cases: [total_positive, positive_cases, malaria_cases, Total_Positive]
+    tested: [total_tested, tests_conducted, Total_Tested]
+    pfpr: [pfpr, pfpr_mean, parasite_prevalence]
+
+  environmental:
+    rainfall: [rainfall, rain, precipitation, Rainfall]
+    temperature: [temperature, temp, Temperature]
+    elevation: [elevation, elevation_mean, altitude, Elevation]
+    water_distance: [distance_to_waterbodies, water_distance, Distance_To_Waterbodies]
+    soil_wetness: [soil_wetness, soil_moisture, Soil_Wetness]
+    urban: [urban_percentage, urban_density, urbanization, Urban_Percentage]
+
+  population:
+    population: [population, pop, total_population, Population]
+    density: [population_density, density, pop_density]
+
+# Skip patterns for filtering technical/internal columns
+# Columns matching these patterns are hidden from user-facing output
+skip_patterns:
+  - "model_"
+  - "geometry"
+  - "_id$"
+  - "_code$"
+  - "^Unnamed"
+  - "index"
+
+# Friendly name mappings for display
+# Maps internal column names to human-readable labels
+friendly_names:
+  # Health indicators
+  tpr_mean: "Test Positivity Rate"
+  TPR: "Test Positivity Rate"
+  pfpr: "Parasite Prevalence"
+  pfpr_mean: "Parasite Prevalence"
+  total_positive: "Positive Cases"
+  Total_Positive: "Positive Cases"
+  total_tested: "Tests Conducted"
+  Total_Tested: "Tests Conducted"
+
+  # Analysis results
+  composite_score: "Risk Score"
+  Composite_Score: "Risk Score"
+  pca_score: "PCA Risk Score"
+  PCA_Score: "PCA Risk Score"
+  composite_rank: "Risk Rank"
+  pca_rank: "PCA Rank"
+  vulnerability_category: "Risk Category"
+  composite_category: "Risk Category"
+
+  # Environmental factors
+  rainfall: "Rainfall"
+  Rainfall: "Rainfall"
+  temperature: "Temperature"
+  elevation: "Elevation"
+  elevation_mean: "Elevation"
+  distance_to_waterbodies: "Distance to Water"
+  Distance_To_Waterbodies: "Distance to Water"
+  soil_wetness: "Soil Wetness"
+  urban_percentage: "Urban Density"
+
+  # Geographic
+  WardName: "Ward"
+  ward_name: "Ward"
+  LGAName: "LGA"
+  lga_name: "LGA"
+  StateName: "State"
+  state_name: "State"
+
+  # Population
+  population: "Population"
+  Population: "Population"
+  population_density: "Population Density"
+
+# Numeric precision rules
+# Defines decimal places for different types of values
+precision:
+  count: 0
+  percentage: 1
+  score: 2
+  rate: 2
+  distance: 1
+  rank: 0
+  default: 2
+
+# Precision patterns - match column names to precision types
+precision_patterns:
+  count:
+    - "count"
+    - "total"
+    - "n_"
+    - "_n$"
+  percentage:
+    - "percent"
+    - "_pct"
+    - "proportion"
+  score:
+    - "score"
+    - "_score"
+  rate:
+    - "rate"
+    - "tpr"
+    - "pfpr"
+  rank:
+    - "rank"
+    - "_rank"
+
+# Thresholds for recommendations and categorization
+thresholds:
+  # Ranking thresholds
+  high_risk_rank: 20
+  medium_risk_rank: 50
+
+  # Percentile thresholds
+  high_percentile: 75
+  very_high_percentile: 90
+  low_percentile: 25
+  very_low_percentile: 10
+
+  # Result set sizes
+  large_result_threshold: 20
+  max_display_rows: 50
+
+# Output templates for different result types
+templates:
+  single_value:
+    count: "**{friendly_name}:** {value} {unit}"
+    default: "**{friendly_name}:** {value}"
+
+  ranking_header:
+    default: "**Results ({count} items):**\n"
+
+  ranking_item:
+    with_score: "{rank}. **{name}** - Score: {score} ({category})"
+    with_lga: "{rank}. **{name}** in {lga} - Score: {score}"
+    simple: "{rank}. **{name}**"
+
+  explanation_header:
+    default: "{ward_name} ward is ranked #{rank} ({category})"
+
+  recommendation:
+    high_risk: "Recommendation: Priority area for immediate intervention - ITN distribution and vector control needed."
+    medium_risk: "Recommendation: High-priority area for malaria interventions."
+    low_risk: "Recommendation: Monitor situation and maintain preventive measures."
+
+# Risk factors configuration
+risk_factors:
+  # Priority variables for risk explanation (shown first)
+  priority_vars:
+    - tpr_mean
+    - TPR
+    - rainfall
+    - distance_to_waterbodies
+    - urban_percentage
+    - soil_wetness
+    - elevation_mean
+    - Total_Tested
+    - Total_Positive
+
+  # Variables where lower values indicate higher risk
+  inverse_risk_vars:
+    - distance_to_waterbodies
+    - elevation_mean
+    - Distance_To_Waterbodies
+
+  # Maximum risk factors to display
+  max_display: 5
+
+# Aggregation result labels
+aggregation_labels:
+  avg: "Average"
+  sum: "Total"
+  min: "Minimum"
+  max: "Maximum"
+  count: "Count"
+  mean: "Mean"

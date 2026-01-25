@@ -396,19 +396,45 @@ class RequestInterpreter:
                     'tools_used': ['query_data']
                 }
 
-            # Build SQL generation prompt
+            # Build SQL generation prompt with smarter column selection
             columns_list = list(schema.get('columns', {}).keys())
+
+            # Identify key column types for better prompting
+            ward_cols = [c for c in columns_list if 'ward' in c.lower()]
+            score_cols = [c for c in columns_list if 'score' in c.lower() or 'composite' in c.lower()]
+            rank_cols = [c for c in columns_list if 'rank' in c.lower()]
+            category_cols = [c for c in columns_list if 'category' in c.lower() or 'vulnerability' in c.lower()]
+            lga_cols = [c for c in columns_list if 'lga' in c.lower()]
+
             sql_prompt = f"""Convert this natural language query to SQL. The table name is 'df'.
 
 Available columns: {', '.join(columns_list[:50])}
 
+Key columns identified:
+- Ward names: {ward_cols[:2] if ward_cols else 'Not found'}
+- Scores: {score_cols[:2] if score_cols else 'Not found'}
+- Rankings: {rank_cols[:2] if rank_cols else 'Not found'}
+- Categories: {category_cols[:2] if category_cols else 'Not found'}
+- LGA: {lga_cols[:2] if lga_cols else 'Not found'}
+
 User query: {query}
 
+IMPORTANT RULES:
+1. For ranking/top-N queries: Select identifier + score + rank + category only (NOT SELECT *)
+2. For count queries: Use COUNT(*) with meaningful alias
+3. For aggregations: Use GROUP BY with clear aliases
+4. For "why is X ranked" queries: SELECT * to get all details
+5. Always include the primary identifier column (ward name, LGA, etc.)
+6. NEVER use SELECT * for listing queries - select only relevant columns
+
 Return ONLY the SQL query, nothing else. Use standard SQL syntax.
+
 Examples:
-- "top 10 highest risk wards" -> SELECT * FROM df ORDER BY composite_score DESC LIMIT 10
-- "average TPR" -> SELECT AVG(tpr_mean) as avg_tpr FROM df
-- "wards with score > 0.5" -> SELECT * FROM df WHERE composite_score > 0.5
+- "top 10 highest risk wards" -> SELECT WardName, composite_score, composite_rank, vulnerability_category FROM df ORDER BY composite_score DESC LIMIT 10
+- "how many high risk wards" -> SELECT COUNT(*) as high_risk_count FROM df WHERE vulnerability_category = 'High Risk'
+- "average TPR by LGA" -> SELECT LGAName, AVG(tpr_mean) as avg_tpr FROM df GROUP BY LGAName
+- "why is Abuja ranked high" -> SELECT * FROM df WHERE WardName LIKE '%Abuja%' OR ward_name LIKE '%Abuja%'
+- "wards with score > 0.5" -> SELECT WardName, composite_score, vulnerability_category FROM df WHERE composite_score > 0.5
 
 SQL:"""
 
@@ -416,7 +442,7 @@ SQL:"""
             sql_response = self.llm_manager.generate_response(
                 prompt=sql_prompt,
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=300
             )
 
             # Clean the SQL response
@@ -428,8 +454,8 @@ SQL:"""
 
             logger.info(f"Generated SQL: {sql_query}")
 
-            # Execute the SQL query
-            result = cda.process_sql_query(sql_query)
+            # Execute the SQL query with original query for better intent detection
+            result = cda.process_sql_query(sql_query, original_query=query)
 
             if result.get('success'):
                 return {
@@ -1787,9 +1813,9 @@ SQL:"""
             logger.info(f"Executing SQL query: {query}")
             from app.services.conversational_data_access import ConversationalDataAccess
             conversational_data_access = ConversationalDataAccess(session_id, self.llm_manager)
-            
+
             # Use the process_sql_query method which handles all stages properly
-            result = conversational_data_access.process_sql_query(query)
+            result = conversational_data_access.process_sql_query(query, original_query=query)
             
             if result.get('success'):
                 return result.get('output', 'Query executed successfully')
