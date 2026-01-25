@@ -14,7 +14,6 @@ from ...core.exceptions import ValidationError
 from app.runtime.tpr.workflow import reset_tpr_handler_cache
 
 from . import logger
-from .arena_helpers import ArenaSetupError, prepare_arena_preload
 from .chat_routing import route_with_mistral
 from .utils import resync_session_flags, run_async
 
@@ -174,32 +173,14 @@ def handle_send_message_streaming() -> Response:
                 session.modified = True
                 return _clarification_response(clarification)
 
-    use_arena = (routing_decision == 'can_answer') and (os.getenv('CHATMRPT_ARENA', '0') != '0')
-    use_tools = routing_decision == 'needs_tools'
-
-    if use_arena:
-        try:
-            arena_preload = prepare_arena_preload(session_id, user_message, run_async)
-        except ArenaSetupError as exc:
-            logger.error("Arena streaming failed: %s", exc)
-            use_arena = False
-        else:
-            if arena_preload.both_models_need_tools():
-                session['last_tool_used'] = True
-                session.modified = True
-                use_arena = False
-            else:
-                return arena_preload.stream_response()
-
-    if not use_arena:
-        return _stream_request_interpreter(
-            user_message=user_message,
-            session_id=session_id,
-            tab_context=tab_context,
-            is_data_analysis=is_data_analysis,
-        )
-
-    return jsonify({'status': 'error', 'message': 'Unable to process streaming request'}), 500
+    # Arena mode is now accessed via /api/arena endpoints directly (uses Groq API)
+    # Main chat streaming always uses request interpreter for tool-based responses
+    return _stream_request_interpreter(
+        user_message=user_message,
+        session_id=session_id,
+        tab_context=tab_context,
+        is_data_analysis=is_data_analysis,
+    )
 
 
 def _clarification_response(payload: Dict[str, Any]) -> Response:

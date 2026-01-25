@@ -122,6 +122,8 @@ class LLMAdapter:
                 return self._generate_vllm(full_prompt, max_tokens, temperature, **kwargs)
             elif self.backend == 'openai':
                 return self._generate_openai(full_prompt, max_tokens, temperature, system_message=system_message, **kwargs)
+            elif self.backend in ('groq', 'mistral'):
+                return self._generate_openai_compatible(full_prompt, max_tokens, temperature, system_message=system_message, **kwargs)
             else:
                 raise ValueError(f"Unsupported backend: {self.backend}")
                 
@@ -525,7 +527,57 @@ class LLMAdapter:
                 return f"OpenAI error: {msg}"
 
         return f"OpenAI error: all candidate models failed. Last error: {last_error or 'unknown'}"
-    
+
+    def _generate_openai_compatible(self, prompt: str, max_tokens: int, temperature: float,
+                                    system_message: Optional[str] = None, **kwargs) -> str:
+        """Generate using OpenAI-compatible APIs (Groq, Mistral, etc.)."""
+        if not self.api_key:
+            return f"{self.backend.title()} error: missing API key (GROQ_API_KEY or MISTRAL_API_KEY)"
+
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+                messages.append({"role": "user", "content": prompt})
+            else:
+                messages.append({"role": "user", "content": prompt})
+
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature
+            }
+
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                text = result['choices'][0]['message']['content'] or ""
+                # Clean chain-of-thought tags (Qwen uses <think>)
+                text = self._clean_chain_of_thought(text)
+                return text
+            else:
+                error_msg = response.text[:200] if response.text else f"HTTP {response.status_code}"
+                logger.error(f"{self.backend.title()} API error: {error_msg}")
+                return f"{self.backend.title()} error: {error_msg}"
+
+        except requests.exceptions.Timeout:
+            return f"{self.backend.title()} error: request timed out"
+        except Exception as e:
+            logger.error(f"{self.backend.title()} error: {str(e)}")
+            return f"{self.backend.title()} error: {str(e)}"
+
     def analyze_tpr_data(self, tpr_data: pd.DataFrame, query: str) -> Dict[str, Any]:
         """
         Analyze TPR data with full context.

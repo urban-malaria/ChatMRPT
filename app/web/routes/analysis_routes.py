@@ -175,9 +175,8 @@ async def route_with_mistral(message: str, session_context: dict) -> str:
             return "needs_tools"
     
     try:
-        # Import Ollama adapter
-        from app.core.ollama_adapter import OllamaAdapter
-        ollama = OllamaAdapter()
+        # Use LLMAdapter for routing (Groq for fast routing)
+        from app.core.llm_adapter import LLMAdapter
         
         # Build context information
         files_info = []
@@ -281,10 +280,10 @@ Without data uploaded:
 
 Reply ONLY: NEEDS_TOOLS, CAN_ANSWER, or NEEDS_CLARIFICATION"""
         
-        # Get Mistral's routing decision
+        # Get routing decision using Groq (fast)
         import asyncio
-        response = await ollama.generate_async(
-            model="mistral:7b",
+        adapter = LLMAdapter(backend='groq', model='llama-3.3-70b-versatile')
+        response = adapter.generate(
             prompt=prompt,
             max_tokens=20,
             temperature=0.1  # Low temperature for consistent routing
@@ -772,17 +771,8 @@ def send_message():
                 _init_arena(_cur_app)
             arena_manager = _shared_arena_manager
             
-            # Get base Arena system prompt
-            base_arena_prompt = get_arena_system_prompt()
-            
-            # Enhance with session context
-            context_manager = get_arena_context_manager()
-            session_context = context_manager.get_session_context(
-                session_id=session_id,
-                session_data=dict(session)
-            )
-            context_enhancement = context_manager.format_context_for_prompt(session_context)
-            arena_system_prompt = base_arena_prompt + context_enhancement
+            # Get Arena system prompt (no context augmentation needed)
+            arena_system_prompt = get_arena_system_prompt()
             
             # Start battle
             import asyncio
@@ -1123,21 +1113,11 @@ def vote_arena():
         # Log the vote
         logger.info(f"Arena vote received: battle_id={battle_id}, vote={vote}, session={session_id}")
         
-        # Get Arena manager, system prompt, and context manager
+        # Get Arena manager and system prompt
         from app.core.arena_manager import ArenaManager
         from app.core.arena_system_prompt import get_arena_system_prompt
-        from app.core.arena_context_manager import get_arena_context_manager
         arena_manager = ArenaManager()
-        
-        # Get enhanced Arena system prompt with context
-        base_arena_prompt = get_arena_system_prompt()
-        context_manager = get_arena_context_manager()
-        session_context = context_manager.get_session_context(
-            session_id=session_id,
-            session_data=dict(session)
-        )
-        context_enhancement = context_manager.format_context_for_prompt(session_context)
-        arena_system_prompt = base_arena_prompt + context_enhancement
+        arena_system_prompt = get_arena_system_prompt()
         
         # Get the progressive battle
         battle = arena_manager.storage.get_progressive_battle(battle_id)

@@ -168,12 +168,10 @@ async def route_with_mistral(message: str, session_context: dict) -> str:
             return "needs_tools"
 
     try:
-        from app.core.ollama_adapter import OllamaAdapter
+        from app.core.llm_adapter import LLMAdapter
     except ImportError as exc:  # pragma: no cover - defensive
-        logger.warning("Ollama adapter unavailable: %s", exc)
+        logger.warning("LLM adapter unavailable: %s", exc)
         return "needs_clarification"
-
-    ollama = OllamaAdapter()
 
     files_info = []
     if session_context.get('has_uploaded_files'):
@@ -239,8 +237,9 @@ Reply ONLY: NEEDS_TOOLS, CAN_ANSWER, or NEEDS_CLARIFICATION"""
         return "can_answer"
 
     try:
-        response = await ollama.generate_async(
-            model="mistral:7b",
+        # Use Groq for fast routing (synchronous call in async context)
+        adapter = LLMAdapter(backend='groq', model='llama-3.3-70b-versatile')
+        response = adapter.generate(
             prompt=prompt,
             max_tokens=20,
             temperature=0.1,

@@ -94,6 +94,8 @@ class RequestInterpreter:
                 'create_settlement_map': self._create_settlement_map,
                 'show_settlement_statistics': self._show_settlement_statistics,
                 'list_dataset_columns': self._list_dataset_columns,
+                'query_tpr_data': self._query_tpr_data,
+                'switch_tpr_combination': self._switch_tpr_combination,
             })
             self.orchestrator = LLMOrchestrator()
         except Exception as e:
