@@ -77,13 +77,14 @@ class ProgressiveBattleSession:
             None
         )
 
+        pair = None
         if self.current_round == 0:
             # First round: Use first two non-final models
             non_final_models = [m for m in self.all_models if m != final_model]
             if len(non_final_models) >= 2:
-                return (non_final_models[0], non_final_models[1])
+                pair = (non_final_models[0], non_final_models[1])
             elif len(self.all_models) >= 2:
-                return (self.all_models[0], self.all_models[1])
+                pair = (self.all_models[0], self.all_models[1])
         else:
             # Subsequent rounds: winner vs next challenger
             if self.winner_chain:
@@ -95,13 +96,17 @@ class ProgressiveBattleSession:
                     unused_non_final = [m for m in unused_models if m != final_model]
                     if len(unused_non_final) == 0:
                         # Final round: champion vs final model
-                        return (current_winner, final_model)
+                        pair = (current_winner, final_model)
                     else:
-                        return (current_winner, unused_non_final[0])
+                        pair = (current_winner, unused_non_final[0])
                 elif unused_models:
-                    return (current_winner, unused_models[0])
+                    pair = (current_winner, unused_models[0])
 
-        return None
+        # Randomize left/right position to avoid position bias
+        if pair and random.random() > 0.5:
+            pair = (pair[1], pair[0])
+
+        return pair
 
     def record_choice(self, choice: str) -> bool:
         """Record user's choice and update state. Returns True if more comparisons needed."""
@@ -331,9 +336,12 @@ class ArenaManager:
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # Select models for tournament (exclude final model from initial rounds)
-        model_ids = list(self.available_models.keys())
-        random.shuffle([m for m in model_ids if not self.available_models.get(m, {}).get('is_final')])
+        # Select models for tournament - randomize non-final models, keep final model (GPT-4o) at end
+        all_models = list(self.available_models.keys())
+        non_final_models = [m for m in all_models if not self.available_models.get(m, {}).get('is_final')]
+        final_model = [m for m in all_models if self.available_models.get(m, {}).get('is_final')]
+        random.shuffle(non_final_models)  # Randomize the 3 Groq models
+        model_ids = non_final_models + final_model  # Final model (GPT-4o) always last
 
         battle = ProgressiveBattleSession(
             session_id=session_id,
