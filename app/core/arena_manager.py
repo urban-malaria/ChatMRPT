@@ -429,8 +429,10 @@ class ArenaManager:
                 'response_b': battle.all_responses.get(model_b, ''),
                 'latency_a': battle.all_latencies.get(model_a, 0),
                 'latency_b': battle.all_latencies.get(model_b, 0),
-                'eliminated_models': battle.eliminated_models,
-                'winner_chain': battle.winner_chain,
+                'eliminated_models': battle.eliminated_models or [],
+                'winner_chain': battle.winner_chain or [],
+                'remaining_models': battle.remaining_models or [],
+                'final_ranking': [],  # Not complete yet
             }
         else:
             # Tournament complete
@@ -439,9 +441,11 @@ class ArenaManager:
 
             return {
                 'continue': False,
-                'final_ranking': battle.final_ranking,
+                'final_ranking': battle.final_ranking or [],
                 'winner': battle.final_ranking[0] if battle.final_ranking else None,
-                'comparison_history': battle.comparison_history,
+                'comparison_history': battle.comparison_history or [],
+                'eliminated_models': battle.eliminated_models or [],
+                'winner_chain': battle.winner_chain or [],
                 'total_rounds': battle.current_round,
             }
 

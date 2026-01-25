@@ -87,10 +87,10 @@ export interface ClarificationMessage extends BaseMessage {
 export type Message = RegularMessage | ArenaMessage | SystemMessage | ClarificationMessage;
 
 // Arena Types - Updated to match backend models
-export type ModelName = 
-  | 'mistral:7b'
-  | 'llama3.1:8b'
-  | 'qwen3:8b'
+export type ModelName =
+  | 'qwen/qwen3-32b'
+  | 'llama-3.3-70b-versatile'
+  | 'moonshotai/kimi-k2-instruct-0905'
   | 'gpt-4o';
 
 export type ModelResponses = {
@@ -101,11 +101,11 @@ export type Vote = 'a' | 'b' | 'tie' | 'bad';
 
 // Arena uses progressive elimination tournament system
 
-// Model display names
-export const MODEL_DISPLAY_NAMES: Record<ModelName, string> = {
-  'mistral:7b': 'Mistral 7B',
-  'llama3.1:8b': 'Llama 3.1 8B',
-  'qwen3:8b': 'Qwen 3 8B',
+// Model display names for Groq models
+export const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  'qwen/qwen3-32b': 'Qwen 3 32B',
+  'llama-3.3-70b-versatile': 'Llama 3.3 70B',
+  'moonshotai/kimi-k2-instruct-0905': 'Kimi K2',
   'gpt-4o': 'GPT-4o',
 };
 

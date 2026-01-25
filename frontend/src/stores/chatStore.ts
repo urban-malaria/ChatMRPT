@@ -121,7 +121,7 @@ export const useChatStore = create<ChatState>()(
               currentMatchup: initialMatchup,
               eliminatedModels: [],
               winnerChain: [],
-              remainingModels: ['mistral:7b', 'llama3.1:8b', 'qwen3:8b'],
+              remainingModels: ['qwen/qwen3-32b', 'llama-3.3-70b-versatile', 'moonshotai/kimi-k2-instruct-0905', 'gpt-4o'],
               modelsRevealed: false,
               isComplete: false,
               timestamp: new Date(),

@@ -19,9 +19,9 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
 
   // Map each model to a consistent letter label that follows the winner
   const MODEL_TO_LABEL: Record<string, string> = {
-    'mistral:7b': 'A',
-    'llama3.1:8b': 'B',
-    'qwen3:8b': 'C',
+    'qwen/qwen3-32b': 'A',
+    'llama-3.3-70b-versatile': 'B',
+    'moonshotai/kimi-k2-instruct-0905': 'C',
     'gpt-4o': 'D'
   };
 
@@ -69,123 +69,37 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
       const response = await api.arena.vote(message.battleId, vote, session.sessionId);
       const data = response.data;
 
-      if (data.continue_battle) {
-        // Check if we need to fetch responses for the next round
-        if (data.needs_responses) {
-          toast.success(`${data.previous_winner} wins! Getting next matchup...`);
+      if (data.continue) {
+        // Next round - responses are included in the vote response
+        const winnerModel = vote === 'a' ? message.currentMatchup.modelA : message.currentMatchup.modelB;
 
-          // Fetch streaming responses for the next round (SSE)
-          try {
-            const battleId = data.battle_id || message.battleId;
-            const resp = await fetch('/api/arena/get_responses_streaming', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Conversation-ID': storage.ensureConversationId(),
-              },
-              body: JSON.stringify({ battle_id: battleId })
-            });
-            const reader = resp.body?.getReader();
-            const decoder = new TextDecoder();
-            if (!reader) throw new Error('No streaming body');
-            let buffer = '';
-            let accumA = '';
-            let accumB = '';
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const payload = JSON.parse(line.slice(6));
-                if (payload.arena_mode === true && payload.model_a && payload.model_b) {
-                  updateMessage(message.id, {
-                    type: 'arena',
-                    round: data.round,
-                    currentMatchup: {
-                      modelA: payload.model_a,
-                      modelB: payload.model_b,
-                      responseA: payload.response_a || '',
-                      responseB: payload.response_b || ''
-                    },
-                    eliminatedModels: data.eliminated_models,
-                    winnerChain: data.winner_chain,
-                    remainingModels: data.remaining_models,
-                    currentVote: undefined,
-                    modelsRevealed: false,
-                  } as any);
-                  accumA = payload.response_a || '';
-                  accumB = payload.response_b || '';
-                  voteSubmittedRef.current = false;
-                  setIsSubmitting(false);
-                }
-                if (payload.stream === true && payload.side && payload.delta) {
-                  if (payload.side === 'a') accumA += payload.delta;
-                  if (payload.side === 'b') accumB += payload.delta;
-                  updateMessage(message.id, {
-                    type: 'arena',
-                    currentMatchup: {
-                      ...message.currentMatchup,
-                      responseA: accumA || message.currentMatchup.responseA,
-                      responseB: accumB || message.currentMatchup.responseB,
-                      modelA: payload.model_a || message.currentMatchup.modelA,
-                      modelB: payload.model_b || message.currentMatchup.modelB,
-                    }
-                  } as any);
-                }
-                if (payload.done === true || payload.arena_complete === true) {
-                  toast.success('Next round ready!');
-                }
-              }
-            }
-          } catch (error: any) {
-            console.error('Error getting next responses:', error);
-            const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
-            toast.error(`Failed to get next round: ${errorMsg}`);
-          }
-        } else {
-          const eliminatedSide = data.eliminated_side || (vote === 'a' ? 'right' : 'left');
-          const winnerSide = eliminatedSide === 'left' ? 'right' : 'left';
+        const updatedMatchup = {
+          modelA: data.model_a,
+          modelB: data.model_b,
+          responseA: data.response_a || '',
+          responseB: data.response_b || '',
+        };
 
-          const updatedMatchup = {
-            modelA: data.model_a || message.currentMatchup.modelA,
-            modelB: data.model_b || message.currentMatchup.modelB,
-            responseA: data.response_a !== undefined ?
-              (data.response_a || 'Error: Response not available') :
-              message.currentMatchup.responseA,
-            responseB: data.response_b !== undefined ?
-              (data.response_b || 'Error: Response not available') :
-              message.currentMatchup.responseB,
-          };
+        updateMessage(message.id, {
+          type: 'arena',
+          round: data.current_round,
+          currentMatchup: updatedMatchup,
+          eliminatedModels: data.eliminated_models || [],
+          winnerChain: data.winner_chain || [],
+          remainingModels: data.remaining_models || [],
+          currentVote: undefined,
+          modelsRevealed: false,
+        } as any);
 
-          if (updatedMatchup.responseA === updatedMatchup.responseB) {
-            console.error('ERROR: Responses A and B are IDENTICAL after update!');
-            toast.error('Error: Duplicate responses detected. Please refresh and try again.');
-          }
+        voteSubmittedRef.current = false;
+        setIsSubmitting(false);
 
-          updateMessage(message.id, {
-            type: 'arena',
-            round: data.round,
-            currentMatchup: updatedMatchup,
-            eliminatedModels: data.eliminated_models,
-            winnerChain: data.winner_chain,
-            remainingModels: data.remaining_models,
-            currentVote: undefined,
-            modelsRevealed: false,
-          } as any);
-
-          voteSubmittedRef.current = false;
-          setIsSubmitting(false);
-
-          const winnerModel = winnerSide === 'left' ? message.currentMatchup.modelA : message.currentMatchup.modelB;
-          toast.success(`${MODEL_DISPLAY_NAMES[winnerModel]} wins! Next challenger appears...`);
-        }
+        toast.success(`${MODEL_DISPLAY_NAMES[winnerModel] || winnerModel} wins! Next round starting...`);
       } else {
         // Battle complete
         completeArenaBattle();
-        toast.success(`Tournament complete! Ranking: ${data.final_ranking.join(' > ')}`);
+        const ranking = (data.final_ranking || []).map((m: string) => MODEL_DISPLAY_NAMES[m as keyof typeof MODEL_DISPLAY_NAMES] || m);
+        toast.success(`Tournament complete! Ranking: ${ranking.join(' > ')}`);
       }
     } catch (error: any) {
       console.error('Error submitting vote:', error);
@@ -215,9 +129,9 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
               Round {message.round} of 3
             </span>
           </div>
-          {message.eliminatedModels.length > 0 && (
+          {(message.eliminatedModels || []).length > 0 && (
             <span className="text-sm text-gray-500 dark:text-dark-text-secondary">
-              Eliminated: {message.eliminatedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(', ')}
+              Eliminated: {(message.eliminatedModels || []).map(m => MODEL_DISPLAY_NAMES[m] || m).join(', ')}
             </span>
           )}
         </div>
@@ -233,8 +147,8 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
       <DualResponsePanel
         responseA={message.currentMatchup.responseA}
         responseB={message.currentMatchup.responseB}
-        modelA={message.modelsRevealed ? MODEL_DISPLAY_NAMES[message.currentMatchup.modelA] : null}
-        modelB={message.modelsRevealed ? MODEL_DISPLAY_NAMES[message.currentMatchup.modelB] : null}
+        modelA={message.modelsRevealed ? (MODEL_DISPLAY_NAMES[message.currentMatchup.modelA] || message.currentMatchup.modelA) : null}
+        modelB={message.modelsRevealed ? (MODEL_DISPLAY_NAMES[message.currentMatchup.modelB] || message.currentMatchup.modelB) : null}
         isLoading={false}
         labelA={getResponseLabels().labelA}
         labelB={getResponseLabels().labelB}
