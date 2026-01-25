@@ -299,7 +299,12 @@ class RequestInterpreter:
         end = start + page_size
         chunk = column_details[start:end]
 
-        lines = [f"Dataset columns (page {page}/{total_pages}, {total} total):"]
+        # Clean header - only show pagination if multiple pages
+        if total_pages > 1:
+            lines = [f"**Dataset columns** ({total} columns, showing {start+1}-{min(end, total)}):"]
+        else:
+            lines = [f"**Dataset columns** ({total} total):"]
+
         for col in chunk:
             name = col.get('name', 'unknown')
             dtype = col.get('dtype', 'object')
@@ -307,10 +312,10 @@ class RequestInterpreter:
             unique = col.get('unique', 'n/a')
             sample_values = col.get('sample_values') or []
             sample = ', '.join(sample_values) if sample_values else '–'
-            lines.append(f"• {name} [{dtype}] – non-null: {non_null}, unique: {unique}, sample: {sample}")
+            lines.append(f"- **{name}** [{dtype}] – {non_null} non-null, {unique} unique")
 
         if page < total_pages:
-            lines.append(f"\nTo see more columns, call list_dataset_columns with page={page + 1}.")
+            lines.append(f"\n*Showing columns {start+1}-{end} of {total}. Ask for more columns to see the rest.*")
 
         return {
             'response': "\n".join(lines),

@@ -81,25 +81,42 @@ def _route_with_patterns(message: str, session_context: dict) -> str:
     ]:
         return "can_answer"
 
-    # Data analysis mode takes priority
+    # Check for explicit data references (should route to tools)
+    data_references = ['my data', 'the data', 'my file', 'uploaded', 'my csv', 'in my']
+    references_user_data = any(ref in message_lower for ref in data_references)
+
+    # Check for knowledge questions FIRST - these should go to Arena even in data mode
+    # This allows users to ask "What is malaria" even when they have data loaded
+    knowledge_patterns = [
+        'what is malaria', 'what causes malaria', 'how is malaria transmitted',
+        'what are the symptoms', 'how to prevent malaria', 'what is pca',
+        'how does pca work', 'what is composite score', 'explain',
+        'tell me about malaria', 'malaria prevention', 'malaria treatment',
+    ]
+    is_pure_knowledge = any(pattern in message_lower for pattern in knowledge_patterns)
+
+    # Don't route pure knowledge questions to tools - let Arena handle them
+    if is_pure_knowledge and not references_user_data:
+        logger.info("Pure knowledge question detected - routing to arena")
+        return "can_answer"
+
+    # Data analysis mode - route most queries to tools (but knowledge already handled above)
     if session_context.get('use_data_analysis_v3', False) or session_context.get(
         'data_analysis_active', False
     ):
         logger.info("Data Analysis mode detected - routing to tools")
         return "needs_tools"
 
-    # Check for explicit data references (should route to tools)
-    data_references = ['my data', 'the data', 'my file', 'uploaded', 'my csv', 'in my']
-    references_user_data = any(ref in message_lower for ref in data_references)
-
     # Check for result queries when analysis is complete
     if session_context.get('analysis_complete', False):
         result_queries = [
             'top', 'highest', 'lowest', 'rank', 'ranked',
             'best', 'worst', 'most at risk', 'least at risk',
-            'results', 'findings', 'show me', 'what are the',
+            'results', 'findings', 'show me',
         ]
-        if any(q in message_lower for q in result_queries):
+        # Must have ward/lga context for data queries
+        has_data_context = any(w in message_lower for w in ['ward', 'lga', 'area', 'region', 'score'])
+        if any(q in message_lower for q in result_queries) and has_data_context:
             logger.info("Result query detected with analysis complete - routing to tools")
             return "needs_tools"
 

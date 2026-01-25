@@ -206,15 +206,27 @@ class TestPatternFallback:
         result = _route_with_patterns("Thanks", {})
         assert result == "can_answer"
 
-    def test_analysis_mode_takes_priority(self):
-        """Data analysis mode should route to tools."""
+    def test_analysis_mode_routes_data_queries_to_tools(self):
+        """Data analysis mode should route data queries to tools."""
         from app.web.routes.analysis.chat_routing import _route_with_patterns
 
+        # Data queries in data mode should go to tools
+        result = _route_with_patterns(
+            "Show me the top wards",
+            {"use_data_analysis_v3": True}
+        )
+        assert result == "needs_tools"
+
+    def test_knowledge_questions_go_to_arena_even_in_data_mode(self):
+        """Knowledge questions should go to Arena even when in data mode."""
+        from app.web.routes.analysis.chat_routing import _route_with_patterns
+
+        # Pure knowledge questions should go to Arena, not tools
         result = _route_with_patterns(
             "What is malaria",
             {"use_data_analysis_v3": True}
         )
-        assert result == "needs_tools"
+        assert result == "can_answer"
 
     def test_result_query_with_analysis_complete(self):
         """Result queries should route to tools when analysis is complete."""
