@@ -29,6 +29,21 @@ from app.core.arena_system_prompt import get_arena_system_prompt
 
 logger = logging.getLogger(__name__)
 
+# Interaction logger for database storage
+_interaction_logger = None
+
+def get_interaction_logger():
+    """Get or create interaction logger instance."""
+    global _interaction_logger
+    if _interaction_logger is None:
+        try:
+            from app.interaction import InteractionLogger
+            _interaction_logger = InteractionLogger()
+            logger.info("Arena interaction logger initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize interaction logger: {e}")
+    return _interaction_logger
+
 
 @dataclass
 class ProgressiveBattleSession:
@@ -394,6 +409,11 @@ class ArenaManager:
         if not battle:
             return {'error': 'Battle not found'}
 
+        # Capture current matchup info before updating
+        current_model_a, current_model_b = battle.current_pair if battle.current_pair else (None, None)
+        elo_before_a = self.elo_system.ratings.get(current_model_a, 1500) if current_model_a else None
+        elo_before_b = self.elo_system.ratings.get(current_model_b, 1500) if current_model_b else None
+
         # Update ELO before recording choice
         if battle.current_pair and choice in ['left', 'right']:
             model_a, model_b = battle.current_pair
@@ -402,8 +422,31 @@ class ArenaManager:
             else:
                 self.elo_system.update_ratings(model_b, model_a)
 
+        # Capture ELO after update
+        elo_after_a = self.elo_system.ratings.get(current_model_a, 1500) if current_model_a else None
+        elo_after_b = self.elo_system.ratings.get(current_model_b, 1500) if current_model_b else None
+
         # Update preference stats
         self.preference_stats[choice] = self.preference_stats.get(choice, 0) + 1
+
+        # Log this matchup to database
+        self._log_battle_to_db(
+            battle_id=battle_id,
+            session_id=battle.session_id,
+            user_message=battle.user_message,
+            model_a=current_model_a,
+            model_b=current_model_b,
+            response_a=battle.all_responses.get(current_model_a, ''),
+            response_b=battle.all_responses.get(current_model_b, ''),
+            latency_a=battle.all_latencies.get(current_model_a, 0),
+            latency_b=battle.all_latencies.get(current_model_b, 0),
+            user_preference=choice,
+            elo_before_a=elo_before_a,
+            elo_before_b=elo_before_b,
+            elo_after_a=elo_after_a,
+            elo_after_b=elo_after_b,
+            round_number=battle.current_round
+        )
 
         # Record choice and check if more rounds needed
         more_rounds = battle.record_choice(choice)
@@ -456,6 +499,45 @@ class ArenaManager:
                 'winner_chain': battle.winner_chain or [],
                 'total_rounds': battle.current_round,
             }
+
+    def _log_battle_to_db(self, battle_id: str, session_id: str, user_message: str,
+                          model_a: str, model_b: str, response_a: str, response_b: str,
+                          latency_a: float, latency_b: float, user_preference: str,
+                          elo_before_a: float, elo_before_b: float,
+                          elo_after_a: float, elo_after_b: float,
+                          round_number: int) -> bool:
+        """Log a battle matchup to the interactions database for research/training data."""
+        try:
+            interaction_logger = get_interaction_logger()
+            if interaction_logger is None:
+                logger.debug("Interaction logger not available, skipping database logging")
+                return False
+
+            # Create unique ID for this specific matchup (battle_id + round)
+            matchup_id = f"{battle_id}_round{round_number}"
+
+            interaction_logger.log_arena_battle(
+                battle_id=matchup_id,
+                session_id=session_id,
+                user_message=user_message,
+                model_a=model_a,
+                model_b=model_b,
+                response_a=response_a,
+                response_b=response_b,
+                latency_a=latency_a,
+                latency_b=latency_b,
+                user_preference=user_preference,
+                elo_before_a=elo_before_a,
+                elo_before_b=elo_before_b,
+                elo_after_a=elo_after_a,
+                elo_after_b=elo_after_b,
+                view_index=round_number
+            )
+            logger.info(f"Logged arena battle to database: {matchup_id} ({model_a} vs {model_b})")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to log arena battle to database: {e}")
+            return False
 
     def get_leaderboard(self) -> List[Dict[str, Any]]:
         """Get current model leaderboard sorted by ELO rating."""
