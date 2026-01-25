@@ -46,7 +46,7 @@ if INCLUDE_OPENAI_FINAL:
 
 # Response configuration
 RESPONSE_TIMEOUT = 30  # seconds
-MAX_TOKENS = 800
+MAX_TOKENS = int(os.environ.get('ARENA_MAX_TOKENS', '1500'))  # Increased for complete responses
 
 # Redis configuration for battle storage
 REDIS_TTL_HOURS = 24
