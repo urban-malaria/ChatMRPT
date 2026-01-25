@@ -42,7 +42,8 @@ class SemanticChatRouter:
         encoder: Optional[BaseEncoder] = None,
         biaser: Optional[ContextBiaser] = None,
         fallback_router: Optional[FallbackRouter] = None,
-        confidence_threshold: float = 0.3,
+        confidence_threshold: float = 0.55,
+        margin_threshold: float = 0.08,
     ):
         """Initialize the semantic router.
 
@@ -51,11 +52,13 @@ class SemanticChatRouter:
             biaser: Context biaser instance (default: new instance)
             fallback_router: LLM fallback for low confidence (default: auto-detect)
             confidence_threshold: Below this, use LLM fallback
+            margin_threshold: If gap between top 2 scores is below this, use fallback
         """
         self.encoder = encoder
         self.biaser = biaser or ContextBiaser()
         self.fallback_router = fallback_router
         self.confidence_threshold = confidence_threshold
+        self.margin_threshold = margin_threshold
 
         # Route embeddings (computed lazily)
         self._route_embeddings: Dict[str, np.ndarray] = {}
@@ -137,17 +140,34 @@ class SemanticChatRouter:
         # Apply context bias
         biased_scores = self.biaser.apply_bias(raw_scores, session_context)
 
-        # Find best route
-        best_route = max(biased_scores.items(), key=lambda x: x[1])
-        route_name, confidence = best_route
+        # Find best and second-best routes
+        sorted_scores = sorted(biased_scores.items(), key=lambda x: x[1], reverse=True)
+        route_name, confidence = sorted_scores[0]
+        second_confidence = sorted_scores[1][1] if len(sorted_scores) > 1 else 0.0
+        margin = confidence - second_confidence
 
-        # Check if confidence is too low
+        # Check if we need to use fallback:
+        # 1. Confidence is too low
+        # 2. Margin between top two is too small (ambiguous)
         used_fallback = False
-        if confidence < self.confidence_threshold and self.fallback_router:
+        needs_fallback = False
+        fallback_reason = ""
+
+        if confidence < self.confidence_threshold:
+            needs_fallback = True
+            fallback_reason = f"low confidence ({confidence:.3f} < {self.confidence_threshold})"
+        elif margin < self.margin_threshold:
+            needs_fallback = True
+            fallback_reason = f"ambiguous (margin {margin:.3f} < {self.margin_threshold})"
+
+        if needs_fallback and self.fallback_router:
             logger.info(
-                "Low confidence (%.3f < %.3f), using LLM fallback",
+                "Using LLM fallback: %s. Top scores: %s=%.3f, %s=%.3f",
+                fallback_reason,
+                route_name,
                 confidence,
-                self.confidence_threshold,
+                sorted_scores[1][0] if len(sorted_scores) > 1 else "N/A",
+                second_confidence,
             )
             fallback_route = self.fallback_router.route(
                 message, session_context, biased_scores
