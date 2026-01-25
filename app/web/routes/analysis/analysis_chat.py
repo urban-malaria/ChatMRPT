@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.auth.decorators import require_auth
-from ...core.decorators import handle_errors, log_execution_time, validate_session
+from app.core.decorators import handle_errors, log_execution_time, validate_session
 
 from . import analysis_bp
 from .chat_sync_service import handle_send_message
