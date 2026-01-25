@@ -1276,14 +1276,18 @@ def vote_arena():
         }), 500
 
 
-@analysis_bp.route('/send_message_streaming', methods=['POST'])
+# DISABLED: Old streaming endpoint with broken arena code
+# The new endpoint is in app/web/routes/analysis/analysis_chat.py
+# which uses chat_stream_service.py with proper Groq-based arena
+# @analysis_bp.route('/send_message_streaming', methods=['POST'])
 @require_auth
 @validate_session
 @handle_errors
 @log_execution_time
-def send_message_streaming():
+def _old_send_message_streaming_DISABLED():
     """
-    Handle chat messages with streaming response for better UX.
+    DISABLED: This old endpoint had broken arena code.
+    The active endpoint is in analysis/analysis_chat.py
     """
     
     try:
