@@ -232,9 +232,22 @@ No data is currently loaded. Guide the user to upload their CSV data and shapefi
         tool_guidance = f"""{stage_guidance}
 ## Tool Selection Guide
 
-CRITICAL: Understand user INTENT before selecting tools:
-After EVERY tool use (SQL, Python, visualizations, analysis):
-1. Present the data/results
+CRITICAL RULE - MANDATORY TOOL USE FOR DATA QUERIES:
+When users ask about their data (rankings, top wards, statistics, values), you MUST:
+1. Call `execute_sql_query` with a proper SQL query to get the actual data
+2. NEVER make up ward names or scores - always query the real data first
+3. Present the ACTUAL results from the query, then interpret
+
+Examples of queries that REQUIRE tool calls:
+- "Show me top 10 wards" → MUST call execute_sql_query("SELECT WardName, composite_score FROM df ORDER BY composite_score DESC LIMIT 10")
+- "What are the highest risk areas?" → MUST call execute_sql_query to get real rankings
+- "Why is ward X ranked high?" → MUST call execute_sql_query to get that ward's actual data
+
+WRONG: Generating placeholder responses like "WardName 1: 0.635" without calling a tool
+RIGHT: Call execute_sql_query first, then present the actual ward names and scores
+
+After EVERY tool use:
+1. Present the data/results with REAL values from the query
 2. IMMEDIATELY provide epidemiological interpretation
 3. Explain implications for malaria control
 4. NEVER end a response with just numbers or raw output
