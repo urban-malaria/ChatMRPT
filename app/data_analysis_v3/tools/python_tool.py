@@ -140,6 +140,15 @@ def analyze_data(
     # If executor encountered errors, append them to the output so LLM sees them
     if state_updates.get('errors'):
         error_text = "\n\n⚠️ **Execution Error:**\n" + "\n".join(state_updates['errors'])
+
+        # Include code snippet and fix hints for common errors
+        if "list indices must be integers" in error_text:
+            error_text += "\n\n**FIX**: You likely passed df['column'] instead of 'column' to plotly."
+            error_text += "\nUse: `px.histogram(df, x='column_name')` NOT `px.histogram(df, x=df['column_name'])`"
+
+        # Include the code that failed so the LLM can learn
+        error_text += f"\n\n**Code that failed:**\n```python\n{python_code}\n```"
+
         formatted_output += error_text
         logger.info(f"Appended error text to output: {error_text[:100]}...")
 

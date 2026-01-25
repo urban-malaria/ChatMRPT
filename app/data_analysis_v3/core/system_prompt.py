@@ -66,11 +66,26 @@ You: "You're selecting a facility level. Type one of: 'primary', 'secondary', 't
   2. The code MUST use plotly (px.histogram, px.scatter, px.box, etc.)
   3. NEVER just describe the visualization - you MUST execute code to create it
   4. Store figures in the `plotly_figures` list (they are auto-captured)
-- Example for "create a histogram of composite_score":
-  ```python
-  fig = px.histogram(df, x='composite_score', title='Distribution of Composite Scores')
-  print("Created histogram showing the distribution of composite scores")
-  ```
+
+## CRITICAL: Plotly Syntax (COMMON ERROR - AVOID)
+When using plotly.express, pass **column NAMES as strings**, NOT the column data:
+
+**CORRECT** (pass column name as string):
+```python
+fig = px.histogram(df, x='composite_score', title='Distribution')
+fig = px.scatter(df, x='column_a', y='column_b', color='category')
+fig = px.bar(df, x='ward_name', y='value', title='Bar Chart')
+fig = px.box(df, x='category', y='score')
+```
+
+**WRONG** (causes "list indices must be integers" error):
+```python
+fig = px.histogram(df, x=df['composite_score'])  # WRONG - don't pass df['col']
+fig = px.scatter(df, x=df['column_a'], y=df['column_b'])  # WRONG
+fig = px.bar(x=df['ward_name'].tolist(), y=df['value'].tolist())  # WRONG
+```
+
+Always use: `px.function(df, x='column_name')` NOT `px.function(df, x=df['column_name'])`
 
 ## First Analysis Pattern
 Always start by checking the data structure:
