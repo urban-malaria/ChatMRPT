@@ -4,6 +4,31 @@
 
 Arena Mode allows users to compare different LLM models in a blind tournament format. Users see two responses side-by-side and vote for their preferred answer. The winner advances until a champion is determined.
 
+## When Arena Triggers
+
+Arena mode **automatically triggers** for general knowledge questions in the chat. The system routes questions based on content:
+
+| Message Type | Arena Triggers? | Example |
+|--------------|-----------------|---------|
+| General knowledge | **Yes** | "What causes malaria?" |
+| Educational/explanatory | **Yes** | "Explain PCA analysis" |
+| Methodology questions | **Yes** | "How does risk scoring work?" |
+| Greetings | No | "hi", "hello" |
+| Pleasantries | No | "thanks", "ok", "bye" |
+| Short messages (<3 words) | No | "What is" |
+| Data analysis requests | No | "Run risk analysis on my data" |
+| Tool-based requests | No | "Create a vulnerability map" |
+
+### Eligibility Logic
+
+Arena only activates when:
+1. `ARENA_ENABLED=true` in environment
+2. `GROQ_API_KEY` is set
+3. Routing decision is `can_answer` (no tools needed)
+4. Message is substantive (not greeting/pleasantry, 3+ words)
+
+Helper: `app/web/routes/analysis/arena_helpers.py` - `is_arena_eligible_message()`
+
 ## Architecture
 
 ### Tournament Structure
@@ -193,7 +218,9 @@ app/
 │   ├── arena_system_prompt.py # System prompts for models
 │   └── llm_adapter.py        # LLM backend adapter (Groq/OpenAI)
 └── web/routes/
-    └── arena_routes.py       # API endpoints (~275 lines)
+    ├── arena_routes.py       # API endpoints (~275 lines)
+    └── analysis/
+        └── arena_helpers.py  # Chat integration helpers
 ```
 
 ## Cost

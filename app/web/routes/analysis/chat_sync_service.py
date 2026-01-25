@@ -13,7 +13,7 @@ from flask import jsonify, current_app, session, request
 from ...core.exceptions import ValidationError
 from ...core.utils import convert_to_json_serializable
 from . import logger
-from .arena_helpers import ArenaSetupError, prepare_arena_preload
+from .arena_helpers import ArenaSetupError, is_arena_eligible_message, start_arena_battle, format_arena_response
 from .chat_routing import route_with_mistral
 from .utils import resync_session_flags, run_async
 
@@ -136,7 +136,13 @@ def handle_send_message():
                     session.modified = True
                     return jsonify(clarification)
 
-        use_arena = (routing_decision == 'can_answer') and (os.getenv('CHATMRPT_ARENA', '0') != '0')
+        # Check if this should trigger Arena mode
+        from app.config.arena import is_arena_available
+        use_arena = (
+            routing_decision == 'can_answer'
+            and is_arena_available()
+            and is_arena_eligible_message(user_message)
+        )
         use_tools = routing_decision == 'needs_tools'
 
         logger.info("Final routing: use_arena=%s, use_tools=%s", use_arena, use_tools)
@@ -146,17 +152,19 @@ def handle_send_message():
 
         if use_arena:
             try:
-                arena_preload = prepare_arena_preload(session_id, user_message, run_async)
+                logger.info("Arena mode triggered for general knowledge question: '%s...'", user_message[:50])
+                battle_result = start_arena_battle(user_message, session_id)
+                response = format_arena_response(battle_result, user_message)
+
+                # Store battle ID in session
+                session['current_battle_id'] = battle_result.get('battle_id')
+                session.modified = True
             except ArenaSetupError as exc:
-                logger.error("Arena preview failed: %s", exc)
+                logger.warning("Arena failed, falling back to normal response: %s", exc)
                 use_arena = False
-            else:
-                if arena_preload.both_models_need_tools():
-                    session['last_tool_used'] = True
-                    session.modified = True
-                    use_arena = False
-                else:
-                    response = arena_preload.build_preview_payload()
+            except Exception as exc:
+                logger.error("Unexpected arena error, falling back: %s", exc)
+                use_arena = False
 
         if use_arena and response:
             processing_duration = time.time() - processing_start_time

@@ -173,8 +173,31 @@ def handle_send_message_streaming() -> Response:
                 session.modified = True
                 return _clarification_response(clarification)
 
-    # Arena mode is now accessed via /api/arena endpoints directly (uses Groq API)
-    # Main chat streaming always uses request interpreter for tool-based responses
+    # Check if this should trigger Arena mode
+    # Arena triggers for general knowledge questions (can_answer) that are substantive
+    if routing_decision == 'can_answer':
+        from .arena_helpers import is_arena_eligible_message, start_arena_battle, format_arena_response, ArenaSetupError
+        from app.config.arena import is_arena_available
+
+        if is_arena_available() and is_arena_eligible_message(user_message):
+            logger.info("Arena mode triggered for general knowledge question: '%s...'", user_message[:50])
+            try:
+                battle_result = start_arena_battle(user_message, session_id)
+                arena_response = format_arena_response(battle_result, user_message)
+
+                # Store battle ID in session
+                session['current_battle_id'] = battle_result.get('battle_id')
+                session.modified = True
+
+                return _arena_response(arena_response)
+            except ArenaSetupError as e:
+                logger.warning("Arena failed, falling back to normal response: %s", e)
+                # Fall through to request interpreter
+            except Exception as e:
+                logger.error("Unexpected arena error, falling back: %s", e)
+                # Fall through to request interpreter
+
+    # Main chat streaming uses request interpreter for tool-based responses
     return _stream_request_interpreter(
         user_message=user_message,
         session_id=session_id,
@@ -186,6 +209,18 @@ def handle_send_message_streaming() -> Response:
 def _clarification_response(payload: Dict[str, Any]) -> Response:
     def generate():
         yield json.dumps(payload)
+
+    response = Response((f"data: {chunk}\n\n" for chunk in generate()), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+def _arena_response(arena_data: Dict[str, Any]) -> Response:
+    """Return arena battle data as a streaming response."""
+    def generate():
+        yield json.dumps(arena_data)
 
     response = Response((f"data: {chunk}\n\n" for chunk in generate()), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
