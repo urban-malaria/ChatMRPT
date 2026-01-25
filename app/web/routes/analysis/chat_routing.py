@@ -11,301 +11,158 @@ __all__ = ["route_with_mistral"]
 
 
 async def route_with_mistral(message: str, session_context: dict) -> str:
-    """Use Mistral to decide whether to call tools, Arena, or request clarification."""
-    message_lower = message.lower().strip()
-    common_greetings = [
-        'hi',
-        'hello',
-        'hey',
-        'greetings',
-        'good morning',
-        'good afternoon',
-        'good evening',
-        'howdy',
-    ]
+    """Route a message to the appropriate handler.
 
-    if message_lower in common_greetings or any(message_lower.startswith(g) for g in common_greetings):
-        return "can_answer"
+    Uses semantic routing when enabled, with fallback to pattern-based routing.
 
-    if message_lower in ['thanks', 'thank you', 'bye', 'goodbye', 'ok', 'okay', 'sure', 'yes', 'no']:
-        return "can_answer"
+    Args:
+        message: User's message text
+        session_context: Session state dictionary
 
-    # Detect knowledge/educational questions BEFORE tool routing
-    # These should go to arena even if user has uploaded data
-    knowledge_patterns = [
-        'what is', 'what are', 'what does', 'what causes',
-        'how does', 'how do', 'how is', 'how are', 'how can',
-        'why is', 'why does', 'why do', 'why are',
-        'explain', 'describe', 'tell me about', 'tell me more',
-        'what do you know about', 'can you explain',
-        'definition of', 'meaning of',
-        'difference between', 'compare',
-    ]
-    # Check if message starts with or contains knowledge patterns
-    is_knowledge_question = any(
-        message_lower.startswith(pattern) or f' {pattern}' in f' {message_lower}'
-        for pattern in knowledge_patterns
+    Returns:
+        One of: 'needs_tools', 'can_answer', 'needs_clarification'
+    """
+    # Check if semantic router is enabled
+    if _is_semantic_router_enabled():
+        try:
+            return await _route_with_semantic_router(message, session_context)
+        except Exception as e:
+            logger.error("Semantic router failed, falling back to patterns: %s", e)
+            # Fall through to pattern-based routing
+
+    # Pattern-based routing (legacy fallback)
+    return _route_with_patterns(message, session_context)
+
+
+def _is_semantic_router_enabled() -> bool:
+    """Check if semantic router is enabled."""
+    return os.getenv("SEMANTIC_ROUTER_ENABLED", "true").lower() == "true"
+
+
+async def _route_with_semantic_router(message: str, session_context: dict) -> str:
+    """Route using the semantic router."""
+    from app.routing import SemanticChatRouter, get_semantic_router
+
+    router = get_semantic_router()
+    result = router.route(message, session_context)
+
+    logger.info(
+        "Semantic routing: '%s...' -> %s (route=%s, conf=%.3f)",
+        message[:30],
+        result.maps_to,
+        result.route_name,
+        result.confidence,
     )
 
-    # Also detect questions about concepts (not specific to user's data)
-    concept_keywords = [
-        'malaria transmission', 'malaria prevention', 'malaria symptoms',
-        'malaria epidemiology', 'malaria control', 'malaria treatment',
-        'pca analysis', 'principal component', 'composite score',
-        'vulnerability index', 'risk assessment', 'risk factors',
-        'incidence rate', 'prevalence', 'mortality rate',
-        'vector control', 'anopheles', 'plasmodium',
-    ]
-    is_concept_question = any(concept in message_lower for concept in concept_keywords)
+    return result.maps_to
 
-    # If it's clearly a knowledge question, route to arena (can_answer)
-    # BUT only if it doesn't explicitly reference their data
+
+def _route_with_patterns(message: str, session_context: dict) -> str:
+    """Legacy pattern-based routing (fallback).
+
+    This preserves the original routing logic for when semantic routing
+    is disabled or fails.
+    """
+    message_lower = message.lower().strip()
+
+    # Quick greetings check
+    common_greetings = [
+        'hi', 'hello', 'hey', 'greetings',
+        'good morning', 'good afternoon', 'good evening', 'howdy',
+    ]
+    if message_lower in common_greetings or any(
+        message_lower.startswith(g) for g in common_greetings
+    ):
+        return "can_answer"
+
+    # Quick acknowledgments check
+    if message_lower in [
+        'thanks', 'thank you', 'bye', 'goodbye', 'ok', 'okay', 'sure', 'yes', 'no'
+    ]:
+        return "can_answer"
+
+    # Data analysis mode takes priority
+    if session_context.get('use_data_analysis_v3', False) or session_context.get(
+        'data_analysis_active', False
+    ):
+        logger.info("Data Analysis mode detected - routing to tools")
+        return "needs_tools"
+
+    # Check for explicit data references (should route to tools)
     data_references = ['my data', 'the data', 'my file', 'uploaded', 'my csv', 'in my']
     references_user_data = any(ref in message_lower for ref in data_references)
 
-    if (is_knowledge_question or is_concept_question) and not references_user_data:
-        logger.info("Knowledge question detected - routing to arena: '%s...'", message[:50])
-        return "can_answer"
+    # Check for result queries when analysis is complete
+    if session_context.get('analysis_complete', False):
+        result_queries = [
+            'top', 'highest', 'lowest', 'rank', 'ranked',
+            'best', 'worst', 'most at risk', 'least at risk',
+            'results', 'findings', 'show me', 'what are the',
+        ]
+        if any(q in message_lower for q in result_queries):
+            logger.info("Result query detected with analysis complete - routing to tools")
+            return "needs_tools"
 
-    if session_context.get('use_data_analysis_v3', False) or session_context.get('data_analysis_active', False):
-        logger.info("🎯 Data Analysis V3 mode detected - routing to agent with tools")
-        return "needs_tools"
-
-    explicit_analysis_triggers = [
-        'run the malaria risk analysis',
-        'run malaria risk analysis',
-        'malaria risk analysis',
-        'run risk analysis',
-        'risk analysis',
-        'run complete analysis',
-    ]
-    if any(trigger in message_lower for trigger in explicit_analysis_triggers):
-        logger.info("Tool detection: Explicit analysis trigger found (ungated) - routing to tools")
-        return "needs_tools"
-
-    if session_context.get('has_uploaded_files', False):
+    # Has uploaded files - check for tool triggers
+    if session_context.get('has_uploaded_files', False) or references_user_data:
+        # Analysis triggers
         analysis_triggers = [
-            'run the malaria risk analysis',
-            'run malaria risk analysis',
-            'malaria risk analysis',
-            'risk analysis',
-            'malaria analysis',
-            'run malaria analysis',
-            'run vulnerability analysis',
-            'run complete analysis',
-            'run analysis',
-            'perform analysis',
-            'analyze the data',
-            'analyze my data',
-            'start analysis',
-            'complete analysis',
-            'run the analysis',
-            'rank wards',
+            'run', 'analyze', 'analysis', 'calculate', 'compute',
+            'process', 'start', 'perform', 'check',
         ]
-        if any(trigger in message_lower for trigger in analysis_triggers) or (
-            'risk' in message_lower and 'analysis' in message_lower
-        ):
-            logger.info("Tool detection: Analysis trigger found - routing to tools")
+        if any(trigger in message_lower for trigger in analysis_triggers):
+            logger.info("Analysis trigger detected - routing to tools")
             return "needs_tools"
 
-        visualization_keywords = ['plot', 'map', 'chart', 'visualize', 'graph', 'show me the', 'display']
-        if any(keyword in message_lower for keyword in visualization_keywords):
-            if 'vulnerability' in message_lower and ('map' in message_lower or 'plot' in message_lower):
-                logger.info("Tool detection: Vulnerability map trigger - routing to tools")
-                return "needs_tools"
-            if 'distribution' in message_lower:
-                logger.info("Tool detection: Distribution visualization trigger - routing to tools")
-                return "needs_tools"
-            if any(word in message_lower for word in ['box plot', 'boxplot', 'histogram', 'scatter', 'heatmap', 'bar chart']):
-                logger.info("Tool detection: Chart type trigger - routing to tools")
-                return "needs_tools"
-            if any(keyword in message_lower for keyword in ['plot', 'map', 'chart', 'visualize']):
-                logger.info("Tool detection: General visualization trigger - routing to tools")
+        # Visualization triggers
+        viz_triggers = [
+            'plot', 'map', 'chart', 'visualize', 'graph',
+            'show me', 'display', 'histogram', 'heatmap',
+        ]
+        if any(trigger in message_lower for trigger in viz_triggers):
+            logger.info("Visualization trigger detected - routing to tools")
+            return "needs_tools"
+
+        # Ranking triggers
+        if any(word in message_lower for word in ['top', 'highest', 'lowest', 'rank', 'worst', 'best']):
+            if 'ward' in message_lower or 'lga' in message_lower or 'area' in message_lower:
+                logger.info("Ranking query detected - routing to tools")
                 return "needs_tools"
 
-        ranking_triggers = [
-            'top',
-            'highest',
-            'lowest',
-            'rank',
-            'list wards',
-            'worst',
-            'best',
-            'most at risk',
-            'least at risk',
-            'high risk wards',
-            'low risk wards',
+        # ITN triggers
+        itn_triggers = [
+            'bed net', 'bednet', 'itn', 'llin', 'net distribution',
+            'intervention', 'mosquito net', 'allocate', 'distribute',
         ]
-        if any(trigger in message_lower for trigger in ranking_triggers) and 'ward' in message_lower:
-            logger.info("Tool detection: Ranking query trigger - routing to tools")
+        if any(trigger in message_lower for trigger in itn_triggers):
+            logger.info("ITN planning trigger detected - routing to tools")
             return "needs_tools"
 
-        data_query_triggers = [
-            'check data quality',
-            'data quality',
-            'check quality',
-            'summarize the data',
-            'summary of data',
-            'data summary',
-            'describe the data',
-            'what variables',
-            'available variables',
+    # Knowledge patterns (only if not referencing user data)
+    if not references_user_data and not session_context.get('analysis_complete', False):
+        knowledge_patterns = [
+            'what is', 'what are', 'what does', 'what causes',
+            'how does', 'how do', 'how is', 'how are', 'how can',
+            'why is', 'why does', 'why do', 'why are',
+            'explain', 'describe', 'tell me about', 'tell me more',
         ]
-        if any(trigger in message_lower for trigger in data_query_triggers):
-            logger.info("Tool detection: Data query trigger - routing to tools")
-            return "needs_tools"
-
-        intervention_triggers = [
-            'bed net',
-            'bednet',
-            'bed-net',
-            'itn',
-            'intervention',
-            'plan distribution',
-            'insecticide',
-            'spray',
-            'irs',
-            'treatment',
-            'mosquito net',
-            'llin',
-            'distribute net',
-            'distributing net',
-            'net distribution',
-            'nets distribution',
-            'distribution of net',
-            'allocate net',
-            'allocation of net',
-            'plan itn',
-            'itn planning',
-            'itn distribution',
-            'distribute itn',
-            'plan high trend',
-            'high trend distribution',
-            'trend distribution',
-        ]
-        if any(trigger in message_lower for trigger in intervention_triggers):
-            logger.info("Tool detection: Intervention planning trigger (ITN) - routing to tools")
-            return "needs_tools"
-
-        itn_param_patterns = [
-            ('have' in message_lower and 'net' in message_lower and any(char.isdigit() for char in message)),
-            ('household size' in message_lower and any(char.isdigit() for char in message)),
-            ('average household' in message_lower and any(char.isdigit() for char in message)),
-            (any(word in message_lower for word in ['million', 'thousand', 'hundred']) and 'net' in message_lower),
-            ('i have' in message_lower and any(word in message_lower for word in ['nets', 'bed nets', 'bednets']) and any(char.isdigit() for char in message)),
-        ]
-        if any(pattern for pattern in itn_param_patterns):
-            logger.info("Tool detection: ITN parameter response detected - routing to tools")
-            return "needs_tools"
-
-        if 'why' in message_lower and 'ward' in message_lower and (
-            'rank' in message_lower or 'high' in message_lower or 'risk' in message_lower
-        ):
-            logger.info("Tool detection: Ward analysis explanation trigger - routing to tools")
-            return "needs_tools"
-
-    try:
-        from app.core.llm_adapter import LLMAdapter
-    except ImportError as exc:  # pragma: no cover - defensive
-        logger.warning("LLM adapter unavailable: %s", exc)
-        return "needs_clarification"
-
-    files_info = []
-    if session_context.get('has_uploaded_files'):
-        if session_context.get('csv_loaded'):
-            files_info.append("CSV data")
-        if session_context.get('shapefile_loaded'):
-            files_info.append("Shapefile")
-        if session_context.get('analysis_complete'):
-            files_info.append("Analysis completed")
-    files_str = (
-        f"Uploaded files: {', '.join(files_info)}" if files_info else "No files uploaded"
-    )
-
-    prompt = f"""You are a routing assistant for ChatMRPT, a malaria risk analysis system.
-
-AVAILABLE CAPABILITIES:
-
-1. TOOLS (require uploaded data to function):
-   - Analysis Tools: RunMalariaRiskAnalysis
-     Purpose: Analyze uploaded malaria data, calculate risk scores, identify high-risk areas
-   - Visualization Tools: CreateVulnerabilityMap, CreateBoxPlot, CreateHistogram, CreateHeatmap
-     Purpose: Generate maps and charts from uploaded data
-   - Export Tools: ExportResults, GenerateReport
-     Purpose: Export analysis results to PDF/Excel
-   - Data Query Tools: CheckDataQuality, GetSummaryStatistics
-     Purpose: Query and examine uploaded data
-
-2. KNOWLEDGE RESPONSES (no data needed):
-   - Explain malaria concepts (transmission, epidemiology, prevention)
-   - Describe analysis methodologies (PCA, composite scoring, risk assessment)
-   - ChatMRPT help and guidance
-   - General public health information
-   - Answer "what is", "how does", "explain" type questions
-
-Context:
-- User has uploaded data: {session_context.get('has_uploaded_files', False)}
-- {files_str}
-
-User message: "{message}"
-
-ROUTING DECISION PROCESS:
-
-1. Does the user want to PERFORM AN ACTION on their uploaded data?
-   Keywords: analyze, plot, visualize, calculate, generate, create, run, export, check, perform
-   → If YES and data exists: Reply NEEDS_TOOLS
-   
-2. Does the user want INFORMATION or EXPLANATION?
-   Keywords: what is, how does, explain, tell me about, describe, why
-   → Reply CAN_ANSWER (even if data exists - they want knowledge, not action)
-
-3. Is the message explicitly about their uploaded data?
-   Phrases: "my data", "the data", "my file", "the csv", "uploaded"
-   → If asking for action: Reply NEEDS_TOOLS
-   → If asking for explanation: Reply CAN_ANSWER
-
-Reply ONLY: NEEDS_TOOLS, CAN_ANSWER, or NEEDS_CLARIFICATION"""
-
-    if os.getenv('CHATMRPT_MISTRAL_ROUTER', '0') == '0':
-        if session_context.get('use_data_analysis_v3', False) or session_context.get('data_analysis_active', False):
-            return "needs_tools"
-        if session_context.get('has_uploaded_files', False):
-            return "needs_tools"
-        return "can_answer"
-
-    try:
-        # Use Groq for fast routing (synchronous call in async context)
-        adapter = LLMAdapter(backend='groq', model='llama-3.3-70b-versatile')
-        response = adapter.generate(
-            prompt=prompt,
-            max_tokens=20,
-            temperature=0.1,
+        is_knowledge_question = any(
+            message_lower.startswith(pattern) or f' {pattern}' in f' {message_lower}'
+            for pattern in knowledge_patterns
         )
-        decision = response.strip().upper()
-        if decision == "NEEDS_TOOLS":
-            return "needs_tools"
-        if decision == "CAN_ANSWER":
-            return "can_answer"
-        if decision == "NEEDS_CLARIFICATION":
-            return "needs_clarification"
-        logger.warning("Unexpected Mistral response: %s. Using fallback logic.", decision)
-    except Exception as exc:  # pragma: no cover - network failure
-        logger.error("Error in Mistral routing: %s. Using neutral fallback.", exc)
-        return "needs_clarification"
 
-    message_lower = message.lower().strip()
-    data_references = [
-        'my data',
-        'the data',
-        'uploaded',
-        'my file',
-        'the file',
-        'my csv',
-        'the csv',
-        'analyze this',
-        'plot my',
-        'visualize the',
-    ]
-    if any(ref in message_lower for ref in data_references):
+        concept_keywords = [
+            'malaria transmission', 'malaria prevention', 'malaria symptoms',
+            'pca analysis', 'principal component', 'vulnerability index',
+        ]
+        is_concept_question = any(concept in message_lower for concept in concept_keywords)
+
+        if is_knowledge_question or is_concept_question:
+            logger.info("Knowledge question detected - routing to arena")
+            return "can_answer"
+
+    # Default: if files uploaded, route to tools; otherwise to arena
+    if session_context.get('has_uploaded_files', False):
         return "needs_tools"
+
     return "can_answer"
