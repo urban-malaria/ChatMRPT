@@ -2,6 +2,7 @@
 Data Analysis V3 Routes
 Handles file uploads and queries for the Data Analysis tab
 """
+from __future__ import annotations
 
 import os
 import logging
