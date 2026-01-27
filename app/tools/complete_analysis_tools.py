@@ -887,19 +887,35 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
                 # Fall back to using analysis results directly
                 return self._generate_summary_from_analysis_results(composite_result, pca_result, comparison_summary, execution_time)
             
-            # Check for NaN values in score columns
+            # Check for NaN values and drop affected rows so valid wards still get summarized
             composite_nan_count = gdf[composite_score_col].isna().sum() if composite_score_col else 0
-            # Only check PCA NaN values if PCA wasn't skipped
-            pca_nan_count = 0
+            if composite_nan_count:
+                logger.warning(
+                    f"🔍 UNIFIED DATASET DEBUG: {composite_nan_count} wards missing composite scores;"
+                    " excluding them from summary generation"
+                )
+                gdf = gdf.dropna(subset=[composite_score_col])
+
+            # Only check PCA columns when PCA actually ran
             if not pca_result.get('pca_skipped') and pca_score_col:
                 pca_nan_count = gdf[pca_score_col].isna().sum()
+                if pca_nan_count:
+                    logger.warning(
+                        f"🔍 UNIFIED DATASET DEBUG: {pca_nan_count} wards missing PCA scores;"
+                        " excluding them from summary generation"
+                    )
+                    gdf = gdf.dropna(subset=[pca_score_col])
 
-            if composite_nan_count > 0 or (not pca_result.get('pca_skipped') and pca_nan_count > 0):
-                logger.warning(f"🔍 UNIFIED DATASET DEBUG: NaN values found - Composite: {composite_nan_count}, PCA: {pca_nan_count}")
-                logger.info(f"🔍 UNIFIED DATASET DEBUG: Falling back to analysis results directly")
-
-                # Fall back to using analysis results directly
-                return self._generate_summary_from_analysis_results(composite_result, pca_result, comparison_summary, execution_time)
+            # If dropping NaNs removed everything, fall back to the simplified summary
+            if gdf.empty:
+                logger.warning("🔍 UNIFIED DATASET DEBUG: No valid rows remain after removing NaNs;"
+                               " falling back to analysis result summary")
+                return self._generate_summary_from_analysis_results(
+                    composite_result,
+                    pca_result,
+                    comparison_summary,
+                    execution_time
+                )
             
             # Detect category columns
             composite_category_col = None
@@ -1786,5 +1802,4 @@ class GenerateComprehensiveAnalysisSummary(DataAnalysisTool):
         summary_parts.append("\n")
         
         return summary_parts
-
 
