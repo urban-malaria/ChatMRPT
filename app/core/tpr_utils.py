@@ -690,6 +690,13 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
             # Merge to get geometries
             merged = state_gdf.merge(result_df, on='WardName_norm', how='left', suffixes=('_shp', ''))
 
+            # Filter out null geometries before population extraction
+            # (shapefile contains wards with missing geometry data that crash zonal_stats)
+            null_geom_count = merged.geometry.isna().sum()
+            if null_geom_count > 0:
+                logger.warning(f"Filtering out {null_geom_count} wards with null geometries")
+                merged = merged[merged.geometry.notna()].copy()
+
             # Extract population based on age group
             pop_series = extract_ward_population(merged, age_group)
 
