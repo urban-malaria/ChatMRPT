@@ -25,6 +25,7 @@ import math
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from flask import current_app
+from app.data_analysis_v3.core.encoding_handler import find_raw_data_file, read_raw_data
 
 logger = logging.getLogger(__name__)
 
@@ -1098,15 +1099,15 @@ SQL:"""
                         logger.info(f"✅ Loaded unified dataset for tools: {df.shape} from {unified_path}")
                     else:
                         # Fall back to raw data if unified not found
-                        raw_data_path = session_folder / 'raw_data.csv'
-                        if raw_data_path.exists():
-                            df = pd.read_csv(raw_data_path)
+                        raw_data_path = find_raw_data_file(str(session_folder))
+                        if raw_data_path:
+                            df = read_raw_data(str(session_folder))
                             logger.info(f"⚠️ Analysis complete but unified dataset not found, loaded raw data: {df.shape}")
                 else:
                     # Load raw data for pre-analysis stage
-                    raw_data_path = session_folder / 'raw_data.csv'
-                    if raw_data_path.exists():
-                        df = pd.read_csv(raw_data_path)
+                    raw_data_path = find_raw_data_file(str(session_folder))
+                    if raw_data_path:
+                        df = read_raw_data(str(session_folder))
                         logger.info(f"✅ Loaded raw data for tools: {df.shape} from {raw_data_path}")
 
                 if 'df' in locals():
@@ -2462,12 +2463,12 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
             
             # Load the data
             session_folder = Path(f'instance/uploads/{session_id}')
-            raw_data_path = session_folder / 'raw_data.csv'
-            
-            if not raw_data_path.exists():
+            raw_data_path = find_raw_data_file(str(session_folder))
+
+            if not raw_data_path:
                 return "No data file found. Please upload data first."
-            
-            df = pd.read_csv(raw_data_path)
+
+            df = read_raw_data(str(session_folder))
             
             # Calculate statistics
             total_missing = df.isnull().sum().sum()

@@ -27,6 +27,7 @@ warnings.filterwarnings('ignore')
 
 from ..data.flexible_data_access import FlexibleDataAccess
 from ..tools.base import get_session_unified_dataset
+from ..data_analysis_v3.core.encoding_handler import find_raw_data_file, read_raw_data
 
 logger = logging.getLogger(__name__)
 
@@ -179,20 +180,24 @@ class ConversationalDataAccess:
         
         if stage == 'pre_analysis':
             # Look for raw processed data
-            possible_files = [
-                session_folder / "processed_data.csv",
-                session_folder / "raw_data.csv"
-            ]
-            
-            for file_path in possible_files:
-                if file_path.exists():
-                    logger.info(f"Loading pre-analysis data from: {file_path}")
-                    try:
-                        return pd.read_csv(file_path)
-                    except Exception as e:
-                        logger.error(f"Error loading {file_path}: {e}")
-                        continue
-            
+            # First try processed_data.csv (always CSV)
+            processed_path = session_folder / "processed_data.csv"
+            if processed_path.exists():
+                logger.info(f"Loading pre-analysis data from: {processed_path}")
+                try:
+                    return pd.read_csv(processed_path)
+                except Exception as e:
+                    logger.error(f"Error loading {processed_path}: {e}")
+
+            # Then try raw_data (could be CSV or Excel)
+            raw_data_path = find_raw_data_file(str(session_folder))
+            if raw_data_path:
+                logger.info(f"Loading pre-analysis data from: {raw_data_path}")
+                try:
+                    return read_raw_data(str(session_folder))
+                except Exception as e:
+                    logger.error(f"Error loading {raw_data_path}: {e}")
+
             logger.error("No suitable pre-analysis data file found")
             return None
             

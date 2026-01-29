@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 from . import DataHandler
+from .data_analysis_v3.core.encoding_handler import find_raw_data_file, read_raw_data
 
 logger = logging.getLogger(__name__)
 
@@ -150,29 +151,28 @@ class SessionDataService:
                 return None
             
             # Check file existence
-            csv_path = os.path.join(session_folder, 'raw_data.csv')
+            raw_data_path = find_raw_data_file(session_folder)
             shp_path = os.path.join(session_folder, 'raw_shapefile.zip')
-            
+
             status = {
                 'session_id': session_id,
                 'session_folder': session_folder,
-                'csv_loaded': os.path.exists(csv_path),
+                'csv_loaded': raw_data_path is not None,
                 'shapefile_loaded': os.path.exists(shp_path),
-                'data_loaded': os.path.exists(csv_path) and os.path.exists(shp_path)
+                'data_loaded': raw_data_path is not None and os.path.exists(shp_path)
             }
-            
+
             # Add file info if available
             if status['csv_loaded']:
-                import pandas as pd
                 try:
-                    df = pd.read_csv(csv_path)
+                    df = read_raw_data(session_folder)
                     status['csv_info'] = {
-                        'filename': 'raw_data.csv',
+                        'filename': os.path.basename(raw_data_path),
                         'rows': len(df),
                         'columns': len(df.columns)
                     }
                 except Exception as e:
-                    logger.warning(f"Could not read CSV info: {e}")
+                    logger.warning(f"Could not read data file info: {e}")
             
             if status['shapefile_loaded']:
                 status['shapefile_info'] = {

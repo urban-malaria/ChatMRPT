@@ -5,6 +5,7 @@ Fully dynamic encoding detection and fixing - no hardcoding
 
 import pandas as pd
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 import chardet
 
@@ -226,5 +227,49 @@ class EncodingHandler:
                     df[col] = df[col].apply(lambda x: EncodingHandler.fix_text_encoding(str(x)) if pd.notna(x) else x)
                 except:
                     pass
-        
+
         return df
+
+
+def find_raw_data_file(session_folder: str) -> Optional[str]:
+    """
+    Find the raw data file in a session folder (csv or xlsx).
+
+    Args:
+        session_folder: Path to the session folder
+
+    Returns:
+        Path to the raw data file, or None if not found
+    """
+    for ext in ['csv', 'xlsx', 'xls']:
+        path = Path(session_folder) / f'raw_data.{ext}'
+        if path.exists():
+            return str(path)
+    return None
+
+
+def read_raw_data(session_folder: str, nrows: Optional[int] = None) -> pd.DataFrame:
+    """
+    Find and read the raw data file from a session folder.
+
+    Uses EncodingHandler methods to properly handle encoding issues.
+
+    Args:
+        session_folder: Path to the session folder
+        nrows: Number of rows to read (optional)
+
+    Returns:
+        DataFrame with the raw data
+
+    Raises:
+        FileNotFoundError: If no raw data file exists in the session folder
+    """
+    filepath = find_raw_data_file(session_folder)
+    if not filepath:
+        raise FileNotFoundError(f"No raw data file found in {session_folder}")
+
+    ext = Path(filepath).suffix.lower()
+    if ext in ('.xlsx', '.xls'):
+        return EncodingHandler.read_excel_with_encoding(filepath, nrows=nrows)
+    else:
+        return EncodingHandler.read_csv_with_encoding(filepath, nrows=nrows)

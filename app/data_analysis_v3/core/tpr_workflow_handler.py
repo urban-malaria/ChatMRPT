@@ -18,6 +18,7 @@ from app.core.tpr_precompute_service import schedule_precompute
 from .state_manager import DataAnalysisStateManager, ConversationStage
 from .tpr_data_analyzer import TPRDataAnalyzer
 from .tpr_language_interface import TPRLanguageInterface
+from .encoding_handler import find_raw_data_file, read_raw_data
 import plotly.express as px
 import pandas as pd
 
@@ -1276,13 +1277,13 @@ Analyzing test data and generating visualizations..."""
             
             # Check for various output files
             tpr_results_path = os.path.join(self.session_folder, 'tpr_results.csv')
-            raw_data_path = os.path.join(self.session_folder, 'raw_data.csv')
+            raw_data_path = find_raw_data_file(self.session_folder)
             shapefile_path = os.path.join(self.session_folder, 'raw_shapefile.zip')
             map_path = os.path.join(self.session_folder, 'tpr_distribution_map.html')
-            
+
             files_status = {
                 "tpr_results.csv": os.path.exists(tpr_results_path),
-                "raw_data.csv": os.path.exists(raw_data_path),
+                "raw_data": raw_data_path is not None,
                 "raw_shapefile.zip": os.path.exists(shapefile_path),
                 "tpr_distribution_map.html": os.path.exists(map_path)
             }
@@ -1450,8 +1451,8 @@ Analyzing test data and generating visualizations..."""
                     # Read TPR results
                     if os.path.exists(tpr_results_path):
                         tpr_df = pd.read_csv(tpr_results_path)
-                    elif os.path.exists(raw_data_path):
-                        tpr_df = pd.read_csv(raw_data_path)
+                    elif raw_data_path:
+                        tpr_df = read_raw_data(self.session_folder)
                     else:
                         tpr_df = None
                     
@@ -1621,11 +1622,10 @@ Analyzing test data and generating visualizations..."""
         # Check if files are ready
         import os
         import pandas as pd
-        from .encoding_handler import EncodingHandler
         session_folder = f"instance/uploads/{self.session_id}"
-        raw_data_path = os.path.join(session_folder, 'raw_data.csv')
-        
-        if not os.path.exists(raw_data_path):
+        raw_data_path = find_raw_data_file(session_folder)
+
+        if not raw_data_path:
             return {
                 "success": False,
                 "message": "Error: TPR data file not found. Please re-run TPR calculation.",
@@ -1636,7 +1636,7 @@ Analyzing test data and generating visualizations..."""
             self._ensure_active_session_has_outputs()
 
             # Load the data that TPR created
-            df = EncodingHandler.read_csv_with_encoding(raw_data_path)
+            df = read_raw_data(session_folder)
             logger.info(f"Loaded TPR output data: {len(df)} rows, {len(df.columns)} columns")
             
             # Concise focused menu - flows as ONE message with TPR completion

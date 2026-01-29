@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 
 from ...core.decorators import handle_errors, log_execution_time, validate_session
 from ...core.exceptions import DataProcessingError
+from ...data_analysis_v3.core.encoding_handler import find_raw_data_file, read_raw_data
 
 logger = logging.getLogger(__name__)
 
@@ -221,14 +222,20 @@ def store_raw_data_files(session_folder: str, csv_file, shapefile) -> dict:
         clear_analysis_results(session_folder)
 
         if csv_file and allowed_file(csv_file.filename, ALLOWED_EXTENSIONS_CSV):
-            raw_csv = os.path.join(session_folder, "raw_data.csv")
-            csv_file.save(raw_csv)
+            # Preserve correct extension based on upload type
+            ext = csv_file.filename.rsplit(".", 1)[1].lower() if "." in csv_file.filename else "csv"
+            if ext in ("xlsx", "xls"):
+                raw_filename = "raw_data.xlsx"
+            else:
+                raw_filename = "raw_data.csv"
+            raw_path = os.path.join(session_folder, raw_filename)
+            csv_file.save(raw_path)
             try:
                 os.sync()  # type: ignore[attr-defined]
             except Exception:
                 pass
-            stored.append("raw_data.csv")
-            logger.info(f"Stored raw data: {csv_file.filename} -> raw_data.csv")
+            stored.append(raw_filename)
+            logger.info(f"Stored raw data: {csv_file.filename} -> {raw_filename}")
 
         if shapefile and allowed_file(shapefile.filename, ALLOWED_EXTENSIONS_SHP):
             raw_shp = os.path.join(session_folder, "raw_shapefile.zip")
@@ -264,17 +271,13 @@ def generate_dynamic_data_summary(session_id: str, session_folder: str, upload_t
             "analysis_timestamp": pd.Timestamp.now().isoformat(),
         }
 
-        raw_csv = os.path.join(session_folder, "raw_data.csv")
-        if os.path.exists(raw_csv):
+        raw_data_path = find_raw_data_file(session_folder)
+        if raw_data_path:
             try:
-                df = pd.read_csv(raw_csv)
-            except Exception:
-                # If read_csv fails (e.g., file is really Excel content), try read_excel
-                try:
-                    df = pd.read_excel(raw_csv)
-                except Exception as e:
-                    logger.error(f"Failed to parse uploaded data: {e}")
-                    raise
+                df = read_raw_data(session_folder)
+            except Exception as e:
+                logger.error(f"Failed to parse uploaded data: {e}")
+                raise
 
             summary.update(
                 {
@@ -426,16 +429,22 @@ def store_raw_csv_only(session_folder: str, csv_file):
     try:
         clear_analysis_results(session_folder)
         if csv_file and allowed_file(csv_file.filename, ALLOWED_EXTENSIONS_CSV):
-            raw_csv = os.path.join(session_folder, "raw_data.csv")
-            csv_file.save(raw_csv)
-            logger.info(f"Stored raw CSV: {csv_file.filename} -> raw_data.csv")
+            # Preserve correct extension based on upload type
+            ext = csv_file.filename.rsplit(".", 1)[1].lower() if "." in csv_file.filename else "csv"
+            if ext in ("xlsx", "xls"):
+                raw_filename = "raw_data.xlsx"
+            else:
+                raw_filename = "raw_data.csv"
+            raw_path = os.path.join(session_folder, raw_filename)
+            csv_file.save(raw_path)
+            logger.info(f"Stored raw data: {csv_file.filename} -> {raw_filename}")
             return {
                 "status": "success",
-                "message": "Raw CSV file stored successfully",
+                "message": "Raw data file stored successfully",
                 "files_stored": 1,
-                "stored_files": ["raw_data.csv"],
+                "stored_files": [raw_filename],
             }
-        return {"status": "error", "message": "Invalid CSV file"}
+        return {"status": "error", "message": "Invalid data file"}
     except Exception as e:
         logger.error(f"Error storing raw CSV: {e}")
         return {"status": "error", "message": f"Failed to store raw CSV: {e}"}
