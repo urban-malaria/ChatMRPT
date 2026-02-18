@@ -447,18 +447,23 @@ class UniversalVisualizationExplainer:
                 return ctx
             # Prefer specific files if they exist
             csv_path = None
-            for name in ['tpr_results.csv', 'raw_data.csv']:
+            for name in ['tpr_results.csv', 'raw_data.csv', 'raw_data.xlsx']:
                 path = os.path.join(sess_dir, name)
                 if os.path.exists(path):
                     csv_path = path
                     break
             if not csv_path:
-                csvs = glob.glob(os.path.join(sess_dir, '*.csv'))
-                if csvs:
-                    csv_path = max(csvs, key=os.path.getctime)
+                data_files = glob.glob(os.path.join(sess_dir, '*.csv')) + \
+                            glob.glob(os.path.join(sess_dir, '*.xlsx')) + \
+                            glob.glob(os.path.join(sess_dir, '*.xls'))
+                if data_files:
+                    csv_path = max(data_files, key=os.path.getctime)
             if not csv_path or not os.path.exists(csv_path):
                 return ctx
-            df = pd.read_csv(csv_path)
+            if csv_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(csv_path)
+            else:
+                df = pd.read_csv(csv_path)
             ctx['summary']['rows'] = int(df.shape[0])
             ctx['summary']['columns'] = int(df.shape[1])
             # Heuristic detection of a key metric (e.g., TPR/positivity)

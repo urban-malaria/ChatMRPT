@@ -595,10 +595,15 @@ def data_analysis_chat():
             df = None
             try:
                 data_dir = os.path.join('instance', 'uploads', session_id)
-                data_files = glob.glob(os.path.join(data_dir, '*.csv'))
+                data_files = glob.glob(os.path.join(data_dir, '*.csv')) + \
+                            glob.glob(os.path.join(data_dir, '*.xlsx')) + \
+                            glob.glob(os.path.join(data_dir, '*.xls'))
                 if data_files:
                     latest = max(data_files, key=os.path.getctime)
-                    df = EncodingHandler.read_csv_with_encoding(latest)
+                    if latest.endswith(('.xlsx', '.xls')):
+                        df = EncodingHandler.read_excel_with_encoding(latest)
+                    else:
+                        df = EncodingHandler.read_csv_with_encoding(latest)
                     tpr_handler.set_data(df)
             except Exception as load_err:
                 logger.error(f"[2-ROUTE] Failed to load dataset for TPR workflow: {load_err}")
@@ -831,7 +836,9 @@ def data_analysis_chat():
         if any(trigger in lower_message for trigger in start_triggers):
             logger.info(f"[BRIDGE] Detected TPR start request: '{message}'")
             data_dir = os.path.join('instance', 'uploads', session_id)
-            data_files = glob.glob(os.path.join(data_dir, '*.csv'))
+            data_files = glob.glob(os.path.join(data_dir, '*.csv')) + \
+                        glob.glob(os.path.join(data_dir, '*.xlsx')) + \
+                        glob.glob(os.path.join(data_dir, '*.xls'))
             if not data_files:
                 return jsonify({
                     'success': False,
@@ -840,7 +847,10 @@ def data_analysis_chat():
                 })
 
             latest = max(data_files, key=os.path.getctime)
-            df = EncodingHandler.read_csv_with_encoding(latest)
+            if latest.endswith(('.xlsx', '.xls')):
+                df = EncodingHandler.read_excel_with_encoding(latest)
+            else:
+                df = EncodingHandler.read_csv_with_encoding(latest)
 
             tpr_analyzer = TPRDataAnalyzer()
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)

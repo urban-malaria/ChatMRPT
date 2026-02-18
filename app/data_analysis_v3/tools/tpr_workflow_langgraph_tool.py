@@ -76,15 +76,19 @@ class TPRWorkflowToolHandler:
                     logger.info(f"✅ Loaded data from {pattern}: {len(df)} rows, {len(df.columns)} columns")
                     return df
 
-            # Try finding ANY CSV file in the folder
+            # Try finding ANY data file in the folder (CSV or Excel)
             import glob
-            csv_files = glob.glob(os.path.join(self.session_folder, '*.csv'))
-            if csv_files:
-                # Use the first CSV found
-                csv_path = csv_files[0]
-                df = pd.read_csv(csv_path)
+            data_files = glob.glob(os.path.join(self.session_folder, '*.csv')) + \
+                        glob.glob(os.path.join(self.session_folder, '*.xlsx')) + \
+                        glob.glob(os.path.join(self.session_folder, '*.xls'))
+            if data_files:
+                data_path = data_files[0]
+                if data_path.endswith(('.xlsx', '.xls')):
+                    df = pd.read_excel(data_path)
+                else:
+                    df = pd.read_csv(data_path)
                 self.uploaded_data = df
-                logger.info(f"✅ Loaded data from first CSV found: {os.path.basename(csv_path)} ({len(df)} rows, {len(df.columns)} columns)")
+                logger.info(f"✅ Loaded data from first file found: {os.path.basename(data_path)} ({len(df)} rows, {len(df.columns)} columns)")
                 return df
 
             logger.warning(f"❌ No data found in {self.session_folder}")
