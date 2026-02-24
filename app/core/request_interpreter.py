@@ -97,6 +97,7 @@ class RequestInterpreter:
                 'show_settlement_statistics': self._show_settlement_statistics,
                 'query_tpr_data': self._query_tpr_data,
                 'switch_tpr_combination': self._switch_tpr_combination,
+                'compare_tpr_combinations': self._compare_tpr_combinations,
             })
             self.orchestrator = LLMOrchestrator()
         except Exception as e:
@@ -576,8 +577,40 @@ SQL:"""
                 'tools_used': ['switch_tpr_combination']
             }
 
+    def _compare_tpr_combinations(self, session_id: str) -> Dict[str, Any]:
+        """
+        Compare malaria burden across all pre-computed facility/age combinations.
+
+        Shows a summary table so the user can decide which combination to analyze.
+
+        Examples of user requests that should trigger this tool:
+        - "Compare all combinations"
+        - "Show burden for all facility and age group combinations"
+        - "Which combination has the highest burden?"
+        """
+        try:
+            from app.tools.tpr_query_tool import CompareTPRCombinations
+
+            tool = CompareTPRCombinations()
+            result = tool.execute(session_id)
+
+            return {
+                'response': result.message,
+                'status': 'success' if result.success else 'error',
+                'data': result.data,
+                'tools_used': ['compare_tpr_combinations']
+            }
+
+        except Exception as e:
+            logger.error(f"Error in _compare_tpr_combinations: {e}")
+            return {
+                'response': f"Failed to compare combinations: {str(e)}",
+                'status': 'error',
+                'tools_used': ['compare_tpr_combinations']
+            }
+
     def _register_tools(self):
-        """Register actual Python functions as tools - true py-sidebot style."""
+        """Register actual Python functions as tools - true py-sidebot pattern."""
         logger.info("Registering tools - py-sidebot pattern")
 
         # Register analysis tools
@@ -624,6 +657,9 @@ SQL:"""
 
         # TPR combination switch - regenerate analysis files for different facility/age group
         self.tools['switch_tpr_combination'] = self._switch_tpr_combination
+
+        # Compare all pre-computed burden combinations
+        self.tools['compare_tpr_combinations'] = self._compare_tpr_combinations
 
         logger.info(f"Registered {len(self.tools)} tools (two-layer data architecture: query_data for SQL, analyze_data for Python)")
 

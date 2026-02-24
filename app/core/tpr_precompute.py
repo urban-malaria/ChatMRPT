@@ -48,8 +48,8 @@ def init_precompute_db(session_id: str) -> str:
             age_group TEXT NOT NULL,
             ward_name TEXT NOT NULL,
             lga TEXT,
-            tpr REAL,
-            total_tested INTEGER,
+            burden REAL,
+            population INTEGER,
             total_positive INTEGER,
             UNIQUE(facility_level, age_group, ward_name)
         )
@@ -162,15 +162,15 @@ def precompute_all_tpr_combinations(
                 for _, row in tpr_df.iterrows():
                     cursor.execute('''
                         INSERT OR REPLACE INTO tpr_results
-                        (facility_level, age_group, ward_name, lga, tpr, total_tested, total_positive)
+                        (facility_level, age_group, ward_name, lga, burden, population, total_positive)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         facility_level,
                         age_group,
                         row.get('WardName', row.get('ward_name', '')),
                         row.get('LGA', row.get('lga', '')),
-                        row.get('TPR', row.get('tpr', 0)),
-                        int(row.get('Total_Tested', row.get('total_tested', 0))),
+                        row.get('Burden', row.get('burden', 0)),
+                        int(row.get('Population', row.get('population', 0))),
                         int(row.get('Total_Positive', row.get('total_positive', 0)))
                     ))
 
@@ -236,7 +236,7 @@ def query_precomputed_tpr(
     age_group: str = 'all_ages',
     lga: Optional[str] = None,
     top_n: Optional[int] = None,
-    sort_by: str = 'tpr',
+    sort_by: str = 'burden',
     sort_desc: bool = True
 ) -> Dict[str, Any]:
     """
@@ -248,7 +248,7 @@ def query_precomputed_tpr(
         age_group: Age group filter
         lga: Optional LGA filter
         top_n: Optional limit on results
-        sort_by: Column to sort by ('tpr', 'total_tested', 'ward_name')
+        sort_by: Column to sort by ('burden', 'population', 'ward_name')
         sort_desc: Sort descending if True
 
     Returns:
@@ -287,9 +287,26 @@ def query_precomputed_tpr(
     try:
         conn = sqlite3.connect(db_path)
 
+        # Check for old-format DB (tpr column instead of burden)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(tpr_results)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if 'tpr' in columns and 'burden' not in columns:
+            conn.close()
+            logger.warning(
+                "Old-format precompute DB detected (has 'tpr' column, not 'burden'). "
+                "Deleting stale DB so it will be regenerated on next workflow run."
+            )
+            os.remove(db_path)
+            return {
+                'success': False,
+                'error': 'Pre-computed data was in an old format and has been cleared. Please re-run the burden workflow.',
+                'data': []
+            }
+
         # Build query
         query = '''
-            SELECT ward_name, lga, tpr, total_tested, total_positive
+            SELECT ward_name, lga, burden, population, total_positive
             FROM tpr_results
             WHERE facility_level = ? AND age_group = ?
         '''
@@ -301,12 +318,15 @@ def query_precomputed_tpr(
 
         # Sort
         sort_column = {
-            'tpr': 'tpr',
-            'total_tested': 'total_tested',
+            'burden': 'burden',
+            'population': 'population',
             'ward_name': 'ward_name',
-            'tested': 'total_tested',
-            'positive': 'total_positive'
-        }.get(sort_by.lower(), 'tpr')
+            'positive': 'total_positive',
+            # Legacy aliases
+            'tpr': 'burden',
+            'total_tested': 'population',
+            'tested': 'population',
+        }.get(sort_by.lower(), 'burden')
 
         order = 'DESC' if sort_desc else 'ASC'
         query += f' ORDER BY {sort_column} {order}'
@@ -320,10 +340,10 @@ def query_precomputed_tpr(
         if not df.empty:
             summary = {
                 'total_wards': len(df),
-                'avg_tpr': round(df['tpr'].mean(), 2),
-                'max_tpr': round(df['tpr'].max(), 2),
-                'min_tpr': round(df['tpr'].min(), 2),
-                'total_tested': int(df['total_tested'].sum()),
+                'avg_burden': round(df['burden'].mean(), 2),
+                'max_burden': round(df['burden'].max(), 2),
+                'min_burden': round(df['burden'].min(), 2),
+                'total_population': int(df['population'].sum()),
                 'total_positive': int(df['total_positive'].sum()),
                 'facility_level': facility_level,
                 'age_group': age_group

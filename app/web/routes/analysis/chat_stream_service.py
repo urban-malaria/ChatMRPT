@@ -70,6 +70,32 @@ def handle_send_message_streaming() -> Response:
 
     session_id = session.get('session_id')
 
+    # ── Conversation history: title on first msg, activity on every msg ──
+    try:
+        from app.services.conversation_history import (
+            ConversationHistoryService, get_user_id, generate_title,
+        )
+        redis_client = current_app.config.get('SESSION_REDIS')
+        _conv_svc = ConversationHistoryService(redis_client=redis_client)
+        _uid = get_user_id()
+        _msg_count = session.get('message_count', 0)
+        session['message_count'] = _msg_count + 1
+        session.modified = True
+        if _msg_count == 0:
+            _conv_svc.set_title(_uid, session_id, generate_title(user_message))
+        has_files = any(session.get(f, False) for f in ('csv_loaded', 'shapefile_loaded'))
+        _conv_svc.update_activity(_uid, session_id, preview=user_message[:80], has_files=has_files)
+    except Exception as _conv_err:
+        logger.debug("Conversation history update failed: %s", _conv_err)
+
+    # ── Persist user message to SessionMemory so resume can load it ──
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        _mem = SessionMemory(session_id)
+        _mem.add_message(MessageType.USER, user_message)
+    except Exception as _mem_err:
+        logger.debug("SessionMemory save (user) failed: %s", _mem_err)
+
     if session.get('data_analysis_active', False):
         logger.info(
             "Data analysis workflow active for session %s, clearing legacy flag",
@@ -89,7 +115,7 @@ def handle_send_message_streaming() -> Response:
             state_manager = DataAnalysisStateManager(session_id)
             tpr_analyzer = TPRDataAnalyzer(session_id)
             handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-            tpr_result = handler.handle_message(user_message)
+            tpr_result = handler.handle_workflow(user_message)
 
             if tpr_result.get('response') == '__DATA_UPLOADED__' or tpr_result.get('status') == 'tpr_to_main_transition':
                 logger.info("TPR router requesting transition to main interpreter for __DATA_UPLOADED__")
@@ -100,6 +126,13 @@ def handle_send_message_streaming() -> Response:
                 session['analysis_complete'] = True
                 session.modified = True
                 user_message = '__DATA_UPLOADED__'
+            elif tpr_result.get('stage') == 'complete':
+                # Workflow finished — clear the flag so subsequent messages
+                # go to the main request interpreter (where switch/compare tools live)
+                session.pop('tpr_workflow_active', None)
+                session.modified = True
+                logger.info("TPR workflow complete, cleared tpr_workflow_active flag")
+                return _response_from_tpr_result(tpr_result)
             else:
                 return _response_from_tpr_result(tpr_result)
         except Exception as exc:
@@ -349,6 +382,14 @@ def _log_stream_completion(app, final_chunk: Dict[str, Any], response_content: s
                 'status': final_chunk.get('status', 'success'),
             },
         )
+
+    # Persist assistant message to SessionMemory for conversation resume
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        _mem = SessionMemory(session_id)
+        _mem.add_message(MessageType.ASSISTANT, response_content)
+    except Exception as _mem_err:
+        logger.debug("SessionMemory save (assistant) failed: %s", _mem_err)
 
 
 def _response_from_tpr_result(tpr_result: Dict[str, Any]) -> Response:

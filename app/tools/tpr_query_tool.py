@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 
 class QueryTPRData(DataAnalysisTool):
     """
-    Query pre-computed TPR (Test Positivity Rate) data for different facility levels and age groups.
+    Query pre-computed malaria burden data for different facility levels and age groups.
 
-    Use this tool when users want to see TPR results for a different combination than
-    they originally selected during the TPR workflow. All 16 combinations are pre-computed
+    Use this tool when users want to see burden results for a different combination than
+    they originally selected during the burden workflow. All 16 combinations are pre-computed
     and available for instant retrieval.
 
     Examples:
-    - "Show me TPR for pregnant women at secondary facilities"
-    - "What's the TPR for under 5s at primary facilities?"
-    - "Show top 10 wards by TPR for over 5 age group"
+    - "Show me burden for pregnant women at secondary facilities"
+    - "What's the burden for under 5s at primary facilities?"
+    - "Show top 10 wards by burden for over 5 age group"
     """
 
     facility_level: str = Field(
@@ -42,7 +42,7 @@ class QueryTPRData(DataAnalysisTool):
 
     top_n: Optional[int] = Field(
         default=None,
-        description="Limit results to top N wards (by TPR). If not specified, returns all wards."
+        description="Limit results to top N wards (by burden). If not specified, returns all wards."
     )
 
     lga: Optional[str] = Field(
@@ -51,8 +51,8 @@ class QueryTPRData(DataAnalysisTool):
     )
 
     sort_by: str = Field(
-        default='tpr',
-        description="Column to sort by: 'tpr', 'total_tested', or 'ward_name'"
+        default='burden',
+        description="Column to sort by: 'burden', 'population', or 'ward_name'"
     )
 
     @classmethod
@@ -66,17 +66,17 @@ class QueryTPRData(DataAnalysisTool):
     @classmethod
     def get_description(cls) -> str:
         return (
-            "Query pre-computed TPR data for any facility level and age group combination. "
-            "Use after completing TPR workflow to explore different combinations without re-uploading data."
+            "Query pre-computed malaria burden data for any facility level and age group combination. "
+            "Use after completing the burden workflow to explore different combinations without re-uploading data."
         )
 
     @classmethod
     def get_examples(cls) -> list:
         return [
-            "Show TPR for pregnant women at secondary facilities",
-            "What's the TPR for under 5s at all facilities?",
-            "Show top 20 wards by TPR for over 5 age group at primary facilities",
-            "TPR data for tertiary facilities, all ages"
+            "Show burden for pregnant women at secondary facilities",
+            "What's the burden for under 5s at all facilities?",
+            "Show top 20 wards by burden for over 5 age group at primary facilities",
+            "Burden data for tertiary facilities, all ages"
         ]
 
     def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
@@ -156,7 +156,7 @@ class QueryTPRData(DataAnalysisTool):
         facility_label = self._format_facility_level(summary.get('facility_level', self.facility_level))
 
         lines = [
-            f"## TPR Results: {age_label} at {facility_label} Facilities",
+            f"## Burden Results: {age_label} at {facility_label} Facilities",
             ""
         ]
 
@@ -165,9 +165,9 @@ class QueryTPRData(DataAnalysisTool):
             lines.extend([
                 "### Summary",
                 f"- **Wards analyzed:** {summary['total_wards']}",
-                f"- **Average TPR:** {summary['avg_tpr']}%",
-                f"- **Range:** {summary['min_tpr']}% - {summary['max_tpr']}%",
-                f"- **Total tested:** {summary['total_tested']:,}",
+                f"- **Average Burden:** {summary['avg_burden']:.1f} per 1,000",
+                f"- **Range:** {summary['min_burden']:.1f} - {summary['max_burden']:.1f} per 1,000",
+                f"- **Total population:** {summary['total_population']:,}",
                 f"- **Total positive:** {summary['total_positive']:,}",
                 ""
             ])
@@ -176,8 +176,8 @@ class QueryTPRData(DataAnalysisTool):
         lines.extend([
             "### Ward-Level Results",
             "",
-            "| Ward | LGA | TPR (%) | Tested | Positive |",
-            "|------|-----|---------|--------|----------|"
+            "| Ward | LGA | Burden (per 1,000) | Population | Positive |",
+            "|------|-----|--------------------|------------|----------|"
         ])
 
         # Limit display to first 20 rows for readability
@@ -185,10 +185,10 @@ class QueryTPRData(DataAnalysisTool):
         for row in display_data:
             ward = row.get('ward_name', 'Unknown')[:25]
             lga = row.get('lga', '')[:15]
-            tpr = row.get('tpr', 0)
-            tested = row.get('total_tested', 0)
+            burden = row.get('burden', 0)
+            population = row.get('population', 0)
             positive = row.get('total_positive', 0)
-            lines.append(f"| {ward} | {lga} | {tpr:.1f} | {tested:,} | {positive:,} |")
+            lines.append(f"| {ward} | {lga} | {burden:.1f} | {population:,} | {positive:,} |")
 
         if len(data) > 20:
             lines.append(f"\n*Showing top 20 of {len(data)} wards. Use `top_n` parameter to see more.*")
@@ -336,8 +336,8 @@ class SwitchTPRCombination(DataAnalysisTool):
         tpr_df.rename(columns={
             'ward_name': 'WardName',
             'lga': 'LGA',
-            'tpr': 'TPR',
-            'total_tested': 'Total_Tested',
+            'burden': 'Burden',
+            'population': 'Population',
             'total_positive': 'Total_Positive'
         }, inplace=True)
 
@@ -389,21 +389,21 @@ class SwitchTPRCombination(DataAnalysisTool):
         age_label = self._format_age_group(age_group)
         facility_label = self._format_facility_level(facility_level)
 
-        message = f"""## TPR Combination Switched
+        message = f"""## Burden Combination Switched
 
 **{state_name}**: Now using **{age_label}** at **{facility_label}** facilities
 
 ### Summary
 - **Wards analyzed:** {summary.get('total_wards', len(tpr_data))}
-- **Average TPR:** {summary.get('avg_tpr', 0):.1f}%
-- **Range:** {summary.get('min_tpr', 0):.1f}% - {summary.get('max_tpr', 0):.1f}%
-- **Total tested:** {summary.get('total_tested', 0):,}
+- **Average Burden:** {summary.get('avg_burden', 0):.1f} per 1,000
+- **Range:** {summary.get('min_burden', 0):.1f} - {summary.get('max_burden', 0):.1f} per 1,000
+- **Total population:** {summary.get('total_population', 0):,}
 - **Total positive:** {summary.get('total_positive', 0):,}
 
 Files updated:
-- `raw_data.csv` - Ward data with new TPR values
-- `raw_shapefile.zip` - Shapefile with new TPR values
-- TPR distribution map
+- `raw_data.csv` - Ward data with new burden values
+- `raw_shapefile.zip` - Shapefile with new burden values
+- Burden distribution map
 
 You can now run **risk analysis** or **ITN planning** using this combination."""
 
@@ -456,14 +456,14 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
 
         # Merge
         merged = state_gdf.merge(
-            tpr_df[['WardName_norm', 'TPR', 'Total_Tested', 'Total_Positive']],
+            tpr_df[['WardName_norm', 'Burden', 'Population', 'Total_Positive']],
             on='WardName_norm',
             how='left'
         )
 
-        # Fill missing TPR with 0
-        merged['TPR'] = merged['TPR'].fillna(0)
-        merged['Total_Tested'] = merged['Total_Tested'].fillna(0).astype(int)
+        # Fill missing values with 0
+        merged['Burden'] = merged['Burden'].fillna(0)
+        merged['Population'] = merged['Population'].fillna(0).astype(int)
         merged['Total_Positive'] = merged['Total_Positive'].fillna(0).astype(int)
 
         return merged
@@ -483,9 +483,9 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
         final_df['State'] = state_name
         final_df['GeopoliticalZone'] = get_geopolitical_zone(state_name)
 
-        # Add TPR metrics
-        final_df['TPR'] = merged_gdf['TPR'].fillna(0)
-        final_df['Total_Tested'] = merged_gdf['Total_Tested'].fillna(0).astype(int)
+        # Add burden metrics
+        final_df['Burden'] = merged_gdf['Burden'].fillna(0)
+        final_df['Population'] = merged_gdf['Population'].fillna(0).astype(int)
         final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).astype(int)
 
         # Add environmental variables
@@ -515,3 +515,135 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
             'all': 'All'
         }
         return labels.get(facility_level.lower(), facility_level.title())
+
+
+class CompareTPRCombinations(DataAnalysisTool):
+    """
+    Compare burden summaries across all pre-computed facility/age combinations.
+
+    Shows a side-by-side table of average burden, ward count, and total positives
+    for every combination that has been pre-computed. Helps users decide which
+    combination to switch to.
+
+    Examples:
+    - "Compare all combinations"
+    - "Show me burden for all facility and age group combinations"
+    - "Which combination has the highest burden?"
+    """
+
+    @classmethod
+    def get_tool_name(cls) -> str:
+        return "compare_tpr_combinations"
+
+    @classmethod
+    def get_category(cls) -> ToolCategory:
+        return ToolCategory.DATA_ANALYSIS
+
+    @classmethod
+    def get_description(cls) -> str:
+        return (
+            "Compare malaria burden across all pre-computed facility level and age group combinations. "
+            "Shows summary statistics for each combination to help choose the best one for analysis."
+        )
+
+    @classmethod
+    def get_examples(cls) -> list:
+        return [
+            "Compare all combinations",
+            "Show burden for all facility and age group combinations",
+            "Which combination has the highest burden?",
+            "Compare facility types for under 5s"
+        ]
+
+    def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
+        """Compare all pre-computed combinations."""
+        from app.core.tpr_precompute import (
+            get_available_combinations, query_precomputed_tpr,
+            is_tpr_precomputed,
+        )
+        from app.core.tpr_precompute_service import get_precompute_status
+
+        status = get_precompute_status(session_id)
+
+        if not is_tpr_precomputed(session_id):
+            state = status.get('state')
+            if state in {'queued', 'running'}:
+                return self._create_error_result(
+                    message=(
+                        "I'm still computing the other facility/age combinations in the background. "
+                        "Please try again in a moment."
+                    ),
+                    error_details="Precompute still running"
+                )
+            return self._create_error_result(
+                message="No pre-computed burden data found. Please complete the burden workflow first.",
+                error_details="No precomputed data"
+            )
+
+        combinations = get_available_combinations(session_id)
+        if not combinations:
+            return self._create_error_result(
+                message="No combinations found in the database.",
+                error_details="Empty combinations list"
+            )
+
+        # Build comparison rows
+        rows = []
+        for combo in combinations:
+            result = query_precomputed_tpr(
+                session_id=session_id,
+                facility_level=combo['facility_level'],
+                age_group=combo['age_group']
+            )
+            summary = result.get('summary', {}) if result.get('success') else {}
+            rows.append({
+                'facility': combo['facility_level'],
+                'age_group': combo['age_group'],
+                'avg_burden': summary.get('avg_burden', 0),
+                'total_wards': summary.get('total_wards', combo.get('ward_count', 0)),
+                'total_positive': summary.get('total_positive', 0),
+                'total_population': summary.get('total_population', 0),
+            })
+
+        # Sort by avg_burden descending
+        rows.sort(key=lambda r: r['avg_burden'], reverse=True)
+
+        # Format table
+        age_labels = {
+            'u5': 'Under 5', 'o5': 'Over 5',
+            'pw': 'Pregnant Women', 'all_ages': 'All Ages'
+        }
+        facility_labels = {
+            'primary': 'Primary', 'secondary': 'Secondary',
+            'tertiary': 'Tertiary', 'all': 'All'
+        }
+
+        lines = [
+            "## Burden Comparison: All Combinations",
+            "",
+            "| Facility | Age Group | Avg Burden | Wards | Total Positive | Population |",
+            "|----------|-----------|------------|-------|----------------|------------|"
+        ]
+
+        for r in rows:
+            fac = facility_labels.get(r['facility'], r['facility'].title())
+            age = age_labels.get(r['age_group'], r['age_group'].title())
+            lines.append(
+                f"| {fac} | {age} | {r['avg_burden']:.1f} | "
+                f"{r['total_wards']} | {r['total_positive']:,} | {r['total_population']:,} |"
+            )
+
+        still_running = status.get('state') in {'queued', 'running'}
+        if still_running:
+            lines.append("")
+            lines.append("*Some combinations are still being computed. Run this again later for full results.*")
+
+        lines.append("")
+        lines.append('To switch, say: "switch to [facility], [age group]"')
+
+        message = "\n".join(lines)
+
+        return self._create_success_result(
+            message=message,
+            data={'combinations': rows, 'still_computing': still_running}
+        )

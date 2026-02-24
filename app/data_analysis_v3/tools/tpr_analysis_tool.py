@@ -1343,6 +1343,14 @@ Available variables for your region ({geopolitical_zone}):
 📊 **Step 3: Run Comprehensive Analysis**
 Try: "**run malaria risk analysis**" to rank wards by malaria risk
 
+🔄 **Explore Other Combinations**
+I've pre-computed burden for all facility/age combinations in the background. You can switch at any time:
+- "**switch to secondary facilities, under 5**"
+- "**switch to all facilities, pregnant women**"
+- "**compare all combinations**" to see a summary table
+
+Your analysis files (raw_data.csv, shapefile) will be updated automatically.
+
 Or ask me anything about your data - I'm here to help!
 """
             except Exception as e:
