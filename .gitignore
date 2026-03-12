@@ -42,6 +42,7 @@ instance/flask_session/
 
 # Backups & Archives
 # ==========================================
+_archive/
 backups/
 archive/
 *.tar.gz

@@ -12,6 +12,18 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 from enum import Enum
 
+
+def reset_tpr_handler_cache(session_id: Optional[str] = None) -> None:
+    """Clear any cached TPR workflow state for a session.
+
+    Previously lived in app.runtime.tpr.workflow. Kept here so that
+    chat_stream_service can import it from a single canonical location.
+    TPRWorkflowHandler instances are created per-request and not cached,
+    so this is effectively a no-op — it exists to avoid import errors.
+    """
+    logger = logging.getLogger(__name__)
+    logger.debug("reset_tpr_handler_cache called for session %s (no-op)", session_id)
+
 from ..core.state_manager import DataAnalysisStateManager, ConversationStage
 from .data_analyzer import TPRDataAnalyzer
 from ..core.tpr_language_interface import TPRLanguageInterface

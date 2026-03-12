@@ -17,7 +17,7 @@ from langchain_core.tools import tool
 from pathlib import Path
 
 from ..core.state_manager import DataAnalysisStateManager, ConversationStage
-from ..core.tpr_data_analyzer import TPRDataAnalyzer
+from ..tpr.data_analyzer import TPRDataAnalyzer
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -44,7 +44,7 @@ class TPRWorkflowToolHandler:
         self.session_id = session_id
         self.session_folder = f"instance/uploads/{session_id}"
         self.state_manager = DataAnalysisStateManager(session_id)
-        self.tpr_analyzer = TPRDataAnalyzer(session_id)
+        self.tpr_analyzer = TPRDataAnalyzer()
         self.tpr_selections = {}
         self.uploaded_data = None
 

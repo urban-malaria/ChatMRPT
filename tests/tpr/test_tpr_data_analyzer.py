@@ -7,7 +7,7 @@ Tests data analysis, statistics generation, and contextual information display.
 import pytest
 import pandas as pd
 import numpy as np
-from app.data_analysis_v3.core.tpr_data_analyzer import TPRDataAnalyzer
+from app.data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer
 
 
 @pytest.fixture

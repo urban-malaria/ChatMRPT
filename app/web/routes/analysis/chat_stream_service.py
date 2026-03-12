@@ -11,7 +11,7 @@ from typing import Any, Dict
 from flask import Response, current_app, jsonify, request, session
 
 from app.core.exceptions import ValidationError
-from app.runtime.tpr.workflow import reset_tpr_handler_cache
+from app.data_analysis_v3.tpr.workflow_manager import reset_tpr_handler_cache
 
 from . import logger
 from .chat_routing import route_with_mistral
@@ -110,10 +110,10 @@ def handle_send_message_streaming() -> Response:
         try:
             from ...data_analysis_v3.core.tpr_workflow_handler import TPRWorkflowHandler
             from ...data_analysis_v3.core.state_manager import DataAnalysisStateManager
-            from ...data_analysis_v3.core.tpr_data_analyzer import TPRDataAnalyzer
+            from ...data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer
 
             state_manager = DataAnalysisStateManager(session_id)
-            tpr_analyzer = TPRDataAnalyzer(session_id)
+            tpr_analyzer = TPRDataAnalyzer()
             handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
             tpr_result = handler.handle_workflow(user_message)
 
