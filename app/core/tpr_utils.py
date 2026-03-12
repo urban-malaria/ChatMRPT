@@ -304,7 +304,8 @@ def fix_column_encoding(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
-                      test_method: str = 'both', facility_level: str = 'all') -> pd.DataFrame:
+                      test_method: str = 'both', facility_level: str = 'all',
+                      schema: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
     """
     Calculate Malaria Burden per 1,000 population.
 
@@ -339,8 +340,12 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
     
     # Filter by facility level if specified
     if facility_level != 'all':
-        # Look for facility level column
-        facility_cols = [col for col in df.columns if 'facility' in col.lower() and ('level' in col.lower() or 'type' in col.lower())]
+        # Prefer schema-inferred column, fall back to keyword detection
+        schema_col = schema.get('facility_level') if schema else None
+        facility_cols = (
+            [schema_col] if schema_col and schema_col in df.columns
+            else [col for col in df.columns if 'facility' in col.lower() and ('level' in col.lower() or 'type' in col.lower())]
+        )
         if facility_cols:
             facility_col = facility_cols[0]
             # Try to filter to selected level (be flexible with matching)
