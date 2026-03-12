@@ -5,13 +5,31 @@ Analyzes TPR data to provide rich contextual information at each decision point.
 Generates statistics for states, facilities, and age groups to help users make informed choices.
 """
 
-import pandas as pd
-import numpy as np
+import json
 import logging
+import os
+import re
+
+import numpy as np
+import pandas as pd
 from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
+
+# Semantic fields the schema inference resolves
+_SCHEMA_FIELDS = ('state', 'lga', 'ward', 'facility_name', 'facility_level', 'period')
+
+# Keyword fallback lists per field (last resort when LLM unavailable)
+_KEYWORD_MAP: Dict[str, List[str]] = {
+    'state':          ['state', 'region', 'province'],
+    'lga':            ['lga', 'local government'],
+    'facility_name':  ['facility', 'clinic', 'hospital', 'health', 'center'],
+    'facility_level': ['facilitylevel', 'facility level', 'facility_level',
+                       'facilitytype', 'level', 'type', 'tier', 'category'],
+    'ward':           ['ward'],
+    'period':         ['period', 'periodname', 'date', 'month', 'year'],
+}
 
 
 class TPRDataAnalyzer:
@@ -30,6 +48,7 @@ class TPRDataAnalyzer:
         """Initialize the TPR data analyzer."""
         self.data = None
         self.analysis_cache = {}
+        self._schema: Optional[Dict[str, Optional[str]]] = None  # inferred once per instance
         
     def analyze_states(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
@@ -43,43 +62,23 @@ class TPRDataAnalyzer:
         """
         try:
             states_info = {}
-            
-            # Find state column dynamically - check all columns
-            state_col = None
-            for col in df.columns:
-                col_lower = col.lower()
-                # Check for state-related keywords
-                if any(keyword in col_lower for keyword in ['state', 'region', 'province', 'area']):
-                    # Verify it has reasonable number of unique values for states
-                    unique_vals = df[col].dropna().nunique()
-                    if 1 <= unique_vals <= 50:  # Reasonable range for states
-                        state_col = col
-                        logger.info(f"Found state column: {col}")
-                        break
-            
+
+            # Infer schema once (no-op on subsequent calls within this workflow run)
+            self.ensure_schema(df)
+
+            state_col = self._get_column(df, 'state')
+            facility_col = self._get_column(df, 'facility_name')
+
             if not state_col:
-                # If no state column, analyze as single entity
-                logger.info("No state column found, analyzing as single dataset")
+                logger.warning("No state column detected in dataset")
                 return {
-                    'states': {'All Data': {
-                        'name': 'All Data',
-                        'total_records': len(df),
-                        'facilities': len(df),
-                        'total_tests': self._count_total_tests(df),
-                        'data_completeness': self._calculate_completeness(df)
-                    }},
-                    'total_states': 1,
-                    'recommended': 'All Data'
+                    'states': {},
+                    'total_states': 0,
+                    'recommended': None,
+                    'state_column': None,
+                    'state_column_detected': False,
+                    'error': 'STATE_COLUMN_NOT_FOUND'
                 }
-            
-            # Find facility column dynamically
-            facility_col = None
-            for col in df.columns:
-                col_lower = col.lower()
-                if any(keyword in col_lower for keyword in ['facility', 'clinic', 'hospital', 'health', 'center']):
-                    facility_col = col
-                    logger.info(f"Found facility column: {col}")
-                    break
             
             # Find test columns dynamically
             test_cols = self._find_test_columns(df)
@@ -90,6 +89,7 @@ class TPRDataAnalyzer:
                 
                 state_info = {
                     'name': str(state),
+                    'display_name': self._strip_dhis2_prefix(state),
                     'total_records': len(state_data),
                     'facilities': len(state_data) if not facility_col else state_data[facility_col].nunique(),
                     'total_tests': self._count_total_tests(state_data),
@@ -106,7 +106,9 @@ class TPRDataAnalyzer:
             return {
                 'states': dict(sorted_states),
                 'total_states': len(states_info),
-                'recommended': sorted_states[0][0] if sorted_states else None
+                'recommended': sorted_states[0][0] if sorted_states else None,
+                'state_column': state_col,
+                'state_column_detected': True
             }
             
         except Exception as e:
@@ -125,29 +127,14 @@ class TPRDataAnalyzer:
             Dictionary with facility level statistics
         """
         try:
-            # Filter to selected state dynamically
-            state_col = None
-            for col in df.columns:
-                col_lower = col.lower()
-                if any(keyword in col_lower for keyword in ['state', 'region', 'province']):
-                    # Verify this column has the state we're looking for
-                    if state in df[col].values:
-                        state_col = col
-                        break
-            
-            if state_col:
+            # Schema should already be set from analyze_states; ensure it is
+            self.ensure_schema(df)
+
+            state_col = self._get_column(df, 'state')
+            if state_col and state in df[state_col].values:
                 df = df[df[state_col] == state]
-            
-            # Find facility level column dynamically
-            level_col = None
-            for col in df.columns:
-                col_lower = col.lower()
-                if any(keyword in col_lower for keyword in ['facility', 'level', 'type', 'tier', 'category']):
-                    # Check if it has reasonable categorical values
-                    unique_vals = df[col].dropna().nunique()
-                    if 2 <= unique_vals <= 20:  # Reasonable range for facility types
-                        level_col = col
-                        break
+
+            level_col = self._get_column(df, 'facility_level')
             
             if not level_col:
                 # If no facility level column, return single "all" option
@@ -386,6 +373,151 @@ class TPRDataAnalyzer:
             logger.error(f"Error analyzing age groups: {e}")
             return {'error': str(e), 'age_groups': {}}
     
+    # ------------------------------------------------------------------
+    # Schema inference — LLM-first, keyword fallback
+    # ------------------------------------------------------------------
+
+    def ensure_schema(self, df: pd.DataFrame) -> None:
+        """Infer and cache column schema for this dataset. No-op after first call."""
+        if self._schema is None:
+            self._schema = self._infer_column_schema(df)
+
+    def _infer_column_schema(self, df: pd.DataFrame) -> Dict[str, Optional[str]]:
+        """
+        Ask the LLM to map semantic field names to actual column names.
+
+        Uses gpt-4o-mini (cheap, fast) with JSON mode. Validates every
+        returned column name actually exists in df. Falls back to {} on
+        any failure so _get_column() degrades to keyword detection.
+        """
+        try:
+            api_key = self._get_openai_api_key()
+            if not api_key:
+                logger.warning("No OpenAI API key — schema inference skipped, using keyword fallback")
+                return {}
+
+            import openai  # local import — only needed when LLM is available
+
+            # Build a compact sample: column names + first 3 non-empty rows
+            sample = df.dropna(how='all').head(3)
+            cols_preview = sample.to_string(max_cols=50, max_colwidth=60)
+
+            prompt = (
+                "You are analyzing a Nigerian malaria surveillance dataset.\n"
+                "It may be a DHIS2 export, HMIS data, NMEP-processed Excel, or a custom format.\n\n"
+                "Column names and sample values (first 3 rows):\n"
+                f"{cols_preview}\n\n"
+                "Identify the exact column name for each semantic field below.\n"
+                "Return null for any field not present.\n"
+                "Return ONLY the exact column name as it appears — do not rename or invent columns.\n\n"
+                "Fields:\n"
+                "- state: Nigerian state name\n"
+                "- lga: Local Government Area\n"
+                "- ward: Ward name\n"
+                "- facility_name: Name of the health facility\n"
+                "- facility_level: Facility tier/type (Primary, Secondary, Tertiary, PHC, etc.)\n"
+                "- period: Reporting period (date, year, month, or period code)\n\n"
+                'Return JSON only, no explanation:\n'
+                '{"state": "...", "lga": "...", "ward": "...", '
+                '"facility_name": "...", "facility_level": "...", "period": "..."}'
+            )
+
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=250,
+                response_format={"type": "json_object"},
+            )
+
+            raw = response.choices[0].message.content
+            parsed = json.loads(raw)
+
+            # Validate: every value must be None or a real column in df
+            validated: Dict[str, Optional[str]] = {}
+            for field in _SCHEMA_FIELDS:
+                val = parsed.get(field)
+                if not val or val == 'null':
+                    validated[field] = None
+                elif val in df.columns:
+                    validated[field] = val
+                else:
+                    logger.warning(
+                        "Schema inference returned unknown column '%s' for field '%s' — ignoring",
+                        val, field,
+                    )
+                    validated[field] = None
+
+            logger.info("Column schema inferred: %s", validated)
+            return validated
+
+        except Exception as e:
+            logger.warning("Schema inference failed (%s) — falling back to keyword detection", e)
+            return {}
+
+    def _get_openai_api_key(self) -> Optional[str]:
+        """Get OpenAI API key from Flask config or environment."""
+        try:
+            from flask import current_app
+            return current_app.config.get('OPENAI_API_KEY')
+        except Exception:
+            return os.environ.get('OPENAI_API_KEY')
+
+    def _get_column(self, df: pd.DataFrame, field: str) -> Optional[str]:
+        """
+        Resolve a semantic field to a column name.
+
+        Priority:
+          1. LLM-inferred schema (self._schema)
+          2. Keyword fallback (_keyword_fallback)
+        """
+        if self._schema is not None:
+            col = self._schema.get(field)
+            if col and col in df.columns:
+                return col
+        return self._keyword_fallback(df, field)
+
+    def _keyword_fallback(self, df: pd.DataFrame, field: str) -> Optional[str]:
+        """
+        Original keyword-in-name detection, preserved as last-resort fallback.
+
+        Guards added:
+        - orgunitlevel* columns are never returned for facility_level
+          (they are DHIS2 org hierarchy, not facility types)
+        - state detection requires 1-50 unique values
+        """
+        keywords = _KEYWORD_MAP.get(field, [])
+
+        for col in df.columns:
+            col_lower = col.lower()
+
+            if not any(kw in col_lower for kw in keywords):
+                continue
+
+            # DHIS2 guard: org unit hierarchy columns are never facility levels
+            if field == 'facility_level' and col_lower.startswith('orgunitlevel'):
+                continue
+
+            # State column must have a plausible number of unique values
+            if field == 'state':
+                unique_vals = df[col].dropna().nunique()
+                if not (1 <= unique_vals <= 50):
+                    continue
+
+            return col
+
+        return None
+
+    @staticmethod
+    def _strip_dhis2_prefix(value: str) -> str:
+        """Strip two-letter DHIS2 state prefixes (e.g. 'kw Kwara State' → 'Kwara')."""
+        cleaned = re.sub(r'^[a-z]{2}\s+', '', str(value), flags=re.IGNORECASE)
+        cleaned = re.sub(r'\s+State$', '', cleaned, flags=re.IGNORECASE)
+        return cleaned.strip()
+
+    # ------------------------------------------------------------------
+
     def _find_column(self, df: pd.DataFrame, patterns: List[str]) -> Optional[str]:
         """
         Find a column matching any of the patterns.
@@ -476,30 +608,23 @@ class TPRDataAnalyzer:
             Filtered DataFrame
         """
         result = df.copy()
-        
-        # Filter by state dynamically
+
+        # Filter by state
         if state:
-            for col in df.columns:
-                col_lower = col.lower()
-                if any(keyword in col_lower for keyword in ['state', 'region', 'province']):
-                    if state in df[col].values:
-                        result = result[result[col] == state]
-                        break
-        
-        # Filter by facility level dynamically
+            state_col = self._get_column(df, 'state')
+            if state_col and state in df[state_col].values:
+                result = result[result[state_col] == state]
+
+        # Filter by facility level
         if facility_level and facility_level != 'all':
-            for col in df.columns:
-                col_lower = col.lower()
-                if any(keyword in col_lower for keyword in ['facility', 'level', 'type', 'tier']):
-                    # Try exact match first
-                    if facility_level in df[col].values:
-                        result = result[result[col] == facility_level]
-                        break
-                    # Try case-insensitive match
-                    elif df[col].astype(str).str.lower().eq(facility_level.lower()).any():
-                        result = result[result[col].astype(str).str.lower() == facility_level.lower()]
-                        break
-        
+            level_col = self._get_column(df, 'facility_level')
+            if level_col:
+                # Exact match first, then case-insensitive
+                if facility_level in df[level_col].values:
+                    result = result[result[level_col] == facility_level]
+                elif df[level_col].astype(str).str.lower().eq(facility_level.lower()).any():
+                    result = result[result[level_col].astype(str).str.lower() == facility_level.lower()]
+
         return result
     
     def _analyze_urban_rural(self, df: pd.DataFrame) -> Dict[str, float]:
