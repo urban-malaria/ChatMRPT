@@ -540,6 +540,9 @@ class TPRWorkflowHandler:
         # Get state analysis
         if not self.state_analysis:
             self.state_analysis = self.tpr_analyzer.analyze_states(self.uploaded_data)
+            # Persist inferred schema so tpr_analysis_tool can reuse it without a second LLM call
+            if self.tpr_analyzer._schema:
+                self.state_manager.update_state({'column_schema': self.tpr_analyzer._schema})
 
         states = list(self.state_analysis.get('states', {}).keys())
 
@@ -608,6 +611,8 @@ class TPRWorkflowHandler:
             try:
                 self.state_analysis = self.tpr_analyzer.analyze_states(self.uploaded_data)
                 states = list((self.state_analysis.get('states') or {}).keys())
+                if self.tpr_analyzer._schema:
+                    self.state_manager.update_state({'column_schema': self.tpr_analyzer._schema})
             except Exception:
                 states = []
 
@@ -813,6 +818,20 @@ class TPRWorkflowHandler:
 
         # Analyze available states first (before marking active)
         state_analysis = self.tpr_analyzer.analyze_states(self.uploaded_data)
+        if not state_analysis.get('state_column_detected'):
+            logger.warning("TPR workflow aborted: no state column detected")
+            return {
+                "success": False,
+                "error": "STATE_COLUMN_NOT_FOUND",
+                "message": (
+                    "I couldn't detect a column that lists Nigerian states in your dataset. "
+                    "Please rename the column that contains state names (for example 'State' or 'StateName') "
+                    "and try starting the TPR workflow again."
+                ),
+                "session_id": self.session_id,
+                "workflow": "tpr",
+            }
+
         self.state_analysis = state_analysis
         try:
             self.language.update_available_states(list(state_analysis.get('states', {}).keys()))

@@ -25,6 +25,7 @@ import warnings
 
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
+from ..core.state_manager import DataAnalysisStateManager
 
 # Custom JSON encoder to handle numpy types
 class NumpyEncoder(json.JSONEncoder):
@@ -982,12 +983,20 @@ You can now:
                 facility_level = 'all'
             
             logger.info(f"Calculating TPR - Age: {age_group}, Method: {test_method}, Facilities: {facility_level}")
-            
+
+            # Load persisted column schema (saved by TPRWorkflowHandler during selection steps)
             try:
-                tpr_results = calculate_ward_tpr(df, 
+                _sm = DataAnalysisStateManager(session_id)
+                column_schema = (_sm.load_state() or {}).get('column_schema') or {}
+            except Exception:
+                column_schema = {}
+
+            try:
+                tpr_results = calculate_ward_tpr(df,
                                                 age_group=age_group,
                                                 test_method=test_method,
-                                                facility_level=facility_level)
+                                                facility_level=facility_level,
+                                                schema=column_schema)
             except Exception as e:
                 logger.error(f"Error calculating TPR: {e}")
                 return f"Error calculating TPR: {str(e)}. Please check your data format and try again."
@@ -1373,7 +1382,12 @@ Or ask me anything about your data - I'm here to help!
                 # Load TPR results
                 tpr_results = EncodingHandler.read_csv_with_encoding(tpr_results_file)
             else:
-                tpr_results = calculate_ward_tpr(df, age_group='all_ages')
+                try:
+                    _sm2 = DataAnalysisStateManager(session_id)
+                    _schema2 = (_sm2.load_state() or {}).get('column_schema') or {}
+                except Exception:
+                    _schema2 = {}
+                tpr_results = calculate_ward_tpr(df, age_group='all_ages', schema=_schema2)
             
             # Step 2: Load Nigeria shapefile and filter to state
             master_gdf = load_nigeria_shapefile()
