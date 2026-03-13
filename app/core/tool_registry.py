@@ -465,29 +465,16 @@ class ToolRegistry:
         self._affordance_scorer = None
         
         self._discovery_paths = [
-            # Core Pydantic tools (100% converted and existing)
-            'app.tools.risk_analysis_tools',
-            'app.tools.ward_data_tools',
-            'app.tools.statistical_analysis_tools',
             'app.tools.visualization_maps_tools',
-            # 'app.tools.visualization_charts_tools',  # REMOVED: Charts now handled by analyze_data tool
-            'app.tools.intervention_targeting_tools',
-            # 'app.tools.scenario_simulation_tools',  # Removed during streamlining
-            'app.tools.smart_knowledge_tools',
-            # 'app.tools.knowledge_tools',  # Removed during streamlining
             'app.tools.settlement_validation_tools',
             'app.tools.settlement_visualization_tools',
-            # 'app.tools.data_preparation_tools',  # Removed during streamlining
-            # Advanced tools (removed during streamlining)
-            # 'app.tools.advanced_mapping_tools',
             'app.tools.settlement_intervention_tools',
-            # 'app.tools.spatial_autocorrelation_tools',
-            'app.tools.complete_analysis_tools',  # CRITICAL: Include complete analysis
-            'app.tools.itn_planning_tools',  # ITN distribution planning
-            'app.tools.export_tools',  # Export functionality
-            'app.tools.methodology_explanation_tools',  # Methodology explanations
-            'app.tools.chatmrpt_help_tool',  # Help and guidance tool
-            'app.tools.variable_distribution'  # CRITICAL FIX: Variable distribution visualization
+            'app.tools.complete_analysis_tools',
+            'app.tools.itn_planning_tools',
+            'app.tools.export_tools',
+            'app.tools.methodology_explanation_tools',
+            'app.tools.chatmrpt_help_tool',
+            'app.tools.variable_distribution',
         ]
         
         # Try cache first, then discovery

@@ -4,7 +4,7 @@ Explains UI elements, features, workflows, and guides users through the applicat
 """
 
 from typing import Dict, Any, List, Optional
-from app.tools.base_tool import BaseTool
+from app.tools.base import BaseTool
 import logging
 
 # Import helpers for proactive assistance
