@@ -847,12 +847,18 @@ def data_analysis_chat():
                 })
 
             latest = max(data_files, key=os.path.getctime)
-            if latest.endswith(('.xlsx', '.xls')):
-                df = EncodingHandler.read_excel_with_encoding(latest)
-            else:
-                df = EncodingHandler.read_csv_with_encoding(latest)
-
             tpr_analyzer = TPRDataAnalyzer()
+            try:
+                df, schema = tpr_analyzer.infer_schema_from_file(latest)
+            except RuntimeError as exc:
+                logger.error(f"Schema inference failed for {latest}: {exc}")
+                return jsonify({
+                    'success': False,
+                    'message': f'Could not parse your data file: {exc}',
+                    'session_id': session_id,
+                })
+            state_manager.update_state({'column_schema': schema})
+
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
             tpr_handler.set_data(df)
             try:

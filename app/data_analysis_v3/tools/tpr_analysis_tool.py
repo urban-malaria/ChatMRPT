@@ -42,13 +42,10 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 from app.core.tpr_utils import (
-    is_tpr_data,
     calculate_ward_tpr,
     normalize_ward_name,
-    extract_state_from_data,
     get_geopolitical_zone,
     prepare_tpr_summary,
-    validate_tpr_data
 )
 from app.utils.map_overlays import add_lga_boundary_overlay, calculate_lga_averages
 from app.utils.visualization_controls import inject_lga_hover_highlight
@@ -900,54 +897,39 @@ def analyze_tpr_data(
         else:
             df = EncodingHandler.read_excel_with_encoding(data_file)
         
-        # Check if this is TPR data
-        is_tpr, tpr_info = is_tpr_data(df)
-        
-        if not is_tpr:
-            return f"This doesn't appear to be TPR data. Confidence: {tpr_info['confidence']:.2f}"
-        
-        logger.info(f"TPR data detected with confidence {tpr_info['confidence']:.2f}")
-        
-        # Validate TPR data
-        is_valid, errors = validate_tpr_data(df)
-        if not is_valid and action != "analyze":
-            return f"TPR data validation failed:\n" + "\n".join(errors)
-        
-        # Extract state name
-        state_name = extract_state_from_data(df)
-        
+        # Load persisted schema so state extraction works even in the analyze action
+        try:
+            _sm_early = DataAnalysisStateManager(session_id)
+            _schema_early = (_sm_early.load_state() or {}).get('column_schema') or {}
+        except Exception:
+            _schema_early = {}
+
+        # Extract state name from schema column
+        state_name = 'Unknown'
+        state_col = _schema_early.get('state')
+        if state_col and state_col in df.columns:
+            import re as _re
+            vals = df[state_col].dropna()
+            if not vals.empty:
+                _s = str(vals.iloc[0])
+                _s = _re.sub(r'^[a-z]{2}\s+', '', _s, flags=_re.IGNORECASE)
+                _s = _re.sub(r'\s+State$', '', _s, flags=_re.IGNORECASE)
+                state_name = ' '.join(w.capitalize() for w in _s.replace('-', ' ').split())
+
         # Perform requested action
         if action == "analyze":
-            # Basic analysis and exploration
-            summary = {
-                "file": os.path.basename(data_file),
-                "rows": len(df),
-                "columns": len(df.columns),
-                "state": state_name,
-                "tpr_confidence": tpr_info['confidence'],
-                "has_rdt": tpr_info['has_rdt'],
-                "has_microscopy": tpr_info['has_microscopy'],
-                "validation_errors": errors if not is_valid else None
-            }
-            
             # Get column info
             column_info = []
-            for col in df.columns[:20]:  # First 20 columns
+            for col in df.columns[:20]:
                 dtype = str(df[col].dtype)
                 null_count = df[col].isna().sum()
                 column_info.append(f"  - {col}: {dtype} ({null_count} nulls)")
-            
-            result = f"""TPR Data Analysis Results:
-            
-File: {summary['file']}
-State: {summary['state']}
-Shape: {summary['rows']} rows × {summary['columns']} columns
-TPR Detection Confidence: {summary['tpr_confidence']:.2%}
 
-Data Quality:
-- Has RDT data: {summary['has_rdt']}
-- Has Microscopy data: {summary['has_microscopy']}
-- Validation: {'Passed' if is_valid else 'Failed - ' + ', '.join(errors[:3])}
+            result = f"""TPR Data Analysis Results:
+
+File: {os.path.basename(data_file)}
+State: {state_name}
+Shape: {len(df)} rows × {len(df.columns)} columns
 
 Sample Columns:
 {chr(10).join(column_info)}

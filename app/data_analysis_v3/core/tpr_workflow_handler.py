@@ -61,6 +61,25 @@ class TPRWorkflowHandler:
         self.tpr_selections = self.state_manager.get_tpr_selections() or {}
         logger.info(f"Loaded state: stage={self.current_stage}, selections={self.tpr_selections}")
 
+    def _extract_state_from_schema(self) -> str:
+        """Extract state name using the LLM-inferred schema column.
+
+        Replaces the old keyword-based extract_state_from_data() utility.
+        Returns empty string if schema or data is not available.
+        """
+        import re as _re
+        schema = getattr(self.tpr_analyzer, '_schema', {}) or {}
+        col = schema.get('state')
+        df = self.uploaded_data
+        if col and df is not None and col in df.columns:
+            vals = df[col].dropna()
+            if not vals.empty:
+                state = str(vals.iloc[0])
+                state = _re.sub(r'^[a-z]{2}\s+', '', state, flags=_re.IGNORECASE)
+                state = _re.sub(r'\s+State$', '', state, flags=_re.IGNORECASE)
+                return ' '.join(w.capitalize() for w in state.replace('-', ' ').split())
+        return ''
+
     # ---------- Small visualization helpers for selection steps ----------
     def _save_fig_as_html(self, fig, title: str) -> Optional[Dict[str, str]]:
         """Save a plotly figure into the session visualizations folder and return its web path."""
@@ -730,9 +749,8 @@ class TPRWorkflowHandler:
                 self.tpr_selections['state'] = saved_state
                 logger.info(f"🔵 Loaded state from state_manager: {saved_state}")
             else:
-                # Try to extract from data
-                from app.core.tpr_utils import extract_state_from_data
-                detected_state = extract_state_from_data(self.uploaded_data)
+                # Try to extract from data via schema
+                detected_state = self._extract_state_from_schema()
                 if detected_state:
                     self.tpr_selections['state'] = detected_state
                     self.state_manager.save_tpr_selection('state', detected_state)
@@ -968,9 +986,8 @@ class TPRWorkflowHandler:
                 self.tpr_selections['state'] = saved_state
                 logger.info(f"🟣 Loaded state from state_manager: {saved_state}")
             else:
-                # Try to extract from data
-                from app.core.tpr_utils import extract_state_from_data
-                detected_state = extract_state_from_data(self.uploaded_data)
+                # Try to extract from data via schema
+                detected_state = self._extract_state_from_schema()
                 if detected_state:
                     self.tpr_selections['state'] = detected_state
                     self.state_manager.save_tpr_selection('state', detected_state)
@@ -1182,9 +1199,8 @@ class TPRWorkflowHandler:
                 self.tpr_selections['state'] = saved_state
                 logger.info(f"🟣 Loaded state from state_manager: {saved_state}")
             else:
-                # Extract state from data as fallback
-                from app.core.tpr_utils import extract_state_from_data
-                detected_state = extract_state_from_data(self.uploaded_data)
+                # Extract state from data via schema as fallback
+                detected_state = self._extract_state_from_schema()
                 if detected_state:
                     self.tpr_selections['state'] = detected_state
                     self.state_manager.save_tpr_selection('state', detected_state)

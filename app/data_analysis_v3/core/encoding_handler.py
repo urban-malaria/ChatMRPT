@@ -201,7 +201,8 @@ class EncodingHandler:
     def read_excel_with_encoding(
         file_path: str,
         sheet_name: Optional[Any] = 0,
-        nrows: Optional[int] = None
+        nrows: Optional[int] = None,
+        header: int = 0,
     ) -> pd.DataFrame:
         """
         Read Excel file with automatic encoding fixing.
@@ -210,27 +211,15 @@ class EncodingHandler:
             file_path: Path to Excel file
             sheet_name: Sheet to read
             nrows: Number of rows to read
+            header: Row number to use as column names (0-indexed).
+                    Pass the value returned by LLM schema inference when the file
+                    has a blank first row (e.g. DHIS2 exports use header=1).
 
         Returns:
             DataFrame with fixed encoding
         """
         # Excel files handle encoding differently, but we still fix the content
-        df = pd.read_excel(file_path, sheet_name=sheet_name, nrows=nrows)
-
-        # Detect blank first row: if ALL columns are Unnamed and the first data row
-        # looks like actual column headers (>40% non-null strings), re-read with header=1.
-        # This handles DHIS2 exports and other tools that emit a blank row before headers.
-        unnamed_count = sum(1 for c in df.columns if str(c).startswith('Unnamed:'))
-        if unnamed_count == len(df.columns) and len(df) > 0:
-            first_row_strings = df.iloc[0].apply(
-                lambda x: isinstance(x, str) and bool(x.strip())
-            ).sum()
-            if first_row_strings > len(df.columns) * 0.4:
-                df = pd.read_excel(file_path, sheet_name=sheet_name, nrows=nrows, header=1)
-                logger.info(
-                    "Blank header row detected in %s — re-read with header=1 (%d real columns found)",
-                    file_path, len(df.columns)
-                )
+        df = pd.read_excel(file_path, sheet_name=sheet_name, nrows=nrows, header=header)
 
         # Fix column names
         df = EncodingHandler.fix_column_names(df)
