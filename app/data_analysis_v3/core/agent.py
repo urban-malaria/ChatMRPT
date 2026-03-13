@@ -710,6 +710,9 @@ class DataAnalysisAgent:
                     rows = data_shape.get('rows', 'unknown')
                     cols = data_shape.get('cols', 'unknown')
                     context_parts.append(f"Dataset shape: {rows} rows x {cols} columns.")
+                schema_desc = workflow_context.get('column_schema_description')
+                if schema_desc:
+                    context_parts.append(schema_desc)
 
             context_message = HumanMessage(content='\n'.join(context_parts))
 

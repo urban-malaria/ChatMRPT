@@ -169,7 +169,49 @@ def _build_general_workflow_context(session_id: str) -> dict:
     # Limit columns to avoid overwhelming the prompt
     if context.get('data_columns') and len(context['data_columns']) > 120:
         context['data_columns_preview'] = context['data_columns'][:120]
-    
+
+    # If we have a saved schema, inject a human-readable column mapping so the
+    # agent can describe columns with confidence instead of guessing.
+    try:
+        from app.data_analysis_v3.core.state_manager import DataAnalysisStateManager
+
+        sm = DataAnalysisStateManager(session_id)
+        saved_state = sm.load_state() or {}
+        saved_schema = saved_state.get('column_schema')
+        if saved_schema:
+            _label = {
+                'state': 'State',
+                'lga': 'LGA (Local Government Area)',
+                'ward': 'Ward',
+                'facility_name': 'Facility name',
+                'facility_level': 'Facility level (Primary/Secondary/Tertiary)',
+                'period': 'Reporting period',
+                'u5_rdt_tested': 'Under-5 RDT tested (denominator)',
+                'u5_rdt_positive': 'Under-5 RDT positive (numerator)',
+                'o5_rdt_tested': 'Over-5 RDT tested (denominator)',
+                'o5_rdt_positive': 'Over-5 RDT positive (numerator)',
+                'pw_rdt_tested': 'Pregnant women RDT tested (denominator)',
+                'pw_rdt_positive': 'Pregnant women RDT positive (numerator)',
+                'u5_microscopy_tested': 'Under-5 Microscopy tested (denominator)',
+                'u5_microscopy_positive': 'Under-5 Microscopy positive (numerator)',
+                'o5_microscopy_tested': 'Over-5 Microscopy tested (denominator)',
+                'o5_microscopy_positive': 'Over-5 Microscopy positive (numerator)',
+                'pw_microscopy_tested': 'Pregnant women Microscopy tested (denominator)',
+                'pw_microscopy_positive': 'Pregnant women Microscopy positive (numerator)',
+            }
+            mapping_lines = [
+                f"  {v} → column: \"{saved_schema[k]}\""
+                for k, v in _label.items()
+                if saved_schema.get(k)
+            ]
+            if mapping_lines:
+                context['column_schema_description'] = (
+                    "Known column meanings (from schema inference):\n"
+                    + "\n".join(mapping_lines)
+                )
+    except Exception:
+        pass
+
     return context
 
 
