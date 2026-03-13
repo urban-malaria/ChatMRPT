@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import VisualizationContainer from '../Visualization/VisualizationContainer';
 import DualMethodDisplay from '../Analysis/DualMethodDisplay';
 import type { RegularMessage as RegularMessageType } from '@/types';
@@ -119,6 +120,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                         <>
                           <div dangerouslySetInnerHTML={{ __html: htmlContent }} className="mb-2" />
                           <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
                             components={{
                               code: ({ className, children, ...props }) => {
                                 const match = /language-(\w+)/.exec(className || '');
@@ -150,6 +152,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                 </>
               ) : (
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
                     code: ({ className, children, ...props }) => {
                       const match = /language-(\w+)/.exec(className || '');
@@ -167,6 +170,23 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                     },
                     a: ({ ...props }) => (
                       <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" />
+                    ),
+                    table: ({ ...props }) => (
+                      <div className="overflow-x-auto my-2">
+                        <table className="min-w-full border-collapse text-sm" {...props} />
+                      </div>
+                    ),
+                    thead: ({ ...props }) => (
+                      <thead className="bg-gray-200 dark:bg-dark-border" {...props} />
+                    ),
+                    th: ({ ...props }) => (
+                      <th className="border border-gray-300 dark:border-gray-600 px-3 py-1 text-left font-semibold" {...props} />
+                    ),
+                    td: ({ ...props }) => (
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1" {...props} />
+                    ),
+                    tr: ({ ...props }) => (
+                      <tr className="even:bg-gray-50 dark:even:bg-dark-bg-secondary" {...props} />
                     ),
                   }}
                 >
