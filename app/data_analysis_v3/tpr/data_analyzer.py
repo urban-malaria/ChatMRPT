@@ -3,6 +3,10 @@ TPR Data Analyzer
 
 Analyzes TPR data to provide rich contextual information at each decision point.
 Generates statistics for states, facilities, and age groups to help users make informed choices.
+
+Schema inference is LLM-driven: one call per dataset reads the file raw (header=None),
+asks the model to identify the header row and map ALL semantic columns (structural +
+age/test-method), then re-reads with the correct header. No keyword fallbacks.
 """
 
 import json
@@ -13,131 +17,306 @@ import re
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional, Tuple
-from collections import defaultdict
 
 logger = logging.getLogger(__name__)
-
-# Semantic fields the schema inference resolves
-_SCHEMA_FIELDS = ('state', 'lga', 'ward', 'facility_name', 'facility_level', 'period')
-
-# Keyword fallback lists per field (last resort when LLM unavailable)
-_KEYWORD_MAP: Dict[str, List[str]] = {
-    'state':          ['state', 'region', 'province'],
-    'lga':            ['lga', 'local government'],
-    'facility_name':  ['facility', 'clinic', 'hospital', 'health', 'center'],
-    'facility_level': ['facilitylevel', 'facility level', 'facility_level',
-                       'facilitytype', 'level', 'type', 'tier', 'category'],
-    'ward':           ['ward'],
-    'period':         ['period', 'periodname', 'date', 'month', 'year'],
-}
 
 
 class TPRDataAnalyzer:
     """
     Analyzes TPR data to generate contextual statistics for workflow decisions.
-    
-    Features:
-    - State-level analysis with facility counts
-    - Facility type distribution
-    - Age group test availability and positivity rates
-    - Data quality assessment
-    - Recommendations based on data patterns
     """
-    
+
     def __init__(self):
-        """Initialize the TPR data analyzer."""
         self.data = None
         self.analysis_cache = {}
-        self._schema: Optional[Dict[str, Optional[str]]] = None  # inferred once per instance
-        
-    def analyze_states(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Analyze available states in the data.
-        
-        Args:
-            df: DataFrame with TPR data
-            
-        Returns:
-            Dictionary with state-level statistics
-        """
-        try:
-            states_info = {}
+        self._schema: Optional[Dict[str, Optional[str]]] = None  # set once per instance
 
-            # Infer schema once (no-op on subsequent calls within this workflow run)
+    # ------------------------------------------------------------------
+    # Public entry point: infer schema + read file correctly
+    # ------------------------------------------------------------------
+
+    def infer_schema_from_file(self, file_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """
+        Read the file raw (header=None), ask the LLM to identify the header row
+        and map every semantic column, then re-read with the correct header.
+
+        Returns (df, schema).  Sets self._schema so all analyze_* methods
+        work without further LLM calls.
+
+        Raises RuntimeError if inference fails (API down, no key, etc.) so the
+        caller can surface a clear error rather than silently producing wrong results.
+        """
+        from app.data_analysis_v3.core.encoding_handler import EncodingHandler
+
+        # Step 1 — raw read (no header assumptions)
+        try:
+            if file_path.lower().endswith('.csv'):
+                raw = pd.read_csv(file_path, header=None, nrows=15,
+                                  encoding='utf-8', errors='replace')
+            else:
+                raw = pd.read_excel(file_path, header=None, nrows=15)
+        except Exception as exc:
+            raise RuntimeError(f"Cannot read file for schema inference: {exc}") from exc
+
+        # Step 2 — fix encoding artifacts in raw cell values so the LLM sees the
+        # same column names that EncodingHandler will produce after re-reading
+        # (e.g. raw bytes show ">=5" but after fix it becomes "≥5")
+        raw = raw.apply(
+            lambda col: col.map(
+                lambda x: EncodingHandler.fix_text_encoding(str(x)) if isinstance(x, str) else x
+            )
+        )
+
+        # Step 3 — LLM determines structure + column mapping
+        parsed = self._call_llm_schema(raw, file_path)
+
+        # Step 4 — re-read with the correct header row
+        header_row = int(parsed.get('header_row', 0))
+        try:
+            if file_path.lower().endswith('.csv'):
+                df = EncodingHandler.read_csv_with_encoding(file_path)
+            else:
+                df = EncodingHandler.read_excel_with_encoding(file_path, header=header_row)
+        except Exception as exc:
+            raise RuntimeError(f"Cannot re-read file with header_row={header_row}: {exc}") from exc
+
+        # Step 5 — validate every mapped column actually exists in df
+        # Preserve header_row so callers can re-read the file with the same offset.
+        validated: Dict[str, Any] = {'header_row': header_row}
+
+        # Build a normalized lookup: replace ≥/≤ with >=/<=  so LLM output
+        # "Persons tested positive... >=5" matches the actual column "...≥5".
+        def _norm(s: str) -> str:
+            return s.replace('≥', '>=').replace('≤', '<=') if s else s
+
+        actual_cols_norm = {_norm(c): c for c in df.columns}
+
+        for field, col in parsed.items():
+            if field == 'header_row':
+                continue
+            if not col or col in ('null', 'None', None):
+                validated[field] = None
+            elif col in df.columns:
+                validated[field] = col
+            elif _norm(col) in actual_cols_norm:
+                # LLM returned ">=" but actual column has "≥" (or vice-versa)
+                actual = actual_cols_norm[_norm(col)]
+                logger.info("Fuzzy-matched '%s' → '%s' (≥/>= normalisation)", col, actual)
+                validated[field] = actual
+            else:
+                # Last resort: substring match — handles LLM truncating long column names.
+                # Disambiguate using field semantics: o5 should prefer "excl PW";
+                # pw should prefer "preg women"; if still ambiguous, drop.
+                norm_col = _norm(col)
+                candidates = [(norm_a, a) for norm_a, a in actual_cols_norm.items()
+                              if norm_col in norm_a]
+                if len(candidates) == 1:
+                    logger.info("Substring-matched '%s' → '%s'", col, candidates[0][1])
+                    validated[field] = candidates[0][1]
+                elif len(candidates) > 1:
+                    # Disambiguate by field type
+                    if 'pw_' in field:
+                        pref = [(na, a) for na, a in candidates if 'preg women' in na.lower()]
+                    elif 'o5_' in field:
+                        pref = [(na, a) for na, a in candidates if 'excl pw' in na.lower() or 'excl. pw' in na.lower()]
+                    else:
+                        pref = []
+                    chosen = pref[0][1] if len(pref) == 1 else None
+                    if chosen:
+                        logger.info("Disambiguated substring-match '%s' → '%s' (field=%s)", col, chosen, field)
+                        validated[field] = chosen
+                    else:
+                        logger.warning(
+                            "Ambiguous substring match for field '%s' col '%s': %s — dropping",
+                            field, col, [a for _, a in candidates]
+                        )
+                        validated[field] = None
+                else:
+                    logger.warning("Schema field '%s' → '%s' not found in columns — dropping", field, col)
+                    validated[field] = None
+
+        self._schema = validated
+        logger.info(
+            "Schema inferred from %s: %s",
+            os.path.basename(file_path),
+            {k: v for k, v in validated.items() if v},
+        )
+        return df, validated
+
+    def _call_llm_schema(self, raw: pd.DataFrame, file_path: str) -> Dict[str, Any]:
+        """Send the raw preview to gpt-4o-mini and get back the full schema dict."""
+        api_key = self._get_openai_api_key()
+        if not api_key:
+            raise RuntimeError("No OpenAI API key — cannot infer column schema")
+
+        import openai
+
+        raw_preview = raw.to_string(max_cols=40, max_colwidth=80)
+
+        # Build a full (untruncated) listing of values per row so the LLM can
+        # read complete column names even when the table preview wraps long text.
+        row_value_lines = []
+        for i in range(len(raw)):
+            vals = [str(v) for v in raw.iloc[i].tolist()
+                    if pd.notna(v) and str(v).strip() and str(v).lower() != 'nan']
+            if vals:
+                row_value_lines.append(f"  Row {i}: {vals}")
+        row_values_section = "\n".join(row_value_lines)
+
+        prompt = (
+            "You are analyzing a Nigerian malaria surveillance dataset.\n"
+            "It may be a DHIS2 export, HMIS data, NMEP-processed Excel, or a custom format.\n\n"
+            f"The file was read with header=None. Here are the first {len(raw)} rows (0-indexed):\n\n"
+            f"{raw_preview}\n\n"
+            "Full cell values per row (use these for EXACT column names — no truncation):\n"
+            f"{row_values_section}\n\n"
+            "TASK:\n"
+            "1. Find the row index that contains the actual column headers "
+            "(the row with recognizable field names, not blank, not data values).\n"
+            "2. Using those column names, map every semantic field below to its EXACT column name.\n"
+            "   Copy the column name character-for-character from the row values listed above.\n"
+            "   Return null for fields not present. Never invent or rename columns.\n\n"
+            "CRITICAL DISTINCTION — read carefully:\n"
+            "  'tested' fields = TOTAL people who received a test (the DENOMINATOR).\n"
+            "    Column names contain phrases like 'tested by RDT', 'presenting with fever & tested'.\n"
+            "  'positive' fields = people who tested POSITIVE (the NUMERATOR).\n"
+            "    Column names contain phrases like 'tested positive', 'positive by RDT'.\n"
+            "  These are ALWAYS different columns. The tested count ≥ the positive count.\n"
+            "  NEVER map the same column to both a _tested and a _positive field.\n\n"
+            "Semantic fields:\n"
+            "- header_row: (integer) 0-indexed row that is the column header row\n"
+            "- state: Nigerian state name\n"
+            "- lga: Local Government Area\n"
+            "- ward: Ward name\n"
+            "- facility_name: Health facility name\n"
+            "- facility_level: Facility tier/type (Primary / Secondary / Tertiary / PHC)\n"
+            "- period: Reporting period (year, month, date, or period code)\n"
+            "- u5_rdt_tested: TOTAL people tested by RDT — Under-5 children (denominator)\n"
+            "- u5_rdt_positive: People who tested POSITIVE by RDT — Under-5 children (numerator)\n"
+            "- o5_rdt_tested: TOTAL people tested by RDT — Over-5 / Adults excl. pregnant women (denominator)\n"
+            "- o5_rdt_positive: People who tested POSITIVE by RDT — Over-5 / Adults (numerator)\n"
+            "- pw_rdt_tested: TOTAL pregnant women tested by RDT (denominator)\n"
+            "- pw_rdt_positive: Pregnant women who tested POSITIVE by RDT (numerator)\n"
+            "- u5_microscopy_tested: TOTAL tested by Microscopy — Under-5 (denominator)\n"
+            "- u5_microscopy_positive: Tested POSITIVE by Microscopy — Under-5 (numerator)\n"
+            "- o5_microscopy_tested: TOTAL tested by Microscopy — Over-5 / Adults (denominator)\n"
+            "- o5_microscopy_positive: Tested POSITIVE by Microscopy — Over-5 / Adults (numerator)\n"
+            "- pw_microscopy_tested: TOTAL pregnant women tested by Microscopy (denominator)\n"
+            "- pw_microscopy_positive: Pregnant women tested POSITIVE by Microscopy (numerator)\n\n"
+            "Return JSON only, no explanation:\n"
+            '{"header_row": 1, "state": "...", "lga": "...", "ward": "...", '
+            '"facility_name": "...", "facility_level": "...", "period": "...", '
+            '"u5_rdt_tested": "...", "u5_rdt_positive": "...", '
+            '"o5_rdt_tested": "...", "o5_rdt_positive": "...", '
+            '"pw_rdt_tested": "...", "pw_rdt_positive": "...", '
+            '"u5_microscopy_tested": "...", "u5_microscopy_positive": "...", '
+            '"o5_microscopy_tested": "...", "o5_microscopy_positive": "...", '
+            '"pw_microscopy_tested": "...", "pw_microscopy_positive": "..."}'
+        )
+
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=900,
+            response_format={"type": "json_object"},
+        )
+
+        raw_resp = response.choices[0].message.content
+        parsed = json.loads(raw_resp)
+        logger.info("LLM schema response: %s", parsed)
+        return parsed
+
+    def _get_openai_api_key(self) -> Optional[str]:
+        try:
+            from flask import current_app
+            return current_app.config.get('OPENAI_API_KEY')
+        except Exception:
+            return os.environ.get('OPENAI_API_KEY')
+
+    # ------------------------------------------------------------------
+    # Schema accessors
+    # ------------------------------------------------------------------
+
+    def ensure_schema(self, df: pd.DataFrame) -> None:
+        """No-op if schema was already set by infer_schema_from_file. Kept for
+        compatibility — the schema must be set before calling analyze_* methods."""
+        if self._schema is None:
+            logger.warning(
+                "ensure_schema called but no schema set — "
+                "call infer_schema_from_file() first"
+            )
+
+    def _get_column(self, df: pd.DataFrame, field: str) -> Optional[str]:
+        """Resolve a semantic field name to a DataFrame column name via schema."""
+        col = (self._schema or {}).get(field)
+        return col if col and col in df.columns else None
+
+    # ------------------------------------------------------------------
+    # Analyze methods
+    # ------------------------------------------------------------------
+
+    def analyze_states(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Analyze available states in the data."""
+        try:
             self.ensure_schema(df)
 
             state_col = self._get_column(df, 'state')
             facility_col = self._get_column(df, 'facility_name')
 
             if not state_col:
-                logger.warning("No state column detected in dataset")
+                logger.warning("No state column in schema")
                 return {
                     'states': {},
                     'total_states': 0,
                     'recommended': None,
                     'state_column': None,
                     'state_column_detected': False,
-                    'error': 'STATE_COLUMN_NOT_FOUND'
+                    'error': 'STATE_COLUMN_NOT_FOUND',
                 }
-            
-            # Find test columns dynamically
-            test_cols = self._find_test_columns(df)
-            
-            # Analyze each state
+
+            states_info = {}
             for state in df[state_col].dropna().unique():
                 state_data = df[df[state_col] == state]
-                
-                state_info = {
+                states_info[str(state)] = {
                     'name': str(state),
                     'display_name': self._strip_dhis2_prefix(state),
                     'total_records': len(state_data),
-                    'facilities': len(state_data) if not facility_col else state_data[facility_col].nunique(),
+                    'facilities': (
+                        state_data[facility_col].nunique()
+                        if facility_col else len(state_data)
+                    ),
                     'total_tests': self._count_total_tests(state_data),
-                    'data_completeness': self._calculate_completeness(state_data)
+                    'data_completeness': self._calculate_completeness(state_data),
                 }
-                
-                states_info[str(state)] = state_info
-            
-            # Sort states by total tests (most data first)
-            sorted_states = sorted(states_info.items(), 
-                                 key=lambda x: x[1]['total_tests'], 
-                                 reverse=True)
-            
+
+            sorted_states = sorted(
+                states_info.items(),
+                key=lambda x: x[1]['total_tests'],
+                reverse=True,
+            )
+
             return {
                 'states': dict(sorted_states),
                 'total_states': len(states_info),
                 'recommended': sorted_states[0][0] if sorted_states else None,
                 'state_column': state_col,
-                'state_column_detected': True
+                'state_column_detected': True,
             }
-            
-        except Exception as e:
-            logger.error(f"Error analyzing states: {e}")
-            return {'error': str(e), 'states': {}}
-    
-    def analyze_facility_levels(self, df: pd.DataFrame, state: str) -> Dict[str, Any]:
-        """
-        Analyze facility level distribution for a state.
-        
-        Args:
-            df: DataFrame with TPR data
-            state: Selected state name
-            
-        Returns:
-            Dictionary with facility level statistics
-        """
-        try:
-            # Schema should already be set from analyze_states; ensure it is
-            self.ensure_schema(df)
 
-            state_col = self._get_column(df, 'state')
-            if state_col and state in df[state_col].values:
-                df = df[df[state_col] == state]
+        except Exception as exc:
+            logger.error("Error analyzing states: %s", exc)
+            return {'error': str(exc), 'states': {}}
+
+    def analyze_facility_levels(self, df: pd.DataFrame, state: str) -> Dict[str, Any]:
+        """Analyze facility level distribution for a state."""
+        try:
+            self.ensure_schema(df)
+            df = self._filter_data(df, state, 'all')
 
             level_col = self._get_column(df, 'facility_level')
-            
             if not level_col:
-                # If no facility level column, return single "all" option
                 return {
                     'levels': {
                         'all': {
@@ -145,50 +324,41 @@ class TPRDataAnalyzer:
                             'count': len(df),
                             'percentage': 100,
                             'description': 'All healthcare facilities',
-                            'recommended': False
+                            'recommended': False,
                         }
                     },
-                    'has_levels': False
+                    'has_levels': False,
                 }
-            
+
+            s = self._schema or {}
+            rdt_tested_keys = ['u5_rdt_tested', 'o5_rdt_tested', 'pw_rdt_tested']
+            micro_tested_keys = ['u5_microscopy_tested', 'o5_microscopy_tested', 'pw_microscopy_tested']
+
             levels_info = {}
-            total_facilities = len(df)
-            
-            # Analyze each level
+            total_records = len(df)
+
             for level in df[level_col].dropna().unique():
                 level_data = df[df[level_col] == level]
-                
-                # Normalize level name
                 level_key = level.lower().replace(' ', '_')
-                
-                # Calculate test type stats
-                rdt_tests = 0
-                microscopy_tests = 0
-                for col in level_data.columns:
-                    col_lower = col.lower()
-                    if pd.api.types.is_numeric_dtype(level_data[col]):
-                        if 'rdt' in col_lower and ('test' in col_lower or 'examined' in col_lower):
-                            if 'positive' not in col_lower and 'negative' not in col_lower:
-                                rdt_tests += level_data[col].fillna(0).sum()
-                        elif 'microscopy' in col_lower and ('test' in col_lower or 'examined' in col_lower):
-                            if 'positive' not in col_lower and 'negative' not in col_lower:
-                                microscopy_tests += level_data[col].fillna(0).sum()
-                
-                # Determine urban/rural split if possible
-                urban_rural = self._analyze_urban_rural(level_data)
-                
+
+                rdt_tests = sum(
+                    self._col_sum(level_data, s.get(k)) for k in rdt_tested_keys
+                )
+                microscopy_tests = sum(
+                    self._col_sum(level_data, s.get(k)) for k in micro_tested_keys
+                )
+
                 levels_info[level_key] = {
                     'name': level,
                     'count': len(level_data),
-                    'percentage': round((len(level_data) / total_facilities) * 100, 1),
-                    'urban_percentage': urban_rural.get('urban', 0),
-                    'rural_percentage': urban_rural.get('rural', 0),
+                    'percentage': round((len(level_data) / total_records) * 100, 1),
+                    'urban_percentage': 0,
+                    'rural_percentage': 0,
                     'description': self._get_facility_description(level),
                     'rdt_tests': int(rdt_tests),
-                    'microscopy_tests': int(microscopy_tests)
+                    'microscopy_tests': int(microscopy_tests),
                 }
-            
-            # Determine which level is Primary and mark it as recommended
+
             primary_found = False
             for key, info in levels_info.items():
                 if 'primary' in info['name'].lower():
@@ -196,318 +366,156 @@ class TPRDataAnalyzer:
                     primary_found = True
                 else:
                     info['recommended'] = False
-            
-            # Add "all" option (not recommended by default)
+
             levels_info['all'] = {
                 'name': 'All Facilities',
-                'count': total_facilities,
+                'count': total_records,
                 'percentage': 100,
                 'description': 'Complete coverage across all facility types',
-                'recommended': False if primary_found else False  # Not recommended
+                'recommended': False,
             }
-            
+
             return {
                 'levels': levels_info,
                 'has_levels': True,
-                'total_facilities': total_facilities,
-                'state_name': state  # Add state name to response
+                'total_facilities': total_records,
+                'state_name': state,
             }
-            
-        except Exception as e:
-            logger.error(f"Error analyzing facility levels: {e}")
-            return {'error': str(e), 'levels': {}}
-    
+
+        except Exception as exc:
+            logger.error("Error analyzing facility levels: %s", exc)
+            return {'error': str(exc), 'levels': {}}
+
     def analyze_age_groups(self, df: pd.DataFrame, state: str, facility_level: str) -> Dict[str, Any]:
-        """
-        Analyze age group data availability and positivity rates.
-        
-        Args:
-            df: DataFrame with TPR data
-            state: Selected state
-            facility_level: Selected facility level
-            
-        Returns:
-            Dictionary with age group statistics
-        """
+        """Analyze age group data availability and positivity rates."""
         try:
-            # Filter data
             df = self._filter_data(df, state, facility_level)
-            
-            age_groups_info = {}
-            
-            # Log column names to help debug age group detection
-            logger.info(f"Analyzing age groups for {len(df)} records with columns: {list(df.columns[:20])}")
-            
-            # Analyze each age group
-            # EXCLUDE All Age Groups Combined per user requirement - only 3 specific groups
-            # Keys MUST match what formatter expects: 'u5', 'o5', 'pw'
-            age_patterns = {
-                'u5': {  # Changed from 'under_5' to 'u5'
+            s = self._schema or {}
+
+            # Schema key mapping per age group
+            age_meta = {
+                'u5': {
                     'name': 'Under 5 Years',
-                    # Original patterns and sanitized versions
-                    'test_patterns': ['<5', 'u5', 'under 5', 'under_5', '≤5',
-                                    'lt_5', 'lte_5', '5yrs', '_5yr', 'lt5', 'lte5',
-                                    'children', 'child'],  # More sanitized versions
-                    'positive_patterns': ['positive.*<5', 'positive.*u5',
-                                        'positive.*lt_5', 'positive.*lte_5',
-                                        'positive.*lt5', 'positive.*children'],  # More patterns
                     'description': 'Highest risk group for severe malaria',
-                    'icon': '👶'
+                    'icon': '👶',
+                    'rdt_tested': 'u5_rdt_tested',
+                    'rdt_positive': 'u5_rdt_positive',
+                    'microscopy_tested': 'u5_microscopy_tested',
+                    'microscopy_positive': 'u5_microscopy_positive',
                 },
-                'o5': {  # Changed from 'over_5' to 'o5'
-                    'name': 'Over 5 Years',  # Simplified name
-                    # Original patterns and sanitized versions
-                    # Be careful not to match Under 5 patterns
-                    'test_patterns': ['>5', '>=5', '≥5', 'o5', 'over 5', 'over_5',
-                                    'gt_5', 'gte_5', 'gt5', 'gte5',
-                                    'adult', '>5yrs', '≥5yrs', '>=5yrs', '5_years'],
-                    'positive_patterns': ['positive.*>5', 'positive.*≥5', 'positive.*>=5',
-                                        'positive.*o5', 'positive.*gt_5', 'positive.*gte_5',
-                                        'positive.*gt5', 'positive.*gte5', 'positive.*adult'],
+                'o5': {
+                    'name': 'Over 5 Years',
                     'description': 'Community transmission patterns',
-                    'icon': '👥'
+                    'icon': '👥',
+                    'rdt_tested': 'o5_rdt_tested',
+                    'rdt_positive': 'o5_rdt_positive',
+                    'microscopy_tested': 'o5_microscopy_tested',
+                    'microscopy_positive': 'o5_microscopy_positive',
                 },
-                'pw': {  # Changed from 'pregnant' to 'pw'
+                'pw': {
                     'name': 'Pregnant Women',
-                    'test_patterns': ['pregnant', 'anc', 'prenatal', 'pw', 'women',
-                                    'pregnancy', 'maternal'],  # More patterns
-                    'positive_patterns': ['positive.*pregnant', 'positive.*anc', 'positive.*pw',
-                                        'positive.*women', 'positive.*maternal'],
                     'description': 'Special vulnerable population',
-                    'icon': '🤰'
-                }
+                    'icon': '🤰',
+                    'rdt_tested': 'pw_rdt_tested',
+                    'rdt_positive': 'pw_rdt_positive',
+                    'microscopy_tested': 'pw_microscopy_tested',
+                    'microscopy_positive': 'pw_microscopy_positive',
+                },
             }
-            
-            for key, patterns in age_patterns.items():
-                # Find relevant columns for this age group
-                test_cols = self._find_columns_by_patterns(df, patterns['test_patterns'])
-                positive_cols = self._find_columns_by_patterns(df, patterns['positive_patterns'])
-                
-                # Debug logging for age group detection
-                if test_cols:
-                    logger.debug(f"Age group '{key}': Found test columns: {test_cols[:3]}")
-                else:
-                    logger.debug(f"Age group '{key}': No test columns found with patterns: {patterns['test_patterns'][:5]}")
-                
-                # Calculate statistics WITH test type breakdown
-                tests_available = 0
-                positives = 0
-                rdt_tests = 0
-                rdt_positives = 0
-                microscopy_tests = 0
-                microscopy_positives = 0
-                
-                # Sum up test counts by type
-                for col in test_cols:
-                    if pd.api.types.is_numeric_dtype(df[col]):
-                        col_sum = df[col].fillna(0).sum()
-                        tests_available += col_sum
-                        
-                        # Track by test type
-                        col_lower = col.lower()
-                        if 'rdt' in col_lower:
-                            rdt_tests += col_sum
-                        elif 'microscopy' in col_lower:
-                            microscopy_tests += col_sum
-                
-                # Sum up positive counts by type
-                for col in positive_cols:
-                    if pd.api.types.is_numeric_dtype(df[col]):
-                        col_sum = df[col].fillna(0).sum()
-                        positives += col_sum
-                        
-                        # Track by test type
-                        col_lower = col.lower()
-                        if 'rdt' in col_lower:
-                            rdt_positives += col_sum
-                        elif 'microscopy' in col_lower:
-                            microscopy_positives += col_sum
-                
-                # Calculate positivity rates
-                positivity_rate = (positives / tests_available * 100) if tests_available > 0 else 0
+
+            age_groups_info = {}
+
+            for key, meta in age_meta.items():
+                rdt_tests = self._col_sum(df, s.get(meta['rdt_tested']))
+                rdt_positives = self._col_sum(df, s.get(meta['rdt_positive']))
+                micro_tests = self._col_sum(df, s.get(meta['microscopy_tested']))
+                micro_positives = self._col_sum(df, s.get(meta['microscopy_positive']))
+
+                total_tests = rdt_tests + micro_tests
+                total_positives = rdt_positives + micro_positives
+
+                positivity_rate = (total_positives / total_tests * 100) if total_tests > 0 else 0
                 rdt_tpr = (rdt_positives / rdt_tests * 100) if rdt_tests > 0 else 0
-                microscopy_tpr = (microscopy_positives / microscopy_tests * 100) if microscopy_tests > 0 else 0
-                
-                # Count facilities with data
-                facilities_with_data = 0
-                for col in test_cols:
-                    facilities_with_data = max(facilities_with_data, df[col].notna().sum())
-                
+                micro_tpr = (micro_positives / micro_tests * 100) if micro_tests > 0 else 0
+
+                test_cols = [c for c in [s.get(meta['rdt_tested']), s.get(meta['microscopy_tested'])]
+                             if c and c in df.columns]
+                facilities_reporting = max(
+                    (df[c].notna().sum() for c in test_cols), default=0
+                )
+
                 age_groups_info[key] = {
-                    'name': patterns['name'],
-                    'total_tests': int(tests_available),  # Changed from 'tests_available' to 'total_tests'
-                    'total_positive': int(positives),  # Added 'total_positive' (raw count)
+                    'name': meta['name'],
+                    'total_tests': int(total_tests),
+                    'total_positive': int(total_positives),
                     'positivity_rate': round(positivity_rate, 1),
-                    'facilities_reporting': facilities_with_data,
-                    'description': patterns['description'],
-                    'icon': patterns['icon'],
-                    'has_data': tests_available > 0,
-                    # Add test type breakdown
+                    'facilities_reporting': int(facilities_reporting),
+                    'description': meta['description'],
+                    'icon': meta['icon'],
+                    'has_data': total_tests > 0,
                     'rdt_tests': int(rdt_tests),
                     'rdt_tpr': round(rdt_tpr, 1),
-                    'microscopy_tests': int(microscopy_tests),
-                    'microscopy_tpr': round(microscopy_tpr, 1)
+                    'microscopy_tests': int(micro_tests),
+                    'microscopy_tpr': round(micro_tpr, 1),
                 }
-            
-            # Remove percentage calculation - doesn't make sense when groups can overlap
-            # User complained about percentages over 100%, so we'll just show absolute numbers
 
-            # Mark Under 5 as recommended (per production standard)
-            # Fixed to use correct keys: 'u5', 'o5' instead of 'under_5', 'over_5'
-            if 'u5' in age_groups_info and age_groups_info['u5']['has_data']:
+            # Mark recommended group
+            if age_groups_info.get('u5', {}).get('has_data'):
                 age_groups_info['u5']['recommended'] = True
-            elif 'o5' in age_groups_info and age_groups_info['o5']['has_data']:
-                age_groups_info['o5']['recommended'] = True  # Fallback if no U5 data
+            elif age_groups_info.get('o5', {}).get('has_data'):
+                age_groups_info['o5']['recommended'] = True
 
-            # Calculate total tests across all age groups for "all" option
-            total_tests_all = sum(info.get('total_tests', 0) for info in age_groups_info.values())
+            total_tests_all = sum(v.get('total_tests', 0) for v in age_groups_info.values())
 
             return {
                 'age_groups': age_groups_info,
-                'total_tests': total_tests_all,  # Added for "all age groups combined" display
-                'state': state,  # Include state name for formatter
-                'facility_level': facility_level  # Include facility level for formatter
+                'total_tests': total_tests_all,
+                'state': state,
+                'facility_level': facility_level,
             }
-            
-        except Exception as e:
-            logger.error(f"Error analyzing age groups: {e}")
-            return {'error': str(e), 'age_groups': {}}
-    
+
+        except Exception as exc:
+            logger.error("Error analyzing age groups: %s", exc)
+            return {'error': str(exc), 'age_groups': {}}
+
     # ------------------------------------------------------------------
-    # Schema inference — LLM-first, keyword fallback
+    # Internal helpers
     # ------------------------------------------------------------------
 
-    def ensure_schema(self, df: pd.DataFrame) -> None:
-        """Infer and cache column schema for this dataset. No-op after first call."""
-        if self._schema is None:
-            self._schema = self._infer_column_schema(df)
+    @staticmethod
+    def _col_sum(df: pd.DataFrame, col: Optional[str]) -> float:
+        """Sum a column if it exists and is numeric, else 0."""
+        if col and col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+            return float(df[col].fillna(0).sum())
+        return 0.0
 
-    def _infer_column_schema(self, df: pd.DataFrame) -> Dict[str, Optional[str]]:
-        """
-        Ask the LLM to map semantic field names to actual column names.
+    def _count_total_tests(self, df: pd.DataFrame) -> int:
+        """Sum all test columns from the schema."""
+        s = self._schema or {}
+        test_keys = [
+            'u5_rdt_tested', 'o5_rdt_tested', 'pw_rdt_tested',
+            'u5_microscopy_tested', 'o5_microscopy_tested', 'pw_microscopy_tested',
+        ]
+        return int(sum(self._col_sum(df, s.get(k)) for k in test_keys))
 
-        Uses gpt-4o-mini (cheap, fast) with JSON mode. Validates every
-        returned column name actually exists in df. Falls back to {} on
-        any failure so _get_column() degrades to keyword detection.
-        """
-        try:
-            api_key = self._get_openai_api_key()
-            if not api_key:
-                logger.warning("No OpenAI API key — schema inference skipped, using keyword fallback")
-                return {}
+    def _filter_data(self, df: pd.DataFrame, state: str, facility_level: str) -> pd.DataFrame:
+        """Filter data by state and facility level using schema columns."""
+        result = df.copy()
 
-            import openai  # local import — only needed when LLM is available
+        if state:
+            state_col = self._get_column(df, 'state')
+            if state_col and state in df[state_col].values:
+                result = result[result[state_col] == state]
 
-            # Build a compact sample: column names + first 3 non-empty rows
-            sample = df.dropna(how='all').head(3)
-            cols_preview = sample.to_string(max_cols=50, max_colwidth=60)
+        if facility_level and facility_level != 'all':
+            level_col = self._get_column(df, 'facility_level')
+            if level_col:
+                if facility_level in result[level_col].values:
+                    result = result[result[level_col] == facility_level]
+                elif result[level_col].astype(str).str.lower().eq(facility_level.lower()).any():
+                    result = result[result[level_col].astype(str).str.lower() == facility_level.lower()]
 
-            prompt = (
-                "You are analyzing a Nigerian malaria surveillance dataset.\n"
-                "It may be a DHIS2 export, HMIS data, NMEP-processed Excel, or a custom format.\n\n"
-                "Column names and sample values (first 3 rows):\n"
-                f"{cols_preview}\n\n"
-                "Identify the exact column name for each semantic field below.\n"
-                "Return null for any field not present.\n"
-                "Return ONLY the exact column name as it appears — do not rename or invent columns.\n\n"
-                "Fields:\n"
-                "- state: Nigerian state name\n"
-                "- lga: Local Government Area\n"
-                "- ward: Ward name\n"
-                "- facility_name: Name of the health facility\n"
-                "- facility_level: Facility tier/type (Primary, Secondary, Tertiary, PHC, etc.)\n"
-                "- period: Reporting period (date, year, month, or period code)\n\n"
-                'Return JSON only, no explanation:\n'
-                '{"state": "...", "lga": "...", "ward": "...", '
-                '"facility_name": "...", "facility_level": "...", "period": "..."}'
-            )
-
-            client = openai.OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=250,
-                response_format={"type": "json_object"},
-            )
-
-            raw = response.choices[0].message.content
-            parsed = json.loads(raw)
-
-            # Validate: every value must be None or a real column in df
-            validated: Dict[str, Optional[str]] = {}
-            for field in _SCHEMA_FIELDS:
-                val = parsed.get(field)
-                if not val or val == 'null':
-                    validated[field] = None
-                elif val in df.columns:
-                    validated[field] = val
-                else:
-                    logger.warning(
-                        "Schema inference returned unknown column '%s' for field '%s' — ignoring",
-                        val, field,
-                    )
-                    validated[field] = None
-
-            logger.info("Column schema inferred: %s", validated)
-            return validated
-
-        except Exception as e:
-            logger.warning("Schema inference failed (%s) — falling back to keyword detection", e)
-            return {}
-
-    def _get_openai_api_key(self) -> Optional[str]:
-        """Get OpenAI API key from Flask config or environment."""
-        try:
-            from flask import current_app
-            return current_app.config.get('OPENAI_API_KEY')
-        except Exception:
-            return os.environ.get('OPENAI_API_KEY')
-
-    def _get_column(self, df: pd.DataFrame, field: str) -> Optional[str]:
-        """
-        Resolve a semantic field to a column name.
-
-        Priority:
-          1. LLM-inferred schema (self._schema)
-          2. Keyword fallback (_keyword_fallback)
-        """
-        if self._schema is not None:
-            col = self._schema.get(field)
-            if col and col in df.columns:
-                return col
-        return self._keyword_fallback(df, field)
-
-    def _keyword_fallback(self, df: pd.DataFrame, field: str) -> Optional[str]:
-        """
-        Original keyword-in-name detection, preserved as last-resort fallback.
-
-        Guards added:
-        - orgunitlevel* columns are never returned for facility_level
-          (they are DHIS2 org hierarchy, not facility types)
-        - state detection requires 1-50 unique values
-        """
-        keywords = _KEYWORD_MAP.get(field, [])
-
-        for col in df.columns:
-            col_lower = col.lower()
-
-            if not any(kw in col_lower for kw in keywords):
-                continue
-
-            # DHIS2 guard: org unit hierarchy columns are never facility levels
-            if field == 'facility_level' and col_lower.startswith('orgunitlevel'):
-                continue
-
-            # State column must have a plausible number of unique values
-            if field == 'state':
-                unique_vals = df[col].dropna().nunique()
-                if not (1 <= unique_vals <= 50):
-                    continue
-
-            return col
-
-        return None
+        return result
 
     @staticmethod
     def _strip_dhis2_prefix(value: str) -> str:
@@ -516,154 +524,14 @@ class TPRDataAnalyzer:
         cleaned = re.sub(r'\s+State$', '', cleaned, flags=re.IGNORECASE)
         return cleaned.strip()
 
-    # ------------------------------------------------------------------
+    def _calculate_completeness(self, df: pd.DataFrame) -> float:
+        if df.empty:
+            return 0.0
+        total_cells = len(df) * len(df.columns)
+        return round((df.count().sum() / total_cells) * 100, 1) if total_cells else 0.0
 
-    def _find_column(self, df: pd.DataFrame, patterns: List[str]) -> Optional[str]:
-        """
-        Find a column matching any of the patterns.
-        
-        Args:
-            df: DataFrame to search
-            patterns: List of patterns to match
-            
-        Returns:
-            Column name or None
-        """
-        for pattern in patterns:
-            for col in df.columns:
-                if pattern.lower() in col.lower():
-                    return col
-        return None
-    
-    def _find_columns_by_patterns(self, df: pd.DataFrame, patterns: List[str]) -> List[str]:
-        """
-        Find all columns matching any of the patterns.
-        Handles both exact substring matches and regex patterns.
-        
-        Args:
-            df: DataFrame to search
-            patterns: List of patterns to match
-            
-        Returns:
-            List of column names
-        """
-        import re
-        matching_cols = []
-        
-        for pattern in patterns:
-            for col in df.columns:
-                col_lower = col.lower()
-                pattern_lower = pattern.lower()
-                
-                # Check if it's a regex pattern (contains .*)
-                if '.*' in pattern:
-                    try:
-                        if re.search(pattern_lower, col_lower):
-                            if col not in matching_cols:
-                                matching_cols.append(col)
-                    except:
-                        # Fallback to substring match if regex fails
-                        if pattern_lower.replace('.*', '') in col_lower and col not in matching_cols:
-                            matching_cols.append(col)
-                else:
-                    # Simple substring match
-                    if pattern_lower in col_lower and col not in matching_cols:
-                        matching_cols.append(col)
-        
-        return matching_cols
-    
-    def _find_test_columns(self, df: pd.DataFrame) -> List[str]:
-        """
-        Find columns that likely contain test data.
-        
-        Args:
-            df: DataFrame to search
-            
-        Returns:
-            List of test column names
-        """
-        test_patterns = ['tested', 'test', 'examined', 'screened']
-        test_cols = []
-        
-        for col in df.columns:
-            col_lower = col.lower()
-            # Check if column name suggests test data
-            if any(pattern in col_lower for pattern in test_patterns):
-                # Verify it's numeric
-                if pd.api.types.is_numeric_dtype(df[col]):
-                    test_cols.append(col)
-        
-        return test_cols
-    
-    def _filter_data(self, df: pd.DataFrame, state: str, facility_level: str) -> pd.DataFrame:
-        """
-        Filter data by state and facility level dynamically.
-        
-        Args:
-            df: DataFrame to filter
-            state: State to filter by
-            facility_level: Facility level to filter by
-            
-        Returns:
-            Filtered DataFrame
-        """
-        result = df.copy()
-
-        # Filter by state
-        if state:
-            state_col = self._get_column(df, 'state')
-            if state_col and state in df[state_col].values:
-                result = result[result[state_col] == state]
-
-        # Filter by facility level
-        if facility_level and facility_level != 'all':
-            level_col = self._get_column(df, 'facility_level')
-            if level_col:
-                # Exact match first, then case-insensitive
-                if facility_level in df[level_col].values:
-                    result = result[result[level_col] == facility_level]
-                elif df[level_col].astype(str).str.lower().eq(facility_level.lower()).any():
-                    result = result[result[level_col].astype(str).str.lower() == facility_level.lower()]
-
-        return result
-    
-    def _analyze_urban_rural(self, df: pd.DataFrame) -> Dict[str, float]:
-        """
-        Analyze urban/rural distribution if possible.
-        
-        Args:
-            df: DataFrame to analyze
-            
-        Returns:
-            Dictionary with urban/rural percentages
-        """
-        # Look for urban/rural indicator
-        location_col = self._find_column(df, ['Location', 'Setting', 'Urban', 'Rural', 'Area'])
-        
-        if location_col:
-            total = len(df)
-            urban = df[location_col].str.lower().str.contains('urban', na=False).sum()
-            rural = df[location_col].str.lower().str.contains('rural', na=False).sum()
-            
-            return {
-                'urban': round((urban / total) * 100, 1) if total > 0 else 0,
-                'rural': round((rural / total) * 100, 1) if total > 0 else 0
-            }
-        
-        return {'urban': 0, 'rural': 0}
-    
     def _get_facility_description(self, level: str) -> str:
-        """
-        Get a description for a facility level.
-        
-        Args:
-            level: Facility level name
-            
-        Returns:
-            Description string
-        """
         level_lower = level.lower()
-        
         descriptions = {
             'primary': 'Community-level care, first point of contact',
             'secondary': 'District hospitals with broader services',
@@ -672,84 +540,18 @@ class TPRDataAnalyzer:
             'general': 'General hospitals with comprehensive services',
             'teaching': 'Teaching hospitals with specialized care',
             'clinic': 'Small health clinics',
-            'dispensary': 'Basic health dispensaries'
+            'dispensary': 'Basic health dispensaries',
         }
-        
         for key, desc in descriptions.items():
             if key in level_lower:
                 return desc
-        
         return 'Healthcare facilities'
-    
-    def _count_total_tests(self, df: pd.DataFrame) -> int:
-        """
-        Count total tests in the dataframe dynamically.
-        
-        Args:
-            df: DataFrame to analyze
-            
-        Returns:
-            Total number of tests
-        """
-        total = 0
-        
-        # Find all columns that might contain test data
-        test_patterns = ['tested', 'test', 'examined', 'screened', 'rdt', 'microscopy']
-        
-        for col in df.columns:
-            col_lower = col.lower()
-            # Check if column contains test-related keywords
-            if any(pattern in col_lower for pattern in test_patterns):
-                # Exclude positive/negative result columns
-                if not any(exclude in col_lower for exclude in ['positive', 'negative', 'confirmed', 'result']):
-                    # Check if numeric
-                    if pd.api.types.is_numeric_dtype(df[col]):
-                        col_sum = df[col].sum()
-                        if not pd.isna(col_sum):
-                            total += col_sum
-        
-        return int(total)
-    
-    def _calculate_completeness(self, df: pd.DataFrame) -> float:
-        """
-        Calculate data completeness percentage.
-        
-        Args:
-            df: DataFrame to analyze
-            
-        Returns:
-            Percentage of non-null cells
-        """
-        if df.empty:
-            return 0.0
-            
-        total_cells = len(df) * len(df.columns)
-        if total_cells == 0:
-            return 0.0
-            
-        non_null_cells = df.count().sum()
-        return round((non_null_cells / total_cells) * 100, 1)
-    
+
     def generate_recommendation(self, analysis: Dict[str, Any], stage: str) -> str:
-        """
-        Generate a recommendation based on analysis.
-        
-        Args:
-            analysis: Analysis results
-            stage: Current workflow stage
-            
-        Returns:
-            Recommendation text
-        """
-        if stage == 'state':
-            # Recommend state with most data
-            if 'recommended' in analysis:
-                return f"💡 Tip: {analysis['recommended']} has the most complete data"
-        
+        if stage == 'state' and 'recommended' in analysis:
+            return f"💡 Tip: {analysis['recommended']} has the most complete data"
         elif stage == 'facility':
             return "💡 Tip: 'Primary' facilities are recommended for community-level insights"
-        
         elif stage == 'age':
             return "💡 Tip: 'Under 5' is the recommended age group for highest malaria risk"
-        
         return ""

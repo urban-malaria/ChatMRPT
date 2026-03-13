@@ -104,6 +104,38 @@ def _build_general_workflow_context(session_id: str) -> dict:
 
     session_path = Path('instance/uploads') / session_id
 
+    # If columns look wrong (many Unnamed: entries from wrong header row), try to
+    # re-read the Excel using the saved schema's header_row so the agent sees real names.
+    unnamed_count = sum(1 for c in columns if str(c).startswith('Unnamed:'))
+    if columns and unnamed_count > len(columns) * 0.5:
+        try:
+            from app.data_analysis_v3.core.state_manager import DataAnalysisStateManager
+            from app.data_analysis_v3.core.encoding_handler import EncodingHandler
+
+            sm = DataAnalysisStateManager(session_id)
+            saved_state = sm.load_state() or {}
+            saved_schema = saved_state.get('column_schema')
+            header_row = int(saved_schema.get('header_row', 1)) if saved_schema else 1
+
+            for candidate in ['data_analysis.xlsx', 'data_analysis.xls']:
+                candidate_path = session_path / candidate
+                if candidate_path.exists():
+                    sample = EncodingHandler.read_excel_with_encoding(
+                        str(candidate_path), header=header_row, nrows=5
+                    )
+                    real_cols = sample.columns.tolist()
+                    if real_cols:
+                        columns = real_cols
+                        context['data_columns'] = columns
+                        context['columns_total'] = len(columns)
+                        logger.info(
+                            "[WORKFLOW CONTEXT] Re-read Excel with header_row=%d → %d real columns",
+                            header_row, len(columns)
+                        )
+                    break
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(f"[WORKFLOW CONTEXT] Failed to fix Excel header: {exc}")
+
     if not columns:
         # Fallback: load a tiny sample directly
         for candidate in ['unified_dataset.csv', 'data_analysis.csv', 'raw_data.csv', 'uploaded_data.csv']:
@@ -589,9 +621,19 @@ def data_analysis_chat():
         if is_tpr_active:
             logger.info(f"[2-ROUTE] TPR workflow active for session {session_id}")
             tpr_analyzer = TPRDataAnalyzer()
+
+            # Restore schema inferred at workflow start so analyze_* methods work correctly
+            saved_state = state_manager.load_state() or {}
+            saved_schema = saved_state.get('column_schema')
+            if saved_schema:
+                tpr_analyzer._schema = saved_schema
+                logger.info(f"[2-ROUTE] Restored column_schema from state_manager ({len([v for v in saved_schema.values() if v])} mapped fields)")
+            else:
+                logger.warning("[2-ROUTE] No column_schema in state_manager — schema-based analysis will fail")
+
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
 
-            # Load data
+            # Load data using header_row from saved schema so columns match what was inferred
             df = None
             try:
                 data_dir = os.path.join('instance', 'uploads', session_id)
@@ -601,7 +643,8 @@ def data_analysis_chat():
                 if data_files:
                     latest = max(data_files, key=os.path.getctime)
                     if latest.endswith(('.xlsx', '.xls')):
-                        df = EncodingHandler.read_excel_with_encoding(latest)
+                        header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
+                        df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
                     else:
                         df = EncodingHandler.read_csv_with_encoding(latest)
                     tpr_handler.set_data(df)
@@ -880,6 +923,17 @@ def data_analysis_chat():
         )
 
         result = run_agent_sync(message, workflow_context=workflow_context)
+
+        # After the initial auto-analysis ("analyze uploaded data"), append a
+        # clear call-to-action so the user knows the exact command to start TPR.
+        if message.strip().lower() == 'analyze uploaded data' and isinstance(result, dict):
+            existing_msg = result.get('message', '')
+            tpr_prompt = (
+                "\n\n---\n"
+                "**Ready to start the TPR Burden Analysis?**\n"
+                "Type **`start the tpr workflow`** to begin the guided ward-level malaria burden calculation."
+            )
+            result['message'] = existing_msg + tpr_prompt
 
         # 🎯 LOG ASSISTANT RESPONSE (agent path) - CRITICAL FOR COMPLETE INTERACTION CAPTURE
         response_time = time.time() - request_start_time
