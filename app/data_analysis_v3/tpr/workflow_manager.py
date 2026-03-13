@@ -795,6 +795,22 @@ class TPRWorkflowHandler:
             self.state_manager.mark_tpr_workflow_complete()
             self.state_manager.update_workflow_stage(ConversationStage.INITIAL)
 
+            # Kick off background pre-computation of all other combinations
+            try:
+                from app.core.tpr_precompute_service import schedule_precompute
+                schedule_precompute(
+                    session_id=self.session_id,
+                    state=self.tpr_selections.get('state', ''),
+                    data_path=data_path,
+                    exclude_combination={
+                        'facility_level': facility_level,
+                        'age_group': age_group,
+                    },
+                )
+                logger.info("Scheduled TPR background pre-computation for session %s", self.session_id)
+            except Exception as precompute_exc:
+                logger.warning("Could not schedule TPR pre-computation: %s", precompute_exc)
+
             return {
                 "success": True,
                 "message": message,

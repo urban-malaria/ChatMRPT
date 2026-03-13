@@ -106,6 +106,19 @@ def precompute_all_tpr_combinations(
 
     logger.info(f"Starting TPR pre-computation for session {session_id}, state: {state}")
 
+    # Load saved column schema so calculate_ward_tpr can find the right columns
+    schema: Optional[Dict[str, Any]] = None
+    try:
+        from app.data_analysis_v3.core.state_manager import DataAnalysisStateManager
+        saved_state = DataAnalysisStateManager(session_id).load_state() or {}
+        schema = saved_state.get('column_schema')
+        if schema:
+            logger.info("Loaded column schema for pre-computation (%d mapped fields)", len([v for v in schema.values() if v]))
+        else:
+            logger.warning("No column schema in state manager — pre-computation may produce empty results")
+    except Exception as exc:
+        logger.warning("Could not load column schema for pre-computation: %s", exc)
+
     # Initialize database
     db_path = init_precompute_db(session_id)
 
@@ -151,7 +164,8 @@ def precompute_all_tpr_combinations(
                     df=data.copy(),
                     age_group=age_group,
                     test_method='both',
-                    facility_level=facility_level
+                    facility_level=facility_level,
+                    schema=schema,
                 )
 
                 if tpr_df is None or tpr_df.empty:
