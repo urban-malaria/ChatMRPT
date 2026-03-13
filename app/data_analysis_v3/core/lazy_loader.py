@@ -71,7 +71,7 @@ class LazyDataLoader:
             if filepath.endswith('.csv'):
                 df = EncodingHandler.read_csv_with_encoding(filepath)
             else:
-                df = pd.read_excel(filepath)
+                df = EncodingHandler.read_excel_with_encoding(filepath)
             
             # Cache it
             self._loaded_data[name] = df

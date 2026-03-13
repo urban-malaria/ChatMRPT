@@ -17,6 +17,7 @@ from langchain_core.tools import tool
 from pathlib import Path
 
 from ..core.state_manager import DataAnalysisStateManager, ConversationStage
+from ..core.encoding_handler import EncodingHandler
 from ..tpr.data_analyzer import TPRDataAnalyzer
 import plotly.express as px
 import plotly.graph_objects as go
@@ -84,9 +85,9 @@ class TPRWorkflowToolHandler:
             if data_files:
                 data_path = data_files[0]
                 if data_path.endswith(('.xlsx', '.xls')):
-                    df = pd.read_excel(data_path)
+                    df = EncodingHandler.read_excel_with_encoding(data_path)
                 else:
-                    df = pd.read_csv(data_path)
+                    df = EncodingHandler.read_csv_with_encoding(data_path)
                 self.uploaded_data = df
                 logger.info(f"✅ Loaded data from first file found: {os.path.basename(data_path)} ({len(df)} rows, {len(df.columns)} columns)")
                 return df

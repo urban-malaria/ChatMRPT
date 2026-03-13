@@ -205,18 +205,33 @@ class EncodingHandler:
     ) -> pd.DataFrame:
         """
         Read Excel file with automatic encoding fixing.
-        
+
         Args:
             file_path: Path to Excel file
             sheet_name: Sheet to read
             nrows: Number of rows to read
-            
+
         Returns:
             DataFrame with fixed encoding
         """
         # Excel files handle encoding differently, but we still fix the content
         df = pd.read_excel(file_path, sheet_name=sheet_name, nrows=nrows)
-        
+
+        # Detect blank first row: if ALL columns are Unnamed and the first data row
+        # looks like actual column headers (>40% non-null strings), re-read with header=1.
+        # This handles DHIS2 exports and other tools that emit a blank row before headers.
+        unnamed_count = sum(1 for c in df.columns if str(c).startswith('Unnamed:'))
+        if unnamed_count == len(df.columns) and len(df) > 0:
+            first_row_strings = df.iloc[0].apply(
+                lambda x: isinstance(x, str) and bool(x.strip())
+            ).sum()
+            if first_row_strings > len(df.columns) * 0.4:
+                df = pd.read_excel(file_path, sheet_name=sheet_name, nrows=nrows, header=1)
+                logger.info(
+                    "Blank header row detected in %s — re-read with header=1 (%d real columns found)",
+                    file_path, len(df.columns)
+                )
+
         # Fix column names
         df = EncodingHandler.fix_column_names(df)
         

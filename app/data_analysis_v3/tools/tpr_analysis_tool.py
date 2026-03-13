@@ -896,10 +896,9 @@ def analyze_tpr_data(
         data_file = max(data_files, key=os.path.getctime)
         
         if data_file.endswith('.csv'):
-            # Load TPR data with original column names
             df = EncodingHandler.read_csv_with_encoding(data_file)
         else:
-            df = pd.read_excel(data_file)
+            df = EncodingHandler.read_excel_with_encoding(data_file)
         
         # Check if this is TPR data
         is_tpr, tpr_info = is_tpr_data(df)
