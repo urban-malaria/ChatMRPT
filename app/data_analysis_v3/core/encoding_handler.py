@@ -234,6 +234,25 @@ class EncodingHandler:
 
         return df
 
+    @staticmethod
+    def detect_header_row(file_path: str) -> int:
+        """
+        Detect the correct header row for an Excel file.
+
+        DHIS2 exports have a blank row 0 and real column names in row 1.
+        Reading with header=0 produces Unnamed:0, Unnamed:1... for those files.
+
+        Returns 1 if row 0 appears to be blank/junk (>50% Unnamed columns), else 0.
+        """
+        try:
+            df_probe = pd.read_excel(file_path, nrows=2, header=0)
+            unnamed_count = sum(1 for c in df_probe.columns if str(c).startswith('Unnamed:'))
+            if unnamed_count > len(df_probe.columns) * 0.5:
+                return 1
+        except Exception:
+            pass
+        return 0
+
 
 def find_raw_data_file(session_folder: str) -> Optional[str]:
     """

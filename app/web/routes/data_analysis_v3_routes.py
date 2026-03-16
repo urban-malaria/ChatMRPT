@@ -283,7 +283,26 @@ def upload_for_analysis():
         # Copy to standard name
         import shutil
         shutil.copy2(filepath, standard_path)
-        
+
+        # Normalise to uploaded_data.csv with correct headers immediately on upload.
+        # This is the single source of truth consumed by _get_input_data and the agent.
+        # For DHIS2 XLS files the real headers are in row 1 (row 0 is blank); detect
+        # this automatically and save a clean CSV so every downstream path sees the
+        # right column names without per-consumer patches.
+        uploaded_csv_path = os.path.join(upload_dir, 'uploaded_data.csv')
+        header_row = 0
+        try:
+            from app.data_analysis_v3.core.encoding_handler import EncodingHandler as _EH
+            if filename.lower().endswith(('.xlsx', '.xls')):
+                header_row = _EH.detect_header_row(filepath)
+                df_upload = _EH.read_excel_with_encoding(filepath, header=header_row)
+            else:
+                df_upload = _EH.read_csv_with_encoding(filepath)
+            df_upload.to_csv(uploaded_csv_path, index=False)
+            logger.info(f"✅ Saved uploaded_data.csv (header_row={header_row}, shape={df_upload.shape})")
+        except Exception as _exc:
+            logger.warning(f"⚠️  Could not save uploaded_data.csv at upload time: {_exc}")
+
         # Extract and cache metadata for quick access
         logger.info(f"📊 Extracting metadata for {filename}...")
         metadata = MetadataCache.update_file_metadata(session_id, filepath, filename)
@@ -336,9 +355,11 @@ def upload_for_analysis():
         da_state_manager = DataAnalysisStateManager(session_id)
         da_state_manager.update_state({
             'workflow_transitioned': False,
-            'tpr_completed': False
+            'tpr_completed': False,
+            'column_schema': {'header_row': header_row},
         })
         logger.info(f"✅ Cleared DataAnalysisStateManager workflow flags for session {session_id}")
+        logger.info(f"✅ Saved header_row={header_row} to state for session {session_id}")
         
         # Sync to other instances for multi-instance support
         try:
