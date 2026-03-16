@@ -134,6 +134,17 @@ def analyze_data(
     # Apply normalization to fix bullet points and spacing
     formatted_output = ResponseFormatter.normalize_spacing(output)
 
+    # If code ran with no errors but produced no output, tell the LLM explicitly.
+    # Without this, the LLM sees an empty tool result and guesses wrong (e.g.,
+    # concluding "no secondary facilities" when the code simply forgot to print).
+    if not formatted_output.strip() and not state_updates.get('errors'):
+        formatted_output = (
+            "⚠️ Code executed successfully but produced no output. "
+            "The code did not call print() to display any results. "
+            "Please rewrite the code using print() for all results. "
+            "Example: print(df['Facility level'].value_counts())"
+        )
+
     tables = state_updates.get('tables') or []
 
     # FIX: Surface execution errors to the agent (prevents blind retries)
