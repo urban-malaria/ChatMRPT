@@ -484,6 +484,12 @@ Respond with JSON: {{"command": str or null, "rationale": short explanation}}"""
             logger.info(f"🔍 Detected info keyword in: '{message_clean}'")
             return _result("information_request", 0.7, "Detected information request keyword")
 
+        # Step 3b: Check question phrasing BEFORE extract_command so that messages like
+        # "What does o5 mean?" never reach LLM extraction and get mis-classified as selections.
+        if message_lower.endswith("?") or message_lower.startswith(question_starters):
+            logger.info(f"🔍 Detected question phrasing before extraction: '{message_clean}'")
+            return _result("question", 0.8, "Detected question phrasing before extraction")
+
         # Step 4: ONLY NOW try to extract selection commands
         # This happens AFTER checking for data/analysis/info intents
         extracted = None

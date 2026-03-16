@@ -537,6 +537,15 @@ class DataAnalysisAgent:
                 logger.error(f"[_GET_INPUT_DATA FALLBACK] Unable to list session folder: {exc}")
                 all_files = []
 
+            # Load saved header_row from schema (e.g. DHIS2 XLS has blank row 0, headers in row 1)
+            _fallback_header_row = 0
+            try:
+                from app.data_analysis_v3.core.state_manager import DataAnalysisStateManager
+                _saved_state = DataAnalysisStateManager(self.session_id).load_state() or {}
+                _fallback_header_row = (_saved_state.get('column_schema') or {}).get('header_row', 0)
+            except Exception:
+                pass
+
             fallback_extensions = ('.csv', '.xlsx', '.xls')
             for fname in all_files:
                 if not fname.lower().endswith(fallback_extensions):
@@ -549,7 +558,14 @@ class DataAnalysisAgent:
                     if fname.lower().endswith('.csv'):
                         df = EncodingHandler.read_csv_with_encoding(fallback_path)
                     else:
-                        df = EncodingHandler.read_excel_with_encoding(fallback_path)
+                        header_row = _fallback_header_row
+                        logger.info(f"[_GET_INPUT_DATA FALLBACK] Reading Excel with header_row={header_row}")
+                        df = EncodingHandler.read_excel_with_encoding(fallback_path, header=header_row)
+                        # Auto-detect wrong header: if >50% columns are Unnamed, try header=1
+                        unnamed_count = sum(1 for c in df.columns if str(c).startswith('Unnamed:'))
+                        if unnamed_count > len(df.columns) * 0.5 and header_row == 0:
+                            logger.info(f"[_GET_INPUT_DATA FALLBACK] Detected mostly Unnamed columns, retrying with header=1")
+                            df = EncodingHandler.read_excel_with_encoding(fallback_path, header=1)
 
                     data_obj = {
                         'variable_name': 'df',
