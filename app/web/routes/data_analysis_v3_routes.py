@@ -285,23 +285,36 @@ def upload_for_analysis():
         shutil.copy2(filepath, standard_path)
 
         # Normalise to uploaded_data.csv with correct headers immediately on upload.
-        # This is the single source of truth consumed by _get_input_data and the agent.
-        # For DHIS2 XLS files the real headers are in row 1 (row 0 is blank); detect
-        # this automatically and save a clean CSV so every downstream path sees the
-        # right column names without per-consumer patches.
+        # LLM-based schema inference (infer_schema_from_file) handles any file structure:
+        # blank preamble rows, DHIS2 exports, HMIS, NMEP-processed Excel, custom formats.
+        # The LLM reads all rows raw (header=None) and determines the actual header row.
+        # Result is saved so ALL downstream paths see correct column names from the first
+        # question asked — no per-consumer patches, no hardcoded row assumptions.
         uploaded_csv_path = os.path.join(upload_dir, 'uploaded_data.csv')
-        header_row = 0
+        schema_at_upload = {'header_row': 0}
         try:
-            from app.data_analysis_v3.core.encoding_handler import EncodingHandler as _EH
-            if filename.lower().endswith(('.xlsx', '.xls')):
-                header_row = _EH.detect_header_row(filepath)
-                df_upload = _EH.read_excel_with_encoding(filepath, header=header_row)
-            else:
-                df_upload = _EH.read_csv_with_encoding(filepath)
+            from app.data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer as _Analyzer
+            _analyzer = _Analyzer()
+            df_upload, schema_at_upload = _analyzer.infer_schema_from_file(filepath)
             df_upload.to_csv(uploaded_csv_path, index=False)
-            logger.info(f"✅ Saved uploaded_data.csv (header_row={header_row}, shape={df_upload.shape})")
+            logger.info(
+                f"✅ Schema inferred at upload: header_row={schema_at_upload.get('header_row')}, "
+                f"shape={df_upload.shape}, columns={df_upload.columns.tolist()[:5]}"
+            )
         except Exception as _exc:
-            logger.warning(f"⚠️  Could not save uploaded_data.csv at upload time: {_exc}")
+            # LLM unavailable or file unreadable — fall back to header=0 so upload
+            # still succeeds. TPR workflow will re-try inference when it starts.
+            logger.warning(f"⚠️  Schema inference failed at upload (falling back to header=0): {_exc}")
+            try:
+                from app.data_analysis_v3.core.encoding_handler import EncodingHandler as _EH
+                if filename.lower().endswith(('.xlsx', '.xls')):
+                    df_upload = _EH.read_excel_with_encoding(filepath, header=0)
+                else:
+                    df_upload = _EH.read_csv_with_encoding(filepath)
+                df_upload.to_csv(uploaded_csv_path, index=False)
+                logger.info(f"✅ Fallback: saved uploaded_data.csv with header=0, shape={df_upload.shape}")
+            except Exception as _exc2:
+                logger.warning(f"⚠️  Could not save uploaded_data.csv at upload time: {_exc2}")
 
         # Extract and cache metadata for quick access
         logger.info(f"📊 Extracting metadata for {filename}...")
@@ -356,10 +369,12 @@ def upload_for_analysis():
         da_state_manager.update_state({
             'workflow_transitioned': False,
             'tpr_completed': False,
-            'column_schema': {'header_row': header_row},
+            'column_schema': schema_at_upload,
         })
-        logger.info(f"✅ Cleared DataAnalysisStateManager workflow flags for session {session_id}")
-        logger.info(f"✅ Saved header_row={header_row} to state for session {session_id}")
+        logger.info(
+            f"✅ Cleared DataAnalysisStateManager flags, saved schema "
+            f"(header_row={schema_at_upload.get('header_row')}) for session {session_id}"
+        )
         
         # Sync to other instances for multi-instance support
         try:
@@ -954,16 +969,44 @@ def data_analysis_chat():
 
             latest = max(data_files, key=os.path.getctime)
             tpr_analyzer = TPRDataAnalyzer()
-            try:
-                df, schema = tpr_analyzer.infer_schema_from_file(latest)
-            except RuntimeError as exc:
-                logger.error(f"Schema inference failed for {latest}: {exc}")
-                return jsonify({
-                    'success': False,
-                    'message': f'Could not parse your data file: {exc}',
-                    'session_id': session_id,
-                })
-            state_manager.update_state({'column_schema': schema})
+
+            # If schema was already fully inferred at upload time, reuse it — skip
+            # the second LLM call. A schema is "complete" when it has at least one
+            # core TPR column mapped (the LLM found the data columns, not just header_row).
+            _saved_state = state_manager.load_state() or {}
+            _saved_schema = _saved_state.get('column_schema') or {}
+            _tpr_cols = ('tested_pos', 'u5_pos', 'o5_pos', 'pw_pos', 'total_tested')
+            _schema_complete = (
+                _saved_schema.get('header_row') is not None
+                and any(_saved_schema.get(c) for c in _tpr_cols)
+            )
+
+            if _schema_complete:
+                logger.info(f"[TPR START] Reusing schema from upload (header_row={_saved_schema.get('header_row')})")
+                schema = _saved_schema
+                tpr_analyzer._schema = schema
+                header_row = int(schema.get('header_row', 0))
+                try:
+                    from app.data_analysis_v3.core.encoding_handler import EncodingHandler as _EH
+                    if latest.lower().endswith(('.xlsx', '.xls')):
+                        df = _EH.read_excel_with_encoding(latest, header=header_row)
+                    else:
+                        df = _EH.read_csv_with_encoding(latest)
+                except Exception as exc:
+                    logger.warning(f"[TPR START] Re-read failed ({exc}), falling back to full inference")
+                    _schema_complete = False
+
+            if not _schema_complete:
+                try:
+                    df, schema = tpr_analyzer.infer_schema_from_file(latest)
+                except RuntimeError as exc:
+                    logger.error(f"Schema inference failed for {latest}: {exc}")
+                    return jsonify({
+                        'success': False,
+                        'message': f'Could not parse your data file: {exc}',
+                        'session_id': session_id,
+                    })
+                state_manager.update_state({'column_schema': schema})
 
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
             tpr_handler.set_data(df)

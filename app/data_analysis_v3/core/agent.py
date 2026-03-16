@@ -558,14 +558,10 @@ class DataAnalysisAgent:
                     if fname.lower().endswith('.csv'):
                         df = EncodingHandler.read_csv_with_encoding(fallback_path)
                     else:
-                        header_row = _fallback_header_row
-                        logger.info(f"[_GET_INPUT_DATA FALLBACK] Reading Excel with header_row={header_row}")
-                        df = EncodingHandler.read_excel_with_encoding(fallback_path, header=header_row)
-                        # Auto-detect wrong header: if >50% columns are Unnamed, try header=1
-                        unnamed_count = sum(1 for c in df.columns if str(c).startswith('Unnamed:'))
-                        if unnamed_count > len(df.columns) * 0.5 and header_row == 0:
-                            logger.info(f"[_GET_INPUT_DATA FALLBACK] Detected mostly Unnamed columns, retrying with header=1")
-                            df = EncodingHandler.read_excel_with_encoding(fallback_path, header=1)
+                        # Use header_row from schema inferred at upload time.
+                        # If schema inference failed at upload, this defaults to 0.
+                        logger.info(f"[_GET_INPUT_DATA FALLBACK] Reading Excel with header_row={_fallback_header_row}")
+                        df = EncodingHandler.read_excel_with_encoding(fallback_path, header=_fallback_header_row)
 
                     data_obj = {
                         'variable_name': 'df',
