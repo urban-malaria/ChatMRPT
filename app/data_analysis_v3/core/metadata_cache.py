@@ -380,15 +380,45 @@ class MetadataCache:
         metrics['numeric_columns'] = numeric_cols[:5]
         metrics['categorical_columns'] = categorical_cols[:5]
 
+        # Value distributions for categorical columns (exact values the LLM needs)
+        value_distributions: Dict[str, Any] = {}
+        for col in categorical_cols:
+            unique_vals = df[col].dropna().unique()
+            n_unique = len(unique_vals)
+            if n_unique <= 25:
+                value_distributions[col] = {
+                    'unique_count': n_unique,
+                    'values': sorted(str(v) for v in unique_vals),
+                }
+            else:
+                top5 = df[col].value_counts(dropna=True).head(5)
+                value_distributions[col] = {
+                    'unique_count': n_unique,
+                    'top_values': {str(k): int(v) for k, v in top5.items()},
+                }
+        metrics['value_distributions'] = value_distributions
+
+        # Numeric ranges
+        numeric_ranges: Dict[str, Dict[str, float]] = {}
+        for col in numeric_cols:
+            col_data = df[col].dropna()
+            if len(col_data) > 0:
+                numeric_ranges[col] = {
+                    'min': float(col_data.min()),
+                    'max': float(col_data.max()),
+                    'mean': round(float(col_data.mean()), 2),
+                }
+        metrics['numeric_ranges'] = numeric_ranges
+
         # Data type summary
         dtype_counts = df.dtypes.value_counts()
         metrics['dtype_summary'] = {str(dtype): int(count) for dtype, count in dtype_counts.items()}
 
-        # Missing value summary (top 3 only)
+        # Missing value summary (top 5 with percentages)
         missing_info = []
         missing_counts = df.isna().sum()
         total_rows = max(len(df), 1)
-        for col, count in missing_counts.sort_values(ascending=False).head(3).items():
+        for col, count in missing_counts.sort_values(ascending=False).head(5).items():
             if count > 0:
                 pct = (count / total_rows) * 100
                 missing_info.append({'column': col, 'missing_percent': round(pct, 2)})

@@ -324,6 +324,15 @@ def upload_for_analysis():
         if standard_path != filepath:
             standard_filename = os.path.basename(standard_path)
             MetadataCache.update_file_metadata(session_id, standard_path, standard_filename)
+
+        # Profile uploaded_data.csv (the normalised file the agent actually loads).
+        # This ensures MetadataCache has value distributions for the correct columns.
+        if os.path.exists(uploaded_csv_path):
+            try:
+                MetadataCache.update_file_metadata(session_id, uploaded_csv_path, 'uploaded_data.csv')
+                logger.info(f"📊 Profiled uploaded_data.csv for session {session_id}")
+            except Exception as _prof_exc:
+                logger.warning(f"⚠️  Could not profile uploaded_data.csv: {_prof_exc}")
         
         logger.info(f"📊 Data Analysis file uploaded: {filename} for session {session_id}")
         if metadata.get('is_sampled'):

@@ -227,8 +227,95 @@ class DataAnalysisAgent:
 
         return result
 
+    @staticmethod
+    def _build_value_profile(df, max_chars: int = 12000) -> str:
+        """Build a rich value profile from a DataFrame for LLM context.
+
+        Includes exact values for categorical columns, numeric ranges,
+        null counts, and sample rows — so the LLM never has to guess
+        about what the data actually contains.
+        """
+        import pandas as pd
+
+        lines: list[str] = []
+        lines.append(f"Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
+        lines.append("")
+        lines.append("## Column Profiles")
+
+        for col in df.columns:
+            dtype = df[col].dtype
+            null_count = int(df[col].isna().sum())
+            null_pct = null_count / max(len(df), 1) * 100
+            null_note = f", {null_pct:.0f}% null" if null_pct > 5 else ""
+
+            if dtype == 'object':
+                unique_vals = df[col].dropna().unique()
+                n_unique = len(unique_vals)
+                if n_unique <= 25:
+                    vals_str = ", ".join(sorted(str(v) for v in unique_vals))
+                    lines.append(f"- **{col}** (text, {n_unique} unique{null_note}): [{vals_str}]")
+                else:
+                    top5 = df[col].value_counts(dropna=True).head(5)
+                    top5_str = ", ".join(f"{idx}" for idx in top5.index)
+                    lines.append(f"- **{col}** (text, {n_unique} unique{null_note}): top values: [{top5_str}]")
+            elif pd.api.types.is_numeric_dtype(dtype):
+                col_data = df[col].dropna()
+                if len(col_data) > 0:
+                    lines.append(
+                        f"- **{col}** (numeric{null_note}): "
+                        f"min={col_data.min()}, max={col_data.max()}, mean={col_data.mean():.1f}"
+                    )
+                else:
+                    lines.append(f"- **{col}** (numeric, all null)")
+            elif pd.api.types.is_datetime64_any_dtype(dtype):
+                col_data = df[col].dropna()
+                if len(col_data) > 0:
+                    lines.append(
+                        f"- **{col}** (date{null_note}): "
+                        f"range {col_data.min()} to {col_data.max()}"
+                    )
+                else:
+                    lines.append(f"- **{col}** (date, all null)")
+            else:
+                lines.append(f"- **{col}** ({dtype}{null_note})")
+
+            # Check total length — stop adding columns if we're getting too big
+            if sum(len(l) for l in lines) > max_chars - 1500:
+                remaining = len(df.columns) - len([l for l in lines if l.startswith("- **")])
+                if remaining > 0:
+                    lines.append(f"- ... and {remaining} more columns")
+                break
+
+        # Add sample rows (3 rows, truncated values)
+        lines.append("")
+        lines.append("## Sample Rows (first 3)")
+        try:
+            sample = df.head(3)
+            # Build a compact markdown table
+            headers = list(sample.columns)
+            header_line = "| " + " | ".join(str(h)[:30] for h in headers) + " |"
+            sep_line = "| " + " | ".join("---" for _ in headers) + " |"
+            lines.append(header_line)
+            lines.append(sep_line)
+            for _, row in sample.iterrows():
+                vals = [str(v)[:30] if pd.notna(v) else "null" for v in row]
+                lines.append("| " + " | ".join(vals) + " |")
+        except Exception:
+            lines.append("(Could not generate sample rows)")
+
+        result = "\n".join(lines)
+        # Final safety cap
+        if len(result) > max_chars:
+            result = result[:max_chars] + "\n... (profile truncated)"
+        return result
+
     def _create_data_summary(self, state: DataAnalysisState) -> str:
-        """Create summary of available data - enhanced for data-aware responses."""
+        """Create summary of available data with full value profiles.
+
+        The LLM receives exact column values, numeric ranges, and sample
+        rows so it can write correct code on the first try — no guessing
+        about capitalisation, value formats, or column contents.
+        """
         summary = ""
         variables = []
 
@@ -237,15 +324,20 @@ class DataAnalysisAgent:
             variables.append(var_name)
 
             summary += f"\n\nVariable: {var_name}\n"
-            summary += f"Description: {data_obj.get('data_description', 'Dataset loaded')}\n"
 
-            # Add column preview if available
-            if 'columns' in data_obj and data_obj['columns']:
-                cols = data_obj['columns']
-                if len(cols) <= 10:
-                    summary += f"Columns: {', '.join(cols)}"
-                else:
-                    summary += f"Columns ({len(cols)} total): {', '.join(cols[:10])}..."
+            # If we have the actual DataFrame, build a rich profile
+            df = data_obj.get('data')
+            if df is not None and hasattr(df, 'columns') and len(df) > 0:
+                summary += self._build_value_profile(df)
+            else:
+                # Fallback: just column names (old behaviour)
+                summary += f"Description: {data_obj.get('data_description', 'Dataset loaded')}\n"
+                if 'columns' in data_obj and data_obj['columns']:
+                    cols = data_obj['columns']
+                    if len(cols) <= 10:
+                        summary += f"Columns: {', '.join(cols)}"
+                    else:
+                        summary += f"Columns ({len(cols)} total): {', '.join(cols[:10])}..."
 
         # Include any remaining variables from state
         if "current_variables" in state:
@@ -253,9 +345,8 @@ class DataAnalysisAgent:
             for v in remaining:
                 summary += f"\n\nVariable: {v}"
 
-        # Add note about data availability (system prompt now controls when to use tool)
         if summary:
-            summary += "\n\n**This data is loaded and ready for analysis.**"
+            summary += "\n\n**This data is loaded and ready for analysis. Use the exact column names and values shown above.**"
 
         return summary
 
