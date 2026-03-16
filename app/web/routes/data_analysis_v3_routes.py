@@ -966,16 +966,6 @@ def data_analysis_chat():
 
         result = run_agent_sync(message, workflow_context=workflow_context)
 
-        # After the initial auto-analysis ("analyze uploaded data"), append a
-        # clear call-to-action so the user knows the exact command to start TPR.
-        if message.strip().lower() == 'analyze uploaded data' and isinstance(result, dict):
-            existing_msg = result.get('message', '')
-            tpr_prompt = (
-                "\n\n---\n"
-                "**Ready to start the TPR Burden Analysis?**\n"
-                "Type **`start the tpr workflow`** to begin the guided ward-level malaria burden calculation."
-            )
-            result['message'] = existing_msg + tpr_prompt
 
         # 🎯 LOG ASSISTANT RESPONSE (agent path) - CRITICAL FOR COMPLETE INTERACTION CAPTURE
         response_time = time.time() - request_start_time
