@@ -93,7 +93,14 @@ def schedule_precompute(
     data_path: str,
     exclude_combination: Dict[str, str],
 ) -> Dict[str, Any]:
-    """Queue a background job. If Redis is unavailable, run inline."""
+    """Run precomputation in a background thread.
+
+    Previously this queued to Redis, but the consumer worker was never
+    started so jobs sat in "queued" forever.  A daemon thread is simpler
+    and works in both development and production without extra ops.
+    """
+    import threading
+
     job_id = str(uuid.uuid4())
     job = {
         "id": job_id,
@@ -120,16 +127,17 @@ def schedule_precompute(
     }
     _write_status(session_id, status)
 
-    client = _get_redis_client()
-    if client is None:
-        logger.warning("Redis not available - running TPR precompute inline")
-        _execute_job(job)
-        return {"mode": "inline", "job_id": job_id}
-
-    client.rpush(QUEUE_KEY, json.dumps(job))
-    client.set(f"{JOB_KEY_PREFIX}{job_id}", json.dumps(job), ex=86400)
-    logger.info("Queued TPR precompute job %s", job_id)
-    return {"mode": "queued", "job_id": job_id}
+    # Run in a daemon thread so the HTTP response returns immediately
+    # while precomputation continues in the background.
+    thread = threading.Thread(
+        target=_execute_job,
+        args=(job,),
+        daemon=True,
+        name=f"tpr-precompute-{session_id[:8]}",
+    )
+    thread.start()
+    logger.info("Started TPR precompute thread for job %s (session %s)", job_id, session_id)
+    return {"mode": "thread", "job_id": job_id}
 
 
 def retry_failed(session_id: str) -> Optional[Dict[str, Any]]:
