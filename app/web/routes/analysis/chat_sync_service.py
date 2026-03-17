@@ -68,6 +68,20 @@ def handle_send_message():
             )
             session['message_count'] = session.get('message_count', 0) + 1
 
+        # Update conversation history metadata (title on first message, activity always)
+        try:
+            from app.services.conversation_history import ConversationHistoryService, get_user_id, generate_title
+            redis_client = current_app.config.get('SESSION_REDIS')
+            conv_svc = ConversationHistoryService(redis_client=redis_client)
+            uid = get_user_id()
+            msg_count = session.get('message_count', 1)
+            if msg_count == 1:
+                conv_svc.set_title(uid, session_id, generate_title(user_message))
+            has_files = any(session.get(f, False) for f in ('csv_loaded', 'shapefile_loaded'))
+            conv_svc.update_activity(uid, session_id, preview=user_message[:80], has_files=has_files)
+        except Exception as _conv_err:
+            logger.debug("Conversation history update failed: %s", _conv_err)
+
         try:
             from app.core.instance_sync import ensure_session_available
             ensure_session_available(session_id)

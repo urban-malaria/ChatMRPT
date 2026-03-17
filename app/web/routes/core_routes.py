@@ -165,6 +165,15 @@ def index():
                             stack_trace=traceback.format_exc()
                         )
         
+        # Register conversation in history for sidebar
+        try:
+            from ...services.conversation_history import ConversationHistoryService, get_user_id
+            redis_client = current_app.config.get('SESSION_REDIS')
+            svc = ConversationHistoryService(redis_client=redis_client)
+            svc.register_conversation(get_user_id(), session_id)
+        except Exception as e:
+            logger.debug(f"Could not register conversation in history: {e}")
+
         # CRITICAL: Mark session as modified when new session is created
         session.modified = True
         logger.info(f"New session marked as modified for persistence: {session['session_id']}")
@@ -413,6 +422,15 @@ def clear_session():
                             stack_trace=traceback.format_exc()
                         )
         
+        # Register new conversation in history
+        try:
+            from ...services.conversation_history import ConversationHistoryService, get_user_id
+            redis_client = current_app.config.get('SESSION_REDIS')
+            svc = ConversationHistoryService(redis_client=redis_client)
+            svc.register_conversation(get_user_id(), new_session_id)
+        except Exception as e:
+            logger.debug(f"Could not register new conversation in history: {e}")
+
         logger.info(f"Session {old_session_id} cleared and migrated to {new_session_id}")
 
         return jsonify({
