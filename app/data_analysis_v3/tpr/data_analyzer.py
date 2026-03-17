@@ -52,7 +52,7 @@ class TPRDataAnalyzer:
         try:
             if file_path.lower().endswith('.csv'):
                 raw = pd.read_csv(file_path, header=None, nrows=15,
-                                  encoding='utf-8', errors='replace')
+                                  encoding='utf-8', on_bad_lines='skip')
             else:
                 raw = pd.read_excel(file_path, header=None, nrows=15)
         except Exception as exc:
