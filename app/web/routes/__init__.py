@@ -25,6 +25,7 @@ from .itn_routes import itn_bp, itn_embed_bp
 from .export_routes import export_bp
 from .session_routes import session_bp
 from .arena_routes import arena_bp
+from .conversation_routes import conversations_bp
 
 # API routes for React frontend
 try:
@@ -85,6 +86,7 @@ __all__ = [
     'export_bp',
     'session_bp',
     'arena_bp',
+    'conversations_bp',
     'api_bp',
     'data_analysis_bp',
     'register_all_blueprints'
@@ -128,6 +130,9 @@ def register_all_blueprints(app):
     # Register Arena routes (model comparison interface)
     app.register_blueprint(arena_bp)
 
+    # Register Conversation History routes
+    app.register_blueprint(conversations_bp)
+
     # Register API routes (React frontend API)
     if API_ROUTES_AVAILABLE and api_bp:
         app.register_blueprint(api_bp)
@@ -144,6 +149,7 @@ def register_all_blueprints(app):
     logger.info("✅ Export routes registered")
     logger.info("✅ Session routes registered")
     logger.info("✅ Arena routes registered")
+    logger.info("✅ Conversation history routes registered")
 
     if API_ROUTES_AVAILABLE:
         logger.info("✅ API routes registered")

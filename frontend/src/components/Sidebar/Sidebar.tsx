@@ -7,6 +7,7 @@ import ProfileSection from '@/components/Profile/ProfileSection';
 import UserAvatar from '@/components/Profile/UserAvatar';
 import LoginModal from '@/components/Auth/LoginModal';
 import SignupModal from '@/components/Auth/SignupModal';
+import ConversationList from '@/components/Sidebar/ConversationList';
 
 interface SidebarProps {
   onOpenSettings?: () => void;
@@ -60,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             <div className="mt-8 space-y-4">
               <button
                 className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg transition-colors"
-                title="Recent Files"
+                title="Chats"
                 onClick={() => {
                   setIsCollapsed(false);
                   setActiveSection('history');
@@ -175,7 +176,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                 : 'text-gray-600 dark:text-dark-text-secondary hover:text-gray-900 dark:hover:text-dark-text'
             }`}
           >
-            History
+            Chats
           </button>
           <button
             onClick={() => setActiveSection('samples')}
@@ -192,32 +193,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
       
       {/* Content Sections */}
       <div className="p-4 flex-1 overflow-y-auto">
-        {/* History Section */}
+        {/* Chats Section */}
         {activeSection === 'history' && (
           <div className="animate-fadeIn">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-3">Recent Files</h4>
-            {session.hasUploadedFiles && session.uploadedFiles ? (
-            <div className="space-y-2">
-              {session.uploadedFiles.csv && (
-                <div className="flex items-center p-2 bg-white dark:bg-dark-bg-tertiary rounded border border-gray-200 dark:border-dark-border">
-                  <svg className="w-4 h-4 text-green-600 dark:text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-sm text-gray-700 dark:text-dark-text truncate">{session.uploadedFiles.csv}</span>
-                </div>
-              )}
-              {session.uploadedFiles.shapefile && (
-                <div className="flex items-center p-2 bg-white dark:bg-dark-bg-tertiary rounded border border-gray-200 dark:border-dark-border">
-                  <svg className="w-4 h-4 text-green-600 dark:text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-sm text-gray-700 dark:text-dark-text truncate">{session.uploadedFiles.shapefile}</span>
-                </div>
-              )}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-dark-text-secondary text-center py-8">No files uploaded yet</p>
-            )}
+            <ConversationList />
           </div>
         )}
         

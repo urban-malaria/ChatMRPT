@@ -133,6 +133,17 @@ export interface StreamChunk {
   error?: string;
 }
 
+// Conversation History Types
+export interface ConversationSummary {
+  session_id: string;
+  title: string;
+  last_activity: string; // Unix timestamp as string
+  created_at: string;
+  has_files: string; // "0" or "1"
+  preview: string;
+  user_id?: string;
+}
+
 // File Upload Types
 export interface UploadedFile {
   name: string;

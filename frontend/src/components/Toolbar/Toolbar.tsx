@@ -4,6 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
 import storage from '@/utils/storage';
+import { useConversationHistoryStore } from '@/stores/conversationHistoryStore';
 
 interface DownloadFile {
   name: string;
@@ -26,6 +27,8 @@ const Toolbar: React.FC = () => {
   const hasMessages = useChatStore((state) => state.messages.length > 0);
   const session = useChatStore((state) => state.session);
   const { theme, toggleTheme } = useTheme();
+  const fetchConversations = useConversationHistoryStore((s) => s.fetchConversations);
+  const setActiveSessionId = useConversationHistoryStore((s) => s.setActiveSessionId);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -96,6 +99,8 @@ const Toolbar: React.FC = () => {
         }
 
         setShowClearConfirm(false);
+        setActiveSessionId(null);
+        fetchConversations();
         toast.success('New chat started');
       } else {
         throw new Error(response.data.message || 'Failed to clear session');

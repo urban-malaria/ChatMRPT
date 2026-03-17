@@ -198,6 +198,15 @@ export const api = {
       axiosInstance.get(`/api/wards?session_id=${sessionId}`),
   },
   
+  // Conversation history endpoints
+  conversations: {
+    list: () =>
+      axiosInstance.get('/api/conversations'),
+
+    resume: (sessionId: string) =>
+      axiosInstance.post(`/api/conversations/${sessionId}/resume`),
+  },
+
   // Session endpoints
   session: {
     getInfo: () =>
