@@ -110,30 +110,36 @@ def extract_ward_population(ward_gdf, age_group: str = 'all_ages'):
 def normalize_ward_name(name: str) -> str:
     """
     Normalize ward names for matching between TPR data and shapefiles.
-    
-    Removes prefixes like 'ad ', 'kw ', 'os ' and suffixes like ' Ward'.
-    
+
+    Handles DHIS2 naming quirks: state prefixes, 'Ward' anywhere in the
+    name, inconsistent separators (hyphens/slashes/spaces), and trailing
+    numbering variations.
+
     Args:
         name: Ward name to normalize
-        
+
     Returns:
-        Normalized ward name (lowercase)
+        Normalized ward name (lowercase, unified separators)
     """
     if pd.isna(name):
         return ''
-    
+
     name = str(name).strip()
-    
+
     # Remove state prefixes (ad, kw, os, etc.) - two letter codes
     name = re.sub(r'^[a-z]{2}\s+', '', name, flags=re.IGNORECASE)
-    
-    # Remove 'Ward' suffix
-    name = re.sub(r'\s+Ward$', '', name, flags=re.IGNORECASE)
-    
-    # Remove extra spaces and normalize
+
+    # Remove 'Ward' ANYWHERE in the string (not just suffix)
+    # e.g., "balogun fulani ward 3" → "balogun fulani 3"
+    name = re.sub(r'\bward\b', '', name, flags=re.IGNORECASE)
+
+    # Unify separators: replace hyphens and slashes with spaces
+    # e.g., "budo-egba" and "budo/egba" and "budo egba" all become "budo egba"
+    name = name.replace('-', ' ').replace('/', ' ')
+
+    # Collapse multiple spaces and strip
     name = ' '.join(name.split())
-    
-    # Return lowercase for consistent matching
+
     return name.strip().lower()
 
 
@@ -320,6 +326,36 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
 
         if ward_col:
             state_gdf['WardName_norm'] = state_gdf[ward_col].apply(normalize_ward_name)
+
+            # Fuzzy fallback: for data wards that don't exact-match after
+            # normalization, find the closest shapefile ward name.  This
+            # handles DHIS2 encoding artifacts (digits replacing letters),
+            # spelling variations, and minor typos.
+            shp_norms = set(state_gdf['WardName_norm'].unique())
+            shp_norms_list = list(shp_norms)
+            from difflib import get_close_matches
+            remap = {}
+            for data_norm in result_df['WardName_norm'].unique():
+                if data_norm and data_norm not in shp_norms:
+                    # First try: direct fuzzy match
+                    matches = get_close_matches(data_norm, shp_norms_list, n=1, cutoff=0.7)
+                    if not matches:
+                        # Second try: DHIS2 often replaces letters with '0'
+                        # e.g. "ade0" should be "adena", "ajan0ku" → "ajanaku"
+                        digit_cleaned = re.sub(r'0', 'a', data_norm)
+                        matches = get_close_matches(digit_cleaned, shp_norms_list, n=1, cutoff=0.65)
+                    if not matches:
+                        # Third try: data ward is a substring of shapefile ward
+                        # e.g. "ajanaku" matches "ajanaku malete"
+                        candidates = [s for s in shp_norms_list
+                                      if data_norm in s or s in data_norm]
+                        if len(candidates) == 1:
+                            matches = candidates
+                    if matches:
+                        remap[data_norm] = matches[0]
+            if remap:
+                logger.info(f"Fuzzy-matched {len(remap)} ward names: {dict(list(remap.items())[:5])}")
+                result_df['WardName_norm'] = result_df['WardName_norm'].replace(remap)
 
             # Merge to get geometries
             merged = state_gdf.merge(result_df, on='WardName_norm', how='left', suffixes=('_shp', ''))
