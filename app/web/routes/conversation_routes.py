@@ -76,11 +76,10 @@ def resume_conversation(session_id: str):
         user_id = get_user_id()
         svc = _get_service()
 
-        # Ownership check: sorted-set membership + meta user_id match
+        # Ownership check: sorted-set membership is sufficient proof.
+        # The meta user_id field may be absent if register_conversation was
+        # never called (e.g. session created via file upload, not page load).
         if not svc.conversation_belongs_to_user(user_id, session_id):
-            return jsonify({"success": False, "message": "Conversation not found"}), 404
-        meta = svc.get_conversation_meta(session_id)
-        if not meta or meta.get("user_id") != user_id:
             return jsonify({"success": False, "message": "Conversation not found"}), 404
 
         # --- Load messages from SessionMemory JSON files ---

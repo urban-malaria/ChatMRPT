@@ -60,7 +60,12 @@ class ConversationHistoryService:
         logger.debug("Registered conversation %s for user %s", session_id, user_id)
 
     def update_activity(self, user_id: str, session_id: str, preview: Optional[str] = None, has_files: bool = False) -> None:
-        """Update last-activity timestamp and optional preview text."""
+        """Update last-activity timestamp and optional preview text.
+
+        Also ensures user_id and created_at are present in meta — they may
+        be missing if the session was created via file upload rather than
+        the main page load (which calls register_conversation).
+        """
         now = time.time()
 
         if self._redis:
@@ -71,6 +76,9 @@ class ConversationHistoryService:
                 updates[b"preview"] = preview[:120].encode()
             if has_files:
                 updates[b"has_files"] = b"1"
+            # Always ensure user_id and created_at are set (idempotent via HSETNX)
+            pipe.hsetnx(self._meta_key(session_id), b"user_id", user_id.encode())
+            pipe.hsetnx(self._meta_key(session_id), b"created_at", str(now).encode())
             pipe.hset(self._meta_key(session_id), mapping=updates)
             pipe.execute()
         else:
@@ -79,7 +87,7 @@ class ConversationHistoryService:
                 changes["preview"] = preview[:120]
             if has_files:
                 changes["has_files"] = "1"
-            self._fs_update(user_id, session_id, changes)
+            self._fs_update(user_id, session_id, changes, ensure_fields={"user_id": user_id})
 
     def set_title(self, user_id: str, session_id: str, title: str) -> None:
         """Set the conversation title (usually derived from the first user message)."""
@@ -169,11 +177,15 @@ class ConversationHistoryService:
         with open(self._user_file(user_id), "w") as f:
             json.dump(data, f, indent=2)
 
-    def _fs_update(self, user_id: str, session_id: str, updates: Dict[str, str], register: bool = False) -> None:
+    def _fs_update(self, user_id: str, session_id: str, updates: Dict[str, str], register: bool = False, ensure_fields: Optional[Dict[str, str]] = None) -> None:
         data = self._fs_load(user_id)
         if register or session_id not in data:
             data.setdefault(session_id, {})
         if session_id in data:
+            # Set ensure_fields only if not already present (like HSETNX)
+            if ensure_fields:
+                for k, v in ensure_fields.items():
+                    data[session_id].setdefault(k, v)
             data[session_id].update(updates)
         self._fs_save(user_id, data)
 
