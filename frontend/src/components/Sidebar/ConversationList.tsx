@@ -86,7 +86,7 @@ const ConversationList: React.FC = () => {
       // Update browser-side session tracking
       storage.setSessionId(sessionId);
 
-      // Replay messages into the chat store
+      // Replay messages into the chat store (including visualizations)
       for (const msg of messages) {
         addMessage({
           id: `restored_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -95,6 +95,7 @@ const ConversationList: React.FC = () => {
           content: msg.content,
           timestamp: new Date(msg.timestamp),
           sessionId,
+          ...(msg.visualizations?.length ? { visualizations: msg.visualizations } : {}),
         });
       }
 

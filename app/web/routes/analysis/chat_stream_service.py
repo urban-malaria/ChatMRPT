@@ -387,7 +387,10 @@ def _log_stream_completion(app, final_chunk: Dict[str, Any], response_content: s
     try:
         from app.services.session_memory import SessionMemory, MessageType
         _mem = SessionMemory(session_id)
-        _mem.add_message(MessageType.ASSISTANT, response_content)
+        # Include visualizations in metadata so they can be restored on resume
+        _viz = final_chunk.get('visualizations') or []
+        _metadata = {'visualizations': _viz} if _viz else {}
+        _mem.add_message(MessageType.ASSISTANT, response_content, metadata=_metadata)
     except Exception as _mem_err:
         logger.debug("SessionMemory save (assistant) failed: %s", _mem_err)
 

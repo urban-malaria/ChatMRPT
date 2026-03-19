@@ -140,11 +140,16 @@ def _load_messages(session_id: str) -> list:
             # Only return user and assistant messages to the frontend
             if msg_type not in ("user", "assistant"):
                 continue
-            messages.append({
+            entry = {
                 "type": msg_type,
                 "content": msg.get("content", ""),
                 "timestamp": msg.get("timestamp", ""),
-            })
+            }
+            # Restore visualizations from metadata if present
+            viz = (msg.get("metadata") or {}).get("visualizations")
+            if viz:
+                entry["visualizations"] = viz
+            messages.append(entry)
         return messages
 
     except Exception as exc:

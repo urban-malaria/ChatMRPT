@@ -648,6 +648,13 @@ def data_analysis_chat():
         )
         logger.info(f"✅ Logged user message for session {session_id}")
 
+        # Persist user message to SessionMemory for conversation resume
+        try:
+            from app.services.session_memory import SessionMemory, MessageType
+            SessionMemory(session_id).add_message(MessageType.USER, message)
+        except Exception:
+            pass
+
         from app.data_analysis_v3.core.state_manager import DataAnalysisStateManager, ConversationStage
         state_manager = DataAnalysisStateManager(session_id)
         current_state = state_manager.get_state() or {}
@@ -943,6 +950,16 @@ def data_analysis_chat():
                 }
             )
             logger.info(f"✅ Logged assistant response for session {session_id} (response_time={response_time:.2f}s)")
+
+            # Persist to SessionMemory so conversation resume includes all messages + visualizations
+            try:
+                from app.services.session_memory import SessionMemory, MessageType
+                _mem = SessionMemory(session_id)
+                _viz = (response.get('visualizations') or []) if isinstance(response, dict) else []
+                _meta = {'visualizations': _viz} if _viz else {}
+                _mem.add_message(MessageType.ASSISTANT, assistant_message, metadata=_meta)
+            except Exception as _mem_err:
+                logger.debug("SessionMemory save (v3 assistant) failed: %s", _mem_err)
 
             # CRITICAL FIX: Check if TPR workflow completed and add exit flag
             if isinstance(response, dict):
