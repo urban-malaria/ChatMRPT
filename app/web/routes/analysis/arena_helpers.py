@@ -20,55 +20,22 @@ class ArenaSetupError(Exception):
 
 
 def is_arena_eligible_message(message: str) -> bool:
+    """Check if a message should trigger Arena (multi-model battle).
+
+    Only filters out trivially short messages and obvious confirmations.
+    The LLM models in the Arena can handle greetings and knowledge
+    questions appropriately on their own.
     """
-    Check if a message is eligible for arena mode.
+    message_lower = message.strip().lower()
 
-    Arena should trigger for substantive general knowledge questions,
-    but NOT for:
-    - Greetings (hi, hello)
-    - Pleasantries (thanks, bye, ok)
-    - Very short messages (< 3 words)
-    - Follow-up acknowledgments
-
-    Args:
-        message: The user's message
-
-    Returns:
-        True if message should trigger arena mode
-    """
-    message_lower = message.lower().strip()
-
-    # Skip greetings
-    greetings = [
-        'hi', 'hello', 'hey', 'greetings', 'good morning',
-        'good afternoon', 'good evening', 'howdy', 'hiya',
-    ]
-    if message_lower in greetings or any(message_lower.startswith(g + ' ') for g in greetings):
+    # Skip very short messages (likely confirmations, not questions)
+    if len(message.split()) < 3:
         return False
 
-    # Skip pleasantries and acknowledgments
-    pleasantries = [
-        'thanks', 'thank you', 'bye', 'goodbye', 'ok', 'okay',
-        'sure', 'yes', 'no', 'got it', 'i see', 'understood',
-        'alright', 'great', 'cool', 'nice', 'perfect', 'awesome',
-    ]
-    if message_lower in pleasantries:
+    # Skip obvious confirmations
+    if message_lower in ['yes', 'no', 'ok', 'okay', 'sure', 'thanks', 'bye']:
         return False
 
-    # Skip very short messages (likely not substantive questions)
-    word_count = len(message.split())
-    if word_count < 3:
-        return False
-
-    # Skip messages that are just follow-up confirmations
-    confirmation_patterns = [
-        'yes please', 'no thanks', 'that works', 'sounds good',
-        'go ahead', 'do it', 'proceed', 'continue',
-    ]
-    if message_lower in confirmation_patterns:
-        return False
-
-    # Message is eligible for arena
     return True
 
 

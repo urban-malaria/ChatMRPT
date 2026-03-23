@@ -285,19 +285,13 @@ def is_conversation_active(session_state: SessionState) -> bool:
 
 
 def needs_agent_processing(query: str, session_state: SessionState) -> bool:
-    """Determine if query needs agent processing vs simple chat."""
-    # Check for analysis indicators
-    analysis_keywords = ['analyze', 'show', 'create', 'calculate', 'rank', 'compare', 
-                        'highest risk', 'statistics', 'visualization', 'intervention']
-    
-    query_lower = query.lower()
-    has_analysis_intent = any(keyword in query_lower for keyword in analysis_keywords)
-    
-    # Check if data is available for analysis
-    has_data = is_data_ready_for_analysis(session_state)
-    
-    # Agent processing needed if analysis intent AND data available
-    return has_analysis_intent and has_data
+    """Determine if query needs agent processing vs simple chat.
+
+    If data is loaded, every message goes to the agent. The LLM decides
+    what to do — not a keyword list. This follows the industry standard
+    pattern used by ChatGPT, Claude, and other modern AI tools.
+    """
+    return is_data_ready_for_analysis(session_state)
 
 
 def get_conversation_summary(session_state: SessionState) -> Dict[str, Any]:

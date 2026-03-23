@@ -449,45 +449,16 @@ Respond with JSON: {{"command": str or null, "rationale": short explanation}}"""
         if any(message_lower == kw or message_lower.startswith(f"{kw} ") for kw in navigation_keywords):
             return _result("navigation", 0.9, "Detected navigation keyword")
 
-        # Step 2: Define intent keyword lists (before extract_command!)
+        # Step 2: Safety check — detect questions BEFORE extract_command()
+        # This prevents "List all columns" → extracting "all" as a selection,
+        # and "What does o5 mean?" → extracting "o5" as a selection.
         question_starters = (
             "what", "why", "how", "when", "where", "which", "who", "can",
             "could", "would", "should", "do ", "does", "did"
         )
 
-        analysis_keywords = (
-            "analy", "analysis", "analyze", "trend", "chart", "plot", "graph", "visual",
-            "calculate", "compute", "comparison", "correl", "distribution", "histogram",
-            "heatmap", "statistics", "stats"
-        )
-        data_keywords = (
-            "data", "dataset", "column", "row", "value", "table", "record", "entries",
-            "fields", "variables", "list", "show", "display", "view"
-        )
-        info_keywords = (
-            "explain", "info", "information", "detail", "difference", "options", "describe",
-            "meaning", "definition", "what is", "what are"
-        )
-
-        # Step 3: Check for non-selection intents BEFORE trying to extract commands
-        # This fixes "List all columns" being misinterpreted as selecting "all"
-
-        if any(kw in message_lower for kw in analysis_keywords):
-            logger.info(f"🔍 Detected analysis keyword in: '{message_clean}'")
-            return _result("analysis_request", 0.75, "Detected analysis keyword")
-
-        if any(kw in message_lower for kw in data_keywords):
-            logger.info(f"🔍 Detected data keyword in: '{message_clean}'")
-            return _result("data_inquiry", 0.7, "Detected data exploration keyword")
-
-        if any(kw in message_lower for kw in info_keywords):
-            logger.info(f"🔍 Detected info keyword in: '{message_clean}'")
-            return _result("information_request", 0.7, "Detected information request keyword")
-
-        # Step 3b: Check question phrasing BEFORE extract_command so that messages like
-        # "What does o5 mean?" never reach LLM extraction and get mis-classified as selections.
         if message_lower.endswith("?") or message_lower.startswith(question_starters):
-            logger.info(f"🔍 Detected question phrasing before extraction: '{message_clean}'")
+            logger.info(f"🔍 Detected question phrasing — routing to agent: '{message_clean}'")
             return _result("question", 0.8, "Detected question phrasing before extraction")
 
         # Step 4: ONLY NOW try to extract selection commands

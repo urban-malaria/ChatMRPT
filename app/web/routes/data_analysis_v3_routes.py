@@ -749,96 +749,7 @@ def data_analysis_chat():
             current_stage = state_manager.get_workflow_stage()
 
             # ============================================================
-            # PRIORITY 1: CHECK FOR EXACT VISUALIZATION PHRASES ONLY
-            # ============================================================
-            # ONLY exact phrases that request stored TPR visualizations
-            # Must be checked BEFORE everything else (confirmation, commands, agent)
-            # Using EXACT matching (not substring) to avoid false positives like "plot distribution"
-            viz_exact_phrases = [
-                "show facility charts",
-                "show age charts"
-            ]
-
-            # Explanation phrases - conceptual help for decision making
-            explanation_phrases = [
-                "explain the differences",
-                "explain differences",
-                "what's the difference",
-                "what is the difference",
-                "compare them"
-            ]
-
-            message_normalized = message.lower().strip()
-
-            # Check for explanation requests first
-            if message_normalized in explanation_phrases:
-                logger.info(f"[EXPLANATION] Detected explanation request: '{message}'")
-
-                # Get conceptual explanation based on current workflow step
-                # Use existing tpr_handler which is already initialized
-                explanation_result = tpr_handler.handle_explanation_request()
-
-                return jsonify(explanation_result)
-
-            if message_normalized in viz_exact_phrases:
-                logger.info(f"[VISUALIZATION] Detected viz request: '{message}'")
-
-                # Get pending visualizations from state
-                pending_viz = current_state.get('pending_visualizations', {})
-
-                if not pending_viz:
-                    # No visualizations stored yet
-                    return jsonify({
-                        "success": True,
-                        "message": "No visualizations are currently available. Please make a selection first to generate charts.",
-                        "session_id": session_id
-                    })
-
-                # Determine which viz to return based on current stage
-                if current_stage == ConversationStage.TPR_FACILITY_LEVEL and 'facility_level' in pending_viz:
-                    viz_list = pending_viz['facility_level']
-                    msg = "Here are the facility-level visualizations to help inform your decision:\n\n"
-                    msg += "**Chart 1:** Facility mix by level\n"
-                    msg += "**Chart 2:** Test availability (RDT vs Microscopy)\n\n"
-                    msg += "Based on this data, which facility level would you like to analyze?\n"
-                    msg += "(**primary**, **secondary**, **tertiary**, or **all**)"
-
-                    return jsonify({
-                        'success': True,
-                        'message': msg,
-                        'session_id': session_id,
-                        'workflow': 'tpr',
-                        'stage': 'facility_selection',
-                        'visualizations': viz_list
-                    })
-
-                elif current_stage == ConversationStage.TPR_AGE_GROUP and 'age_group' in pending_viz:
-                    viz_list = pending_viz['age_group']
-                    msg = "Here are the age group visualizations:\n\n"
-                    msg += "**Chart 1:** Test volume breakdown by age group\n"
-                    msg += "**Chart 2:** Positivity rate comparisons across ages\n\n"
-                    msg += "This data helps identify which age groups have the highest burden.\n\n"
-                    msg += "Which age group would you like to analyze?\n"
-                    msg += "(**u5**, **o5**, **pw**, or **all**)"
-
-                    return jsonify({
-                        'success': True,
-                        'message': msg,
-                        'session_id': session_id,
-                        'workflow': 'tpr',
-                        'stage': 'age_selection',
-                        'visualizations': viz_list
-                    })
-                else:
-                    # No visualizations for current stage
-                    return jsonify({
-                        "success": True,
-                        "message": "Visualizations aren't available for the current stage.",
-                        "session_id": session_id
-                    })
-
-            # ============================================================
-            # PRIORITY 2: CHECK FOR CONFIRMATION
+            # PRIORITY 1: CHECK FOR CONFIRMATION
             # ============================================================
             # This handles natural language like "sure thing", "yES Let's go", etc.
             if current_state.get('tpr_awaiting_confirmation'):
@@ -978,8 +889,9 @@ def data_analysis_chat():
 
             return jsonify(response)
 
-        # TPR workflow start triggers - removed standalone 'tpr' to prevent false positives (e.g., "map tpr distribution")
-        start_triggers = ['start tpr', 'tpr workflow', 'test positivity', 'test positivity rate', 'run tpr']
+        # TPR workflow start triggers — explicit commands only (from user guide)
+        # Removed 'test positivity' and 'test positivity rate' — these are topics, not commands
+        start_triggers = ['start tpr', 'start the tpr', 'tpr workflow', 'run tpr']
         if any(trigger in lower_message for trigger in start_triggers):
             logger.info(f"[BRIDGE] Detected TPR start request: '{message}'")
             data_dir = os.path.join('instance', 'uploads', session_id)
