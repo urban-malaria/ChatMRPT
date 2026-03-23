@@ -694,7 +694,7 @@ class DataAnalysisAgent:
 
         # Save visualizations into the session's visualizations folder
         # so they are served via /serve_viz_file/<session_id>/visualizations/<file>
-        session_viz_dir = os.path.join(f"instance/uploads/{session_id}", "visualizations")
+        session_viz_dir = os.path.join(f"instance/uploads/{self.session_id}", "visualizations")
         os.makedirs(session_viz_dir, exist_ok=True)
 
         import pickle
@@ -719,7 +719,7 @@ class DataAnalysisAgent:
                         html_file.write(viz_html)
 
                     # Create web-accessible URL via serve_viz_file route
-                    web_url = f"/serve_viz_file/{session_id}/visualizations/{html_filename}"
+                    web_url = f"/serve_viz_file/{self.session_id}/visualizations/{html_filename}"
 
                     visualizations.append({
                         'type': 'iframe',
