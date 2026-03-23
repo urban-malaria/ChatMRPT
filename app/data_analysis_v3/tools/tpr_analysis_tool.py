@@ -1001,7 +1001,22 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
             # Save TPR results
             tpr_output_path = os.path.join(session_folder, 'tpr_results.csv')
             tpr_results.to_csv(tpr_output_path, index=False)
-            
+
+            # Save time-series TPR (preserving period dimension for trend analysis)
+            period_col = column_schema.get('period')
+            if period_col and period_col in df.columns:
+                try:
+                    from app.core.tpr_utils import calculate_ward_tpr_timeseries
+                    ts_results = calculate_ward_tpr_timeseries(
+                        df, age_group=age_group, test_method=test_method,
+                        facility_level=facility_level, schema=column_schema
+                    )
+                    if not ts_results.empty:
+                        ts_results.to_csv(os.path.join(session_folder, 'tpr_time_series.csv'), index=False)
+                        logger.info(f"Saved time-series TPR: {len(ts_results)} rows")
+                except Exception as e:
+                    logger.warning(f"Could not generate time-series TPR: {e}")
+
             # Prepare summary
             summary = prepare_tpr_summary(tpr_results)
 

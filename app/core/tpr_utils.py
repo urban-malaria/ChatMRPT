@@ -403,6 +403,108 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
     return result_df
 
 
+def calculate_ward_tpr_timeseries(df: pd.DataFrame, age_group: str = 'all_ages',
+                                   test_method: str = 'both', facility_level: str = 'all',
+                                   schema: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+    """Like calculate_ward_tpr but preserves the period dimension.
+
+    Groups by (Ward, LGA, Period) instead of (Ward, LGA).
+    Returns DataFrame: WardName, LGA, Period, Total_Positive, Total_Tested, TPR
+
+    Does NOT compute Burden (no per-period population rasters).
+    """
+    if not schema or not schema.get('period'):
+        logger.info("No period column in schema — cannot generate time-series TPR")
+        return pd.DataFrame()
+
+    period_col = schema['period']
+    if period_col not in df.columns:
+        logger.warning(f"Period column '{period_col}' not in DataFrame")
+        return pd.DataFrame()
+
+    df = fix_column_encoding(df)
+
+    # --- Facility level filter (same as calculate_ward_tpr) ---
+    if facility_level != 'all':
+        fl_col = schema.get('facility_level')
+        if fl_col and fl_col in df.columns:
+            filtered = df[df[fl_col].str.lower() == facility_level.lower()].copy()
+            if filtered.empty:
+                filtered = df[df[fl_col].str.lower().str.contains(facility_level.lower(), na=False)].copy()
+            if not filtered.empty:
+                df = filtered
+
+    # --- Ward + LGA columns ---
+    df = df.copy()
+    ward_col = schema.get('ward')
+    if ward_col and ward_col in df.columns:
+        df['WardName'] = df[ward_col]
+        df['WardName_clean'] = df[ward_col].apply(normalize_ward_name)
+    else:
+        df['WardName'] = 'Unknown'
+        df['WardName_clean'] = 'unknown'
+
+    lga_col = schema.get('lga')
+    if not (lga_col and lga_col in df.columns):
+        df['LGA'] = 'Unknown'
+        lga_col = 'LGA'
+
+    # --- Build test column lists (same as calculate_ward_tpr) ---
+    def _schema_cols(col_type: str) -> list:
+        prefixes = ['u5', 'o5', 'pw'] if age_group == 'all_ages' else [age_group]
+        return [c for c in (schema.get(f'{p}_{col_type}') for p in prefixes)
+                if c and c in df.columns]
+
+    rdt_tested_cols   = _schema_cols('rdt_tested')   if test_method in ('rdt', 'both') else []
+    rdt_positive_cols = _schema_cols('rdt_positive')  if test_method in ('rdt', 'both') else []
+    micro_tested_cols = _schema_cols('microscopy_tested')  if test_method in ('microscopy', 'both') else []
+    micro_positive_cols = _schema_cols('microscopy_positive') if test_method in ('microscopy', 'both') else []
+
+    has_rdt = bool(rdt_tested_cols and rdt_positive_cols)
+    has_micro = bool(micro_tested_cols and micro_positive_cols)
+    if not has_rdt and not has_micro:
+        return pd.DataFrame()
+
+    # --- Aggregate by ward + LGA + period ---
+    def _sum_cols(group, cols):
+        return sum(group[c].fillna(0).sum() for c in cols)
+
+    results = []
+    for (ward, lga, period), group in df.groupby(['WardName_clean', lga_col, period_col], dropna=False):
+        rdt_tested   = _sum_cols(group, rdt_tested_cols)
+        rdt_positive = _sum_cols(group, rdt_positive_cols)
+        micro_tested   = _sum_cols(group, micro_tested_cols)
+        micro_positive = _sum_cols(group, micro_positive_cols)
+
+        total_tested = rdt_tested + micro_tested
+        if test_method == 'rdt':
+            total_positive = rdt_positive
+            total_tested = rdt_tested
+        elif test_method == 'microscopy':
+            total_positive = micro_positive
+            total_tested = micro_tested
+        else:  # 'both'
+            rdt_rate   = rdt_positive / rdt_tested if rdt_tested > 0 else 0
+            micro_rate = micro_positive / micro_tested if micro_tested > 0 else 0
+            if rdt_rate >= micro_rate:
+                total_positive = rdt_positive
+                total_tested = rdt_tested
+            else:
+                total_positive = micro_positive
+                total_tested = micro_tested
+
+        if total_tested <= 0:
+            continue
+
+        tpr = (total_positive / total_tested) * 100
+        results.append({
+            'WardName': ward, 'LGA': lga, 'Period': period,
+            'Total_Positive': int(total_positive), 'Total_Tested': int(total_tested),
+            'TPR': round(tpr, 2),
+        })
+
+    logger.info(f"Time-series TPR: {len(results)} ward-period rows generated")
+    return pd.DataFrame(results)
 
 
 def get_geopolitical_zone(state: str) -> str:

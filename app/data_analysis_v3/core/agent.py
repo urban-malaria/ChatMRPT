@@ -619,6 +619,21 @@ class DataAnalysisAgent:
                     logger.error(f"[_GET_INPUT_DATA STEP 3] ❌ Error loading {pattern}: {e}", exc_info=True)
                     continue
 
+        # Also load time-series data if available (alongside main dataset for trend analysis)
+        ts_path = os.path.join(session_folder, 'tpr_time_series.csv')
+        if os.path.exists(ts_path):
+            try:
+                ts_df = EncodingHandler.read_csv_with_encoding(ts_path)
+                input_data_list.append({
+                    'variable_name': 'ts_df',
+                    'data_description': f"Time-series TPR data by ward and year ({len(ts_df)} rows, columns: {ts_df.columns.tolist()})",
+                    'data': ts_df,
+                    'columns': ts_df.columns.tolist()
+                })
+                logger.info(f"[_GET_INPUT_DATA] Also loaded tpr_time_series.csv: {ts_df.shape}")
+            except Exception as e:
+                logger.warning(f"[_GET_INPUT_DATA] Could not load time-series data: {e}")
+
         if not input_data_list:
             logger.warning(f"[_GET_INPUT_DATA] ⚠️  No datasets loaded via priority list. Falling back to scan session folder.")
 
