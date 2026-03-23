@@ -692,9 +692,10 @@ class DataAnalysisAgent:
         """Process output plots (pickle files) into visualization objects."""
         visualizations = []
 
-        # Create static visualizations directory if it doesn't exist
-        static_viz_dir = "app/static/visualizations"
-        os.makedirs(static_viz_dir, exist_ok=True)
+        # Save visualizations into the session's visualizations folder
+        # so they are served via /serve_viz_file/<session_id>/visualizations/<file>
+        session_viz_dir = os.path.join(f"instance/uploads/{session_id}", "visualizations")
+        os.makedirs(session_viz_dir, exist_ok=True)
 
         import pickle
         import uuid
@@ -709,7 +710,7 @@ class DataAnalysisAgent:
                     # Generate unique HTML filename
                     viz_id = str(uuid.uuid4())
                     html_filename = f"data_analysis_{viz_id}.html"
-                    html_path = os.path.join(static_viz_dir, html_filename)
+                    html_path = os.path.join(session_viz_dir, html_filename)
 
                     # Save as HTML
                     # Embed Plotly JS locally to avoid CDN dependency in offline/locked-down environments
@@ -717,8 +718,8 @@ class DataAnalysisAgent:
                     with open(html_path, 'w') as html_file:
                         html_file.write(viz_html)
 
-                    # Create web-accessible URL
-                    web_url = f"/static/visualizations/{html_filename}"
+                    # Create web-accessible URL via serve_viz_file route
+                    web_url = f"/serve_viz_file/{session_id}/visualizations/{html_filename}"
 
                     visualizations.append({
                         'type': 'iframe',
