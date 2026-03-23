@@ -110,6 +110,13 @@ def _run_trend_analysis(df, time_col, value_col, group_col=None, alpha=0.10, top
         print("ERROR: No valid numeric data after cleaning.")
         return pd.DataFrame()
 
+    # --- Aggregate to one value per (group, time_period) before computing trends ---
+    # Raw data often has multiple rows per period (e.g., 64 facilities per LGA per year).
+    # Proper trend analysis requires aggregation to period-level means first.
+    # This avoids pseudoreplication and ensures pct_change/N_periods are meaningful.
+    agg_cols = [time_col] + ([group_col] if group_col else [])
+    df = df.groupby(agg_cols, dropna=False)[value_col].mean().reset_index()
+
     # --- Compute trends per group ---
     groups = df.groupby(group_col) if group_col else [('All', df)]
     results = []
@@ -138,7 +145,7 @@ def _run_trend_analysis(df, time_col, value_col, group_col=None, alpha=0.10, top
             direction = "Decreasing"
 
         sig = "significant" if lr_p < alpha else "non-significant"
-        first_val, last_val = values[0], values[-1]
+        first_val, last_val = float(values[0]), float(values[-1])
         pct_change = ((last_val - first_val) / first_val * 100) if first_val != 0 else 0
 
         results.append({
