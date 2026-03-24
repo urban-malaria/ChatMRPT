@@ -95,6 +95,38 @@ class DataExplorationAgent(DataAnalysisAgent):
             except Exception as e:
                 logger.error(f"Failed to load shapefile {shapefile}: {e}")
 
+        # Load time-series data if available (for trend analysis after TPR)
+        ts_path = os.path.join(session_folder, 'tpr_time_series.csv')
+        if os.path.exists(ts_path):
+            try:
+                ts_df = EncodingHandler.read_csv_with_encoding(ts_path)
+                input_data_list.append({
+                    'variable_name': 'ts_df',
+                    'data_description': f"Time-series TPR data by ward and year ({len(ts_df)} rows, columns: {ts_df.columns.tolist()})",
+                    'data': ts_df,
+                    'columns': ts_df.columns.tolist()
+                })
+                logger.info(f"✅ Also loaded tpr_time_series.csv: {ts_df.shape}")
+            except Exception as e:
+                logger.warning(f"Could not load time-series data: {e}")
+
+        # Also load original uploaded data for broad trend analysis (has all time periods)
+        uploaded_path = os.path.join(session_folder, 'uploaded_data.csv')
+        primary_loaded = input_data_list and input_data_list[0].get('variable_name') == 'df'
+        primary_is_not_uploaded = primary_loaded and 'uploaded_data' not in str(csv_file)
+        if primary_is_not_uploaded and os.path.exists(uploaded_path):
+            try:
+                uploaded_df = EncodingHandler.read_csv_with_encoding(uploaded_path)
+                input_data_list.append({
+                    'variable_name': 'uploaded_df',
+                    'data_description': f"Original uploaded data with all time periods ({len(uploaded_df)} rows)",
+                    'data': uploaded_df,
+                    'columns': uploaded_df.columns.tolist()
+                })
+                logger.info(f"✅ Also loaded uploaded_data.csv: {uploaded_df.shape}")
+            except Exception as e:
+                logger.warning(f"Could not load uploaded data: {e}")
+
         if not input_data_list:
             logger.warning(f"⚠️ No data loaded for session {self.session_id}")
 

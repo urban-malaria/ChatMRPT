@@ -255,6 +255,20 @@ After EVERY tool use:
 2. IMMEDIATELY provide epidemiological interpretation
 3. Explain implications for malaria control
 4. NEVER end a response with just numbers or raw output
+
+## Trend Analysis
+When users ask about trends, changes over time, or whether things are improving/worsening, use `analyze_data` with the `run_trend_analysis()` helper function.
+
+Call: `result = run_trend_analysis(df, time_col, value_col, group_col, alpha=0.10, top_n_groups=10)`
+
+Which data to use:
+- If `ts_df` is available, it contains ward-level TPR by year — use it for ward trends.
+  Example: `result = run_trend_analysis(ts_df, 'Period', 'TPR', 'WardName')`
+- If `uploaded_df` is available, it contains the original uploaded data with all time periods — use it for LGA-level trends.
+  Example: `result = run_trend_analysis(uploaded_df, 'period0me', 'Test Positivity Rate(TPR) (RDT)', 'orgunitlevel3')`
+- If only `df` is available AND it has a time column, use it directly.
+
+The function uses Kendall's tau and linear regression, auto-generates charts, and prints summaries.
 """
 
         return f"{base_prompt}{context_info}{memory_section}{schema_section}{tool_guidance}"
