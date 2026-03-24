@@ -98,7 +98,11 @@ def _run_trend_analysis(df, time_col, value_col, group_col=None, alpha=0.10, top
     # --- Validate inputs ---
     for col in [time_col, value_col] + ([group_col] if group_col else []):
         if col not in df.columns:
-            print(f"ERROR: Column '{col}' not found in data. Available: {list(df.columns)}")
+            print(f"ERROR: Column '{col}' not found in data. Available columns: {list(df.columns)[:10]}")
+            print(f"HINT: You may be using the wrong DataFrame. Try:")
+            print(f"  - uploaded_df (original data with all time periods)")
+            print(f"  - ts_df (ward-level TPR by year)")
+            print(f"  Example: run_trend_analysis(uploaded_df, 'period0me', 'Test Positivity Rate(TPR) (RDT)', 'orgunitlevel3')")
             return pd.DataFrame()
 
     df = df.copy()
