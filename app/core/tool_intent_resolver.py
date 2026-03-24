@@ -495,6 +495,14 @@ class ToolIntentResolver:
         if any(kw in text for kw in viz_keywords):
             return -2.0, {}, False, [], True  # Strong negative score to avoid this tool
 
+        # Temporal/trend keywords -> DO NOT route here, SQL can't handle trend analysis
+        # These need analyze_data with run_trend_analysis helper or LLM orchestration
+        temporal_keywords = {"trend", "over time", "changing", "changed", "improving",
+                           "worsening", "worse", "better", "getting worse", "getting better",
+                           "year by year", "temporal", "time series", "annual"}
+        if any(kw in text for kw in temporal_keywords):
+            return -2.0, {}, False, [], True  # Yield to LLM orchestration
+
         matched = []
         score = 0.0
 
