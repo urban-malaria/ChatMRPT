@@ -264,12 +264,13 @@ When users ask about trends, changes over time, or whether things are improving/
 
 Call: `result = run_trend_analysis(df, time_col, value_col, group_col, alpha=0.10, top_n_groups=10)`
 
-Which data to use:
-- If `ts_df` is available, it contains ward-level TPR by year — use it for ward trends.
-  Example: `result = run_trend_analysis(ts_df, 'Period', 'TPR', 'WardName')`
-- If `uploaded_df` is available, it contains the original uploaded data with all time periods — use it for LGA-level trends.
-  Example: `result = run_trend_analysis(uploaded_df, 'period0me', 'Test Positivity Rate(TPR) (RDT)', 'orgunitlevel3')`
-- If only `df` is available AND it has a time column, use it directly.
+Which data to use (TRY IN THIS ORDER):
+1. FIRST try `uploaded_df` — it has the FULL original data with ALL time periods and ALL facilities. Best for trend analysis.
+   Example: `result = run_trend_analysis(uploaded_df, 'period0me', 'Test Positivity Rate(TPR) (RDT)', 'orgunitlevel3')`
+2. If `uploaded_df` is not available, try `ts_df` — ward-level TPR by year (may be sparse).
+   Example: `result = run_trend_analysis(ts_df, 'Period', 'TPR', 'WardName')`
+3. If only `df` is available AND it has a time column, use it directly.
+IMPORTANT: Do NOT use `df` for trends if it has no time/period column — `df` after TPR is a ward-level snapshot with no temporal data.
 
 The function uses Kendall's tau and linear regression, auto-generates charts, and prints summaries.
 """
