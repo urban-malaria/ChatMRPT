@@ -282,7 +282,28 @@ def _inject_helpers(exec_globals: Dict[str, Any]):
     exec_globals['top_n'] = top_n
     exec_globals['suggest_columns'] = suggest_columns
     exec_globals['capture_table'] = capture_table
-    exec_globals['run_trend_analysis'] = _run_trend_analysis
+
+    # Wrap run_trend_analysis with auto-fallback to uploaded_df
+    def _trend_with_fallback(df, time_col, value_col, group_col=None, alpha=0.10, top_n_groups=10):
+        result = _run_trend_analysis(df, time_col, value_col, group_col, alpha, top_n_groups)
+        if result.empty and 'uploaded_df' in exec_globals:
+            uploaded = exec_globals['uploaded_df']
+            if isinstance(uploaded, pd.DataFrame) and not uploaded.empty:
+                # Auto-detect time column in uploaded data
+                time_candidates = [c for c in uploaded.columns if any(
+                    k in c.lower() for k in ['period', 'year', 'date', 'time', 'month']
+                )]
+                tpr_candidates = [c for c in uploaded.columns if 'positivity' in c.lower() and 'rdt' in c.lower()]
+                lga_candidates = [c for c in uploaded.columns if 'level3' in c.lower() or 'lga' in c.lower()]
+                if time_candidates:
+                    t_col = time_candidates[0]
+                    v_col = tpr_candidates[0] if tpr_candidates else value_col
+                    g_col = lga_candidates[0] if lga_candidates else group_col
+                    print(f"\n🔄 Auto-retrying with uploaded_df ({len(uploaded)} rows, time_col='{t_col}', value='{v_col}', group='{g_col}')")
+                    result = _run_trend_analysis(uploaded, t_col, v_col, g_col, alpha, top_n_groups)
+        return result
+
+    exec_globals['run_trend_analysis'] = _trend_with_fallback
 
 
 def _setup_plotly_capture(exec_globals: Dict[str, Any]):
