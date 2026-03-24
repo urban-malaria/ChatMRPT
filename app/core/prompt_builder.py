@@ -238,9 +238,12 @@ When users ask about their data (rankings, top wards, statistics, values), you M
 2. NEVER make up ward names or scores - always query the real data first
 3. Present the ACTUAL results from the query, then interpret
 
+EXCEPTION: For trend/temporal questions (trends over time, improving, worsening, changes across years),
+use `analyze_data` with `run_trend_analysis()` instead of `query_data`. SQL cannot handle trend analysis.
+
 TWO-LAYER DATA ARCHITECTURE:
 - `query_data`: For data queries (rankings, filtering, statistics, column listings) - returns TEXT ONLY, no charts
-- `analyze_data`: For explicit visualization requests (charts, plots, heatmaps) - generates charts only when user explicitly asks
+- `analyze_data`: For visualizations, trend analysis, and complex Python-based analysis
 
 Examples of queries that REQUIRE tool calls:
 - "Show me top 10 wards" → MUST call query_data with "top 10 wards by composite score"
