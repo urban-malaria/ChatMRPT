@@ -162,6 +162,8 @@ def _run_trend_analysis(df, time_col, value_col, group_col=None, alpha=0.10, top
 
     if not results:
         print("No groups had enough data points (need >= 3 time periods).")
+        print("HINT: Try using uploaded_df which has the full original data with all time periods:")
+        print("  run_trend_analysis(uploaded_df, 'period0me', 'Test Positivity Rate(TPR) (RDT)', 'orgunitlevel3')")
         return pd.DataFrame()
 
     result_df = pd.DataFrame(results).sort_values('Slope', ascending=True)
