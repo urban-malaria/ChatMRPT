@@ -937,33 +937,28 @@ SQL:"""
             if not session_context.get('data_loaded', False):
                 return self._simple_conversational_response(user_message, session_context, session_id)
 
-            # Trend/temporal questions: route directly to DataExplorationAgent
-            # The two-LLM orchestration chain picks wrong DataFrames for trends.
-            # The agent sees data profiles and makes the right choice.
-            temporal_keywords = {"trend", "over time", "changing", "changed", "improving",
-                               "worsening", "worse", "better", "getting worse", "getting better",
-                               "year by year", "temporal", "time series", "annual"}
-            msg_lower = user_message.lower()
-            if any(kw in msg_lower for kw in temporal_keywords):
-                logger.info(f"🔄 Temporal question detected — routing to DataExplorationAgent directly")
-                try:
-                    from app.data_analysis_v3.core.data_exploration_agent import DataExplorationAgent
-                    agent = DataExplorationAgent(session_id)
-                    agent_result = agent.analyze_sync(user_message)
-                    response_text = agent_result.get('message', 'Analysis complete.')
-                    self._store_conversation(session_id, user_message, response_text)
-                    return {
-                        'status': 'success',
-                        'response': response_text,
-                        'visualizations': agent_result.get('visualizations', []),
-                        'tools_used': ['analyze_data'],
-                        'total_time': time.time() - start_time,
-                    }
-                except Exception as e:
-                    logger.warning(f"DataExplorationAgent trend analysis failed, falling through: {e}")
-                    # Fall through to standard orchestration
+            # Route to DataExplorationAgent for all queries not caught by the resolver.
+            # The agent sees full data profiles and makes correct DataFrame/tool choices.
+            # Specialized tools (maps, risk analysis, ITN) are already handled above
+            # by _attempt_direct_tool_resolution. Everything else goes here.
+            logger.info(f"🔄 Routing to DataExplorationAgent (one-brain pattern)")
+            try:
+                from app.data_analysis_v3.core.data_exploration_agent import DataExplorationAgent
+                agent = DataExplorationAgent(session_id)
+                agent_result = agent.analyze_sync(user_message)
+                response_text = agent_result.get('message', 'Analysis complete.')
+                self._store_conversation(session_id, user_message, response_text)
+                return {
+                    'status': 'success',
+                    'response': response_text,
+                    'visualizations': agent_result.get('visualizations', []),
+                    'tools_used': ['analyze_data'],
+                    'total_time': time.time() - start_time,
+                }
+            except Exception as e:
+                logger.warning(f"DataExplorationAgent failed, falling through to orchestration: {e}")
 
-            # Refactored orchestration path
+            # Refactored orchestration path (fallback)
             system_prompt = self._build_system_prompt_refactored(session_context, session_id)
             if self.tool_runner and self.orchestrator:
                 function_schemas = self.tool_runner.get_function_schemas()
