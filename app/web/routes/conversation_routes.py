@@ -89,7 +89,10 @@ def resume_conversation(session_id: str):
         session_state = _reconstruct_session_state(session_id)
 
         # --- Switch Flask session to the resumed session ---
-        session["session_id"] = session_id
+        # If there's a child upload session, set session_id to it so the
+        # backend can find uploaded files. Keep base_session_id as the original.
+        upload_sid = session_state.get("upload_session_id")
+        session["session_id"] = upload_sid or session_id
         session["base_session_id"] = session_id
         session["data_loaded"] = session_state.get("data_loaded", False)
         session["csv_loaded"] = session_state.get("csv_loaded", False)
@@ -158,9 +161,11 @@ def _load_messages(session_id: str) -> list:
 
 
 def _reconstruct_session_state(session_id: str) -> dict:
-    """Reconstruct session flags by inspecting the upload directory."""
-    upload_dir = os.path.join(current_app.instance_path, "uploads", session_id)
+    """Reconstruct session flags by inspecting the upload directory.
 
+    If this session has a child upload session (stored in memory file as
+    upload_session_id), also check that folder for files.
+    """
     state = {
         "has_files": False,
         "csv_loaded": False,
@@ -169,44 +174,64 @@ def _reconstruct_session_state(session_id: str) -> dict:
         "analysis_complete": False,
         "csv_filename": None,
         "shapefile_filename": None,
+        "tpr_active": False,
+        "upload_session_id": None,
     }
 
-    if not os.path.isdir(upload_dir):
-        return state
+    # Determine which directories to scan: the base session + any child upload session
+    dirs_to_check = [os.path.join(current_app.instance_path, "uploads", session_id)]
 
-    try:
-        files = os.listdir(upload_dir)
-    except OSError:
-        return state
+    # Check if the memory file records a child upload session
+    import json as _json
+    memory_path = os.path.join(current_app.instance_path, "memory", f"{session_id}_memory.json")
+    if os.path.exists(memory_path):
+        try:
+            with open(memory_path, "r") as _f:
+                mem_data = _json.load(_f)
+            child_sid = mem_data.get("upload_session_id")
+            if child_sid:
+                state["upload_session_id"] = child_sid
+                child_dir = os.path.join(current_app.instance_path, "uploads", child_sid)
+                dirs_to_check.append(child_dir)
+        except Exception:
+            pass
 
-    for fname in files:
-        lower = fname.lower()
-        if lower.endswith((".csv", ".xlsx", ".xls")):
-            state["csv_loaded"] = True
-            state["csv_filename"] = fname
-            state["has_files"] = True
-        elif lower.endswith((".zip", ".shp")):
-            state["shapefile_loaded"] = True
-            state["shapefile_filename"] = fname
-            state["has_files"] = True
+    for upload_dir in dirs_to_check:
+        if not os.path.isdir(upload_dir):
+            continue
+
+        try:
+            files = os.listdir(upload_dir)
+        except OSError:
+            continue
+
+        for fname in files:
+            lower = fname.lower()
+            if lower.endswith((".csv", ".xlsx", ".xls")):
+                state["csv_loaded"] = True
+                state["csv_filename"] = fname
+                state["has_files"] = True
+            elif lower.endswith((".zip", ".shp")):
+                state["shapefile_loaded"] = True
+                state["shapefile_filename"] = fname
+                state["has_files"] = True
+
+        # Check analysis-complete marker
+        if os.path.exists(os.path.join(upload_dir, ".analysis_complete")):
+            state["analysis_complete"] = True
+
+        # Check if TPR workflow was active
+        agent_state_path = os.path.join(upload_dir, ".agent_state.json")
+        if os.path.exists(agent_state_path):
+            try:
+                with open(agent_state_path, "r") as _f:
+                    ws = _json.load(_f)
+                if ws.get("tpr_workflow_active", False):
+                    state["tpr_active"] = True
+            except Exception:
+                pass
 
     # CSV is the gate for data analysis; shapefile is optional (enriches maps)
     state["data_loaded"] = state["csv_loaded"]
-
-    # Check analysis-complete marker
-    if os.path.exists(os.path.join(upload_dir, ".analysis_complete")):
-        state["analysis_complete"] = True
-
-    # Check if TPR workflow was active (state_manager persists to .agent_state.json)
-    state["tpr_active"] = False
-    agent_state_path = os.path.join(upload_dir, ".agent_state.json")
-    if os.path.exists(agent_state_path):
-        try:
-            import json as _json
-            with open(agent_state_path, "r") as _f:
-                ws = _json.load(_f)
-            state["tpr_active"] = ws.get("tpr_workflow_active", False)
-        except Exception:
-            pass
 
     return state

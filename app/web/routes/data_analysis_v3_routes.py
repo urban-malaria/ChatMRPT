@@ -32,11 +32,13 @@ def _save_and_respond(response_dict, session_id, status_code=200):
     """Save assistant message to SessionMemory, then return JSON response."""
     try:
         from app.services.session_memory import SessionMemory, MessageType
+        # Always write to base_session_id so messages stay with the original conversation
+        mem_sid = session.get('base_session_id') or session_id
         msg = response_dict.get('message', '') if isinstance(response_dict, dict) else str(response_dict)
         if msg:
             viz = (response_dict.get('visualizations') or []) if isinstance(response_dict, dict) else []
             meta = {'visualizations': viz} if viz else {}
-            SessionMemory(session_id).add_message(MessageType.ASSISTANT, msg, metadata=meta)
+            SessionMemory(mem_sid).add_message(MessageType.ASSISTANT, msg, metadata=meta)
     except Exception as err:
         logger.debug("SessionMemory save (v3 helper) failed: %s", err)
     if status_code != 200:
@@ -256,7 +258,25 @@ def upload_for_analysis():
 
         # Log for debugging
         logger.info(f"📊 Generated new session ID for upload: {session_id}")
-        
+
+        # Store the upload session_id in the base session's memory JSON so resume
+        # can find the uploaded files (which live in the upload session folder)
+        if base_session_id and base_session_id != session_id:
+            try:
+                import json as _json
+                _mem_path = os.path.join('instance', 'memory', f'{base_session_id}_memory.json')
+                os.makedirs(os.path.dirname(_mem_path), exist_ok=True)
+                _mem_data = {}
+                if os.path.exists(_mem_path):
+                    with open(_mem_path, 'r') as _f:
+                        _mem_data = _json.load(_f)
+                _mem_data['upload_session_id'] = session_id
+                with open(_mem_path, 'w') as _f:
+                    _json.dump(_mem_data, _f, indent=2)
+                logger.info(f"📊 Stored upload_session_id={session_id} in base session {base_session_id}")
+            except Exception as _link_err:
+                logger.debug(f"Failed to link upload session to base: {_link_err}")
+
         # Check for file
         if 'file' not in request.files:
             return jsonify({
@@ -666,9 +686,11 @@ def data_analysis_chat():
         logger.info(f"✅ Logged user message for session {session_id}")
 
         # Persist user message to SessionMemory for conversation resume
+        # Use base_session_id so messages stay with the original conversation
+        _mem_sid = session.get('base_session_id') or session_id
         try:
             from app.services.session_memory import SessionMemory, MessageType
-            SessionMemory(session_id).add_message(MessageType.USER, message)
+            SessionMemory(_mem_sid).add_message(MessageType.USER, message)
         except Exception:
             pass
 
@@ -882,7 +904,7 @@ def data_analysis_chat():
             # Persist to SessionMemory so conversation resume includes all messages + visualizations
             try:
                 from app.services.session_memory import SessionMemory, MessageType
-                _mem = SessionMemory(session_id)
+                _mem = SessionMemory(session.get('base_session_id') or session_id)
                 _viz = (response.get('visualizations') or []) if isinstance(response, dict) else []
                 _meta = {'visualizations': _viz} if _viz else {}
                 _mem.add_message(MessageType.ASSISTANT, assistant_message, metadata=_meta)

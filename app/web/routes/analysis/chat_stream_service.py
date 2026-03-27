@@ -69,6 +69,9 @@ def handle_send_message_streaming() -> Response:
         logger.info("📊 Data Analysis tab active - setting V3 mode")
 
     session_id = session.get('session_id')
+    # For SessionMemory, always write to the base (original) session so all
+    # messages stay in one file even after upload creates a child session.
+    memory_session_id = session.get('base_session_id') or session_id
 
     # ── Conversation history: title on first msg, activity on every msg ──
     try:
@@ -82,16 +85,16 @@ def handle_send_message_streaming() -> Response:
         session['message_count'] = _msg_count + 1
         session.modified = True
         if _msg_count == 0:
-            _conv_svc.set_title(_uid, session_id, generate_title(user_message))
+            _conv_svc.set_title(_uid, memory_session_id, generate_title(user_message))
         has_files = any(session.get(f, False) for f in ('csv_loaded', 'shapefile_loaded'))
-        _conv_svc.update_activity(_uid, session_id, preview=user_message[:80], has_files=has_files)
+        _conv_svc.update_activity(_uid, memory_session_id, preview=user_message[:80], has_files=has_files)
     except Exception as _conv_err:
         logger.debug("Conversation history update failed: %s", _conv_err)
 
     # ── Persist user message to SessionMemory so resume can load it ──
     try:
         from app.services.session_memory import SessionMemory, MessageType
-        _mem = SessionMemory(session_id)
+        _mem = SessionMemory(memory_session_id)
         _mem.add_message(MessageType.USER, user_message)
     except Exception as _mem_err:
         logger.debug("SessionMemory save (user) failed: %s", _mem_err)
@@ -234,12 +237,23 @@ def handle_send_message_streaming() -> Response:
     return _stream_request_interpreter(
         user_message=user_message,
         session_id=session_id,
+        memory_session_id=memory_session_id,
         tab_context=tab_context,
         is_data_analysis=is_data_analysis,
     )
 
 
 def _clarification_response(payload: Dict[str, Any]) -> Response:
+    # Save clarification to SessionMemory
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        _sid = session.get('base_session_id') or session.get('session_id')
+        if _sid:
+            SessionMemory(_sid).add_message(
+                MessageType.ASSISTANT, payload.get('message', 'Please clarify your request.'))
+    except Exception:
+        pass
+
     def generate():
         yield json.dumps(payload)
 
@@ -252,6 +266,24 @@ def _clarification_response(payload: Dict[str, Any]) -> Response:
 
 def _arena_response(arena_data: Dict[str, Any]) -> Response:
     """Return arena battle data as a streaming response."""
+    # Save arena result to SessionMemory so it appears on resume
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        _sid = session.get('base_session_id') or session.get('session_id')
+        if _sid:
+            # Store the winning-side text (response_a) as the assistant message,
+            # with full arena data in metadata for richer resume if needed later.
+            content = arena_data.get('response_a', '') or arena_data.get('response_b', '')
+            _meta = {
+                'arena': True,
+                'battle_id': arena_data.get('battle_id'),
+                'model_a': arena_data.get('model_a'),
+                'model_b': arena_data.get('model_b'),
+            }
+            SessionMemory(_sid).add_message(MessageType.ASSISTANT, content, metadata=_meta)
+    except Exception:
+        pass
+
     def generate():
         yield json.dumps(arena_data)
 
@@ -266,6 +298,7 @@ def _stream_request_interpreter(
     *,
     user_message: str,
     session_id: str,
+    memory_session_id: str,
     tab_context: str,
     is_data_analysis: bool,
 ) -> Response:
@@ -319,7 +352,7 @@ def _stream_request_interpreter(
                         # If we save after the yield, the generator may be closed
                         # by gunicorn before the save executes (client disconnects
                         # after reading done:true), losing the assistant message.
-                        _log_stream_completion(app, final_chunk, response_content, session_id)
+                        _log_stream_completion(app, final_chunk, response_content, memory_session_id or session_id)
                     chunk_json = json.dumps(chunk)
                     logger.debug("Sending streaming chunk: %s", chunk_json)
                     yield f"data: {chunk_json}\n\n"
@@ -401,7 +434,7 @@ def _response_from_tpr_result(tpr_result: Dict[str, Any]) -> Response:
     # Save TPR assistant response to SessionMemory for conversation resume
     try:
         from app.services.session_memory import SessionMemory, MessageType
-        _sid = session.get('session_id')
+        _sid = session.get('base_session_id') or session.get('session_id')
         if _sid:
             _mem = SessionMemory(_sid)
             _viz = tpr_result.get('visualizations') or []
