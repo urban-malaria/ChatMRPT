@@ -106,9 +106,13 @@ def resume_conversation(session_id: str):
 
         logger.info("Resumed conversation %s for user %s (%d messages)", session_id, user_id, len(messages))
 
+        # Return the upload session_id (if any) so the frontend can use it
+        # for subsequent API calls — files live in the upload session folder.
+        effective_session_id = upload_sid or session_id
+
         return jsonify({
             "success": True,
-            "session_id": session_id,
+            "session_id": effective_session_id,
             "messages": messages,
             "session_state": session_state,
         })
@@ -181,14 +185,14 @@ def _reconstruct_session_state(session_id: str) -> dict:
     # Determine which directories to scan: the base session + any child upload session
     dirs_to_check = [os.path.join(current_app.instance_path, "uploads", session_id)]
 
-    # Check if the memory file records a child upload session
+    # Check if the memory file records a child upload session (stored in key_entities)
     import json as _json
     memory_path = os.path.join(current_app.instance_path, "memory", f"{session_id}_memory.json")
     if os.path.exists(memory_path):
         try:
             with open(memory_path, "r") as _f:
                 mem_data = _json.load(_f)
-            child_sid = mem_data.get("upload_session_id")
+            child_sid = (mem_data.get("key_entities") or {}).get("upload_session_id")
             if child_sid:
                 state["upload_session_id"] = child_sid
                 child_dir = os.path.join(current_app.instance_path, "uploads", child_sid)

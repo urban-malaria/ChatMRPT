@@ -71,6 +71,9 @@ const ConversationList: React.FC = () => {
       }
 
       const { messages, session_state } = response.data;
+      // Backend returns the effective session_id (upload child if exists, else base).
+      // Use this for API calls so the backend can find uploaded files.
+      const effectiveSessionId = response.data.session_id || sessionId;
 
       // Clear current chat state
       clearMessages();
@@ -79,9 +82,9 @@ const ConversationList: React.FC = () => {
       setDataAnalysisMode(session_state.tpr_active ?? false);
       clearAnalysisResults();
 
-      // Update session info
+      // Update session info — use the effective session_id for API calls
       updateSession({
-        sessionId,
+        sessionId: effectiveSessionId,
         hasUploadedFiles: session_state.has_files ?? false,
         uploadedFiles: {
           csv: session_state.csv_filename ?? undefined,
@@ -91,7 +94,7 @@ const ConversationList: React.FC = () => {
       });
 
       // Update browser-side session tracking
-      storage.setSessionId(sessionId);
+      storage.setSessionId(effectiveSessionId);
 
       // Replay messages into the chat store (including visualizations)
       for (const msg of messages) {

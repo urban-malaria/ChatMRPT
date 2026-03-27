@@ -259,20 +259,15 @@ def upload_for_analysis():
         # Log for debugging
         logger.info(f"📊 Generated new session ID for upload: {session_id}")
 
-        # Store the upload session_id in the base session's memory JSON so resume
-        # can find the uploaded files (which live in the upload session folder)
+        # Store the upload session_id in the base session's SessionMemory
+        # (via key_entities which survives _save_memory rewrites) so resume
+        # can find the uploaded files in the child session folder.
         if base_session_id and base_session_id != session_id:
             try:
-                import json as _json
-                _mem_path = os.path.join('instance', 'memory', f'{base_session_id}_memory.json')
-                os.makedirs(os.path.dirname(_mem_path), exist_ok=True)
-                _mem_data = {}
-                if os.path.exists(_mem_path):
-                    with open(_mem_path, 'r') as _f:
-                        _mem_data = _json.load(_f)
-                _mem_data['upload_session_id'] = session_id
-                with open(_mem_path, 'w') as _f:
-                    _json.dump(_mem_data, _f, indent=2)
+                from app.services.session_memory import SessionMemory as _SM
+                _base_mem = _SM(base_session_id)
+                _base_mem.key_entities['upload_session_id'] = session_id
+                _base_mem._save_memory()
                 logger.info(f"📊 Stored upload_session_id={session_id} in base session {base_session_id}")
             except Exception as _link_err:
                 logger.debug(f"Failed to link upload session to base: {_link_err}")

@@ -68,6 +68,24 @@ def handle_send_message_streaming() -> Response:
         session['use_data_analysis_v3'] = True
         logger.info("📊 Data Analysis tab active - setting V3 mode")
 
+    # Session realignment: the frontend may send a session_id (e.g. the upload
+    # child session) that differs from the Flask session (e.g. after resume or
+    # multi-instance routing).  Treat the client's ID as the source of truth so
+    # file paths resolve correctly — same logic as data_analysis_chat().
+    existing_session_id = session.get('session_id')
+    if payload_session_id and existing_session_id and existing_session_id != payload_session_id:
+        logger.info(
+            "[STREAM] Realigning session context from %s to client session %s",
+            existing_session_id, payload_session_id,
+        )
+        session['session_id'] = payload_session_id
+        session['base_session_id'] = session.get('base_session_id') or existing_session_id
+        session.modified = True
+    elif payload_session_id and not existing_session_id:
+        session['session_id'] = payload_session_id
+        session['base_session_id'] = session.get('base_session_id') or payload_session_id
+        session.modified = True
+
     session_id = session.get('session_id')
     # For SessionMemory, always write to the base (original) session so all
     # messages stay in one file even after upload creates a child session.
