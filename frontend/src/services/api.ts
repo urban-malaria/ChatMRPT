@@ -123,6 +123,7 @@ export const api = {
     uploadFiles: (formData: FormData) =>
       axiosInstance.post('/api/data-analysis/upload', formData, {
         timeout: 120000, // 2 minutes for slow connections
+        headers: { 'Content-Type': undefined }, // Let browser set multipart boundary
       }),
     
     runAnalysis: (params: AnalysisParams) =>
@@ -158,6 +159,7 @@ export const api = {
     uploadBothFiles: (formData: FormData) =>
       axiosInstance.post('/upload_both_files', formData, {
         timeout: 120000, // 2 minutes for slow connections
+        headers: { 'Content-Type': undefined }, // Let browser set multipart boundary
       }),
     
     loadSampleData: (dataType: string, sessionId: string) =>
