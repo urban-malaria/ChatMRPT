@@ -122,9 +122,7 @@ export const api = {
   analysis: {
     uploadFiles: (formData: FormData) =>
       axiosInstance.post('/api/data-analysis/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        timeout: 120000, // 2 minutes for slow connections
       }),
     
     runAnalysis: (params: AnalysisParams) =>
@@ -159,9 +157,7 @@ export const api = {
   upload: {
     uploadBothFiles: (formData: FormData) =>
       axiosInstance.post('/upload_both_files', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        timeout: 120000, // 2 minutes for slow connections
       }),
     
     loadSampleData: (dataType: string, sessionId: string) =>
