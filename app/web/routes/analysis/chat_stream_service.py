@@ -315,6 +315,11 @@ def _stream_request_interpreter(
                         tools_used.extend(chunk.get('tools_used', []))
                     if chunk.get('done'):
                         final_chunk = chunk
+                        # Save assistant response BEFORE yielding final chunk.
+                        # If we save after the yield, the generator may be closed
+                        # by gunicorn before the save executes (client disconnects
+                        # after reading done:true), losing the assistant message.
+                        _log_stream_completion(app, final_chunk, response_content, session_id)
                     chunk_json = json.dumps(chunk)
                     logger.debug("Sending streaming chunk: %s", chunk_json)
                     yield f"data: {chunk_json}\n\n"
@@ -338,9 +343,6 @@ def _stream_request_interpreter(
                         flask_session.pop('pending_action', None)
                         flask_session.pop('pending_variables', None)
                         flask_session.modified = True
-
-                if final_chunk:
-                    _log_stream_completion(app, final_chunk, response_content, session_id)
         except Exception as exc:
             logger.error("Error in streaming processing: %s", exc)
             error_json = json.dumps({'content': f'Error: {str(exc)}', 'status': 'error', 'done': True})
@@ -396,6 +398,18 @@ def _log_stream_completion(app, final_chunk: Dict[str, Any], response_content: s
 
 
 def _response_from_tpr_result(tpr_result: Dict[str, Any]) -> Response:
+    # Save TPR assistant response to SessionMemory for conversation resume
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        _sid = session.get('session_id')
+        if _sid:
+            _mem = SessionMemory(_sid)
+            _viz = tpr_result.get('visualizations') or []
+            _metadata = {'visualizations': _viz} if _viz else {}
+            _mem.add_message(MessageType.ASSISTANT, tpr_result.get('response', ''), metadata=_metadata)
+    except Exception as _err:
+        logger.debug("SessionMemory save (TPR assistant) failed: %s", _err)
+
     def generate():
         yield json.dumps(
             {

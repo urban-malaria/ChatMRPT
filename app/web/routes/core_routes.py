@@ -347,8 +347,20 @@ def clear_session():
         import uuid
         new_session_id = str(uuid.uuid4())
 
+        # Preserve auth state before clearing (session.clear removes everything
+        # including Flask-Login's _user_id and auth_token, breaking subsequent requests)
+        _auth_keys = {}
+        for key in ('auth_token', '_user_id', '_fresh', '_remember', '_id'):
+            if key in session:
+                _auth_keys[key] = session[key]
+
         # Clear session data and set new session_id
         session.clear()  # Clear everything first
+
+        # Restore auth state so user stays logged in
+        for key, val in _auth_keys.items():
+            session[key] = val
+
         session['session_id'] = new_session_id  # Set new session ID
         session['base_session_id'] = new_session_id
         session['conversation_history'] = []
