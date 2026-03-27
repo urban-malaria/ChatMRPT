@@ -5,6 +5,7 @@ import api from '@/services/api';
 import toast from 'react-hot-toast';
 import storage from '@/utils/storage';
 import { useConversationHistoryStore } from '@/stores/conversationHistoryStore';
+import { useAnalysisStore } from '@/stores/analysisStore';
 
 interface DownloadFile {
   name: string;
@@ -29,6 +30,11 @@ const Toolbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const fetchConversations = useConversationHistoryStore((s) => s.fetchConversations);
   const setActiveSessionId = useConversationHistoryStore((s) => s.setActiveSessionId);
+  const setDataAnalysisMode = useAnalysisStore((s) => s.setDataAnalysisMode);
+  const clearAnalysisResults = useAnalysisStore((s) => s.clearAnalysisResults);
+  const setCsvFile = useAnalysisStore((s) => s.setCsvFile);
+  const setShapeFile = useAnalysisStore((s) => s.setShapeFile);
+  const setAnalyzing = useAnalysisStore((s) => s.setAnalyzing);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -86,6 +92,13 @@ const Toolbar: React.FC = () => {
         // Reset session completely - generates new conversation ID and clears messages
         resetSession();
 
+        // Reset analysis state so next message goes to correct endpoint
+        setDataAnalysisMode(false);
+        clearAnalysisResults();
+        setCsvFile(null);
+        setShapeFile(null);
+        setAnalyzing(false);
+
         // Get the new conversation ID and update URL
         const newConversationId = storage.ensureConversationId();
         const newUrl = new URL(window.location.href);
@@ -113,6 +126,11 @@ const Toolbar: React.FC = () => {
       // But notify user that backend might have issues
       if (window.confirm('Backend clear failed. Clear frontend data anyway?')) {
         resetSession();
+        setDataAnalysisMode(false);
+        clearAnalysisResults();
+        setCsvFile(null);
+        setShapeFile(null);
+        setAnalyzing(false);
 
         // Update URL with new conversation ID
         const newConversationId = storage.ensureConversationId();

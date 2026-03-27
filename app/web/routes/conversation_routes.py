@@ -190,10 +190,23 @@ def _reconstruct_session_state(session_id: str) -> dict:
             state["shapefile_filename"] = fname
             state["has_files"] = True
 
-    state["data_loaded"] = state["csv_loaded"] and state["shapefile_loaded"]
+    # CSV is the gate for data analysis; shapefile is optional (enriches maps)
+    state["data_loaded"] = state["csv_loaded"]
 
     # Check analysis-complete marker
     if os.path.exists(os.path.join(upload_dir, ".analysis_complete")):
         state["analysis_complete"] = True
+
+    # Check if TPR workflow was active (state_manager persists to .agent_state.json)
+    state["tpr_active"] = False
+    agent_state_path = os.path.join(upload_dir, ".agent_state.json")
+    if os.path.exists(agent_state_path):
+        try:
+            import json as _json
+            with open(agent_state_path, "r") as _f:
+                ws = _json.load(_f)
+            state["tpr_active"] = ws.get("tpr_workflow_active", False)
+        except Exception:
+            pass
 
     return state

@@ -27,6 +27,23 @@ data_analysis_v3_bp = Blueprint('data_analysis_v3', __name__)
 
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls', 'json', 'txt'}
 
+
+def _save_and_respond(response_dict, session_id, status_code=200):
+    """Save assistant message to SessionMemory, then return JSON response."""
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        msg = response_dict.get('message', '') if isinstance(response_dict, dict) else str(response_dict)
+        if msg:
+            viz = (response_dict.get('visualizations') or []) if isinstance(response_dict, dict) else []
+            meta = {'visualizations': viz} if viz else {}
+            SessionMemory(session_id).add_message(MessageType.ASSISTANT, msg, metadata=meta)
+    except Exception as err:
+        logger.debug("SessionMemory save (v3 helper) failed: %s", err)
+    if status_code != 200:
+        return jsonify(response_dict), status_code
+    return jsonify(response_dict)
+
+
 def allowed_file(filename):
     """Check if file extension is allowed."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -682,13 +699,13 @@ def data_analysis_chat():
                 }
             )
 
-            return jsonify({
+            return _save_and_respond({
                 'success': True,
                 'exit_data_analysis_mode': True,
                 'message': transition_message,
                 'redirect_message': message,
                 'session_id': session_id
-            })
+            }, session_id)
 
         from app.data_analysis_v3.tpr.workflow_manager import TPRWorkflowHandler
         from app.data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer
@@ -761,7 +778,7 @@ def data_analysis_chat():
                 if message_clean in confirmation_keywords or any(kw in message_clean.split() for kw in confirmation_keywords):
                     logger.info(f"[CONFIRMATION] Detected confirmation keyword in: '{message}'")
                     response = tpr_handler.execute_confirmation()
-                    return jsonify(response)
+                    return _save_and_respond(response, session_id)
 
                 logger.info(f"[CONFIRMATION] No confirmation keyword detected, proceeding with 2-route logic")
 
@@ -899,11 +916,11 @@ def data_analysis_chat():
                         glob.glob(os.path.join(data_dir, '*.xlsx')) + \
                         glob.glob(os.path.join(data_dir, '*.xls'))
             if not data_files:
-                return jsonify({
+                return _save_and_respond({
                     'success': False,
                     'message': 'No data found. Please upload your dataset before starting the TPR workflow.',
                     'session_id': session_id
-                })
+                }, session_id)
 
             latest = max(data_files, key=os.path.getctime)
             tpr_analyzer = TPRDataAnalyzer()
@@ -939,11 +956,11 @@ def data_analysis_chat():
                     df, schema = tpr_analyzer.infer_schema_from_file(latest)
                 except RuntimeError as exc:
                     logger.error(f"Schema inference failed for {latest}: {exc}")
-                    return jsonify({
+                    return _save_and_respond({
                         'success': False,
                         'message': f'Could not parse your data file: {exc}',
                         'session_id': session_id,
-                    })
+                    }, session_id)
                 state_manager.update_state({'column_schema': schema})
 
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
@@ -956,7 +973,7 @@ def data_analysis_chat():
             state_manager.mark_tpr_workflow_active()
             state_manager.update_workflow_stage(ConversationStage.TPR_STATE_SELECTION)
 
-            return jsonify(tpr_handler.start_workflow())
+            return _save_and_respond(tpr_handler.start_workflow(), session_id)
 
         workflow_context = _build_general_workflow_context(session_id)
         logger.info(
@@ -988,7 +1005,7 @@ def data_analysis_chat():
         )
         logger.info(f"✅ Logged agent response for session {session_id} (response_time={response_time:.2f}s)")
 
-        return jsonify(result)
+        return _save_and_respond(result, session_id)
 
     except Exception as e:
         logger.error(f"Error in data analysis chat: {str(e)}", exc_info=True)

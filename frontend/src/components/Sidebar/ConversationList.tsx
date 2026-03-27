@@ -5,6 +5,7 @@ import api from '@/services/api';
 import storage from '@/utils/storage';
 import toast from 'react-hot-toast';
 import type { ConversationSummary } from '@/types';
+import { useAnalysisStore } from '@/stores/analysisStore';
 
 /** Bucket conversations by relative date. */
 function groupByDate(conversations: ConversationSummary[]) {
@@ -51,6 +52,8 @@ const ConversationList: React.FC = () => {
   const clearMessages = useChatStore((s) => s.clearMessages);
   const updateSession = useChatStore((s) => s.updateSession);
   const addMessage = useChatStore((s) => s.addMessage);
+  const setDataAnalysisMode = useAnalysisStore((s) => s.setDataAnalysisMode);
+  const clearAnalysisResults = useAnalysisStore((s) => s.clearAnalysisResults);
 
   // Fetch on mount
   useEffect(() => {
@@ -71,6 +74,10 @@ const ConversationList: React.FC = () => {
 
       // Clear current chat state
       clearMessages();
+
+      // Set analysis mode based on whether TPR workflow was active in this session
+      setDataAnalysisMode(session_state.tpr_active ?? false);
+      clearAnalysisResults();
 
       // Update session info
       updateSession({
