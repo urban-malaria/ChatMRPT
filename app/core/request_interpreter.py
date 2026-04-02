@@ -969,6 +969,7 @@ SQL:"""
                     function_schemas,
                     session_id,
                     self.tool_runner,
+                    conversation_history=self.conversation_history.get(session_id, []),
                 )
             else:
                 # Fallback to legacy path
@@ -1041,9 +1042,13 @@ SQL:"""
                 if self.llm_manager and hasattr(self.llm_manager, 'generate_with_functions_streaming'):
                     system_prompt = self._build_system_prompt_refactored(session_context, session_id)
                     
+                    # Build messages with conversation history for multi-turn awareness
+                    conv_messages = list(self.conversation_history.get(session_id, [])[-8:])
+                    conv_messages.append({"role": "user", "content": user_message})
+
                     # Stream the response
                     for chunk in self.llm_manager.generate_with_functions_streaming(
-                        messages=[{"role": "user", "content": user_message}],
+                        messages=conv_messages,
                         system_prompt=system_prompt,
                         functions=[],  # No tools for simple conversation
                         temperature=0.7,
@@ -1087,6 +1092,7 @@ SQL:"""
                     session_id,
                     self.tool_runner,
                     interpretation_cb=lambda raw, _msg: self._interpret_raw_output(raw, _msg, session_context, session_id),
+                    conversation_history=self.conversation_history.get(session_id, []),
                 )
             else:
                 yield from self._stream_with_tools(user_message, session_context, session_id)
@@ -2176,7 +2182,7 @@ ChatMRPT uses both composite scoring and PCA for comprehensive assessment:
             if not hasattr(self, "_viz_explainer") or self._viz_explainer is None:
                 from app.services.universal_viz_explainer import UniversalVizExplainer
 
-                self._viz_explainer = UniversalVizExplainer()
+                self._viz_explainer = UniversalVizExplainer(llm_manager=self.llm_manager)
 
             explanation = self._viz_explainer.explain_visualization(
                 viz_path=file_path,

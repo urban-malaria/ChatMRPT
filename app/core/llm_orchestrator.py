@@ -20,10 +20,18 @@ class LLMOrchestrator:
         function_schemas: list[dict],
         session_id: Optional[str],
         tool_runner,
+        conversation_history: Optional[list] = None,
     ) -> Dict[str, Any]:
         """Non-streaming function-calling with tool execution."""
+        # Build messages with conversation history so the LLM can reference
+        # previous turns (what it said, what visualizations it showed, etc.)
+        messages = []
+        if conversation_history:
+            messages.extend(conversation_history[-8:])  # Last 8 turns for context
+        messages.append({"role": "user", "content": user_message})
+
         response = llm_manager.generate_with_functions(
-            messages=[{"role": "user", "content": user_message}],
+            messages=messages,
             system_prompt=system_prompt,
             functions=function_schemas,
             temperature=0.7,
@@ -61,10 +69,16 @@ class LLMOrchestrator:
         session_id: Optional[str],
         tool_runner,
         interpretation_cb=None,
+        conversation_history: Optional[list] = None,
     ) -> Iterable[Dict[str, Any]]:
         """Streaming function-calling. Executes tool when function_call chunk arrives."""
+        messages = []
+        if conversation_history:
+            messages.extend(conversation_history[-8:])
+        messages.append({"role": "user", "content": user_message})
+
         stream = llm_manager.generate_with_functions_streaming(
-            messages=[{"role": "user", "content": user_message}],
+            messages=messages,
             system_prompt=system_prompt,
             functions=function_schemas,
             temperature=0.7,

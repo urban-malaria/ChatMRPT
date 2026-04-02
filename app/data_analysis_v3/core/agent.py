@@ -721,10 +721,18 @@ class DataAnalysisAgent:
                     # Create web-accessible URL via serve_viz_file route
                     web_url = f"/serve_viz_file/{self.session_id}/visualizations/{html_filename}"
 
+                    # Extract title from the Plotly figure layout
+                    fig_title = 'Data Analysis Visualization'
+                    try:
+                        if hasattr(fig, 'layout') and fig.layout.title and fig.layout.title.text:
+                            fig_title = fig.layout.title.text
+                    except Exception:
+                        pass
+
                     visualizations.append({
                         'type': 'iframe',
                         'url': web_url,
-                        'title': 'Data Analysis Visualization',
+                        'title': fig_title,
                         'height': 600
                     })
                     logger.info(f"Converted visualization: {plot_path} → {web_url}")
@@ -929,6 +937,12 @@ class DataAnalysisAgent:
 
             final_content = final_message.content if final_message else "Analysis complete."
             final_content = ResponseFormatter.normalize_spacing(final_content)
+
+            # Append visualization titles to the message so they appear in
+            # conversation history — the LLM can then reference them on follow-ups.
+            if visualizations:
+                viz_descriptions = [v.get('title', 'Visualization') for v in visualizations]
+                final_content += "\n\n**Visualizations shown:** " + "; ".join(viz_descriptions)
 
             return {
                 "success": True,
