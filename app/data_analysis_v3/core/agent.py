@@ -70,9 +70,26 @@ class DataAnalysisAgent:
                 timeout=50
             )
 
-            # Set up tools - Python analysis + specialized map tools
-            from ..tools.map_tools import create_variable_map
-            self.tools = [analyze_data, create_variable_map]
+            # Set up tools - Python analysis + all specialized tools
+            from ..tools.map_tools import (
+                create_variable_map,
+                create_vulnerability_map,
+                create_composite_score_maps,
+                create_urban_extent_map,
+                run_risk_analysis,
+                plan_itn_distribution,
+                switch_tpr_combination,
+            )
+            self.tools = [
+                analyze_data,
+                create_variable_map,
+                create_vulnerability_map,
+                create_composite_score_maps,
+                create_urban_extent_map,
+                run_risk_analysis,
+                plan_itn_distribution,
+                switch_tpr_combination,
+            ]
 
             # Follow AgenticDataAnalysis pattern exactly
             model_with_tools = self.llm.bind_tools(
