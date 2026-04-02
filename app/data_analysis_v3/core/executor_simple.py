@@ -305,6 +305,45 @@ def _inject_helpers(exec_globals: Dict[str, Any]):
 
     exec_globals['run_trend_analysis'] = _trend_with_fallback
 
+    # Inject create_map helper — calls existing VariableDistribution tool
+    def _create_map(variable_name, geographic_level='ward'):
+        """Create a spatial distribution map for a variable.
+
+        Args:
+            variable_name: Column name to map (fuzzy-matched, e.g. 'Burden', 'TPR', 'rainfall')
+            geographic_level: 'ward' (default) or 'lga'
+
+        Returns:
+            dict with keys: success, message, web_path, file_path
+        """
+        try:
+            from app.tools.variable_distribution import VariableDistribution
+            tool_instance = VariableDistribution(
+                variable_name=variable_name,
+                geographic_level=geographic_level,
+            )
+            # session_id is captured from the outer executor scope
+            _sid = exec_globals.get('_session_id', 'default')
+            result = tool_instance.execute(session_id=_sid)
+            data = result.data or {}
+            file_path = data.get('file_path', '')
+            web_path = data.get('web_path', '')
+            # Register as output plot so it appears in visualizations
+            if file_path and os.path.exists(file_path):
+                exec_globals.setdefault('_map_outputs', []).append(file_path)
+            print(result.message or f"Map created for {variable_name}")
+            return {
+                'success': result.success,
+                'message': result.message,
+                'web_path': web_path,
+                'file_path': file_path,
+            }
+        except Exception as e:
+            print(f"Error creating map: {e}")
+            return {'success': False, 'message': str(e)}
+
+    exec_globals['create_map'] = _create_map
+
 
 def _setup_plotly_capture(exec_globals: Dict[str, Any]):
     """Setup Plotly figure auto-capture."""
@@ -422,6 +461,9 @@ class SimpleExecutor:
         # Add current data
         exec_globals.update(current_data or {})
 
+        # Make session_id available to injected helpers (e.g., create_map)
+        exec_globals['_session_id'] = self.session_id
+
         # Inject helpers
         _inject_helpers(exec_globals)
 
@@ -511,9 +553,13 @@ class SimpleExecutor:
                 if dataframes:
                     formatted_tables = self._render_tables(dataframes)
 
+                # Include map outputs (HTML files from create_map helper)
+                map_outputs = exec_globals.get('_map_outputs', [])
+                all_plots = saved_plots + map_outputs
+
                 state_updates = {
                     'current_variables': dict(self.persistent_vars),
-                    'output_plots': saved_plots,
+                    'output_plots': all_plots,
                     'tables': formatted_tables,
                     'executor_ms': int((time.time() - start) * 1000),
                     'timeout_triggered': False,
