@@ -70,8 +70,9 @@ class DataAnalysisAgent:
                 timeout=50
             )
 
-            # Set up tools - Just Python analysis tool
-            self.tools = [analyze_data]
+            # Set up tools - Python analysis + specialized map tools
+            from ..tools.map_tools import create_variable_map
+            self.tools = [analyze_data, create_variable_map]
 
             # Follow AgenticDataAnalysis pattern exactly
             model_with_tools = self.llm.bind_tools(
@@ -703,7 +704,25 @@ class DataAnalysisAgent:
         for plot_path in output_plots:
             if isinstance(plot_path, str) and os.path.exists(plot_path):
                 try:
-                    # Load pickle file
+                    # HTML files (from map tools) — already rendered, just serve
+                    if plot_path.endswith('.html'):
+                        html_filename = os.path.basename(plot_path)
+                        # If not already in the viz dir, copy it there
+                        target_path = os.path.join(session_viz_dir, html_filename)
+                        if os.path.abspath(plot_path) != os.path.abspath(target_path):
+                            import shutil
+                            shutil.copy2(plot_path, target_path)
+                        web_url = f"/serve_viz_file/{self.session_id}/visualizations/{html_filename}"
+                        visualizations.append({
+                            'type': 'iframe',
+                            'url': web_url,
+                            'title': html_filename.replace('_', ' ').replace('.html', '').title(),
+                            'height': 600
+                        })
+                        logger.info(f"Served HTML visualization: {plot_path} → {web_url}")
+                        continue
+
+                    # Pickle files (from analyze_data Plotly captures) — convert to HTML
                     with open(plot_path, 'rb') as f:
                         fig = pickle.load(f)
 
@@ -713,7 +732,6 @@ class DataAnalysisAgent:
                     html_path = os.path.join(session_viz_dir, html_filename)
 
                     # Save as HTML
-                    # Embed Plotly JS locally to avoid CDN dependency in offline/locked-down environments
                     viz_html = fig.to_html(include_plotlyjs=True)
                     with open(html_path, 'w') as html_file:
                         html_file.write(viz_html)
