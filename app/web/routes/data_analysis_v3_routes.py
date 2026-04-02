@@ -716,11 +716,11 @@ def data_analysis_chat():
                 }
             )
 
+            # ONE-BRAIN MIGRATION: Don't exit data analysis mode — stay in V3 agent
             return _save_and_respond({
                 'success': True,
-                'exit_data_analysis_mode': True,
+                # 'exit_data_analysis_mode': True,  # DISABLED for one-brain migration
                 'message': transition_message,
-                'redirect_message': message,
                 'session_id': session_id
             }, session_id)
 
@@ -911,15 +911,13 @@ def data_analysis_chat():
                 stage = (response.get('stage') or '').upper()
                 workflow = (response.get('workflow') or '').lower()
 
-                # If TPR is complete, ensure exit_data_analysis_mode is set
-                if stage == 'COMPLETE' and workflow in ['tpr', 'data_upload']:
-                    if not response.get('exit_data_analysis_mode'):
-                        logger.info(f"🚦 TPR COMPLETE detected - adding exit_data_analysis_mode flag")
-                        response['exit_data_analysis_mode'] = True
-                        # Also change workflow to data_upload to indicate transition
-                        if workflow == 'tpr':
-                            response['workflow'] = 'data_upload'
-                            logger.info(f"🚦 Changed workflow from 'tpr' to 'data_upload'")
+                # ONE-BRAIN MIGRATION: Don't exit data analysis mode — stay in V3 agent
+                # if stage == 'COMPLETE' and workflow in ['tpr', 'data_upload']:
+                #     if not response.get('exit_data_analysis_mode'):
+                #         response['exit_data_analysis_mode'] = True
+                #         if workflow == 'tpr':
+                #             response['workflow'] = 'data_upload'
+                pass  # Stay in V3 mode after TPR completes
 
             return jsonify(response)
 
