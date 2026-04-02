@@ -110,17 +110,45 @@
 
 ### Phase 1: Register all standard mode tools as @tool wrappers ✅ STARTED
 **Branch**: `one-brain-migration`
+**Total**: 19 tools — 1 done, 1 already in agent, 2 deprecated = **15 remaining**
 
-Wrap each tool following the `create_variable_map` pattern in `map_tools.py`:
-- [x] `create_variable_map` (create_variable_distribution) — DONE, TESTED
-- [ ] `run_risk_analysis` (run_malaria_risk_analysis) — heavy deps
-- [ ] `create_vulnerability_map` — needs unified_dataset.csv
-- [ ] `create_pca_map` — needs unified_dataset.csv
-- [ ] `create_composite_score_maps` — needs unified_dataset.csv
-- [ ] `create_urban_extent_map` — needs data_loaded
-- [ ] `create_decision_tree` — needs unified_dataset.csv
-- [ ] `plan_itn_distribution` (run_itn_planning) — needs analysis_complete
-- [ ] Update system prompt to describe all available tools
+Wrap each tool following the `create_variable_map` pattern in `map_tools.py`.
+
+#### Already handled (4)
+- [x] `create_variable_map` (create_variable_distribution) — DONE, TESTED, VALIDATED
+- [x] `analyze_data` — already in agent as Python execution tool
+- [x] `create_settlement_map` — DEPRECATED, skip
+- [x] `show_settlement_statistics` — DEPRECATED, skip
+
+#### Map tools (6 remaining)
+- [ ] `create_vulnerability_map` — Plotly choropleth, needs unified_dataset.csv (composite_score)
+- [ ] `create_pca_map` — Plotly choropleth, needs unified_dataset.csv (pca_score)
+- [ ] `create_composite_score_maps` — Plotly subplots, needs unified_dataset.csv (model scores)
+- [ ] `create_composite_vulnerability_map` — Plotly choropleth, explicit composite method
+- [ ] `create_urban_extent_map` — Plotly choropleth, needs data_loaded only
+- [ ] `create_decision_tree` — Custom HTML, needs unified_dataset.csv
+
+#### Analysis tools (2 remaining)
+- [ ] `run_risk_analysis` (run_malaria_risk_analysis) — heavy deps (AnalysisEngine, pca_pipeline, UnifiedDatasetBuilder, imputation)
+- [ ] `plan_itn_distribution` (run_itn_planning) — needs analysis_complete + population data, produces map + CSV + dashboard
+
+#### Data query tools (1 remaining, decision pending)
+- [ ] `query_data` (NL→SQL via DuckDB) — decision: keep as @tool or let agent use pandas?
+
+#### Knowledge tools (2 remaining)
+- [ ] `explain_analysis_methodology` — text only, no data needed
+- [ ] `chatmrpt_help` — text only, no data needed
+
+#### TPR query/switch tools (3 remaining)
+- [ ] `query_tpr_data` — query pre-computed TPR cache
+- [ ] `switch_tpr_combination` — switch facility/age combo, regenerate files
+- [ ] `compare_tpr_combinations` — compare all combos side by side
+
+#### Other (1 remaining)
+- [ ] `create_intervention_targeting_map` — Plotly, settlement + analysis data
+
+#### System prompt update
+- [ ] Update `system_prompt.py` to describe ALL available tools to the LLM
 
 ### Phase 2: Disable TPR exit ✅ DONE (testing)
 - [x] Disabled `exit_data_analysis_mode` in data_analysis_v3_routes.py
