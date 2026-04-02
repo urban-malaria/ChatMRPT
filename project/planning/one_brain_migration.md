@@ -139,11 +139,11 @@ Wrap each tool following the `create_variable_map` pattern in `map_tools.py`.
 - [x] `query_tpr_data` — agent queries tpr_results.csv or uploaded_data.csv via pandas
 - [x] `compare_tpr_combinations` — agent analyzes pre-computed data via pandas
 
-#### Deprecated — skip (4)
-- [x] `create_settlement_map` — "removed during streamlining"
-- [x] `show_settlement_statistics` — "removed during streamlining"
-- [x] `create_decision_tree` — low-value custom HTML flowchart
-- [x] `create_intervention_targeting_map` — tied to deprecated settlement tools
+#### Deferred — not now, but keep for later (4)
+- [ ] `create_settlement_map` — marked "removed during streamlining" but code still exists. Wrap when settlement data becomes available.
+- [ ] `show_settlement_statistics` — same as above. Pair with settlement map.
+- [ ] `create_intervention_targeting_map` — settlement + analysis data. Wrap alongside settlement tools.
+- [ ] `create_decision_tree` — custom HTML flowchart. Low priority but wrappable.
 
 #### System prompt update
 - [ ] Update `system_prompt.py` to describe all 7 available tools (analyze_data + 6 new)
@@ -158,8 +158,8 @@ Wrap each tool following the `create_variable_map` pattern in `map_tools.py`.
 | Need @tool wrappers | **6** | The actual work |
 | Merged | 2 | Into create_vulnerability_map |
 | Redundant | 5 | Agent handles natively |
-| Deprecated | 4 | Skip entirely |
-| **Total** | **19** | **6 tools to build** |
+| Deferred | 4 | Keep code, wrap later when needed |
+| **Total** | **19** | **6 tools to build now, 4 ready when needed** |
 
 ### Phase 2: Disable TPR exit ✅ DONE (testing)
 - [x] Disabled `exit_data_analysis_mode` in data_analysis_v3_routes.py
