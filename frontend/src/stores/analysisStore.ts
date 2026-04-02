@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 
 interface AnalysisResult {
   id: string;
@@ -31,33 +31,43 @@ interface AnalysisState {
 
 export const useAnalysisStore = create<AnalysisState>()(
   devtools(
-    (set) => ({
-      analysisResults: [],
-      isAnalyzing: false,
-      csvFile: null,
-      shapeFile: null,
-      dataAnalysisMode: false,
+    persist(
+      (set) => ({
+        analysisResults: [],
+        isAnalyzing: false,
+        csvFile: null,
+        shapeFile: null,
+        dataAnalysisMode: false,
 
-      addAnalysisResult: (result) =>
-        set((state) => ({
-          analysisResults: [...state.analysisResults, result],
-        })),
+        addAnalysisResult: (result) =>
+          set((state) => ({
+            analysisResults: [...state.analysisResults, result],
+          })),
 
-      clearAnalysisResults: () =>
-        set({ analysisResults: [] }),
+        clearAnalysisResults: () =>
+          set({ analysisResults: [] }),
 
-      setAnalyzing: (analyzing) =>
-        set({ isAnalyzing: analyzing }),
+        setAnalyzing: (analyzing) =>
+          set({ isAnalyzing: analyzing }),
 
-      setCsvFile: (file) =>
-        set({ csvFile: file }),
+        setCsvFile: (file) =>
+          set({ csvFile: file }),
 
-      setShapeFile: (file) =>
-        set({ shapeFile: file }),
+        setShapeFile: (file) =>
+          set({ shapeFile: file }),
 
-      setDataAnalysisMode: (mode) =>
-        set({ dataAnalysisMode: mode }),
-    }),
+        setDataAnalysisMode: (mode) =>
+          set({ dataAnalysisMode: mode }),
+      }),
+      {
+        name: 'analysis-storage',
+        storage: createJSONStorage(() => sessionStorage),
+        // Only persist the mode flag — files can't be serialized
+        partialize: (state) => ({
+          dataAnalysisMode: state.dataAnalysisMode,
+        }),
+      }
+    ),
     { name: 'analysis-store' }
   )
 );

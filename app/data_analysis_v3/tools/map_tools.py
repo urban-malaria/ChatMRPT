@@ -53,17 +53,19 @@ def create_variable_map(
         if not result.success:
             return result.message, {}
 
-        # Extract the visualization path for the agent's pipeline
-        state_updates = {}
+        # Extract the visualization path
         data = result.data or {}
         file_path = data.get('file_path')
         web_path = data.get('web_path', '')
 
+        # CRITICAL: Directly mutate graph_state to add output_plots,
+        # same pattern as analyze_data tool. This is how the agent's
+        # _process_visualizations picks them up after graph completion.
         if file_path and os.path.exists(file_path):
-            # Store as output_plot so _process_visualizations picks it up.
-            # The file is already HTML (Plotly), not a pickle, so we need
-            # to handle it in the viz pipeline.
-            state_updates['output_plots'] = [file_path]
+            if 'output_plots' not in graph_state:
+                graph_state['output_plots'] = []
+            graph_state['output_plots'].append(file_path)
+            logger.info(f"Added map to graph state output_plots: {file_path}")
 
         # Build a rich text response with the map context
         message = result.message or f"Created spatial distribution map for {variable_name}."
@@ -72,7 +74,7 @@ def create_variable_map(
         if web_path:
             message += f"\n\n[Map available at: {web_path}]"
 
-        return message, state_updates
+        return message, {}
 
     except Exception as e:
         logger.error(f"create_variable_map failed: {e}", exc_info=True)
