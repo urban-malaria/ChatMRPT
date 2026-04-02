@@ -1,546 +1,632 @@
 """
-Universal Visualization Explanation Service - Py-Sidebot Approach
+Universal Visualization Explanation Service - Data-Driven Approach
 
-This service provides automatic LLM-powered explanations for ANY visualization 
-by converting them to images and using vision-enabled LLMs for interpretation.
+Generates LLM-powered explanations for visualizations by reading the underlying
+data files and sending rich statistical context to the LLM.  No headless browser
+or image conversion required.
 
-Based on py-sidebot's elegant universal approach:
-- Convert ANY visualization to base64 image
-- Send to LLM with malaria-specific instructions
-- Get natural language explanation
-- Works for maps, charts, graphs, plots - everything!
+For each visualization type the service:
+1. Reads the relevant CSV/state files from the session folder
+2. Computes key statistics (means, extremes, distributions, top/bottom wards)
+3. Builds a visualization-type-specific prompt with real numbers
+4. Calls the LLM to produce a concrete, data-referenced explanation
 """
 
+import json
 import os
-import base64
-import tempfile
 import logging
 from typing import Dict, Any, Optional
+
+import pandas as pd
 from flask import current_app
-import subprocess
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Visualization type metadata - what each type shows and which data to read
+# ---------------------------------------------------------------------------
+VIZ_TYPE_INFO = {
+    'tpr_map': {
+        'label': 'Malaria Burden Distribution Map',
+        'description': 'a choropleth map showing ward-level malaria burden (cases per 1,000 population)',
+        'data_files': ['raw_data.csv', 'tpr_results.csv'],
+        'metric_col': 'Burden',
+    },
+    'vulnerability_map_composite': {
+        'label': 'Composite Vulnerability Classification Map',
+        'description': 'a map classifying wards by malaria vulnerability using a composite scoring method that combines multiple risk models',
+        'data_files': ['unified_dataset.csv', 'raw_data.csv'],
+        'metric_col': 'composite_score',
+    },
+    'vulnerability_map_pca': {
+        'label': 'PCA Vulnerability Classification Map',
+        'description': 'a map classifying wards by malaria vulnerability using Principal Component Analysis (PCA)',
+        'data_files': ['unified_dataset.csv', 'raw_data.csv'],
+        'metric_col': 'pca_score',
+    },
+    'composite_score_maps': {
+        'label': 'Individual Model Score Maps',
+        'description': 'a set of choropleth maps showing each individual risk model\'s scores across wards',
+        'data_files': ['unified_dataset.csv'],
+        'metric_col': 'composite_score',
+    },
+    'box_plot': {
+        'label': 'Ward Vulnerability Box Plot Ranking',
+        'description': 'horizontal box plots showing the distribution of model scores for each ward, ranked by overall vulnerability',
+        'data_files': ['unified_dataset.csv'],
+        'metric_col': 'composite_score',
+    },
+    'variable_distribution': {
+        'label': 'Variable Distribution Map',
+        'description': 'a choropleth map showing the spatial distribution of an environmental or risk variable across wards',
+        'data_files': ['unified_dataset.csv', 'raw_data.csv'],
+        'metric_col': None,  # determined from filename
+    },
+    'itn_map': {
+        'label': 'ITN Distribution Planning Map',
+        'description': 'a map showing insecticide-treated net (ITN) allocation across wards based on vulnerability ranking and population',
+        'data_files': ['unified_dataset.csv'],
+        'metric_col': 'composite_score',
+    },
+    'urban_extent_map': {
+        'label': 'Urban Extent Map',
+        'description': 'a map showing ward vulnerability filtered by urbanisation level, highlighting differences between urban and rural areas',
+        'data_files': ['unified_dataset.csv'],
+        'metric_col': 'urbanPercentage',
+    },
+    'settlement_map': {
+        'label': 'Settlement Pattern Map',
+        'description': 'a map showing settlement patterns and their relationship to malaria risk',
+        'data_files': ['unified_dataset.csv', 'raw_data.csv'],
+        'metric_col': None,
+    },
+    'decision_tree': {
+        'label': 'Analysis Decision Tree',
+        'description': 'a diagram showing how variables were selected and processed to produce the vulnerability ranking',
+        'data_files': ['unified_dataset.csv'],
+        'metric_col': None,
+    },
+}
+
+
 class UniversalVisualizationExplainer:
     """
-    Universal explanation service for ANY visualization type.
-    
-    Follows py-sidebot's approach:
-    1. Convert visualization to image (base64)
-    2. Send to LLM with malaria epidemiology instructions
-    3. Return natural explanation
+    Data-driven explanation service for visualizations.
+
+    Instead of converting HTML to screenshots, reads the underlying data
+    and sends rich statistical context to the LLM for explanation.
     """
-    
+
     def __init__(self, llm_manager=None):
         self.llm_manager = llm_manager
-        self.instructions = """
-        Analyze this specific visualization and provide concrete insights about what you observe.
-        
-        Focus on making specific observations about THIS data:
-        1. What is the most important pattern or finding you see in this visualization?
-        2. Which specific areas, values, or data points stand out and why?
-        3. What does this pattern suggest for immediate action or decision-making?
-        4. What is one unexpected or noteworthy insight from this specific data?
-        
-        Be concrete and data-specific. Avoid generic interpretation guidance.
-        Talk about what you actually see in THIS visualization, not how to interpret visualizations in general.
-        """.strip()
-    
-    def explain_visualization(self, viz_path: str, viz_type: str = None, session_id: str = None) -> str:
-        """
-        Generate automatic explanation for ANY visualization.
 
-        Args:
-            viz_path: Path to the visualization file (HTML, PNG, etc.)
-            viz_type: Optional type hint for context
-            session_id: Session ID for logging
+    # ------------------------------------------------------------------
+    # Main entry point
+    # ------------------------------------------------------------------
+    def explain_visualization(
+        self, viz_path: str, viz_type: str = None, session_id: str = None
+    ) -> str:
+        """Generate a data-driven explanation for a visualization."""
+        if not self.llm_manager:
+            return "ERROR: LLM manager not available for explanations"
 
-        Returns:
-            str: LLM-generated explanation
-        """
-        # Check if vision explanations are enabled via environment variable
-        enable_vision = os.environ.get('ENABLE_VISION_EXPLANATIONS', 'false').lower() in ['true', '1', 'yes']
-        can_use_vision = bool(enable_vision and self.llm_manager and hasattr(self.llm_manager, 'generate_with_image'))
+        viz_type = (viz_type or '').lower().replace(' ', '_')
+        logger.info(
+            "Explaining visualization: type=%s path=%s session=%s",
+            viz_type, viz_path, session_id,
+        )
 
         try:
-            logger.info(f"Starting vision-based explanation for: {viz_path}, type: {viz_type}")
-            logger.info(f"Absolute path check: {os.path.abspath(viz_path)}")
-            logger.info(f"Path exists: {os.path.exists(viz_path)}")
+            # 1. Build rich data context from session files
+            ctx = self._build_data_context(session_id, viz_type, viz_path)
 
-            img_b64 = None
-            explanation = None
+            # 2. Build a type-specific prompt with real data
+            prompt = self._build_prompt(viz_type, ctx)
 
-            # Try vision path first when allowed
-            if can_use_vision:
-                # Convert visualization to base64 image
-                img_b64 = self._convert_to_image(viz_path)
+            # 3. Call LLM
+            system_message = (
+                "You are a malaria epidemiologist embedded in the ChatMRPT analysis system. "
+                "Explain the visualization clearly and specifically using the data provided. "
+                "Reference actual ward names, LGA names, and numbers. "
+                "Be concise (3-5 paragraphs). Focus on actionable insights for public health officials."
+            )
 
-                if img_b64:
-                    logger.info("Successfully converted visualization to image, getting LLM explanation")
-                    # Get LLM explanation using image
-                    explanation = self._get_llm_explanation(img_b64, viz_type, session_id)
+            explanation = self.llm_manager.generate_response(
+                prompt=prompt,
+                system_message=system_message,
+                session_id=session_id,
+            )
 
-            # If vision is disabled/unavailable or conversion failed, fall back to text-only explanation
-            if not explanation:
-                if not self.llm_manager:
-                    error_msg = "LLM manager not available for explanations"
-                    logger.error(error_msg)
-                    return f"ERROR: {error_msg}"
-
-                logger.info("Using text-only fallback explanation (vision disabled or conversion failed)")
-                # Build lightweight data context from session artifacts when available
-                data_context = self._build_data_context(session_id, viz_type, viz_path)
-
-                try:
-                    # Prefer LLM manager's visualization explainer with context
-                    explanation = self.llm_manager.explain_visualization(
-                        session_id=session_id,
-                        viz_type=viz_type or 'visualization',
-                        context=data_context
-                    )
-                except Exception as e:
-                    logger.warning(f"Fallback explanation via llm_manager failed: {e}; using generic prompt")
-                    prompt = (
-                        f"Provide a clear, practical explanation of this {viz_type or 'visualization'} "
-                        f"generated during malaria risk analysis. Focus on how to read it and what insights it typically reveals. "
-                        f"Be concise and action-oriented."
-                    )
-                    explanation = self.llm_manager.generate_response(
-                        prompt=prompt,
-                        system_message=self.instructions,
-                        session_id=session_id
-                    )
+            if not explanation or explanation.strip().upper().startswith('ERROR'):
+                return "ERROR: LLM failed to generate explanation"
 
             return explanation
 
         except Exception as e:
-            # As a final safety net, return a generic explanation prompt
-            logger.error(f"Error at {viz_path}: {e}", exc_info=True)
-            if self.llm_manager:
-                return self.llm_manager.explain_visualization(
-                    session_id=session_id,
-                    viz_type=viz_type or 'visualization',
-                    context={'source': os.path.basename(viz_path) if viz_path else None}
-                )
-            return "This visualization summarizes analysis results relevant to malaria risk and intervention planning."
-        
-        # ORIGINAL CODE (commented out for performance):
-        # try:
-        #     logger.info(f"Starting visualization explanation for: {viz_path}, type: {viz_type}")
-        #     
-        #     # Convert visualization to base64 image
-        #     img_b64 = self._convert_to_image(viz_path)
-        #     
-        #     if not img_b64:
-        #         logger.warning(f"Failed to convert {viz_path} to image, using fallback explanation")
-        #         return self._fallback_explanation(viz_type)
-        #     
-        #     logger.info("Successfully converted visualization to image, getting LLM explanation")
-        #     
-        #     # Get LLM explanation using image
-        #     explanation = self._get_llm_explanation(img_b64, viz_type, session_id)
-        #     
-        #     return explanation
-        #     
-        # except Exception as e:
-        #     logger.error(f"Error explaining visualization {viz_path}: {e}")
-        #     return self._fallback_explanation(viz_type)
-    
-    def _convert_to_image(self, viz_path: str) -> Optional[str]:
-        """Convert visualization to base64 image (py-sidebot approach)."""
-        try:
-            logger.info(f"_convert_to_image called with path: {viz_path}")
+            logger.error("Error explaining visualization: %s", e, exc_info=True)
+            return f"ERROR: {e}"
 
-            # Check if file exists
-            if not os.path.exists(viz_path):
-                logger.warning(f"Visualization file not found: {viz_path}")
-                logger.info(f"Current working directory: {os.getcwd()}")
-                logger.info(f"Absolute path attempted: {os.path.abspath(viz_path)}")
-                return None
-
-            logger.info(f"File exists, checking type for: {viz_path}")
-
-            # Handle different file types
-            if viz_path.endswith('.html'):
-                # Check if it's a Plotly HTML and try to extract data
-                plotly_result = self._try_plotly_extraction(viz_path)
-                if plotly_result:
-                    return plotly_result
-                # Otherwise convert HTML to image
-                return self._html_to_image(viz_path)
-            elif viz_path.endswith('.pickle'):
-                # Handle pickle files from Data Analysis V3
-                return self._pickle_to_image(viz_path)
-            elif viz_path.endswith(('.png', '.jpg', '.jpeg')):
-                return self._image_to_base64(viz_path)
-            else:
-                logger.warning(f"Unsupported file type: {viz_path}")
-                return None
-
-        except Exception as e:
-            logger.error(f"Error converting visualization to image: {e}")
-            return None
-    
-    def _try_plotly_extraction(self, html_path: str) -> Optional[str]:
-        """Try to extract Plotly figure from HTML and convert to image using Kaleido."""
-        try:
-            import json
-            import re
-
-            with open(html_path, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-
-            # Look for Plotly JSON data in the HTML
-            plotly_pattern = r'Plotly\.newPlot\([^,]+,\s*(\[.*?\])\s*,\s*(\{.*?\})'
-            matches = re.search(plotly_pattern, html_content, re.DOTALL)
-
-            if matches:
-                try:
-                    import plotly.graph_objects as go
-
-                    data_json = matches.group(1)
-                    layout_json = matches.group(2)
-
-                    # Parse the JSON
-                    data = json.loads(data_json)
-                    layout = json.loads(layout_json)
-
-                    # Create Plotly figure
-                    fig = go.Figure(data=data, layout=layout)
-
-                    # Convert to image using Kaleido
-                    return self._plotly_to_image(fig)
-                except Exception as e:
-                    logger.debug(f"Failed to extract Plotly from HTML: {e}")
-                    return None
-
-            return None
-
-        except Exception as e:
-            logger.debug(f"Error trying Plotly extraction: {e}")
-            return None
-
-    def _plotly_to_image(self, fig) -> Optional[str]:
-        """Convert Plotly figure directly to base64 image using Kaleido."""
-        try:
-            # Convert Plotly figure to PNG bytes
-            img_bytes = fig.to_image(format="png", width=1200, height=800)
-            # Convert to base64
-            img_b64 = base64.b64encode(img_bytes).decode('utf-8')
-            logger.info("Successfully converted Plotly figure to image using Kaleido")
-            return img_b64
-        except Exception as e:
-            logger.warning(f"Kaleido conversion failed: {e}")
-            return None
-
-    def _pickle_to_image(self, pickle_path: str) -> Optional[str]:
-        """Convert pickle file containing Plotly figure to base64 image."""
-        try:
-            import pickle
-            import os
-
-            logger.info(f"Loading pickle file: {pickle_path}")
-            logger.info(f"File exists: {os.path.exists(pickle_path)}")
-            logger.info(f"Absolute path: {os.path.abspath(pickle_path)}")
-
-            if not os.path.exists(pickle_path):
-                logger.error(f"Pickle file does not exist at path: {pickle_path}")
-                # Try to list files in the directory
-                dir_path = os.path.dirname(pickle_path)
-                if os.path.exists(dir_path):
-                    files = os.listdir(dir_path)
-                    logger.info(f"Files in {dir_path}: {files[:5]}")  # Show first 5 files
-                return None
-
-            # Load the pickle file
-            with open(pickle_path, 'rb') as f:
-                fig = pickle.load(f)
-                logger.info(f"Successfully loaded pickle file, type: {type(fig)}")
-
-            # Convert Plotly figure to image using existing method
-            result = self._plotly_to_image(fig)
-            if result:
-                logger.info("Successfully converted pickle to image")
-            else:
-                logger.error("Failed to convert Plotly figure to image")
-            return result
-
-        except FileNotFoundError:
-            logger.error(f"Pickle file not found: {pickle_path}")
-            return None
-        except Exception as e:
-            logger.error(f"Error converting pickle to image: {e}", exc_info=True)
-            return None
-
-    def _html_to_image(self, html_path: str) -> Optional[str]:
-        """Convert HTML visualization to base64 image."""
-        try:
-            logger.info(f"Attempting to convert HTML to image: {html_path}")
-
-            # Create temporary image file
-            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                tmp_path = tmp_file.name
-
-            # Use headless browser to capture HTML as image
-            # Try different methods in order of preference
-            methods = [
-                ('html2image', self._capture_with_html2image),  # New lightweight method
-                ('playwright', self._capture_with_playwright),
-                ('selenium', self._capture_with_selenium),
-                ('wkhtmltoimage', self._capture_with_wkhtmltoimage)
-            ]
-            
-            for method_name, method in methods:
-                try:
-                    logger.info(f"Trying {method_name} for HTML capture")
-                    if method(html_path, tmp_path):
-                        logger.info(f"Successfully captured HTML with {method_name}")
-                        # Convert captured image to base64
-                        return self._image_to_base64(tmp_path)
-                except Exception as e:
-                    logger.debug(f"{method_name} capture failed: {e}")
-                    continue
-            
-            logger.warning("All image capture methods failed")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error converting HTML to image: {e}")
-            return None
-        finally:
-            # Clean up temporary file
-            if 'tmp_path' in locals() and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-    
-    def _capture_with_html2image(self, html_path: str, output_path: str) -> bool:
-        """Capture HTML using html2image (lightweight method)."""
-        try:
-            from html2image import Html2Image
-
-            # Create Html2Image instance
-            hti = Html2Image(output_path=os.path.dirname(output_path))
-
-            # Read HTML content
-            with open(html_path, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-
-            # Generate screenshot
-            output_filename = os.path.basename(output_path)
-            hti.screenshot(html_str=html_content, save_as=output_filename)
-
-            # Check if file was created
-            return os.path.exists(output_path)
-
-        except ImportError:
-            logger.debug("html2image not available")
-            return False
-        except Exception as e:
-            logger.debug(f"html2image capture failed: {e}")
-            return False
-
-    def _capture_with_playwright(self, html_path: str, output_path: str) -> bool:
-        """Capture HTML using Playwright (preferred method)."""
-        try:
-            # Try to import playwright
-            from playwright.sync_api import sync_playwright
-            
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                
-                # Load HTML file
-                page.goto(f"file://{os.path.abspath(html_path)}")
-                
-                # Wait for content to load
-                page.wait_for_timeout(2000)
-                
-                # Take screenshot
-                page.screenshot(path=output_path, full_page=True)
-                
-                browser.close()
-                return True
-                
-        except ImportError:
-            logger.debug("Playwright not available")
-            return False
-        except Exception as e:
-            logger.debug(f"Playwright capture failed: {e}")
-            return False
-    
-    def _capture_with_selenium(self, html_path: str, output_path: str) -> bool:
-        """Capture HTML using Selenium."""
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import Options
-            
-            options = Options()
-            options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            
-            driver = webdriver.Chrome(options=options)
-            driver.get(f"file://{os.path.abspath(html_path)}")
-            
-            # Wait for content to load
-            driver.implicitly_wait(3)
-            
-            # Take screenshot
-            driver.save_screenshot(output_path)
-            driver.quit()
-            
-            return True
-            
-        except ImportError:
-            logger.debug("Selenium not available")
-            return False
-        except Exception as e:
-            logger.debug(f"Selenium capture failed: {e}")
-            return False
-    
-    def _capture_with_wkhtmltoimage(self, html_path: str, output_path: str) -> bool:
-        """Capture HTML using wkhtmltoimage."""
-        try:
-            cmd = [
-                'wkhtmltoimage',
-                '--width', '1200',
-                '--height', '800',
-                '--javascript-delay', '2000',
-                html_path,
-                output_path
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            return result.returncode == 0
-            
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            logger.debug("wkhtmltoimage not available or failed")
-            return False
-        except Exception as e:
-            logger.debug(f"wkhtmltoimage capture failed: {e}")
-            return False
-    
-    def _image_to_base64(self, image_path: str) -> str:
-        """Convert image file to base64 string."""
-        try:
-            with open(image_path, 'rb') as f:
-                img_data = f.read()
-                img_b64 = base64.b64encode(img_data).decode('utf-8')
-                return img_b64
-        except Exception as e:
-            logger.error(f"Error converting image to base64: {e}")
-            return None
-
-    def _build_data_context(self, session_id: Optional[str], viz_type: Optional[str], viz_path: Optional[str]) -> Dict[str, Any]:
-        """Construct a minimal context from available session data to guide text-only explanations."""
+    # ------------------------------------------------------------------
+    # Data context builder
+    # ------------------------------------------------------------------
+    def _build_data_context(
+        self, session_id: Optional[str], viz_type: str, viz_path: Optional[str]
+    ) -> Dict[str, Any]:
+        """Build rich context from session data files."""
         ctx: Dict[str, Any] = {
-            'type': viz_type or 'visualization',
-            'source': os.path.basename(viz_path) if viz_path else None,
-            'summary': {}
+            'viz_type': viz_type,
+            'source_file': os.path.basename(viz_path) if viz_path else None,
+            'state_name': None,
+            'facility_level': None,
+            'age_group': None,
         }
-        try:
-            if not session_id:
-                return ctx
-            import glob
-            import pandas as pd
-            sess_dir = os.path.join(current_app.instance_path, 'uploads', session_id)
-            if not os.path.isdir(sess_dir):
-                return ctx
-            # Prefer specific files if they exist
-            csv_path = None
-            for name in ['tpr_results.csv', 'raw_data.csv', 'raw_data.xlsx']:
-                path = os.path.join(sess_dir, name)
-                if os.path.exists(path):
-                    csv_path = path
+
+        if not session_id:
+            return ctx
+
+        sess_dir = self._get_session_dir(session_id)
+        if not sess_dir:
+            return ctx
+
+        # Read workflow metadata (state, facility, age group)
+        self._read_workflow_metadata(sess_dir, ctx)
+
+        # Read the primary data file for this viz type
+        df = self._read_data_file(sess_dir, viz_type)
+        if df is None or df.empty:
+            ctx['error'] = 'No data file found for this session'
+            return ctx
+
+        ctx['total_wards'] = len(df)
+        ctx['columns'] = list(df.columns)
+
+        # Extract LGA info
+        lga_col = self._find_column(df, ['LGA', 'LGAName', 'lga'])
+        ward_col = self._find_column(df, ['WardName', 'ward_name', 'Ward'])
+        if lga_col:
+            ctx['lga_count'] = int(df[lga_col].nunique())
+            ctx['lga_names'] = df[lga_col].dropna().unique().tolist()[:10]
+
+        # Dispatch to viz-type-specific extractors
+        extractors = {
+            'tpr_map': self._extract_tpr_context,
+            'vulnerability_map_composite': self._extract_vulnerability_context,
+            'vulnerability_map_pca': self._extract_vulnerability_context,
+            'composite_score_maps': self._extract_composite_models_context,
+            'box_plot': self._extract_composite_models_context,
+            'variable_distribution': self._extract_variable_context,
+            'itn_map': self._extract_itn_context,
+            'urban_extent_map': self._extract_urban_context,
+            'decision_tree': self._extract_decision_tree_context,
+        }
+
+        extractor = extractors.get(viz_type, self._extract_generic_context)
+        extractor(df, ctx, ward_col, lga_col, viz_path)
+
+        return ctx
+
+    # ------------------------------------------------------------------
+    # Viz-type-specific extractors
+    # ------------------------------------------------------------------
+    def _extract_tpr_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract burden/TPR map context."""
+        burden_col = self._find_column(df, ['Burden', 'burden', 'TPR', 'tpr'])
+        pop_col = self._find_column(df, ['Population', 'population'])
+        pos_col = self._find_column(df, ['Total_Positive', 'total_positive'])
+
+        if burden_col:
+            series = pd.to_numeric(df[burden_col], errors='coerce')
+            ctx['metric_name'] = 'Malaria Burden (per 1,000)'
+            ctx['mean'] = round(float(series.mean(skipna=True)), 1)
+            ctx['median'] = round(float(series.median(skipna=True)), 1)
+            ctx['min'] = round(float(series.min(skipna=True)), 1)
+            ctx['max'] = round(float(series.max(skipna=True)), 1)
+
+            if ward_col:
+                top5 = df.nlargest(5, burden_col)
+                ctx['top_5_wards'] = [
+                    {'ward': r[ward_col], 'value': round(float(r[burden_col]), 1)}
+                    for _, r in top5.iterrows()
+                ]
+                bottom5 = df[series > 0].nsmallest(5, burden_col)
+                ctx['bottom_5_wards'] = [
+                    {'ward': r[ward_col], 'value': round(float(r[burden_col]), 1)}
+                    for _, r in bottom5.iterrows()
+                ]
+
+            if lga_col:
+                lga_avg = df.groupby(lga_col)[burden_col].mean().sort_values(ascending=False)
+                ctx['top_3_lgas'] = [
+                    {'lga': name, 'avg_burden': round(float(val), 1)}
+                    for name, val in lga_avg.head(3).items()
+                ]
+
+        if pop_col:
+            ctx['total_population'] = int(pd.to_numeric(df[pop_col], errors='coerce').sum())
+        if pos_col:
+            ctx['total_positive'] = int(pd.to_numeric(df[pos_col], errors='coerce').sum())
+
+    def _extract_vulnerability_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract vulnerability map context (composite or PCA)."""
+        is_pca = 'pca' in (ctx.get('viz_type') or '')
+
+        score_col = self._find_column(
+            df, ['pca_score', 'pca_rank'] if is_pca else ['composite_score', 'composite_rank']
+        )
+        cat_col = self._find_column(
+            df, ['pca_category'] if is_pca else ['composite_category']
+        )
+        rank_col = self._find_column(
+            df, ['pca_rank'] if is_pca else ['composite_rank']
+        )
+
+        ctx['method'] = 'PCA' if is_pca else 'Composite'
+
+        if cat_col:
+            counts = df[cat_col].value_counts().to_dict()
+            ctx['category_distribution'] = counts
+
+        if rank_col and ward_col:
+            ranked = df.dropna(subset=[rank_col]).sort_values(rank_col)
+            ctx['most_vulnerable'] = [
+                {'ward': r[ward_col], 'rank': int(r[rank_col])}
+                for _, r in ranked.head(5).iterrows()
+            ]
+            ctx['least_vulnerable'] = [
+                {'ward': r[ward_col], 'rank': int(r[rank_col])}
+                for _, r in ranked.tail(5).iterrows()
+            ]
+            ctx['total_ranked'] = len(ranked)
+
+        if score_col:
+            scores = pd.to_numeric(df[score_col], errors='coerce')
+            ctx['score_mean'] = round(float(scores.mean(skipna=True)), 3)
+            ctx['score_range'] = {
+                'min': round(float(scores.min()), 3),
+                'max': round(float(scores.max()), 3),
+            }
+
+        if lga_col and rank_col:
+            lga_risk = df.groupby(lga_col)[rank_col].mean().sort_values()
+            ctx['highest_risk_lgas'] = [
+                {'lga': name, 'avg_rank': round(float(val), 1)}
+                for name, val in lga_risk.head(3).items()
+            ]
+
+    def _extract_composite_models_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract context for composite score maps and box plots."""
+        model_cols = [c for c in df.columns if c.startswith('model_')]
+        ctx['model_count'] = len(model_cols)
+        ctx['model_names'] = model_cols[:10]
+
+        if model_cols:
+            model_stats = {}
+            for col in model_cols[:8]:
+                series = pd.to_numeric(df[col], errors='coerce')
+                model_stats[col] = {
+                    'mean': round(float(series.mean(skipna=True)), 3),
+                    'min': round(float(series.min(skipna=True)), 3),
+                    'max': round(float(series.max(skipna=True)), 3),
+                }
+            ctx['model_stats'] = model_stats
+
+        # Also extract overall vulnerability for box plot
+        self._extract_vulnerability_context(df, ctx, ward_col, lga_col, viz_path)
+
+    def _extract_variable_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract context for variable distribution maps."""
+        # Try to identify the variable from the viz filename
+        variable = None
+        if viz_path:
+            basename = os.path.basename(viz_path).lower()
+            # Common variable names in filenames
+            for var_name in [
+                'rainfall', 'ndvi', 'ndwi', 'elevation', 'housing_quality',
+                'urban_percentage', 'soil_wetness', 'distance_to_waterbodies',
+                'urban_extent', 'burden', 'tpr', 'population',
+            ]:
+                if var_name in basename:
+                    variable = var_name
                     break
-            if not csv_path:
-                data_files = glob.glob(os.path.join(sess_dir, '*.csv')) + \
-                            glob.glob(os.path.join(sess_dir, '*.xlsx')) + \
-                            glob.glob(os.path.join(sess_dir, '*.xls'))
-                if data_files:
-                    csv_path = max(data_files, key=os.path.getctime)
-            if not csv_path or not os.path.exists(csv_path):
-                return ctx
-            if csv_path.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(csv_path)
-            else:
-                df = pd.read_csv(csv_path)
-            ctx['summary']['rows'] = int(df.shape[0])
-            ctx['summary']['columns'] = int(df.shape[1])
-            # Heuristic detection of a key metric (e.g., TPR/positivity)
-            metric_cols = [c for c in df.columns if 'tpr' in c.lower() or 'positiv' in c.lower() or 'risk' in c.lower()]
-            if metric_cols:
-                c = metric_cols[0]
-                import pandas as _pd
-                series = _pd.to_numeric(df[c], errors='coerce')
-                if series.notna().any():
-                    ctx['summary']['metric'] = c
-                    ctx['summary']['mean'] = float(series.mean(skipna=True))
-                    ctx['summary']['max'] = float(series.max(skipna=True))
-            # Extract location hints if available
-            for col in ['state', 'state_name', 'lga', 'lga_name']:
-                if col in df.columns:
-                    vals = df[col].dropna().astype(str).unique().tolist()
-                    if vals:
-                        ctx['summary'][col] = vals[:3]
-            return ctx
-        except Exception as e:
-            logger.debug(f"Could not build data context: {e}")
-            return ctx
-    
-    def _get_llm_explanation(self, img_b64: str, viz_type: str, session_id: str) -> str:
-        """Get LLM explanation using image (py-sidebot approach)."""
+
+        if variable:
+            col = self._find_column(df, [variable, variable.title(), variable.replace('_', ' ').title()])
+            if col:
+                series = pd.to_numeric(df[col], errors='coerce')
+                ctx['variable_name'] = variable.replace('_', ' ').title()
+                ctx['mean'] = round(float(series.mean(skipna=True)), 2)
+                ctx['median'] = round(float(series.median(skipna=True)), 2)
+                ctx['min'] = round(float(series.min(skipna=True)), 2)
+                ctx['max'] = round(float(series.max(skipna=True)), 2)
+                ctx['std'] = round(float(series.std(skipna=True)), 2)
+
+                if ward_col:
+                    top3 = df.nlargest(3, col)
+                    ctx['highest_wards'] = [
+                        {'ward': r[ward_col], 'value': round(float(r[col]), 2)}
+                        for _, r in top3.iterrows()
+                    ]
+        else:
+            ctx['variable_name'] = 'Unknown variable'
+            self._extract_generic_context(df, ctx, ward_col, lga_col, viz_path)
+
+    def _extract_itn_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract ITN distribution map context."""
+        nets_col = self._find_column(df, ['nets_allocated', 'Nets_Allocated'])
+        coverage_col = self._find_column(df, ['coverage_percent', 'Coverage_Percent'])
+        phase_col = self._find_column(df, ['allocation_phase', 'Allocation_Phase'])
+
+        if phase_col:
+            phase_counts = df[phase_col].value_counts().to_dict()
+            ctx['allocation_phases'] = phase_counts
+            ctx['wards_covered'] = int(df[phase_col].eq('Allocated').sum()) if 'Allocated' in df[phase_col].values else 0
+
+        if nets_col:
+            nets = pd.to_numeric(df[nets_col], errors='coerce')
+            ctx['total_nets'] = int(nets.sum())
+            ctx['avg_nets_per_ward'] = round(float(nets[nets > 0].mean()), 0) if (nets > 0).any() else 0
+
+        if coverage_col:
+            cov = pd.to_numeric(df[coverage_col], errors='coerce')
+            ctx['avg_coverage'] = round(float(cov.mean(skipna=True)), 1)
+            ctx['coverage_range'] = {
+                'min': round(float(cov.min()), 1),
+                'max': round(float(cov.max()), 1),
+            }
+
+        # Also get vulnerability context
+        self._extract_vulnerability_context(df, ctx, ward_col, lga_col, viz_path)
+
+    def _extract_urban_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract urban extent map context."""
+        urban_col = self._find_column(df, ['urbanPercentage', 'urban_percentage', 'Urban_Percentage'])
+        if urban_col:
+            urban = pd.to_numeric(df[urban_col], errors='coerce')
+            ctx['urban_mean'] = round(float(urban.mean(skipna=True)), 1)
+            ctx['urban_median'] = round(float(urban.median(skipna=True)), 1)
+            ctx['urban_wards'] = int((urban > 50).sum())
+            ctx['rural_wards'] = int((urban <= 50).sum())
+
+        # Also get vulnerability ranking
+        self._extract_vulnerability_context(df, ctx, ward_col, lga_col, viz_path)
+
+    def _extract_decision_tree_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Extract decision tree context."""
+        model_cols = [c for c in df.columns if c.startswith('model_')]
+        env_cols = [
+            c for c in df.columns
+            if c not in ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State',
+                         'GeopoliticalZone', 'geometry']
+            and not c.startswith('model_')
+            and not c.endswith('_rank') and not c.endswith('_category') and not c.endswith('_score')
+        ]
+        ctx['total_variables'] = len(env_cols)
+        ctx['variables_used'] = env_cols[:10]
+        ctx['model_count'] = len(model_cols)
+        self._extract_vulnerability_context(df, ctx, ward_col, lga_col, viz_path)
+
+    def _extract_generic_context(
+        self, df: pd.DataFrame, ctx: dict, ward_col: str, lga_col: str,
+        viz_path: str = None
+    ):
+        """Fallback: extract basic stats from whatever data is available."""
+        numeric_cols = df.select_dtypes(include='number').columns.tolist()
+        if numeric_cols:
+            primary = numeric_cols[0]
+            series = df[primary]
+            ctx['primary_metric'] = primary
+            ctx['mean'] = round(float(series.mean(skipna=True)), 2)
+            ctx['min'] = round(float(series.min(skipna=True)), 2)
+            ctx['max'] = round(float(series.max(skipna=True)), 2)
+
+    # ------------------------------------------------------------------
+    # Prompt builder
+    # ------------------------------------------------------------------
+    def _build_prompt(self, viz_type: str, ctx: Dict[str, Any]) -> str:
+        """Build a visualization-type-specific prompt with real data."""
+        info = VIZ_TYPE_INFO.get(viz_type, {})
+        label = info.get('label', viz_type.replace('_', ' ').title() if viz_type else 'Visualization')
+        description = info.get('description', 'a data visualization from the malaria risk analysis')
+
+        state = ctx.get('state_name') or 'the selected state'
+        lines = [f"This is a **{label}** for **{state}** — {description}."]
+
+        # Add facility/age context for TPR maps
+        if viz_type == 'tpr_map':
+            fac = ctx.get('facility_level')
+            age = ctx.get('age_group')
+            if fac or age:
+                lines.append(f"Facility level: {fac or 'all'}, Age group: {age or 'all ages'}.")
+
+        lines.append("")
+        lines.append("**Key statistics from the underlying data:**")
+
+        total = ctx.get('total_wards', 0)
+        lga_count = ctx.get('lga_count', 0)
+        if total:
+            lines.append(f"- {total} wards analyzed across {lga_count} LGAs")
+
+        # Metric stats
+        metric_name = ctx.get('metric_name', ctx.get('variable_name'))
+        if metric_name and 'mean' in ctx:
+            lines.append(
+                f"- {metric_name}: mean {ctx['mean']}, median {ctx.get('median', 'N/A')}, "
+                f"range {ctx.get('min', '?')} - {ctx.get('max', '?')}"
+            )
+
+        # Top/bottom wards
+        for key, header in [
+            ('top_5_wards', 'Highest burden wards'),
+            ('bottom_5_wards', 'Lowest burden wards (non-zero)'),
+            ('most_vulnerable', 'Most vulnerable wards'),
+            ('least_vulnerable', 'Least vulnerable wards'),
+            ('highest_wards', 'Highest value wards'),
+        ]:
+            items = ctx.get(key)
+            if items:
+                ward_strs = [
+                    f"{w.get('ward', '?')} ({w.get('value', w.get('rank', '?'))})"
+                    for w in items[:5]
+                ]
+                lines.append(f"- {header}: {', '.join(ward_strs)}")
+
+        # LGA breakdown
+        for key, header in [
+            ('top_3_lgas', 'Highest burden LGAs (avg)'),
+            ('highest_risk_lgas', 'Highest risk LGAs (avg rank)'),
+        ]:
+            items = ctx.get(key)
+            if items:
+                lga_strs = [
+                    f"{l.get('lga', '?')} ({l.get('avg_burden', l.get('avg_rank', '?'))})"
+                    for l in items
+                ]
+                lines.append(f"- {header}: {', '.join(lga_strs)}")
+
+        # Category distribution
+        cat_dist = ctx.get('category_distribution')
+        if cat_dist:
+            cat_str = ', '.join(f"{k}: {v}" for k, v in cat_dist.items())
+            lines.append(f"- Vulnerability categories: {cat_str}")
+
+        # Population / positives
+        if ctx.get('total_population'):
+            lines.append(f"- Total population: {ctx['total_population']:,}")
+        if ctx.get('total_positive'):
+            lines.append(f"- Total positive cases: {ctx['total_positive']:,}")
+
+        # Urban context
+        if ctx.get('urban_wards') is not None:
+            lines.append(f"- Urban wards (>50% urbanised): {ctx['urban_wards']}, Rural wards: {ctx['rural_wards']}")
+
+        # ITN context
+        if ctx.get('total_nets'):
+            lines.append(f"- Total nets allocated: {ctx['total_nets']:,}")
+            lines.append(f"- Average nets per covered ward: {ctx.get('avg_nets_per_ward', 0):,.0f}")
+            lines.append(f"- Wards receiving nets: {ctx.get('wards_covered', 0)}")
+
+        # Model info
+        if ctx.get('model_count'):
+            lines.append(f"- Risk models used: {ctx['model_count']}")
+
+        # Method
+        if ctx.get('method'):
+            lines.append(f"- Analysis method: {ctx['method']}")
+
+        lines.append("")
+        lines.append(
+            "Based on this data, provide a clear interpretation:\n"
+            "1. What is the most important finding?\n"
+            "2. Which specific areas need the most urgent attention and why?\n"
+            "3. Are there any notable patterns or surprising results?\n"
+            "4. What practical next steps would you recommend?\n\n"
+            "Be specific — use the actual ward names, LGA names, and numbers provided above."
+        )
+
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Helper methods
+    # ------------------------------------------------------------------
+    def _get_session_dir(self, session_id: str) -> Optional[str]:
+        """Get the session upload directory path."""
         try:
-            if not self.llm_manager:
-                error_msg = "LLM manager not available for vision explanations"
-                logger.error(error_msg)
-                return f"ERROR: {error_msg}"
-            
-            # Create image URL for LLM
-            img_url = f"data:image/png;base64,{img_b64}"
-            
-            # Enhanced instructions for malaria context
-            # Create focused instructions for this specific visualization
-            focused_instructions = f"""
-            {self.instructions}
-            
-            Visualization context: {viz_type or 'data analysis'}
-            
-            Analyze what you actually see in this specific image. Make observations about:
-            - The specific patterns, clusters, or distributions visible
-            - Which regions/areas show the highest and lowest values
-            - Any surprising outliers or unexpected patterns
-            - Practical implications of what this data reveals
-            
-            Be specific to THIS visualization, not general advice.
-            """
-            
-            # Check if LLM supports vision
-            if hasattr(self.llm_manager, 'generate_with_image'):
-                logger.info("Using vision-enabled LLM for explanation")
-                # Use vision-enabled LLM
-                explanation = self.llm_manager.generate_with_image(
-                    prompt=focused_instructions,
-                    image_url=img_url,
-                    session_id=session_id
-                )
-            else:
-                logger.warning("LLM doesn't support vision, using text fallback")
-                # Fallback to text-only explanation
-                explanation = self.llm_manager.generate_response(
-                    prompt=f"Explain this {viz_type or 'malaria visualization'} for public health officials.",
-                    system_message=self.instructions,
-                    session_id=session_id
-                )
-            
-            return explanation
-            
-        except Exception as e:
-            error_msg = f"LLM explanation failed: {str(e)}"
-            logger.error(f"Error getting LLM explanation: {e}", exc_info=True)
-            return f"ERROR: {error_msg}"
-    
-    # REMOVED: _fallback_explanation method completely removed
-    # All errors now return explicit error messages instead of generic fallbacks
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'instance/uploads')
+            sess_dir = os.path.join(upload_folder, session_id)
+            if os.path.isdir(sess_dir):
+                return sess_dir
+            # Also try instance path
+            sess_dir = os.path.join(current_app.instance_path, 'uploads', session_id)
+            if os.path.isdir(sess_dir):
+                return sess_dir
+        except RuntimeError:
+            # Outside app context
+            sess_dir = os.path.join('instance', 'uploads', session_id)
+            if os.path.isdir(sess_dir):
+                return sess_dir
+        return None
+
+    def _read_workflow_metadata(self, sess_dir: str, ctx: dict):
+        """Read .agent_state.json and tpr_debug.json for workflow context."""
+        for filename in ['.agent_state.json', 'tpr_debug.json']:
+            path = os.path.join(sess_dir, filename)
+            if os.path.exists(path):
+                try:
+                    with open(path, 'r') as f:
+                        data = json.load(f)
+                    # Extract common fields
+                    selections = data.get('tpr_selections', data.get('selections', {}))
+                    if selections:
+                        ctx['state_name'] = ctx.get('state_name') or selections.get('state_name', selections.get('state'))
+                        ctx['facility_level'] = ctx.get('facility_level') or selections.get('facility_level', selections.get('facility'))
+                        ctx['age_group'] = ctx.get('age_group') or selections.get('age_group')
+                except Exception as e:
+                    logger.debug("Could not read %s: %s", filename, e)
+
+    def _read_data_file(self, sess_dir: str, viz_type: str) -> Optional[pd.DataFrame]:
+        """Read the most relevant data file for this visualization type."""
+        info = VIZ_TYPE_INFO.get(viz_type, {})
+        candidates = info.get('data_files', ['unified_dataset.csv', 'raw_data.csv'])
+
+        for filename in candidates:
+            path = os.path.join(sess_dir, filename)
+            if os.path.exists(path):
+                try:
+                    if filename.endswith(('.xlsx', '.xls')):
+                        return pd.read_excel(path)
+                    return pd.read_csv(path)
+                except Exception as e:
+                    logger.debug("Could not read %s: %s", path, e)
+
+        # Fallback: try any CSV in the session
+        import glob
+        csvs = glob.glob(os.path.join(sess_dir, '*.csv'))
+        if csvs:
+            try:
+                return pd.read_csv(max(csvs, key=os.path.getctime))
+            except Exception:
+                pass
+
+        return None
+
+    @staticmethod
+    def _find_column(df: pd.DataFrame, candidates: list) -> Optional[str]:
+        """Find the first matching column name from a list of candidates."""
+        for col in candidates:
+            if col in df.columns:
+                return col
+        # Case-insensitive fallback
+        lower_map = {c.lower(): c for c in df.columns}
+        for col in candidates:
+            if col.lower() in lower_map:
+                return lower_map[col.lower()]
+        return None
+
+
+# Alias for backward compatibility (request_interpreter imports this name)
+UniversalVizExplainer = UniversalVisualizationExplainer
+
 
 def get_universal_viz_explainer(llm_manager=None):
     """Factory function to create universal visualization explainer."""

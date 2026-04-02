@@ -682,21 +682,25 @@ def explain_visualization():
                 viz_filename = viz_path.split('/')[-1]  # Get filename like "data_analysis_xxx.html"
                 visualization_path = os.path.join(current_app.root_path, 'static/visualizations', viz_filename)
             elif viz_path.startswith('/serve_viz_file/'):
-                # Handle served session visualization paths: /serve_viz_file/<session_id>/visualizations/<file>
+                # Handle served session visualization paths:
+                #   /serve_viz_file/<session_id>/visualizations/<file>
+                #   /serve_viz_file/<session_id>/<file>  (e.g. tpr_distribution_map.html)
                 try:
                     parts = viz_path.strip('/').split('/')
-                    # Expected: ['serve_viz_file', '<session_id>', 'visualizations', '<file>']
-                    if len(parts) >= 4 and parts[0] == 'serve_viz_file':
+                    # parts[0] = 'serve_viz_file', parts[1] = session_id, rest = relative path
+                    if len(parts) >= 3 and parts[0] == 'serve_viz_file':
                         sid = parts[1]
-                        filename = parts[-1]
-                        visualization_path = os.path.join(current_app.instance_path, 'uploads', sid, 'visualizations', filename)
+                        rel_path = '/'.join(parts[2:])
+                        visualization_path = os.path.join(
+                            current_app.instance_path, 'uploads', sid, rel_path
+                        )
                         logger.info(f"Resolved serve_viz_file path to: {visualization_path}")
-                    else:
-                        # Fallback to using provided session_id if available
-                        if session_id:
-                            filename = parts[-1]
-                            visualization_path = os.path.join(current_app.instance_path, 'uploads', session_id, 'visualizations', filename)
-                            logger.info(f"Resolved serve_viz_file path using request session_id to: {visualization_path}")
+                    elif session_id:
+                        filename = parts[-1]
+                        visualization_path = os.path.join(
+                            current_app.instance_path, 'uploads', session_id, filename
+                        )
+                        logger.info(f"Resolved serve_viz_file path using request session_id to: {visualization_path}")
                 except Exception as e:
                     logger.warning(f"Failed to resolve serve_viz_file path: {e}")
             else:
