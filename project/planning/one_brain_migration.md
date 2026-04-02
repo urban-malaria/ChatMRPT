@@ -120,35 +120,46 @@ Wrap each tool following the `create_variable_map` pattern in `map_tools.py`.
 - [x] `create_settlement_map` — DEPRECATED, skip
 - [x] `show_settlement_statistics` — DEPRECATED, skip
 
-#### Map tools (6 remaining)
-- [ ] `create_vulnerability_map` — Plotly choropleth, needs unified_dataset.csv (composite_score)
-- [ ] `create_pca_map` — Plotly choropleth, needs unified_dataset.csv (pca_score)
-- [ ] `create_composite_score_maps` — Plotly subplots, needs unified_dataset.csv (model scores)
-- [ ] `create_composite_vulnerability_map` — Plotly choropleth, explicit composite method
-- [ ] `create_urban_extent_map` — Plotly choropleth, needs data_loaded only
-- [ ] `create_decision_tree` — Custom HTML, needs unified_dataset.csv
+#### Need @tool wrappers (6 remaining)
+- [ ] `create_vulnerability_map` — Plotly choropleth, needs unified_dataset.csv. Add `method` param ('composite'/'pca') to handle both composite AND PCA maps in one tool
+- [ ] `create_composite_score_maps` — Plotly multi-subplot, needs unified_dataset.csv (model scores)
+- [ ] `create_urban_extent_map` — Plotly choropleth with threshold-based opacity, needs data_loaded
+- [ ] `run_risk_analysis` (run_malaria_risk_analysis) — heavy deps (AnalysisEngine, pca_pipeline, UnifiedDatasetBuilder, imputation). Creates unified_dataset.csv + .analysis_complete marker
+- [ ] `plan_itn_distribution` (run_itn_planning) — needs analysis_complete + population data. Produces map + CSV + dashboard + download links
+- [ ] `switch_tpr_combination` — modifies files on disk (regenerates raw_data.csv + shapefile for new facility/age combo)
 
-#### Analysis tools (2 remaining)
-- [ ] `run_risk_analysis` (run_malaria_risk_analysis) — heavy deps (AnalysisEngine, pca_pipeline, UnifiedDatasetBuilder, imputation)
-- [ ] `plan_itn_distribution` (run_itn_planning) — needs analysis_complete + population data, produces map + CSV + dashboard
+#### Merged into existing tools (2 — no separate wrapper needed)
+- [x] `create_pca_map` → MERGED into `create_vulnerability_map` with `method='pca'` (same rendering code, different column)
+- [x] `create_composite_vulnerability_map` → MERGED into `create_vulnerability_map` with `method='composite'` (identical to vulnerability map)
 
-#### Data query tools (1 remaining, decision pending)
-- [ ] `query_data` (NL→SQL via DuckDB) — decision: keep as @tool or let agent use pandas?
+#### Redundant — agent handles natively via analyze_data or conversation (5 — no wrapper needed)
+- [x] `query_data` (NL→SQL) — agent writes pandas instead of SQL. Redundant.
+- [x] `explain_analysis_methodology` — agent explains from knowledge + conversation history
+- [x] `chatmrpt_help` — agent answers help questions naturally
+- [x] `query_tpr_data` — agent queries tpr_results.csv or uploaded_data.csv via pandas
+- [x] `compare_tpr_combinations` — agent analyzes pre-computed data via pandas
 
-#### Knowledge tools (2 remaining)
-- [ ] `explain_analysis_methodology` — text only, no data needed
-- [ ] `chatmrpt_help` — text only, no data needed
-
-#### TPR query/switch tools (3 remaining)
-- [ ] `query_tpr_data` — query pre-computed TPR cache
-- [ ] `switch_tpr_combination` — switch facility/age combo, regenerate files
-- [ ] `compare_tpr_combinations` — compare all combos side by side
-
-#### Other (1 remaining)
-- [ ] `create_intervention_targeting_map` — Plotly, settlement + analysis data
+#### Deprecated — skip (4)
+- [x] `create_settlement_map` — "removed during streamlining"
+- [x] `show_settlement_statistics` — "removed during streamlining"
+- [x] `create_decision_tree` — low-value custom HTML flowchart
+- [x] `create_intervention_targeting_map` — tied to deprecated settlement tools
 
 #### System prompt update
-- [ ] Update `system_prompt.py` to describe ALL available tools to the LLM
+- [ ] Update `system_prompt.py` to describe all 7 available tools (analyze_data + 6 new)
+- [ ] Guide agent on when to use pandas vs specialized tools
+- [ ] Guide agent on data pipeline order (upload → TPR → risk analysis → maps → ITN)
+
+#### Summary
+| Category | Count | Action |
+|----------|-------|--------|
+| Done | 1 | create_variable_map — tested, validated |
+| Already in agent | 1 | analyze_data |
+| Need @tool wrappers | **6** | The actual work |
+| Merged | 2 | Into create_vulnerability_map |
+| Redundant | 5 | Agent handles natively |
+| Deprecated | 4 | Skip entirely |
+| **Total** | **19** | **6 tools to build** |
 
 ### Phase 2: Disable TPR exit ✅ DONE (testing)
 - [x] Disabled `exit_data_analysis_mode` in data_analysis_v3_routes.py
