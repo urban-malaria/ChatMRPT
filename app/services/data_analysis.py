@@ -19,9 +19,9 @@ import geopandas as gpd
 from typing import Dict, Any, List, Optional, Union
 
 # Import other data modules
-from .loaders import CSVLoader, ShapefileLoader
-from .validation import DataValidator
-from .processing import DataProcessor
+from .data_loaders import CSVLoader, ShapefileLoader
+from .data_validation import DataValidator
+from .data_processing import DataProcessor
 
 # Set up logging
 logger = logging.getLogger(__name__)

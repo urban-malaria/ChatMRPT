@@ -1,49 +1,49 @@
+chatmrpt_venv_new) bbofori@B3NZ0:/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT$ 
+(chatmrpt_venv_new) bbofori@B3NZ0:/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT$ 
+(chatmrpt_venv_new) bbofori@B3NZ0:/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT$ 
 (chatmrpt_venv_new) bbofori@B3NZ0:/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT$ python run.py
 [DEV] ChatMRPT Development Mode
 [DEV] Instance folder: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance
 [DEV] OpenAI API Key: Set
 [DEV] Debug Mode: True
-[2026-04-03 14:30:45,692] WARNING in redis_config: ⚠️ Redis not available: Error 111 connecting to loccalhost:6379. Connection refused.
-[2026-04-03 14:30:45,693] INFO in redis_config: 📁 Falling back to filesystem sessions for local development
-[2026-04-03 14:30:46,107] INFO in redis_config: ✅ Filesystem session store initialized at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/flask_session
-[2026-04-03 14:30:46,205] DEBUG in container: Registered service: interaction_logger (singleton: True)
-[2026-04-03 14:30:46,206] DEBUG in container: Registered service: llm_manager (singleton: True)       
-[2026-04-03 14:30:46,206] DEBUG in container: Registered service: data_service (singleton: True)
-[2026-04-03 14:30:46,206] DEBUG in container: Registered service: analysis_service (singleton: True)  
-[2026-04-03 14:30:46,206] DEBUG in container: Registered service: visualization_service (singleton: True)
-[2026-04-03 14:30:46,206] DEBUG in container: Registered service: report_service (singleton: True)    
-[2026-04-03 14:30:46,206] DEBUG in container: Registered service: request_interpreter (singleton: True)
-[2026-04-03 14:30:46,206] INFO in container: 🚀 Starting eager initialization of core services...     
-[2026-04-03 14:30:59,007] WARNING in container: Failed to create interaction logger: No module named 'app.utils.utils'
-[2026-04-03 14:30:59,007] DEBUG in container: Created service instance: interaction_logger
-[2026-04-03 14:30:59,007] WARNING in container: ⚠️  interaction_logger returned None
-[2026-04-03 14:30:59,092] WARNING in container: Failed to create interaction logger: No module named 'app.utils.utils'
-[2026-04-03 14:30:59,092] DEBUG in container: Created service instance: interaction_logger
-[2026-04-03 14:31:01,807] INFO in container: 🔍 DEBUG: USE_VLLM = False (from env: None)
-[2026-04-03 14:31:01,807] INFO in container: 🔍 DEBUG: USE_OLLAMA = False (from env: None)
-[2026-04-03 14:31:01,807] INFO in container: ☁️ Using OpenAI for cloud inference
-[2026-04-03 14:31:01,807] INFO in llm_adapter: LLM Adapter initialized: backend=openai, model=gpt-4o  
-[2026-04-03 14:31:16,898] INFO in llm_adapter: OpenAI call: model=gpt-4o, project=unset, base_url_env=unset
-[2026-04-03 14:31:23,558] INFO in container: ✅ LLM backend verified: openai with gpt-4o
-[2026-04-03 14:31:23,558] DEBUG in container: Created service instance: llm_manager
-[2026-04-03 14:31:23,558] INFO in container: ✅ llm_manager initialized in 24.55s
-[2026-04-03 14:31:23,558] DEBUG in container: Created service instance: data_service
-[2026-04-03 14:31:23,558] INFO in container: ✅ data_service initialized in 0.00s
-[2026-04-03 14:31:37,200] DEBUG in container: Created service instance: analysis_service
-[2026-04-03 14:31:37,200] INFO in container: ✅ analysis_service initialized in 13.64s
-[2026-04-03 14:31:41,560] WARNING in container: Failed to create visualization service: cannot import name 'create_agent_box_plot_ranking' from 'app.visualization' (/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/visualization/__init__.py)
-[2026-04-03 14:31:41,560] DEBUG in container: Created service instance: visualization_service
-[2026-04-03 14:31:41,560] WARNING in container: ⚠️  visualization_service returned None
-[2026-04-03 14:31:41,643] DEBUG in container: Created service instance: report_service
-[2026-04-03 14:31:41,643] INFO in container: ✅ report_service initialized in 0.08s
-[2026-04-03 14:31:41,705] WARNING in container: Failed to create visualization service: cannot import name 'create_agent_box_plot_ranking' from 'app.visualization' (/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/visualization/__init__.py)
-[2026-04-03 14:31:41,705] DEBUG in container: Created service instance: visualization_service
-[2026-04-03 14:31:41,775] WARNING in interpreter: Services init failed (non-fatal): No module named 'app.agent.session_context'
-[2026-04-03 14:31:41,775] DEBUG in container: Created service instance: request_interpreter
-[2026-04-03 14:31:41,776] INFO in container: ✅ request_interpreter initialized in 0.13s
-[2026-04-03 14:31:41,776] INFO in container: 🎯 Eager initialization complete - services ready for instant responses!
-[2026-04-03 14:31:41,776] INFO in container: Service container initialized with core services
-[2026-04-03 14:31:41,777] INFO in __init__: 🚀 Development mode - Using in-memory conversation tracking
+[2026-04-03 14:36:19,296] WARNING in redis_config: ⚠️ Redis not available: Error 111 connecting to loccalhost:6379. Connection refused.
+[2026-04-03 14:36:19,297] INFO in redis_config: 📁 Falling back to filesystem sessions for local development
+[2026-04-03 14:36:19,774] INFO in redis_config: ✅ Filesystem session store initialized at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/flask_session
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: interaction_logger (singleton: True)
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: llm_manager (singleton: True)       
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: data_service (singleton: True)      
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: analysis_service (singleton: True)  
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: visualization_service (singleton: True)
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: report_service (singleton: True)    
+[2026-04-03 14:36:19,858] DEBUG in container: Registered service: request_interpreter (singleton: True)
+[2026-04-03 14:36:19,858] INFO in container: 🚀 Starting eager initialization of core services...     
+[2026-04-03 14:36:32,136] WARNING in container: Failed to create interaction logger: No module named 'app.utils.utils'
+[2026-04-03 14:36:32,137] DEBUG in container: Created service instance: interaction_logger
+[2026-04-03 14:36:32,137] WARNING in container: ⚠️  interaction_logger returned None
+[2026-04-03 14:36:32,179] WARNING in container: Failed to create interaction logger: No module named 'app.utils.utils'
+[2026-04-03 14:36:32,179] DEBUG in container: Created service instance: interaction_logger
+[2026-04-03 14:36:34,579] INFO in container: 🔍 DEBUG: USE_VLLM = False (from env: None)
+[2026-04-03 14:36:34,579] INFO in container: 🔍 DEBUG: USE_OLLAMA = False (from env: None)
+[2026-04-03 14:36:34,579] INFO in container: ☁️ Using OpenAI for cloud inference
+[2026-04-03 14:36:34,579] INFO in llm_adapter: LLM Adapter initialized: backend=openai, model=gpt-4o
+[2026-04-03 14:36:47,901] INFO in llm_adapter: OpenAI call: model=gpt-4o, project=unset, base_url_env=unset
+[2026-04-03 14:36:55,048] INFO in container: ✅ LLM backend verified: openai with gpt-4o
+[2026-04-03 14:36:55,048] DEBUG in container: Created service instance: llm_manager
+[2026-04-03 14:36:55,048] INFO in container: ✅ llm_manager initialized in 22.91s
+[2026-04-03 14:36:55,048] DEBUG in container: Created service instance: data_service
+[2026-04-03 14:36:55,048] INFO in container: ✅ data_service initialized in 0.00s
+[2026-04-03 14:37:07,880] DEBUG in container: Created service instance: analysis_service
+[2026-04-03 14:37:07,880] INFO in container: ✅ analysis_service initialized in 12.83s
+[2026-04-03 14:37:10,927] DEBUG in container: Created service instance: visualization_service
+[2026-04-03 14:37:10,928] INFO in container: ✅ visualization_service initialized in 3.05s
+[2026-04-03 14:37:10,983] DEBUG in container: Created service instance: report_service
+[2026-04-03 14:37:10,983] INFO in container: ✅ report_service initialized in 0.06s
+[2026-04-03 14:37:11,073] WARNING in interpreter: Services init failed (non-fatal): No module named 'app.agent.session_context'
+[2026-04-03 14:37:11,074] DEBUG in container: Created service instance: request_interpreter
+[2026-04-03 14:37:11,074] INFO in container: ✅ request_interpreter initialized in 0.09s
+[2026-04-03 14:37:11,074] INFO in container: 🎯 Eager initialization complete - services ready for instant responses!
+[2026-04-03 14:37:11,074] INFO in container: Service container initialized with core services
+[2026-04-03 14:37:11,076] INFO in __init__: 🚀 Development mode - Using in-memory conversation tracking
 ⚠️ Redis not available: Error 111 connecting to localhost:6379. Connection refused.. Falling back to SSQLite for sessions.
 Traceback (most recent call last):
   File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/run.py", line 35, in <module>
@@ -52,7 +52,7 @@ Traceback (most recent call last):
     from .api import admin_bp, register_all_blueprints
   File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/__init__.py", line 22, in <module>       
     from .visualization_routes import viz_bp
-  File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/visualization_routes.py", line 29, in <module>
-    from ...services.universal_viz_explainer import get_universal_viz_explainer
-ImportError: attempted relative import beyond top-level package
+  File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/visualization_routes.py", line 31, in <module>
+    from app.tools.variable_distribution import VariableDistribution
+ModuleNotFoundError: No module named 'app.tools'
 (chatmrpt_venv_new) bbofori@B3NZ0:/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT$ 

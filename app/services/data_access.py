@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List, Tuple, Union
 from pathlib import Path
 
 from ..analysis.imputation import handle_spatial_imputation, handle_mean_imputation
-from .validation import DataValidator
+from .data_validation import DataValidator
 from ..analysis.pipeline import run_full_analysis_pipeline
 from ..analysis.pca_pipeline import run_independent_pca_analysis
 from app.services.variable_resolver import variable_resolver

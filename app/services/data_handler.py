@@ -18,13 +18,13 @@ import pandas as pd
 import geopandas as gpd
 
 # Import all modules
-from .loaders import CSVLoader, ShapefileLoader, load_csv_file, load_shapefile_zip
-from .validation import DataValidator, check_ward_mismatches, validate_variable_list, run_quality_assessment
-from .processing import DataProcessor, clean_dataset, normalize_dataset, calculate_composite_scores, analyze_urban_thresholds
-from .analysis import AnalysisCoordinator, run_complete_analysis
-from .reporting import ReportGenerator, generate_result_summary
-from .unified_dataset_builder import UnifiedDatasetBuilder, build_unified_dataset
-from .utils import (
+from .data_loaders import CSVLoader, ShapefileLoader, load_csv_file, load_shapefile_zip
+from .data_validation import DataValidator, check_ward_mismatches, validate_variable_list, run_quality_assessment
+from .data_processing import DataProcessor, clean_dataset, normalize_dataset, calculate_composite_scores, analyze_urban_thresholds
+from .data_analysis import AnalysisCoordinator, run_complete_analysis
+from .data_reporting import ReportGenerator, generate_result_summary
+from .dataset_builder import UnifiedDatasetBuilder, build_unified_dataset
+from .data_utils import (
     FileManager, DataConverter, ValidationHelper, SessionMetadata,
     create_temp_directory, cleanup_temp_directory, safe_filename, 
     format_file_size, get_file_info
@@ -835,7 +835,7 @@ class DataHandler:
         """Attempt to load unified dataset from disk"""
         try:
             session_id = os.path.basename(self.session_folder)
-            from .unified_dataset_builder import load_unified_dataset
+            from .dataset_builder import load_unified_dataset
             
             self.logger.info(f"Attempting to load unified dataset for session {session_id} (require_geometry={require_geometry})")
             unified_dataset = load_unified_dataset(session_id, require_geometry=require_geometry)

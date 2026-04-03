@@ -183,8 +183,8 @@ def load_population_data(state: str) -> Optional[pd.DataFrame]:
     # Fall back to legacy per-state files if the unified dataset is unavailable
     logger.info(f"Unified dataset not available for {state}, attempting legacy population files")
 
-    xlsx_path = f'app/data/population_data/pbi_distribution_{state}.xlsx'
-    csv_path = f'app/data/population_data/pbi_distribution_{state}.csv'
+    xlsx_path = f'data/population_data/pbi_distribution_{state}.xlsx'
+    csv_path = f'data/population_data/pbi_distribution_{state}.csv'
 
     pop_data = None
     if os.path.exists(xlsx_path):

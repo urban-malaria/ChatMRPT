@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 from flask import jsonify
-from .utils import convert_to_json_serializable
+from .core_utils import convert_to_json_serializable
 
 logger = logging.getLogger(__name__)
 
