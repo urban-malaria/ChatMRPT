@@ -126,38 +126,7 @@ def handle_send_message_streaming() -> Response:
         session.modified = True
         logger.warning("Old data analysis flag detected, clearing and falling through to main chat")
 
-    elif session.get('tpr_workflow_active', False):
-        logger.info("TPR workflow active for session %s", session_id)
-        try:
-            from ...data_analysis_v3.core.tpr_workflow_handler import TPRWorkflowHandler
-            from ...data_analysis_v3.core.state_manager import DataAnalysisStateManager
-            from ...data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer
-
-            state_manager = DataAnalysisStateManager(session_id)
-            tpr_analyzer = TPRDataAnalyzer()
-            handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-            tpr_result = handler.handle_workflow(user_message)
-
-            if tpr_result.get('response') == '__DATA_UPLOADED__' or tpr_result.get('status') == 'tpr_to_main_transition':
-                logger.info("TPR router requesting transition to main interpreter for __DATA_UPLOADED__")
-                session.pop('tpr_workflow_active', None)
-                session.pop('tpr_session_id', None)
-                session['csv_loaded'] = True
-                session['has_uploaded_files'] = True
-                session['analysis_complete'] = True
-                session.modified = True
-                user_message = '__DATA_UPLOADED__'
-            elif tpr_result.get('stage') == 'complete':
-                # Workflow finished — clear the flag so subsequent messages
-                # go to the main request interpreter (where switch/compare tools live)
-                session.pop('tpr_workflow_active', None)
-                session.modified = True
-                logger.info("TPR workflow complete, cleared tpr_workflow_active flag")
-                return _response_from_tpr_result(tpr_result)
-            else:
-                return _response_from_tpr_result(tpr_result)
-        except Exception as exc:
-            logger.error("Error routing to TPR handler: %s", exc)
+    # ONE-BRAIN: TPR workflow is handled by /api/v1/data-analysis/chat, not here
 
     if user_message == '__DATA_UPLOADED__':
         try:
