@@ -922,26 +922,13 @@ SQL:"""
             session_context = self._get_session_context(session_id, session_data)
             session_context = self._enrich_session_context_with_memory(session_id, session_context)
 
-            # Try deterministic intent resolution before handing off to LLM
-            direct_result = self._attempt_direct_tool_resolution(
-                user_message,
-                session_id,
-                session_context,
-            )
-            if direct_result:
-                self._store_conversation(session_id, user_message, direct_result.get('response', ''))
-                direct_result['total_time'] = time.time() - start_time
-                return direct_result
-
-            # Simple routing: no data = conversational, with data = tools available
+            # ONE-BRAIN: No data loaded = conversational. Data loaded = V3 agent handles
+            # (post-upload queries go to /api/v1/data-analysis/chat, not here)
             if not session_context.get('data_loaded', False):
                 return self._simple_conversational_response(user_message, session_context, session_id)
 
-            # Route to DataExplorationAgent for all queries not caught by the resolver.
-            # The agent sees full data profiles and makes correct DataFrame/tool choices.
-            # Specialized tools (maps, risk analysis, ITN) are already handled above
-            # by _attempt_direct_tool_resolution. Everything else goes here.
-            logger.info(f"🔄 Routing to DataExplorationAgent (one-brain pattern)")
+            # Fallback: if somehow a data query reaches here, route to agent
+            logger.info(f"🔄 Routing to DataExplorationAgent (fallback)")
             try:
                 from app.data_analysis_v3.core.data_exploration_agent import DataExplorationAgent
                 agent = DataExplorationAgent(session_id)
@@ -956,30 +943,13 @@ SQL:"""
                     'total_time': time.time() - start_time,
                 }
             except Exception as e:
-                logger.warning(f"DataExplorationAgent failed, falling through to orchestration: {e}")
-
-            # Refactored orchestration path (fallback)
-            system_prompt = self._build_system_prompt_refactored(session_context, session_id)
-            if self.tool_runner and self.orchestrator:
-                function_schemas = self.tool_runner.get_function_schemas()
-                result = self.orchestrator.run_with_tools(
-                    self.llm_manager,
-                    system_prompt,
-                    user_message,
-                    function_schemas,
-                    session_id,
-                    self.tool_runner,
-                    conversation_history=self.conversation_history.get(session_id, []),
-                )
-            else:
-                # Fallback to legacy path
-                result = self._llm_with_tools(user_message, session_context, session_id)
-            
-            # Store conversation
-            self._store_conversation(session_id, user_message, result.get('response', ''))
-            
-            result['total_time'] = time.time() - start_time
-            return result
+                logger.warning(f"DataExplorationAgent failed: {e}")
+                return {
+                    'status': 'error',
+                    'response': f'Analysis error: {str(e)}',
+                    'tools_used': [],
+                    'total_time': time.time() - start_time,
+                }
             
         except Exception as e:
             logger.error(f"Error in py-sidebot processing: {e}")
@@ -1018,59 +988,33 @@ SQL:"""
             logger.info(f"   session_data param keys: {list(session_data.keys())[:10] if session_data else 'None'}")
             logger.info(f"   kwargs: {kwargs}")
 
-            direct_result = self._attempt_direct_tool_resolution(
-                user_message,
-                session_id,
-                session_context,
-            )
-            if direct_result:
-                self._store_conversation(session_id, user_message, direct_result.get('response', ''))
-                yield {
-                    'content': direct_result.get('response', ''),
-                    'status': direct_result.get('status', 'success'),
-                    'visualizations': direct_result.get('visualizations', []),
-                    'download_links': direct_result.get('download_links', []),
-                    'tools_used': direct_result.get('tools_used', []),
-                    'debug': direct_result.get('debug'),
-                    'done': True
-                }
-                return
-            
+            # ONE-BRAIN: No data = conversational streaming.
+            # Data queries go to /api/v1/data-analysis/chat (V3 agent), not here.
             if not session_context.get('data_loaded', False):
                 logger.info(f"❌ No data loaded, using conversational streaming")
-                # Use streaming for conversational responses too
                 if self.llm_manager and hasattr(self.llm_manager, 'generate_with_functions_streaming'):
                     system_prompt = self._build_system_prompt_refactored(session_context, session_id)
-                    
-                    # Build messages with conversation history for multi-turn awareness
+
                     conv_messages = list(self.conversation_history.get(session_id, [])[-8:])
                     conv_messages.append({"role": "user", "content": user_message})
 
-                    # Stream the response
                     for chunk in self.llm_manager.generate_with_functions_streaming(
                         messages=conv_messages,
                         system_prompt=system_prompt,
-                        functions=[],  # No tools for simple conversation
+                        functions=[],
                         temperature=0.7,
                         session_id=session_id
                     ):
-                        # Handle OpenAI streaming format (no 'type' field)
                         content = chunk.get('content', '')
-                        if content:  # Only yield if there's actual content
+                        if content:
                             yield {
                                 'content': content,
                                 'status': 'success',
                                 'done': False
                             }
-                    
-                    # Send final done signal
-                    yield {
-                        'content': '',
-                        'status': 'success',
-                        'done': True
-                    }
+
+                    yield {'content': '', 'status': 'success', 'done': True}
                 else:
-                    # Fallback to non-streaming
                     response = self._simple_conversational_response(user_message, session_context, session_id)
                     yield {
                         'content': response.get('response', ''),
@@ -1078,24 +1022,28 @@ SQL:"""
                         'done': True
                     }
                 return
-            
-            # Stream with tools via orchestrator when available
-            logger.info(f"✅ Data loaded! Streaming with tools")
-            if self.tool_runner and self.orchestrator:
-                system_prompt = self._build_system_prompt_refactored(session_context, session_id)
-                function_schemas = self.tool_runner.get_function_schemas()
-                yield from self.orchestrator.stream_with_tools(
-                    self.llm_manager,
-                    system_prompt,
-                    user_message,
-                    function_schemas,
-                    session_id,
-                    self.tool_runner,
-                    interpretation_cb=lambda raw, _msg: self._interpret_raw_output(raw, _msg, session_context, session_id),
-                    conversation_history=self.conversation_history.get(session_id, []),
-                )
-            else:
-                yield from self._stream_with_tools(user_message, session_context, session_id)
+
+            # Fallback: data query reached streaming endpoint — shouldn't happen
+            # but route to agent just in case
+            logger.warning(f"Data query reached streaming endpoint — routing to agent")
+            try:
+                from app.data_analysis_v3.core.data_exploration_agent import DataExplorationAgent
+                agent = DataExplorationAgent(session_id)
+                agent_result = agent.analyze_sync(user_message)
+                yield {
+                    'content': agent_result.get('message', 'Analysis complete.'),
+                    'status': 'success',
+                    'visualizations': agent_result.get('visualizations', []),
+                    'tools_used': ['analyze_data'],
+                    'done': True,
+                }
+            except Exception as agent_err:
+                logger.error(f"Agent fallback failed: {agent_err}")
+                yield {
+                    'content': f'Error: {agent_err}',
+                    'status': 'error',
+                    'done': True,
+                }
             
         except Exception as e:
             logger.error(f"Error in streaming: {e}")
