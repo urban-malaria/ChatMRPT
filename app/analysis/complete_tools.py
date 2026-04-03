@@ -389,7 +389,7 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
             
             # Notify analysis state handler about completion
             try:
-                from ..core.analysis_state_handler import get_analysis_state_handler
+                from app.conversation.analysis_state import get_analysis_state_handler
                 state_handler = get_analysis_state_handler()
                 state_result = state_handler.on_analysis_complete(session_id, result_data)
                 logger.info(f"State handler notified: {state_result}")

@@ -878,7 +878,7 @@ class DataHandler:
         
         # If still not available, try to create it using the base tool function
         try:
-            from ..tools.base import get_session_unified_dataset
+            from app.utils.tool_base import get_session_unified_dataset
             session_id = os.path.basename(self.session_folder)
             
             unified_dataset = get_session_unified_dataset(session_id, require_geometry=require_geometry)
