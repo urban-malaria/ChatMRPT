@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 from flask import current_app
 
-from .base import BaseTool, ToolCategory, ToolExecutionResult, DataAnalysisTool
+from app.utils.tool_base import BaseTool, ToolCategory, ToolExecutionResult, DataAnalysisTool
 
 logger = logging.getLogger(__name__)
 
@@ -808,7 +808,7 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
                 logger.warning(f"Failed to load unified dataset: {load_error}")
                 # Try alternative: load from tools base
                 try:
-                    from .base import get_session_unified_dataset
+                    from app.utils.tool_base import get_session_unified_dataset
                     gdf = get_session_unified_dataset(session_id)
                 except Exception as alt_error:
                     logger.warning(f"Alternative unified dataset load failed: {alt_error}")
@@ -1513,7 +1513,7 @@ class GenerateComprehensiveAnalysisSummary(DataAnalysisTool):
             
             # Get unified dataset with analysis results
             try:
-                from .base import get_session_unified_dataset
+                from app.utils.tool_base import get_session_unified_dataset
                 gdf = get_session_unified_dataset(session_id)
                 
                 if gdf is None or len(gdf) == 0:

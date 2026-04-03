@@ -24,7 +24,7 @@ import pandas as pd
 import numpy as np
 from flask import current_app
 
-from .base import (
+from app.utils.tool_base import (
     BaseTool, ToolExecutionResult, ToolCategory,
     get_session_unified_dataset, validate_session_data_exists
 )

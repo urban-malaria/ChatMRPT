@@ -18,7 +18,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 import logging
 
-from .base import BaseTool, ToolExecutionResult, VisualizationTool
+from app.utils.tool_base import BaseTool, ToolExecutionResult, VisualizationTool
 from app.services.dataset_builder import load_unified_dataset
 from app.services.variable_resolver import variable_resolver
 

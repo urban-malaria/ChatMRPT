@@ -11,7 +11,7 @@ import pandas as pd
 import geopandas as gpd
 from pydantic import Field
 
-from .base import DataAnalysisTool, ToolExecutionResult, ToolCategory
+from app.utils.tool_base import DataAnalysisTool, ToolExecutionResult, ToolCategory
 
 logger = logging.getLogger(__name__)
 

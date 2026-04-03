@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any, Optional, ClassVar
 from pydantic import BaseModel, Field
 
-from .base import BaseTool, ToolCategory, ToolExecutionResult
+from app.utils.tool_base import BaseTool, ToolCategory, ToolExecutionResult
 
 logger = logging.getLogger(__name__)
 

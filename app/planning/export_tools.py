@@ -16,7 +16,7 @@ import pandas as pd
 import geopandas as gpd
 from pydantic import Field
 
-from .base import BaseTool, ToolCategory, ToolExecutionResult, get_session_unified_dataset
+from app.utils.tool_base import BaseTool, ToolCategory, ToolExecutionResult, get_session_unified_dataset
 from app.services.dataset_builder import load_unified_dataset
 
 logger = logging.getLogger(__name__)
