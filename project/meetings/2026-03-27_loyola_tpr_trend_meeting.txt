@@ -1,0 +1,478 @@
+Meeting: Loyola Team - TPR Trend Analysis for ITN Reprioritization
+Date: March 27, 2026
+Source: Zoom Recording Transcript
+======================================================================
+
+Laurette Mhlanga: Hello, Bernard.
+
+Boateng, Bernard: Hi, good morning, good morning, Lorette. How are you doing today?
+
+Laurette Mhlanga: I'm good. How was your presentation, or was it a lecture? Was it a presentation or a lecture?
+
+Boateng, Bernard: Both? Because I presented first, I have slides, and then… Building AI agents, there's this, platform that allows you to build agents.
+
+Laurette Mhlanga: Oh, nice!
+
+Boateng, Bernard: So, yeah.
+
+Laurette Mhlanga: How did it go? Did you enjoy it?
+
+Boateng, Bernard: Yeah, yeah, it was… it was… it was okay, it was great. Stop start, because they were asking a lot of questions every… Two ways, or other ways, yeah.
+
+Laurette Mhlanga: That's a good thing. If you get questions, it's actually a good thing.
+
+Boateng, Bernard: Yeah.
+
+Laurette Mhlanga: It means people are listening, and if you don't get questions, it's usually one of two things. Either people understood everything, or no one was listening to you, and you really don't want that case.
+
+Boateng, Bernard: Yeah, that's true.
+
+Laurette Mhlanga: So, if you've got questions, that's good. It means that they were engaged and they were excited to have you in front of them.
+
+Boateng, Bernard: Yeah.
+
+Laurette Mhlanga: Hi, Mr. Bashar.
+
+Bashir Oyetunji: Yes, good day, Loretta. Hi, as well.
+
+Laurette Mhlanga: Is Mr. the right title for you? I'm just remembering the… I think you're Dr. Bashir, right?
+
+Bashir Oyetunji: No, I just said Borship.
+
+Laurette Mhlanga: Bashir. Oh, great, thank you.
+
+Bashir Oyetunji: Just a bush.
+
+Laurette Mhlanga: Okay, I also go by Lorette, so that's fine.
+
+Bashir Oyetunji: program.
+
+Laurette Mhlanga: How's Nigeria?
+
+Bashir Oyetunji: Nigeria is cool. Isaac Jacob.
+
+Laurette Mhlanga: Oh, I don't know, I haven't been outside, but it's okay.
+
+Bashir Oyetunji: I don't… Hi, Professor, if you over.
+
+Ifeoma Ozodiegwu: Hello, Mr. Bashir, how are you?
+
+Bashir Oyetunji: I'm fine, are you?
+
+Ifeoma Ozodiegwu: Good, you are a guest of honor today, and we'.
+
+Bashir Oyetunji: I'm excited. Quick.
+
+Ifeoma Ozodiegwu: We're excited to share what we've been building with you, and hopefully you'll find it very useful.
+
+Bashir Oyetunji: No, that's fine, that's fine.
+
+Ifeoma Ozodiegwu: Okay.
+
+Bashir Oyetunji: So, maybe outside the meeting, beyond this, discussion, I will still bring some things on the table. If it's within the support, I can get personally from Liu.
+
+Ifeoma Ozodiegwu: Well, let's… let's have the conversation, and then we see… how things evolve, right? Like, I don't know what exactly you're requesting, so… I welcome the communication, and I will let you know.
+
+Bashir Oyetunji: No problem.
+
+Boateng, Bernard: Good morning, everyone. So, we'll allow for 5 more minutes, or 5 to 10 minutes, to allow more people to join before we start.
+
+Laurette Mhlanga: Hmm.
+
+Ifeoma Ozodiegwu: Bena, did you just say something? I think I may have missed what you said.
+
+Boateng, Bernard: Yes, I'm giving us a couple more minutes for people to join, then we'll get started.
+
+Ifeoma Ozodiegwu: Opa, how many minutes?
+
+Boateng, Bernard: 5? That was about 3 more minutes.
+
+Ifeoma Ozodiegwu: Okay.
+
+Laurette Mhlanga: How many more people are we expecting?
+
+Bashir Oyetunji: Okay, so, from my hand, I expected that the PM has the program manager, or, the deputy program manager to join. And also some, other, critical stakeholders. However. If it is not convenient for them, I will just share A kind of reminder now. So, but in the next couple of minutes, I think we can… we can start, actually.
+
+Boateng, Bernard: Okay. Great, so I think, we can start now. Good afternoon, Mr. Bashir and Mr. Samba. Good morning, to Lorette and Coffee Filmo. Thank you all for joining this meeting, this call. On this… Collaboration started with, an issue that we… we go from… Mr. Bashir about, data ingestion issue, for Quora State. And we've been working hard on it to fix the issues. And… I think we are ready now to show you, the new… Features we've also added, including the trend analysis that was mentioned, to be incorporated into ChatMRPT to help you guys, Use these findings to inform, reprioritization as well. So, the agenda today, will be straightforward. I would like to quickly demo, what we've done. And then, I'd love us to also partake in the activity, if everyone's got their laptops or their personal computers open, to follow, what I'll be doing, and also… ask questions that you might want to have on the Quora data that was given to us. And then, once that is done, we'll open the floor for questions, suggestions, and areas to further improve the tool. So, I'll start by sharing my screen, and then we'll get started. Before I do that, is there any… Question, at this stage.
+
+Bashir Oyetunji: So, for now, from our end, I don't think there's any question. Click on guard.
+
+Boateng, Bernard: Okay, great. I'm sure by now we all have a link to ChatMRPT. If we don't, I will share it with you, once we start the… But the interface is still the same, easy for… for us to follow, and since we enter it, we know exactly what, Chad MRPT can help us with.
+
+Ifeoma Ozodiegwu: Yeah, can you share the link on the chat bar?
+
+Boateng, Bernard: Okay. Okay… Great, so I've shared the link, with everyone. Please let me know if you can access it. If not, I'm also here to help. Troubleshoot any issues you might have. Great, so, So there's the interface. I will just get started and go straight to our issue. The first one that we had from you was the data ingestion issue for the Cora State data that was sent to us. So this is what we'll be using, today, for this call. So, as with, ChatMRPT, We first start with, testing data, that we have. We click the upload button. And then, we have two tabs here. If you have your complete data, which we are not using today, you go straight to the second tab, which is a half TPR data only. And then we'll choose… A file to upload. I'll… I'll… I'm uploading, the data that was sent to us, And then wait for ChatMRPT to ingest. The data, and then we'll start with, some questions that we might have, on it. So, I'm sure we're all familiar with, Mr. Bashir and your team, familiar with the data that was sent to us. We had several levels, And I tried MRPT has been able to detect these levels and link them to… Representing states. And local government areas, the world. And the facilities, the period, ranging from 2022 to 2025. And some of the testing, early testing rates in the data. Now, we can… Now, at this stage, we can now start the testing, test positivity rate workflow, or… we can… Query our data further. Now, I want us to… Start by asking some questions, For trend analysis, see what we can get, so far. Because that's of interest to us the most. So… I put… done some… questions that I had in mind, And immediately, as soon as I saw The period ranging from 2020 to 2025, I have this question in mind, and then I will ask. chat Emma Pretty, about this. Right, so now, what they did, here is… It'll… it takes in the data, And then… It calculates, test positive rates, we have, embedded in the calculations, And… it'll use… Some words, and then it'll tell us the words that are increasing, or the words that are They're also decreased in… Test positive rate. It also provides us with… Plots, in plotly. That we can also download. So, these are a line charts that shows the… some of the decrease and some of the increase, in the rates. And we can trace it according to the words. So it is something that, It's new, it's a new feature that we can get in chat MRPT, trend analysis. We also get another plot here. showing… The changes, in testing positivity rate data that we have. Now, we can ask more further questions. We've… we've set it up in a way that, Allows the user to ask any trend, question that you might have. Yes, please, go ahead.
+
+Ifeoma Ozodiegwu: What if they want to check The data quality before they start their trend analysis.
+
+Boateng, Bernard: Okay, yes, we can do that as well. We can query it and ask, what is… And let's see what happened. So… Now… This is where we, okay. Okay, so, when you ask a question like this, The tool will, say, look at the data, and then it'll… Go through it, and here, you notice that there's some now values, which are empty, rows and columns. And it noted about 17% of missing data, And some of these in, in these columns. It also… will give us a bit more information about the main TPR, and… the TPR ranges, And also… so it… You can ask it questions about your data quality. Here we've given it a bit of freeway, but… We can tighten it up to give a certain, how you would want your answer to come, look like, so… I hope I've answered your question, Ralph.
+
+Ifeoma Ozodiegwu: Yes, you have. Maybe one more interaction. Can you tell us the year? When we are seeing the most missingness.
+
+Boateng, Bernard: Okay.
+
+Ifeoma Ozodiegwu: The highest missingness.
+
+Boateng, Bernard: That's… Okay, let's see… Okay, so… Okay, so it is telling us it is 2020, with about 13.68%. Okay, I understand it's consistent, so I think next question, let's see, The missing is for each year. You can see if it's actually a consistent or not. Okay, so it's still… Saying that it's.
+
+Ifeoma Ozodiegwu: Yeah, so if you wanted more insights as to… to, for instance, map the missingness Could it give you that, or would that require additional adaptations from your end?
+
+Boateng, Bernard: I think… It'll require additional.
+
+Ifeoma Ozodiegwu: Okay.
+
+Boateng, Bernard: Where's initial thought. But…
+
+Ifeoma Ozodiegwu: But, yeah, this is… this is such a huge improvement. Mr. Bashir, do you have any questions you want to ask the two?
+
+Bashir Oyetunji: Yes, thank you very much, the Loyola team, so… I think this is an improvement compared to the previous interface that we were taking through. The… the last time we had the training. So, fortunately for me, myself, Sambu. And, Mr. Tony, I don't… I don't know if it's still online that we attended the… that training. So, the… the continuity is, is there. So, for the questions, so let me start with the… the data itself. So, the first thing is, is there any modification done on the data in form of, The… the way we share it, the… that data. the template, the way we… I mean, the template of that data, is there any modification, is there any adjustment, is there any addition to that data? So, if yes, can you let us know? Which means if we upload the same data from our end, we will not get the same result, except that data is reshaped. So let me start with Sidas.
+
+Boateng, Bernard: Okay, So, this is the same data that, was shared to us. We didn't make… we didn't make any modifications to that data. We just improved our system to be able to accept, Different kinds of data and different formats, so…
+
+Bashir Oyetunji: Okay, so… That, that is good to hear that. So, the platform accommodates, whatever Format of the data that, we try to upload. So, the second, one I would like to Also, ask is, Can we ask the Charter PROT To give us the… the best 14 words. Or, yes, the best footing was to be reprotized. In 2025, based on the… The trend of the data supply.
+
+Boateng, Bernard: Yes, I think we can do that. And I'd love us, at this stage, for us to, open our… if we have our laptops open to ask these questions, and any questions we have on our minds, and I think it will improve this session.
+
+Ifeoma Ozodiegwu: Mr. Bashir, do you want to share your screen and show us so that we can see you use it and ask any question you want?
+
+Bashir Oyetunji: Okay, so, let me try to do that. I think Loretta's hand is all.
+
+Boateng, Bernard: Hi, Laurie, please go ahead.
+
+Laurette Mhlanga: Yeah, I have a question about the difference graph that you showed. So, when you say difference here, the other one. What are we referring to? which… I think you had 5 time points, so I'm trying to figure out what is the difference. Is it the last two? How did you calculate the difference, actually?
+
+Boateng, Bernard: Okay, so, here, I just gave, Chad MRPT, Access to, so it's a system prompt here. For it to have access to, to calculate trend analysis, so… This decision is… is on… On the tool, is a system, prompt fix that I did, given the… OpenAI, Brain, access to… Do a trend analysis, so… If we wanted to… Perhaps focus on a specific, Thread analysis technique that we have in mind, then you can certainly do that also.
+
+Laurette Mhlanga: So, what I don't understand is what we mean by difference, then.
+
+Boateng, Bernard: Difference in terms of…
+
+Laurette Mhlanga: Let me see, what is the heading of this plot? Trend slope, oh, it's the slope, but it's the slope to what is it? Okay. Did it create a function through the several points, and then found the… the gradient, calculated the gradient, or is it between two extreme points, like 2020 and 25? What did it do? That's what I'm asking.
+
+Boateng, Bernard: Oh.
+
+Laurette Mhlanga: The myth behind the difference calculation that it's presenting for it to be a minus 5.
+
+Boateng, Bernard: Okay, yeah, I think we can… we can ask that. But I think this… Ask it, to explain. How it calculated it. Could you repeat a question?
+
+Ifeoma Ozodiegwu: It's just the math behind the trend slope calculation. Mr. Bashir, how is it coming along for you?
+
+Bashir Oyetunji: Yes, I'm just trying to upload the data, currently. So, once I'm done, I will also share my… My screen. And, just to also ask on the, the uploading platform does, upload the data. There are two options where we have a complete data and only TPR. So, by complete data, what do we mean? So that if we are to use that option, we know what we are supplying the chat PR to.
+
+Boateng, Bernard: Could you repeat the question?
+
+Bashir Oyetunji: Okay, at the point of uploading the data, there are two options. where we said, I mean, I have a complete data, the second option is, I have TPR data only. So, the first option… completed data, so what's, what do we mean by that completed data? In case we are to use that option, we know the type of data we are to supply.
+
+Boateng, Bernard: Okay, definitely. So… Here, if you have complete data, we mean that you have, Your testing data plus your environmental variables. As well as the shapefile of the area that you're working with. So if you have… All those in hand, then you can use this tab. And… that takes additional work that you have to go through to get the shapefile, plus extract environmental variables for the area we're working with. So we made it easier for users to only upload the testing data. So we have the shapefiles and the environmental variables. In a database already, in our cloud service. And… We set it up in a way that it'll… When you're going through the workflows, You get the… Relevant environmental variables added to your testing data, as well as the shapefile of the state that you're working with. So it saves you, a lot of time looking for shapefile and environmental variables, so that's the difference that I talked about.
+
+Bashir Oyetunji: Okay, so thank you for the clarification. Let me share my… my screen. I think… I'm having uploading issues. Are you giving me access to share my screen?
+
+Boateng, Bernard: Oh, okay, me. Indeed it.
+
+Ifeoma Ozodiegwu: You should be able to share. Okay, there you go.
+
+Bashir Oyetunji: Yes, yes, I'm able to… to share. So, What I did was to, select the data, so the data that was shared was named Quara TR Data 2020-2025. And it was shared on the 2nd of March. 226. So when I click on it and I say, upload, So it is what I've been, experiencing. It will say upload, then it will stop.
+
+Boateng, Bernard: Okay…
+
+Ifeoma Ozodiegwu: Is there someone else on your team that can try, so that we see if it's a network issue, or… If it's a two issue.
+
+Bashir Oyetunji: Okay, so I think, sambo Control… Adam can also try. You were all in copy of that, data at the point of sharing it with the Loyola team. So, I think Sambo is having a network issue.
+
+Adamu Muhammed Nma: I'm holding… I'm also trying to… try it… I'm trying to actually, as soon as it also upload, then I'll get in touch.
+
+Bashir Oyetunji: Okay, thank you very much. So, alternatively, the one you uploaded, you can also share it. So, let me also try that particular one. If… The situation will be the same or different.
+
+Boateng, Bernard: Oh, okay.
+
+Laurette Mhlanga: Another quick one also. Where is this data stored? Like, the one that you're trying to upload, Mr. Prasher?
+
+Bashir Oyetunji: Sorry, I didn't get that.
+
+Laurette Mhlanga: Where's the data stored?
+
+Bashir Oyetunji: It is stored on my sister.
+
+Laurette Mhlanga: In your downloads or documents or something.
+
+Bashir Oyetunji: Yes, I have a folder. I name, Loyola… Let me share it. So, this is my desktop. And I have a father named Loyola.
+
+Laurette Mhlanga: Okay.
+
+Bashir Oyetunji: And I have this data,
+
+Laurette Mhlanga: another experiment. Can we try the Quora TPR data, and let's see if it will work whilst we're waiting for the other guys?
+
+Bashir Oyetunji: Oops.
+
+Laurette Mhlanga: But I think Ivan.
+
+Bashir Oyetunji: No, this, this was the nature data,
+
+Laurette Mhlanga: The one that we did at that point.
+
+Bashir Oyetunji: We literally…
+
+Laurette Mhlanga: Wag for this one. So it's a… it's the platform, because I think I've experienced this before, Bernard, and you had a solution for us. This looks like the same issue that Chris and I were having at some point. But I don't remember what she said for she'll do.
+
+Boateng, Bernard: Okay, look, can we, try and… Refresh, let's see… We're gonna… Okay, let's… can we sign out and sign in again to the platform? Let's see if it works. So there's…
+
+Ifeoma Ozodiegwu: I'm also noticing that the link you're using… Doesn't correspond to the same link that… I have… I'm not… I don't know what that is. Due to the conversation ID being slightly different. There… is there a way to… it did work… is it… is it… it seems like it just worked.
+
+Bashir Oyetunji: Yes, this is, the previous data that, the clean data shared by the Loyola.
+
+Ifeoma Ozodiegwu: Right. So now try the pre… the one that you shared with us, if the platform is not working.
+
+Laurette Mhlanga: I'll assume it's working because it's…
+
+Bashir Oyetunji: So, fair to upload file.
+
+Ifeoma Ozodiegwu: Would it make sense for you to close your entire browser, start up a new browser, just to restart your system? Because I think sometimes it remembers what's happened in the past, and it doesn't update, right? Bernard, I don't know.
+
+Boateng, Bernard: Yeah, I think if we can, sign in and sign, sign out and sign in again, Let's see if we'll… a flat.
+
+Ifeoma Ozodiegwu: How does he sign in and sign out? You'd have to show him how to do that.
+
+Boateng, Bernard: Okay, let me… Okay, so, there's a button, here, that allows you to… Sign out, then sign in again.
+
+Bashir Oyetunji: Where is that button?
+
+Boateng, Bernard: It was… Let me quickly show. Okay, so the button is on our left-hand side. At the bottom.
+
+Bashir Oyetunji: This… you mean this arrow to the right?
+
+Boateng, Bernard: Let me see if you're sharing your screen. Are you… could you please share your screen so I can direct you?
+
+Bashir Oyetunji: Okay.
+
+Boateng, Bernard: Okay, could you go further down? You see where you're BA?
+
+Bashir Oyetunji: Okay.
+
+Boateng, Bernard: Is it BA? Yes, could you click the drop-down? Yes.
+
+Bashir Oyetunji: Okay.
+
+Boateng, Bernard: And let's sign in again, we'll see.
+
+Ifeoma Ozodiegwu: Click on Continue with Google.
+
+Bashir Oyetunji: Okay.
+
+Ifeoma Ozodiegwu: Bless you. If you… is… Yeah, if you share your screen, we can… if you reshare your screen so we can follow along, Mr. Bashir. We want to make sure you have everything.
+
+Bashir Oyetunji: So I'll just sign in back. Then I go back to upload. Then I have TPR data only, which is fine. this data. Upload analysis.
+
+Ifeoma Ozodiegwu: No.
+
+Bashir Oyetunji: table to upload.
+
+Laurette Mhlanga: Is anyone…
+
+Boateng, Bernard: Anyone in attendance, have you… anyone in attendance tried it? Getting the same issues?
+
+Bashir Oyetunji: Okay, so, other people, I've used credits. Mr. Sambo, Mr. Haddam?
+
+Adamu Muhammed Nma: Yes, I'm also trying to upload, and then I upload on AZ data, and also asking to upload the zip file, which I have done, and it's still loading. So I'm trying to…
+
+Ifeoma Ozodiegwu: Zip file. You're not supposed to upload any zip files.
+
+Bashir Oyetunji: Can you share your screen?
+
+Ifeoma Ozodiegwu: Yeah.
+
+Bashir Oyetunji: So, for others, I think the data we are trying to upload is under the military. Every one of us were in copy, so you can also download the data and try to upload. The link has been shared on the… on the chart for this meeting. That's the link to chat if you have to… I'm an MRPT, right?
+
+Ifeoma Ozodiegwu: It seems like that this is a location issue, because I tried it here, and it's working for me.
+
+Boateng, Bernard: Hmm.
+
+Ifeoma Ozodiegwu: Yeah.
+
+Bashir Oyetunji: Really?
+
+Ifeoma Ozodiegwu: Yes, I can share my own screen.
+
+Bashir Oyetunji: I think, share your screen, and, you are using the same data.
+
+Ifeoma Ozodiegwu: The exact same data, let me share.
+
+Bashir Oyetunji: The one I shared via email, or the one I shared with you by Bono?
+
+Ifeoma Ozodiegwu: No, I'm sharing the one… I'm using the one you shared on the email. So, you see I've uploaded it. Let me try and upload it again, so you can see me do that. So, if I start a new chat, and then upload, choose… So, the one you shared in the email, I have it in my downloads folder. And so I'm going to upload that.
+
+Laurette Mhlanga: Big question. So, I have… I think it's something to do with the data that Mr. Bashar has on the name of that file. Is it possible that it might be the issue? Because it's Quara TPR data 2020 to 2025, then there's a TDAR, then 2026, yada yada, XLS?
+
+Ifeoma Ozodiegwu: Breaking the founding, it's breaking the thing.
+
+Laurette Mhlanga: Yeah, to the…
+
+Ifeoma Ozodiegwu: Mine doesn't have that file name, so maybe… let me… let me just reply to that email, and send… and forward you the email, Mr. Bashir, so you download your data that you sent to us again. And try, because the way you've named it might be a problem, and maybe you didn't account for them renaming the datasets in a specific way, Bernard?
+
+Boateng, Bernard: I don't think that should be an issue.
+
+Laurette Mhlanga: But is it another exception.
+
+Bashir Oyetunji: I also observed that the way it was named, that's what you just tried to upload it now. I mean, Professorioma. So, the same name.
+
+Ifeoma Ozodiegwu: Yes, it's the same name as what you have named… you named it when you sent it to us. It was… something is missing.
+
+Laurette Mhlanga: Oh, no, but when you look.
+
+Boateng, Bernard: the same.
+
+Laurette Mhlanga: Just a second, sorry to cut you off, I see a TDA in this dataset. On the other side, it's not there.
+
+Ifeoma Ozodiegwu: That's what I'm… I'm also… I'm responding to that. I'm saying that he named his slightly different from the… what he sent to us. And that… sometimes those new symbols can become a problem, right? Is that what you're saying, Lorette?
+
+Laurette Mhlanga: No, not really. I was now saying, looking at how it's writing system message, the tilde seems to be there. what I thought might be the issue.
+
+Ifeoma Ozodiegwu: Well, let me just respond to that email, and send back… the file to Mr. Bashir, so he can download it directly from the email and try again.
+
+Bashir Oyetunji: Okay.
+
+Ifeoma Ozodiegwu: Because I've tried uploading it 3 times, and it's all… it worked each time for me. So I'm not sure. What's going on? Vena, do you have any ideas?
+
+Boateng, Bernard: So I was basically researching, Not sure if it's internet, speed or anything like that, so I just want to confirm if, any of… Anyone in attendance has tried it and is having the same issue. I think that will give us a better idea of what… Patient might be.
+
+Ifeoma Ozodiegwu: Okay, so I just sent Mr. Bashir the same dataset he sent to me. Yeah, so if you download the second one… That's the one I received. Try that and see. But I do remember when we were doing the state training, there was this lady that had… kept having the same problem of trying to upload. But it wasn't… working for her.
+
+Laurette Mhlanga: Also, the other question, are you tethering, like, are you connected? Do you have a hotspot? Or you connect it directly to a modem of some sort?
+
+Bashir Oyetunji: Reserve for me.
+
+Ifeoma Ozodiegwu: Yes.
+
+Bashir Oyetunji: Okay, so I have, A 5G network I'm using, which is the router.
+
+Laurette Mhlanga: Oh, okay. Say.
+
+Ifeoma Ozodiegwu: Hmm. But the thing that is surprising is that the clean data set is uploading, but not the… One that he sent to us.
+
+Boateng, Bernard: Yeah…
+
+Laurette Mhlanga: Myself, when I encountered that problem, it was the way the file… it was trying to download a file from Dropbox, and Dropbox wasn't syncing well, so it kept on failing to upload. That's why my initial question was, where is the file served?
+
+Ifeoma Ozodiegwu: Hmm. Ms. Sebastia, did you get my email?
+
+Bashir Oyetunji: Yes, I've got your email, I've downloaded the data, I'm trying to…
+
+Sambo Abdullateef: Hello, please, can you share the link to the Sargentia MRPT?
+
+Boateng, Bernard: Okay, I'll share it in the chat again. Should I also put the data in the chat, or…
+
+Ifeoma Ozodiegwu: Yeah, if you can put the data on the chat so they can have it, that would be nice.
+
+Boateng, Bernard: Okay. Is that common share. Okay, it's not allowing me to share the data.
+
+Ifeoma Ozodiegwu: It's likely that the data is too large to be shared. But let me do reply all to that email and see. But I already did that, actually. I already replied all and sent it. Let me cookie again. Mr. Bashir, any updates on your end?
+
+Bashir Oyetunji: Yes, it's still downloading, I think.
+
+Ifeoma Ozodiegwu: Oh, so it's just… it's still downloading. That's a sign that your internet is slow. Yeah, because it's… it takes me, like, 2 seconds to download here. Yeah, yeah. How do we optimize this for low bandwidth environments? That's one of the things we also want to do, Bernard.
+
+Boateng, Bernard: Okay, okay, I'm thinking if that is the case, perhaps I can increase, timeouts, because normally, standard timeouts are, like. 30 seconds, so if I.
+
+Ifeoma Ozodiegwu: So it's probably timing out that when it can, it's taking that much time to upload. Can you increase the timeout to 1 minute? Is that something that can be automatic?
+
+Boateng, Bernard: Yeah, let me quickly see if I can do that and deploy.
+
+Ifeoma Ozodiegwu: Okay.
+
+Bashir Oyetunji: Okay, so while we are waiting for… It's a feedback, so I've downloaded it, I've tried it, but it's still decent.
+
+Ifeoma Ozodiegwu: Yeah, it seems like my… at least my perception is that your internet is a bit slow, and the system, the way it's set up is, if it doesn't get to the data uploaded in 30 seconds, it times out. So he's about to fix or extend the timeout time, so that it can take a longer time For your data to be uploaded.
+
+Bashir Oyetunji: That's fun.
+
+Boateng, Bernard: Yeah, I'd really like to, to, to find out if anyone in attendance is also facing the same issues, please. So, it'll.
+
+Ifeoma Ozodiegwu: I mean? Mr. Damu, will you share your screen so we can try another system?
+
+Adamu Muhammed Nma: Okay. I need to share my screen.
+
+Ifeoma Ozodiegwu: Are you having trouble sharing your screen, Mr. Adam?
+
+Adamu Muhammed Nma: No.
+
+Ifeoma Ozodiegwu: We don't see your screen. At all.
+
+Adamu Muhammed Nma: So, can you confirm if you can see my screen?
+
+Ifeoma Ozodiegwu: Yes, we see it now. So, if you click on Upload. But you also still have the same file with the tilde in it. If that's the tool, okay, so click Upload.
+
+Adamu Muhammed Nma: So, upload files.
+
+Ifeoma Ozodiegwu: Yeah.
+
+Adamu Muhammed Nma: Oh, dang.
+
+Ifeoma Ozodiegwu: So, Vena, do you see that… Did you extend the timeout time?
+
+Boateng, Bernard: I'm doing that.
+
+Ifeoma Ozodiegwu: Okay So, in the interest of time, because we have been here for an hour, and if you're still having timeout issues, I think we will need to reconvene Bernard will try and fix the timeout, issue, because I think he's optimized it for high-speed internet. But not for low-speed internet. Do you need information on the internet speed that they are using, Bernard?
+
+Boateng, Bernard: Yes, that will help. I think I can get it online, but if you guys can tell me…
+
+Ifeoma Ozodiegwu: How would you get it online?
+
+Boateng, Bernard: I can… Search and get a standard, Speed in certain areas in Nigeria.
+
+Ifeoma Ozodiegwu: Is there a way for you to get it now, so that they can just open up their internet connection so you can see?
+
+Boateng, Bernard: How would I even get it? .
+
+Ifeoma Ozodiegwu: Sometimes there's a website that can read your internet speed. Off of your computer. Right? Internet speeds… Tests. I see. Now, they're all requiring you to sign up. There used to be this one you can just… Oh, go… Speed test… Mr. Damu, I'm going to send you a link. If you go to this link. It should hopefully read the internet speed so that we can see it right now.
+
+Adamu Muhammed Nma: Hmm?
+
+Ifeoma Ozodiegwu: And if you can share your screen, we need the number that it would give us. So that we can see. Even the speed test is taking so much time down. This internet is… is… really troublesome. No, you don't need to re… it's common, I can see that it's common. But it… even that is taking so much time, though. Hmm. So you don't even have enough internet to… enough bandwidth to read your speed. How are we going to do this? But I think, Bernard, you're seeing what the problem is, or what the problems are right now. Just to use the experiment.
+
+Boateng, Bernard: Nice. Yes, yes, whoops.
+
+Ifeoma Ozodiegwu: We need something that is as slow as WhatsApp at this point.
+
+Boateng, Bernard: Okay.
+
+Ifeoma Ozodiegwu: Because even the bandwidth can be read. Yeah. That's a problem. Thank you, Mr. Adamo. It doesn't seem like it's working for you at all. It's just signaling that maybe something is wrong with your internet. Hmm. I wonder, let's try… this is another site, it doesn't have all the ads. Maybe try this one, Mr. Damoth, thefast.com. That one doesn't have ads in it, so that one might be faster. I put the link in the chat. It's called Fast.com. Are you seeing the number, Bennett?
+
+Boateng, Bernard: Yes I am.
+
+Ifeoma Ozodiegwu: Okay. Because the standard internet speed here in America is 180 megabytes. If you do show more information, can you please just click on show more information? He has less than half of what we have.
+
+Boateng, Bernard: Good.
+
+Ifeoma Ozodiegwu: That's a problem.
+
+Boateng, Bernard: Yeah, let me… Write down these numbers.
+
+Ifeoma Ozodiegwu: Okay, I just… I took a picture. I can send it to you.
+
+Boateng, Bernard: Okay, thank you.
+
+Ifeoma Ozodiegwu: Thank you so much, Mr. Damu, this is helpful. I think we need to reconfigure our system so that it can work with the current internet speed in Ibadon. Because I think that's where you're getting your server from. Alright.
+
+Adamu Muhammed Nma: Thank you, okay.
+
+Ifeoma Ozodiegwu: all work for us.
+
+Boateng, Bernard: Thank you, thank you everyone for… Partaking in this.
+
+Sambo Abdullateef: And it's cold. Hmm. Thank you.
+
+Boateng, Bernard: We'll, work on it, and then we'll reconvene, sometime, soon.
+
+Ifeoma Ozodiegwu: Alright, bye-bye, everyone.
+
+Boateng, Bernard: Bye.
+
+Sambo Abdullateef: Yeah, right?
+
+Bashir Oyetunji: Thank you. Bye-bye. Thank you.
+
+Laurette Mhlanga: Peace, bye.
+
+Ifeoma Ozodiegwu: last year.
+
+Adamu Muhammed Nma: He fucking is fuckin'.

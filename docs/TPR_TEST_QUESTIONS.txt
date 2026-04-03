@@ -1,0 +1,132 @@
+================================================================================
+                    ChatMRPT TPR Workflow — Conversational Test Suite
+                    Dataset: Kwara TPR data 2020–2025
+================================================================================
+
+
+--------------------------------------------------------------------------------
+STAGE 1: RIGHT AFTER UPLOAD (Before TPR Workflow)
+--------------------------------------------------------------------------------
+Goal: Verify the agent can actually read and reason about the Kwara data,
+      not just recite column names.
+
+--- Data Access ---
+1.  "How many unique wards are in this dataset?"
+2.  "Which LGA has the most health facilities?"
+3.  "What time period does this data cover? Show me the earliest and latest records."
+4.  "What percentage of rows have missing values in the RDT columns?"
+
+--- Column Interpretation (tests hedging fix) ---
+5.  "What does `organisationunit0me` mean?"
+    → It's a typo for `organisationunitname`. Agent should catch this confidently.
+6.  "Explain every column in this dataset to me"
+
+--- Baseline Memory Anchor (NOTE THE ANSWER — you'll reference it later) ---
+7.  "How many primary facilities are in Kwara?"
+    ★ Write down the number the agent gives you.
+
+
+--------------------------------------------------------------------------------
+STAGE 2: DURING WORKFLOW — FACILITY SELECTION STEP
+--------------------------------------------------------------------------------
+Goal: Test detours mid-flow. Ask these AFTER selecting the state but BEFORE
+      picking primary/secondary/tertiary.
+
+--- Off-topic Detours ---
+8.  "Wait, what's the difference between RDT and microscopy?"
+    → Pure knowledge question. Should answer fully then return to facility prompt.
+
+9.  "Actually before I choose, show me which facility level has the highest
+     positivity rate in Kwara"
+    → Requires actual data access mid-workflow.
+
+10. "How many secondary facilities are in this data?"
+    → Data question specific to the decision at hand.
+
+--- Memory Test ---
+11. "You told me earlier there were X primary facilities — is that the same
+     number you're showing me now?"
+    → Replace X with the number from Question 7. Tests cross-stage memory.
+
+--- Workflow Disruption ---
+12. "Actually forget the workflow for a second. Give me a quick summary of
+     the whole dataset"
+    → Full detour. After the agent responds, type "primary" to return.
+    → Does it pick up the workflow where it left off?
+
+
+--------------------------------------------------------------------------------
+STAGE 3: DURING WORKFLOW — AGE GROUP SELECTION STEP
+--------------------------------------------------------------------------------
+Goal: Test data access and micro-detours at the final workflow decision point.
+
+13. "Before I choose, what age group has the worst positivity rate in Kwara
+     primary facilities?"
+    → Should answer from data, then prompt age group selection.
+
+14. "What does o5 mean again?"
+    → Simple knowledge question. Tests graceful micro-detour.
+
+15. "Can you show me a bar chart comparing tests across age groups?"
+    → Visualization request mid-workflow.
+
+
+--------------------------------------------------------------------------------
+STAGE 4: AFTER TPR WORKFLOW COMPLETES
+--------------------------------------------------------------------------------
+Goal: Test memory, combination switching, and deep data analysis capability.
+
+--- Memory and Reference ---
+16. "Earlier you said Kwara had X cases per 1,000 population — which wards
+     are driving that?"
+    → Replace X with the burden figure from the workflow result.
+
+17. "We chose primary facilities and u5. What would the number look like if
+     we had chosen all facilities instead?"
+    → Should trigger combination switch (tests precompute feature).
+
+18. "Compare all combinations"
+    → Tests background precompute. Should show a formatted table of all
+      facility/age group combinations.
+
+--- Deep Data Questions ---
+19. "Which ward has the highest malaria burden? And what LGA is it in?"
+20. "Show me the top 10 worst wards as a table"
+21. "Is there a pattern between facility level and positivity rate?"
+
+--- Stress Test ---
+22. "I want to start over with secondary facilities and pregnant women.
+     Walk me through it"
+    → Does it restart the workflow cleanly, or does it break?
+
+
+--------------------------------------------------------------------------------
+WHAT EACH TEST PROVES
+--------------------------------------------------------------------------------
+
+Questions 1–4  : Agent actually reads the data (not just metadata)
+Questions 5–6  : Column interpretation confidence (no hedging language)
+Question  7    : Memory anchor for later cross-stage reference
+Questions 8–10 : Mid-workflow detour + graceful return
+Question  11   : Cross-stage memory (Stage 1 → Stage 2)
+Question  12   : Full detour + workflow resume
+Questions 13–15: Data access during active workflow steps
+Questions 16–17: Long-range memory + combination switching
+Question  18   : Background precompute (fixed today)
+Questions 19–21: Post-workflow deep data analysis
+Question  22   : Workflow restart / clean state handling
+
+
+--------------------------------------------------------------------------------
+HOW TO REPORT FAILURES
+--------------------------------------------------------------------------------
+For each failure, note:
+  - Question number
+  - What you typed exactly
+  - What the agent responded
+  - What you expected instead
+
+Share the browser console log (contxt.md) or a screenshot for any unexpected
+errors or blank responses.
+
+================================================================================

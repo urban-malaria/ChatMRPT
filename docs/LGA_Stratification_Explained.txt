@@ -1,0 +1,37 @@
+LGA STRATIFICATION IN CHATMRPT
+Users can switch between viewing maps at Ward level or LGA level.
+They can also highlight specific LGAs they want to focus on.
+
+
+HOW IT WORKS
+1. User creates a map (e.g., "Show TPR distribution")
+2. Map appears with controls at the top:
+
+   [Ward] [LGA]  |  Focus LGA: [dropdown]  [Apply] [Clear]
+
+3. Click [LGA] --> wards get grouped into LGAs
+4. Select LGAs from dropdown --> those LGAs get highlighted, others fade out
+
+
+CODE LOGIC (SIMPLIFIED)
+-----------------------
+When user clicks [LGA]:
+
+1. System groups all wards by their LGACode
+2. Calculates the average value for each LGA
+3. Fetches LGA boundary shapes from a reference file (nga_lga_boundaries.gpkg)
+4. Draws the map using LGA boundaries instead of ward boundaries
+
+When user selects specific LGAs:
+
+1. System marks selected LGAs as "highlighted"
+2. Selected LGAs render at full color/opacity
+3. Other LGAs render faded/greyed out
+
+
+KEY FILES
+- app/utils/geospatial_levels.py    --> groups wards into LGAs
+- app/utils/lga_boundaries.py       --> gets LGA shapes from reference file
+- app/utils/visualization_controls.py --> creates the [Ward][LGA] buttons
+- app/tools/variable_distribution.py  --> builds the actual map
+

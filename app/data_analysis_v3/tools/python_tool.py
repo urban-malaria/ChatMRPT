@@ -79,7 +79,7 @@ def analyze_data(
     # Fallback: If no DataFrame provided via input_data, try UnifiedDataState by session_id
     if 'df' not in current_data and session_id:
         try:
-            from app.services.unified_data_state import get_data_state
+            from app.core.unified_data_state import get_data_state
             uds = get_data_state(session_id)
             if uds and uds.current_data is not None:
                 current_data['df'] = uds.current_data

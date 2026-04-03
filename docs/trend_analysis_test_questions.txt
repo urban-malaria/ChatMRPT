@@ -1,0 +1,32 @@
+ChatMRPT - Trend Analysis Questions for Kwara TPR Data (2020-2025)
+===================================================================
+
+Upload your dataset, then try these questions to explore TPR trends
+across Kwara State to inform ITN campaign reprioritization.
+
+
+OVERALL TRENDS
+1. What are the TPR trends from 2020 to 2025?
+2. How has malaria testing changed over time across LGAs?
+3. Is malaria positivity increasing or decreasing across Kwara State?
+
+IDENTIFYING PRIORITY AREAS
+4. Which LGAs have gotten worse over time?
+5. Which wards are getting worse over time?
+6. Are any areas seeing increasing malaria positivity rates?
+7. Which LGAs have the highest TPR in the most recent year?
+
+COMPARATIVE ANALYSIS
+8. Compare how different LGAs have changed over the years
+9. Which LGAs improved the most and which improved the least?
+10. How does TPR differ between urban and rural LGAs?
+
+ITN CAMPAIGN PLANNING
+11. Based on the trends, which LGAs should be prioritized for ITN distribution?
+12. Which areas have consistently high TPR across all years?
+13. Are there any LGAs where TPR is rising despite interventions?
+
+DEEP DIVE
+14. Break down the TPR trends by age group (under 5 vs over 5)
+15. How do facility-level trends compare across LGAs?
+16. What is the year-over-year change in TPR for each LGA?

@@ -1,0 +1,35 @@
+Loyola Team Meeting - Demo Questions (Kwara TPR 2020-2025)
+============================================================
+
+DEMO FLOW: Upload data, then ask these in order.
+
+
+PART 1: SET THE SCENE (you ask these)
+--------------------------------------
+1. What are the TPR trends from 2020 to 2025?
+2. Is malaria positivity increasing or decreasing across Kwara State?
+3. Which LGAs have gotten worse over time?
+
+
+PART 2: DIG DEEPER (you ask these)
+------------------------------------
+4. Which LGAs improved the most and which improved the least?
+5. How do facility-level trends compare across LGAs?
+6. What is the year-over-year change in TPR for each LGA?
+
+
+PART 3: OPEN FLOOR (invite Bashir and team)
+---------------------------------------------
+Let them ask their own questions. If something fails,
+rephrase and try again.
+
+Suggested prompts to encourage participation:
+- "Bashir, is there a specific LGA you want to look at?"
+- "Are there any wards you've been concerned about?"
+- "Any questions about a particular year or time period?"
+
+
+QUESTIONS TO AVOID (known issues)
+----------------------------------
+- "How has malaria testing changed over time across LGAs?" (plotting error)
+- "Break down the TPR trends by age group" (insufficient data points)

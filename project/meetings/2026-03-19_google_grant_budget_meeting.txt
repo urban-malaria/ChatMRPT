@@ -1,0 +1,177 @@
+Google AI for Government Innovation Grant - Budget Meeting
+===========================================================
+Date: March 19, 2026 (3:00 PM)
+Attendees: Ifeoma (PI), Laurette, Eniola, Bernard
+Absent: Letitia (impromptu meeting conflict)
+Recording: 19 Mar, 14.59_.m4a
+
+
+MEETING SUMMARY
+===============
+
+1. PROPOSAL REVIEW
+------------------
+Ifeoma walked the team through the proposed methods/tech stack:
+- Move away from composite scoring to advanced ML models
+- Use Google Gemini instead of GPT-4o for conversational AI
+- GEE for real-time satellite data extraction
+- GBM and XGBoost for fine-scale malaria risk modeling
+- MaxEnt and BioMod2 for Anopheles habitat suitability
+- LangChain and FAISS for RAG (retrieval-augmented generation)
+- PuLP and Google OR-Tools for building-level allocation optimization
+- TensorFlow CNNs for settlement classification
+- React Native for offline-capable mobile deployment
+- FastAPI on GCP
+
+Ifeoma's vision: clinical malaria data + field study data + satellite
+data -> ML risk model -> fine-scale maps. Composite scoring remains as
+a parallel output for government validation against the ML maps.
+
+Integer programming optimization: optimize net allocation at building
+level given budget constraints and household data from campaigns.
+
+RAG: train on Nigerian malaria research + policy documents for locally
+relevant LLM responses.
+
+Eniola asked about clarity on planned extensions in proposal (100-word
+limit is tight). Ifeoma confirmed the methodology section needs more
+space than available.
+
+Ifeoma noted DSN Nigeria just released their own DHIS2 chatbot
+(released March 18, 2026) - space is getting competitive.
+
+
+2. TECH STACK - BERNARD'S INPUT REQUESTED
+------------------------------------------
+Ifeoma asked Bernard to:
+- Review the proposed tech stack and comment on feasibility
+- Research PuLP, FAISS, Google OR-Tools
+- Evaluate React Native for offline mobile deployment
+- Research cost of Gemini API, GCP services, and other tools
+- Provide cost estimates for the technology budget line item
+- Note: Google's Geospatial Reasoning is built on LangChain,
+  deployed with Vertex AI (per Ifeoma's research)
+
+Bernard's initial reactions:
+- Gemini for conversational AI: agrees, makes sense
+- GEE integration: agrees, can incorporate for real-time raster pulling
+- GBM/XGBoost for risk modeling: good choices, could add more
+- RAG: LangChain may be outdated, will research alternatives
+- FAISS: hadn't heard of it (Facebook AI Similarity Search - local
+  vector DB for domain-specific LLM retrieval)
+- PuLP: hadn't heard of it, will research
+- React/FastAPI: already in current stack base, good
+- AWS to GCP migration: needed if Google provides credits
+- Noted: most of these technologies already have a base in current tool
+
+
+3. BUDGET DISCUSSION
+--------------------
+Target: Under $3M total, ideally around $2M-$2.5M
+Max $1M for personnel
+Budget period: 3 years with 3% annual salary increase
+Fringe rate: 17.5% (Loyola employees only)
+Indirect costs: 12%
+
+PERSONNEL (final tentative numbers):
+
+Role                          | Person       | Salary/yr | LOE  | Fringe
+------------------------------|--------------|-----------|------|-------
+Principal Investigator        | Ifeoma       | ~$149K    | 30%  | Yes (17.5%)
+Sr Data Scientist/Epi        | Laurette     | $90K      | 100% | Yes (17.5%)
+Jr Software Eng/Data Sci     | Bernard      | $28K      | 63%  | Yes (17.5%)
+Program Manager               | Eniola       | $80K      | 100% | No (consultant)
+User Research & Learning      | Letitia      | $50K      | 50%  | No (consultant)
+M&E Person (local Nigeria)    | TBD          | $48K/yr   | -    | No
+Mid-level Software Engineer   | TBD          | $75K      | ~25% | No (consultant)
+Data Scientist (consultant)   | TBD          | $75K      | ~50% | No (consultant)
+NASDA Rep 1                   | TBD          | $50K      | -    | No
+NASDA Rep 2                   | TBD          | $50K      | -    | No
+NASDA Rep 3                   | TBD          | $50K      | -    | No
+NMEP/SMEP User Testing        | Various      | $5K/yr    | -    | No
+NMEP/SMEP Coordination        | Various      | $5K/yr    | -    | No
+
+Notes:
+- Bernard's hourly rate proposed increase from $25/hr to $40/hr
+- Bernard limited to 19 hrs/week (student), 12 hrs currently for Ifeoma
+- Senior software engineer dropped to mid-level to save budget
+- Bernard suggested a contact in UK who might take $50K
+- Laurette absorbed senior data scientist role to save budget
+- NASDA (Nigeria Space Agency) reps for geospatial processing,
+  data collection, and field validation
+
+OTHER COSTS:
+
+Category                      | Amount/yr   | Notes
+------------------------------|-------------|------
+Travel (domestic Nigeria)     | $50K/yr     | ~4 trips/month for Eniola, flights ~$300-400 RT
+Travel (international)        | $10K/yr     | Ifeoma travel to Nigeria
+Stakeholder Workshops         | $40K/yr     | State-level workshops, ~$30K each
+Technology & Software         | $50K/yr     | Bernard to break down subcategories
+Cloud Services                | incl above  | AWS currently $10K/yr, will increase
+Indirect Costs (Loyola)       | 12%         | Applied to total
+
+Running total at end of meeting: ~$2.3M-$2.4M
+
+
+4. ACTION ITEMS
+---------------
+[ ] BERNARD: Research proposed tech stack costs and provide detailed
+    breakdown for the $50K/yr technology budget line item
+    - Gemini API costs
+    - GCP cloud services (replacing AWS)
+    - FAISS, PuLP, Google OR-Tools feasibility
+    - React Native for mobile deployment
+    - LangChain alternatives for RAG
+    - Any other subscriptions/tools needed
+
+[ ] BERNARD: Review proposal in depth and add comments to the
+    Google doc on innovative use of technology section
+
+[ ] BERNARD: Develop a technical architecture diagram for the
+    proposed Google grant tech stack (requested by Ifeoma)
+    Reference links from Ifeoma:
+    - https://developers.google.com/maps/documentation/roads-management-insights
+    - https://www.google.org/impact-challenges/ai-government-innovation/
+    - https://cloud.google.com/gemini-enterprise?e=48754805
+    - https://ai.google/earth-ai/
+    - https://research.google/blog/geospatial-reasoning-unlocking-insights-with-generative-ai-and-multiple-foundation-models/
+
+[ ] ENIOLA: Break down budget into Google's categories:
+    - Personnel & Staffing
+    - Technology Development
+    - Infrastructure
+    - Partnership & Engagement
+    - M&E
+    - Indirect Costs
+    Send completed Excel to Ifeoma
+
+[ ] IFEOMA: Talk to Letitia about her role (user research + learning,
+    50% effort as consultant)
+
+[ ] IFEOMA: Share Google Geospatial Reasoning link with Bernard
+
+[ ] TEAM: Submit budget to Molly (deadline: tomorrow March 20)
+
+
+5. KEY DECISIONS
+----------------
+- Tech stack will align with Google ecosystem (Gemini over GPT-4o,
+  GCP over AWS, Vertex AI) since applying to Google.org
+- No separate senior data scientist hire - Laurette fills that role
+- Mid-level software engineer preferred over senior (cost savings)
+- NASDA partnership for credibility + local capacity building
+- Composite scoring stays as parallel output alongside new ML models
+- M&E handled by one local person in Nigeria ($4K/month)
+
+
+6. OTHER NOTES
+--------------
+- Ifeoma's department at Loyola may be closed after next year
+  (being "sunsetted"). Dean said tenure track contracts will be
+  honored, may be reassigned to new department. Details TBD.
+- DSN Nigeria released DHIS2 chatbot on March 18 - competitive space
+- Nigeria has 5 satellites through NASDA (3 lost/decommissioned,
+  2 active - 1 communications, 1 Earth observation)
+- Budget submission deadline is tomorrow (March 20)
+- Meeting with Google on Monday to negotiate pro bono support scope

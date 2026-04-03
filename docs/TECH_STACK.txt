@@ -1,0 +1,36 @@
+*ChatMRPT Technology Stack*
+
+*Backend*
+• Python / Flask — web framework with blueprint-based routing
+• Gunicorn — production WSGI server (auto-scaled workers per instance)
+• OpenAI GPT-4o — LLM for conversational AI / request interpretation
+
+*Data & Storage*
+• SQLite — primary database
+• Redis (ElastiCache) — session management in production
+• S3 — backups
+
+*Infrastructure*
+• AWS EC2 — 2 instances behind an ALB (Application Load Balancer)
+• CloudFront — HTTPS CDN layer
+• ElastiCache (Redis) — managed Redis
+
+*Data Processing & Analysis*
+• Pandas — data manipulation
+• GeoPandas — geospatial data processing
+• Matplotlib / Seaborn — chart and map rendering
+• Scikit-learn — PCA, clustering, statistical modeling
+• NumPy / SciPy — numerical computation and statistics
+
+*Frontend*
+• React — single-page application (chat UI)
+• Vite — frontend build tool
+• Jinja2 — server-rendered templates (survey, admin pages)
+
+*Dev & Ops*
+• Git / GitHub — version control
+• pytest — testing
+• systemd — service management on EC2
+• Cron — automated daily backups to S3
+
+> _Flask + Python backend, OpenAI GPT-4o for the conversational AI layer, Pandas/GeoPandas/Scikit-learn for data analysis, Matplotlib/Seaborn for visualization, React + Vite frontend, SQLite + Redis for storage/sessions, deployed on AWS EC2 behind CloudFront._

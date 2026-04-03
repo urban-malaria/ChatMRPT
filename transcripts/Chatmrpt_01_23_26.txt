@@ -1,0 +1,31 @@
+ C:\Users\bbofo\OneDrive\Desktop\ChatMRPT\context.md                                                                       
+  Ok great progress but there are several issues we need to address:                                                        
+  1. When I ask for correlation request, it just prints the columns
+  
+  
+  
+Here are test questions based on your dataset:
+                                                                                                                              query_data Test Questions (Should return DATA only, NO charts)                                                                                                                                                                                        
+  1. "What are the top 10 wards with the highest composite_score?"                                                              - Expected: Table of 10 wards with names and scores    
+  2. "Show me all wards in Demsa LGA"
+    - Expected: List of wards filtered by LGA
+  3. "What is the average Rainfall across all wards?"
+    - Expected: Single numeric value
+  4. "List all the columns in my data"
+    - Expected: All 34 columns displayed (not truncated)
+  5. "How many wards are in each vulnerability_category?"
+    - Expected: Count grouped by High Risk, Medium Risk, Low Risk
+
+  ---
+  analyze_data Test Questions (Should generate CHARTS when asked)
+
+  1. "Create a histogram of composite_score values"
+    - Expected: Histogram visualization
+  2. "Create a correlation heatmap between Rainfall, SoilWetness, and urban_percentage"
+    - Expected: Heatmap visualization
+  3. "Plot a scatter plot of Population vs Total_Positive"
+    - Expected: Scatter plot visualization
+  4. "Create a box plot of composite_score by vulnerability_category"
+    - Expected: Box plot showing distribution per category
+  5. "Visualize the distribution of Burden across all wards"
+    - Expected: Distribution plot/histogram

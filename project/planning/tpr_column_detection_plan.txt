@@ -1,0 +1,33 @@
+TPR Column Detection Fix Plan
+=============================
+
+Goal: Allow the TPR workflow to correctly identify semantic columns (state, LGA, facility name, facility level, period, etc.) across both NMEP-cleaned and DHIS2-style datasets by augmenting the current keyword heuristics with LLM-assisted schema inference and caching.
+
+1. Add Schema Inference Helpers
+   - Implement `TPRDataAnalyzer.ensure_schema(df, session_id)` that caches a schema dict keyed by `(session_id, hash(tuple(df.columns)))`.
+   - `_infer_column_schema` samples the first few rows, builds the prompt (see `tpr_column_detection_proposal.md`), and invokes the existing LLM manager.
+   - Store the schema on the state manager (e.g., `tpr_metadata['column_schema']`) for transparency and reuse.
+
+2. Introduce `_get_column(field)` Abstraction
+   - Replace duplicated keyword loops in `analyze_states`, `analyze_facility_levels`, `_filter_data`, etc., with a helper that first checks the inferred schema and falls back to the existing keyword matcher.
+   - Extract the current keyword logic into `_keyword_fallback(df, field)` so behavior is unchanged when the schema is missing.
+
+3. Normalize Field Values Once
+   - After resolving a column (state, facility level, etc.), run normalization helpers to strip prefixes (`"kw "`, `"ad "`), remove suffixes (`" State"`), and standardize casing. Cache the cleaned Series to avoid reprocessing.
+
+4. Wire Schema Cache Through the Workflow
+   - Pass `session_id` into `TPRDataAnalyzer` (update instantiations in `chat_stream_service`, `runtime/tpr/workflow.py`, LangGraph tool, tests).
+   - On `TPRWorkflowHandler.start_workflow()`, call `tpr_analyzer.ensure_schema(uploaded_data)` so inference happens once per dataset.
+
+5. Update Core Calculation Utilities
+   - Add optional schema support to `app/core/tpr_utils.py` so `calculate_ward_tpr` can reuse the same column mappings.
+   - When the analyzer already inferred a schema, pass it down; otherwise, `tpr_utils` falls back to its keyword logic.
+
+6. Robustness & Testing
+   - Wrap the LLM call in try/except; log failures and fall back to keyword detection so outages do not break the workflow.
+   - Add unit tests covering both formats: one for the existing NMEP layout (ensuring fallback still works) and one for the DHIS2 Kwara sample (mock the LLM response to confirm the schema is honored).
+
+7. Follow-Up
+   - Once stable, document the schema cache and add logging so we can inspect what columns were inferred per session.
+   - Consider future UI enhancements (manual column overrides) if needed, but not required for this fix.
+

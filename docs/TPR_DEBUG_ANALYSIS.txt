@@ -1,0 +1,285 @@
+================================================================================
+CHATMRPT TPR CALCULATION DEBUG ANALYSIS
+================================================================================
+Date: January 16, 2026
+Dataset: niger_tpr_cleaned.csv (22,140 rows, 25 columns)
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+ChatMRPT provides inconsistent and sometimes incorrect analytical answers for
+TPR (Test Positivity Rate) calculations. The issues are NOT pure hallucinations
+but structural problems with the data pipeline.
+
+WHAT WORKS:
+- Simple retrievals (LGA lists, facility names)
+- Straightforward sums (facility volumes)
+- Correctly structured ratio questions (under-5 vs ≥5 average)
+
+WHAT DOESN'T WORK:
+- Rankings (top wards, hotspots)
+- Complex comparative stats
+- Questions requiring precise dimension choices
+
+================================================================================
+ROOT CAUSE #1: FLAWED TPR AGGREGATION LOGIC
+================================================================================
+
+FILE: app/core/tpr_utils.py
+LINES: 484-489
+
+CURRENT CODE (WRONG):
+```python
+# When test_method='both':
+final_tpr = max(rdt_tpr, micro_tpr)
+total_tested = max(rdt_tested, micro_tested)  # ← WRONG!
+total_positive = rdt_positive if rdt_tpr > micro_tpr else micro_positive
+```
+
+PROBLEM:
+- Takes max of tested counts but corresponding positive count from ONE method
+- Creates inconsistent ratios when RDT and Microscopy have different volumes
+
+EXAMPLE OF BUG:
+  RDT: 500 tested, 100 positive = 20% TPR
+  Microscopy: 1000 tested, 120 positive = 12% TPR
+
+  Current code calculates:
+  - final_tpr = max(20%, 12%) = 20%
+  - total_tested = max(500, 1000) = 1000  ← From Microscopy
+  - total_positive = 100 (from RDT)
+  - But 100/1000 = 10% ✗ (doesn't match claimed 20% TPR!)
+
+CORRECT APPROACH (Volume-Weighted):
+```python
+# True volume-weighted TPR:
+total_tested = rdt_tested + micro_tested  # OR just use one method
+total_positive = rdt_positive + micro_positive
+final_tpr = (total_positive / total_tested) * 100
+```
+
+================================================================================
+ROOT CAUSE #2: FRAGILE COLUMN DETECTION
+================================================================================
+
+FILE: app/core/tpr_utils.py
+LINES: 365-407
+
+CURRENT APPROACH:
+- Requires exact substring matches (case-insensitive)
+- Pattern: "presenting" AND "fever" AND "tested by rdt"
+- No fuzzy matching or fallbacks
+
+ACTUAL CSV COLUMN NAMES:
+- "Persons presenting with fever & tested by RDT <5yrs"
+- "Persons presenting with fever & tested by RDT  â‰¥5yrs (excl PW)"  ← UTF-8 issue!
+- "Persons tested positive for malaria by RDT <5yrs"
+
+ENCODING ISSUES:
+- CSV has: â‰¥ (UTF-8 mangled)
+- Should be: ≥ (proper greater-than-or-equal)
+- Partial fix exists at lines 189-200 but incomplete
+
+FAILURE SCENARIOS:
+1. Column is "u5_rdt_test" instead of "tested by rdt" → No match
+2. Excel mangled UTF-8: "Â≥5 years RDT tested" → Pattern doesn't match
+3. Multiple similar columns → Inconsistent detection
+
+================================================================================
+ROOT CAUSE #3: MISSING CANONICAL SCHEMA LAYER
+================================================================================
+
+FILE: app/data_analysis_v3/core/column_validator.py
+LINES: 19-50
+
+CURRENT MAPPINGS (INCOMPLETE):
+```python
+COLUMN_MAPPINGS = {
+    'ward': 'WardName',
+    'lga': 'LGA',
+    'facility': 'HealthFacility',
+    'facility_level': 'FacilityLevel',
+    # ... geographic columns only
+}
+```
+
+WHAT'S MISSING:
+- Age group columns: u5, o5, pw
+- Test method columns: RDT, Microscopy
+- Test type columns: tested, positive
+- Encoding variant handling
+
+NEEDED CANONICAL MAPPING:
+```python
+CANONICAL_COLUMNS = {
+    # RDT Testing Columns
+    'RDT_U5_TEST': 'Persons presenting with fever & tested by RDT <5yrs',
+    'RDT_U5_POS': 'Persons tested positive for malaria by RDT <5yrs',
+    'RDT_O5_TEST': 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)',
+    'RDT_O5_POS': 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)',
+    'RDT_PW_TEST': 'Persons presenting with fever & tested by RDT Preg Women (PW)',
+    'RDT_PW_POS': 'Persons tested positive for malaria by RDT Preg Women (PW)',
+
+    # Microscopy Testing Columns
+    'MIC_U5_TEST': 'Persons presenting with fever and tested by Microscopy <5yrs',
+    'MIC_U5_POS': 'Persons tested positive for malaria by Microscopy <5yrs',
+    'MIC_O5_TEST': 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)',
+    'MIC_O5_POS': 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)',
+    'MIC_PW_TEST': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)',
+    'MIC_PW_POS': 'Persons tested positive for malaria by Microscopy Preg Women (PW)',
+}
+```
+
+================================================================================
+ROOT CAUSE #4: LLM DOES MATH INSTEAD OF DETERMINISTIC TOOLS
+================================================================================
+
+FILE: app/data_analysis_v3/core/python_tool.py
+
+CURRENT APPROACH:
+- LLM writes arbitrary pandas code
+- Executes in SecureExecutor
+- LLM computes: df.groupby('WardName')['TPR'].mean()  ← Mean-of-means!
+
+PROBLEM:
+- Mean-of-means is statistically incorrect for surveillance data
+- Should be: sum(positives) / sum(tested)  ← Volume-weighted
+
+EXAMPLE OF ERROR:
+  Ward A: 100 tested, 80 positive = 80% TPR
+  Ward B: 1000 tested, 500 positive = 50% TPR
+
+  Mean-of-means: (80% + 50%) / 2 = 65%
+  Volume-weighted: (80 + 500) / (100 + 1000) = 52.7%  ← Correct!
+
+NEEDED: Deterministic tools that ALWAYS use volume-weighted aggregation:
+```python
+def get_top_wards_by_tpr(year, age_group, test_type, n=10):
+    # Filter data
+    # Group by ward
+    # Calculate: sum(positives) / sum(tested)
+    # Sort and return top N
+    pass
+```
+
+================================================================================
+ROOT CAUSE #5: HIDDEN DIMENSIONS NOT ENFORCED
+================================================================================
+
+Questions like "Top 10 wards with highest malaria RDT positivity rate in 2025"
+implicitly depend on:
+
+1. TIME: Which year(s)? (2025 vs all years)
+2. LEVEL: Ward vs LGA vs Facility
+3. AGE GROUP: Under-5, ≥5, Pregnant Women, or combined?
+4. TEST TYPE: RDT vs Microscopy vs both
+5. AGGREGATION: Volume-weighted vs mean-of-means
+
+Current workflow does NOT enforce these choices → LLM picks defaults inconsistently
+
+================================================================================
+FILES REQUIRING FIXES
+================================================================================
+
+| FILE                                              | ISSUE                          | PRIORITY |
+|---------------------------------------------------|--------------------------------|----------|
+| app/core/tpr_utils.py                             | TPR aggregation logic          | HIGH     |
+| app/core/tpr_utils.py                             | Column detection patterns      | HIGH     |
+| app/data_analysis_v3/core/column_validator.py    | Missing age/test mappings      | HIGH     |
+| app/data_analysis_v3/tools/unified_tools.py      | Need deterministic TPR tool    | HIGH     |
+| app/data_analysis_v3/prompts/system_prompt.py    | LLM doesn't know columns       | MEDIUM   |
+| app/data_analysis_v3/core/agent.py               | Data summary enhancement       | MEDIUM   |
+
+================================================================================
+SPECIFIC LINE NUMBERS FOR FIXES
+================================================================================
+
+1. TPR AGGREGATION FIX
+   File: app/core/tpr_utils.py
+   Lines: 484-489 (max logic)
+   Lines: 509-599 (age-specific aggregation)
+
+2. COLUMN DETECTION FIX
+   File: app/core/tpr_utils.py
+   Lines: 365-407 (pattern matching)
+   Lines: 189-200 (UTF-8 encoding fix - incomplete)
+
+3. SCHEMA MAPPING FIX
+   File: app/data_analysis_v3/core/column_validator.py
+   Lines: 19-50 (add age/test column mappings)
+
+4. SYSTEM PROMPT FIX
+   File: app/data_analysis_v3/prompts/system_prompt.py
+   Lines: 5-80 (add actual column names)
+
+================================================================================
+RECOMMENDED FIX PLAN
+================================================================================
+
+PHASE 1: CANONICAL SCHEMA LAYER (Highest Priority)
+- Create centralized column registry with all variants
+- Map messy column names to canonical internal names
+- Handle UTF-8 encoding variants
+- Use canonical names in all downstream code
+
+PHASE 2: FIX TPR AGGREGATION LOGIC
+- Remove max() logic in tpr_utils.py
+- Implement true volume-weighted: sum(pos) / sum(tested)
+- Add validation: TPR must be 0-100%, flag anomalies
+
+PHASE 3: DETERMINISTIC ANALYTICS TOOLS
+- Create new tools for common queries:
+  - get_top_wards_by_tpr(year, age_group, test_type, n)
+  - get_global_tpr(year, age_group, test_type)
+  - compare_rdt_vs_microscopy(year, age_group)
+  - get_facilities_by_volume(year, age_group, n)
+- LLM calls tools instead of writing pandas code
+
+PHASE 4: EXPLICIT WORKFLOW STATE MACHINE
+- Before analytics, force selection of:
+  - Timeframe
+  - Geographic level
+  - Age group
+  - Test type
+  - Aggregation method
+- If user query under-specifies, ask clarifying questions
+
+PHASE 5: VALIDATION & LOGGING
+- Add sanity checks (TPR 0-100%, minimum sample sizes)
+- Debug mode showing filters, numerators, denominators
+- Audit trail for reproducibility
+
+================================================================================
+VERIFICATION TEST CASES
+================================================================================
+
+After fixes, these should produce CONSISTENT, CORRECT results:
+
+1. TOP 10 WARDS (Under-5 RDT, 2025, Volume-Weighted):
+   Ground Truth:
+   - Allawa: 98.21%
+   - Kwagana: 94.14%
+   - Kumbashi: 93.99%
+   - Rafin Gora: 93.84%
+   - Tufa: 93.76%
+   - Bangi: 93.41%
+   - Rafi: 92.97%
+   - T/Bube: 92.96%
+   - Erena: 92.83%
+   - Diko: 92.57%
+
+2. AVERAGE POSITIVITY (All facilities, 2025):
+   - Under-5 RDT: 76.44%
+   - Over-5 RDT: 81.30%
+
+3. RDT vs MICROSCOPY COMPARISON:
+   Ground Truth:
+   - Under-5 RDT: 76.44%
+   - Under-5 Microscopy: ~81.50%
+   - Over-5 RDT: 81.30%
+   - Over-5 Microscopy: ~83.49%
+
+================================================================================
+END OF ANALYSIS
+================================================================================

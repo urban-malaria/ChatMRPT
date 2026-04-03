@@ -1,0 +1,350 @@
+30 Mar, 09.28_.m4a
+Transcript
+00:00:00 Speaker 1
+this piece that needs to be created.
+00:00:02 Speaker 1
+Let me share my screen.
+00:00:04 Speaker 1
+Laurence was of the opinion that since you're still thinking through the WhatsApp portion of this tool development, that it would make sense for you to also take a stab at this project milestones and kind of tell us where you think each of these, like the WhatsApp related stuff would fit in and how it would fit in.
+00:00:27 Speaker 1
+So
+00:00:31 Speaker 1
+Am I capturing what you just communicated?
+00:00:34 Speaker 2
+Yeah, that's exactly what I'll need, and also put the right wording.
+00:00:39 Speaker 2
+I don't know what that means, but the right technical wording for the process that you're proposing to happen at a particular milestone, right?
+00:00:52 Speaker 2
+So I guess the thing is, we'll be more like we're proposing WhatsApp, right?
+00:00:57 Speaker 2
+A WhatsApp integration.
+00:00:59 Speaker 2
+which milestone, where does it actually make sense?
+00:01:02 Speaker 2
+But for me, when I look at it, seems like it's something that's kind of, but we're already facing internet challenges with what we have.
+00:01:08 Speaker 2
+It's something that might actually happen concurrently with what we are doing.
+00:01:13 Speaker 2
+When we say we have an MVP at six months time point, do we want the WhatsApp integration to already exist for them also?
+00:01:21 Speaker 2
+Or is it something that we can pull up on month 12?
+00:01:26 Speaker 1
+Nah, it does sound like the one that...
+00:01:28 Speaker 1
+working from day one so you can start testing that.
+00:01:31 Speaker 2
+Yeah.
+00:01:31 Speaker 1
+But then I know you're still researching so I don't want to put pressure on you.
+00:01:37 Speaker 1
+But do you have any thoughts?
+00:01:43 Speaker 3
+Yeah, I think, yeah, currently it is possible.
+00:01:47 Speaker 3
+I think there are quite a few precedents have been done different but then still integrated WhatsApp through it.
+00:01:58 Speaker 3
+So, it is feasible.
+00:02:01 Speaker 3
+I'm still trying to find out how long it will take, but it is possible.
+00:02:07 Speaker 3
+And for this document, I have a question.
+00:02:11 Speaker 3
+Is this just bullet points that I will add to read or a whole write-up?
+00:02:16 Speaker 1
+It gave me a write-up because I need to also understand, at least for my purposes, you just send me a write-up.
+00:02:23 Speaker 1
+But I think Laurette, for this portion, yeah, bullet points is fine.
+00:02:28 Speaker 1
+Because I want to take your right talk and update every section of this proposal that captures the technical pieces.
+00:02:35 Speaker 1
+So I want to make sure I understand it enough to be too right about it.
+00:02:39 Speaker 3
+Okay.
+00:02:42 Speaker 1
+But I also had some other thoughts because data upload is like, especially for Excel sheets and the kinds of Excel sheets they are producing, is going to be a data intensive or bandwidth intensive task.
+00:02:57 Speaker 1
+So my thought is, could they send that, if they're able to send emails, which is evident that they're able to easily send emails, could they send their data to an e-mail that is connected to the server somewhere?
+00:03:10 Speaker 1
+So that once they send an e-mail with their data, if the server picks up who the person is that sends the data, or gives them a number or a code, that then they can use in their WhatsApp chat to indicate that they're the person that sent the data.
+00:03:25 Speaker 1
+can continue their interrogation so that the data upload is no longer a task that they have to do or something that is automated through e-mail.
+00:03:35 Speaker 3
+Okay.
+00:03:39 Speaker 3
+Yeah.
+00:03:40 Speaker 3
+Wouldn't it add an extra layer of complexity to the architecture already?
+00:03:50 Speaker 1
+It adds a layer of complexity because of
+00:03:54 Speaker 1
+the issue of internet.
+00:03:56 Speaker 1
+But if you cannot upload it because of your internet connection, what is the point of the tool?
+00:04:01 Speaker 3
+Yeah.
+00:04:03 Speaker 1
+But they send emails anyway, right?
+00:04:06 Speaker 1
+So that is already, like I'm trying to think of what is already in their workflow.
+00:04:10 Speaker 1
+They send emails.
+00:04:11 Speaker 1
+They use WhatsApp.
+00:04:13 Speaker 1
+So why don't we just integrate it into their existing workflow?
+00:04:16 Speaker 1
+Send an e-mail, get a code, use that code and chat with the WhatsApp to interrogate your data.
+00:04:22 Speaker 1
+Sounds to me much simpler.
+00:04:24 Speaker 1
+them having to upload the data and keep waiting for it to upload.
+00:04:29 Speaker 3
+Yeah.
+00:04:32 Speaker 2
+Also, just to add on to that, I think with an e-mail, if you send an e-mail, these people already have accounts with chats, MRPT, or whatever that will be.
+00:04:46 Speaker 2
+Is it not possible to just take the e-mail and know which state or which person sent state?
+00:04:53 Speaker 1
+Yes, so that is in the case the person has signed up online.
+00:04:56 Speaker 1
+So we can give them options.
+00:04:58 Speaker 1
+Either you want to sign up online or what if you don't want to sign up online but you still want to use the tool?
+00:05:05 Speaker 2
+Yeah, you might need to just tell it.
+00:05:07 Speaker 2
+You just need to, I guess what I'm suggesting is they just have to have an account with us so that they are able to within that WhatsApp chat, they state their.
+00:05:17 Speaker 2
+e-mail and then it pulls up every, it links it to that particular individual.
+00:05:22 Speaker 2
+I'm not sure on the technical side of things, but I think that at least that's what I'll do.
+00:05:27 Speaker 2
+Yeah.
+00:05:29 Speaker 1
+So you're saying that if it states their e-mail on the WhatsApp chat, then it links it, then that's an easy, easier even.
+00:05:34 Speaker 1
+Then you don't need a code.
+00:05:35 Speaker 2
+Yeah, because that's what I'll say.
+00:05:38 Speaker 2
+That's what will look technically easier to me on the implementation side of things, but.
+00:05:46 Speaker 2
+Yes, that's for Bernard to think about.
+00:05:50 Speaker 2
+Then what did I think I had something else?
+00:05:53 Speaker 2
+I'll pause on that.
+00:05:54 Speaker 2
+I'll stop here.
+00:05:56 Speaker 1
+Bernard.
+00:05:59 Speaker 1
+Is it possible for the e-mail connection?
+00:06:03 Speaker 3
+Yeah, it sounds a good idea.
+00:06:06 Speaker 3
+I don't know currently, but I'll definitely find out.
+00:06:12 Speaker 3
+Yeah.
+00:06:14 Speaker 1
+I don't believe that should be hard.
+00:06:15 Speaker 1
+If you can send an e-mail to the cloud, you can send an e-mail to a server.
+00:06:19 Speaker 1
+So I don't think that should be difficult to do.
+00:06:26 Speaker 1
+I think it's you figuring out how to do it, is the question.
+00:06:31 Speaker 1
+And to do it in an efficient way that it doesn't get lost somewhere.
+00:06:34 Speaker 3
+Yeah.
+00:06:37 Speaker 1
+Okay, so I'll be waiting for you, Bernard, because I think...
+00:06:42 Speaker 1
+we have two sets of innovation because I need to build my pitch, which is where, one, we're updating it with local perceptions and conceptions, which is the model piece, while we're also overcoming the, at least we've developed systems to overcome the low bandwidth access that they have or issue that they have through providing them the opportunity to send an e-mail and use WhatsApp.
+00:07:09 Speaker 1
+I think that will probably
+00:07:12 Speaker 1
+give us that edge that I think this proposal needs.
+00:07:16 Speaker 3
+Okay.
+00:07:17 Speaker 1
+All right.
+00:07:20 Speaker 1
+Thank you all.
+00:07:22 Speaker 1
+Hopefully you get back to me right before the end of the day, but it's fine whenever you do, because I'm teaching today, you know how my day is.
+00:07:28 Speaker 2
+Oh, yeah.
+00:07:30 Speaker 2
+I'm sorry.
+00:07:32 Speaker 2
+Yeah, I have one last question.
+00:07:33 Speaker 2
+We're seeing, is it someone's listening?
+00:07:36 Speaker 2
+Is that sorted out?
+00:07:38 Speaker 2
+Did we send him something at least last week?
+00:07:42 Speaker 1
+Who?
+00:07:43 Speaker 2
+Molly and Singh, they'll need, or for this one it's not necessary.
+00:07:48 Speaker 1
+I've sent everything, but I asked them to give us a reduced indirect rate.
+00:07:55 Speaker 2
+Oh, that was the conversation on both things.
+00:07:57 Speaker 1
+Yeah, you know, some, I promise you, get her well because she refused and said, she kind of, yeah, you know how these people are doing excessive politics over things that will benefit them anyway.
+00:08:11 Speaker 2
+Okay, that's great, because that also came up in my mind during the week.
+00:08:15 Speaker 2
+Like, during the weekend, I didn't connect to the conversation.
+00:08:19 Speaker 1
+Molly just emailed about working to finalize the budget together.
+00:08:26 Speaker 1
+Yeah, this is too political for me, and I just gave them the 12% because I just didn't want to fight over.
+00:08:32 Speaker 1
+It's too late in the game to start fighting over things.
+00:08:35 Speaker 2
+Yeah, you just need for them to approve, and then we'll see later.
+00:08:38 Speaker 1
+But the thing is the project is not going to give them an indirect.
+00:08:43 Speaker 1
+The amount they're going to receive is 300 and something thousand.
+00:08:46 Speaker 1
+And if I'm Google, I'm looking at a proposal where the indirect cost is 300 and something thousand.
+00:08:54 Speaker 3
+Quickly before we go.
+00:08:57 Speaker 3
+Doesn't WhatsApp already have the upload side right sorted?
+00:09:03 Speaker 2
+Yeah, it does.
+00:09:05 Speaker 1
+Yes.
+00:09:06 Speaker 1
+But my problem with using WhatsApp to upload is that you're trying to upload very data-intensive Excel sheets.
+00:09:15 Speaker 1
+Because I was starting with ChatGPT about this.
+00:09:18 Speaker 1
+I've been spending time just asking ChatGPT questions, how these things work.
+00:09:22 Speaker 1
+ChatGPT is saying that it still will be very tasking for WhatsApp to upload that dataset, giving us an Excel sheet with many clues and many columns.
+00:09:33 Speaker 1
+And if they want to do trend analysis, for instance, it becomes even much heavier.
+00:09:38 Speaker 1
+So the ChatGPT, male or female, whatever, is suggesting that the way to do it will be to compress those files, break the files into pieces, but that sounds like a whole lot.
+00:09:52 Speaker 1
+No.
+00:09:53 Speaker 1
+Automatically, though, WhatsApp does compress, but the compression level now is an issue.
+00:09:58 Speaker 1
+Like, really compress enough to be able to send the file quickly.
+00:10:02 Speaker 1
+But I asked myself, if this man can send me a file easily by e-mail, why are we not just using that option?
+00:10:09 Speaker 3
+Okay.
+00:10:10 Speaker 1
+So that's why.
+00:10:14 Speaker 1
+But like I'm saying, what I'm invariably trying to say is that...
+00:10:18 Speaker 1
+We give them this e-mail option.
+00:10:19 Speaker 1
+We try it.
+00:10:20 Speaker 1
+We also try other options.
+00:10:22 Speaker 1
+WhatsApp, you know, during the testing phase, you can try different things and see what works.
+00:10:26 Speaker 3
+Okay.
+00:10:26 Speaker 1
+You know, so I think adding this as an initial, like additional innovation, this whole pipeline would help.
+00:10:35 Speaker 3
+Okay.
+00:10:37 Speaker 2
+Then just another add-on, an alternative will be to directly pull the data from the DHIS.
+00:10:45 Speaker 2
+Can we not do that?
+00:10:48 Speaker 2
+We don't, from my research the other time, we don't need to be collaborating with DHAIS or Oslo University for that.
+00:10:58 Speaker 2
+We just need to be able to have access to the data.
+00:11:02 Speaker 2
+And then if they just state they are state, we just filter it.
+00:11:07 Speaker 2
+Like, I don't know how they pull the data for their particular state, but if they tell us they are state that they want to work on, we just work with that state.
+00:11:17 Speaker 1
+I think people have to give access, right?
+00:11:19 Speaker 1
+I'm sure from that research that you've done, or whoever the DHIS will be.
+00:11:26 Speaker 2
+Yeah, it might be one of the NMEP people who will be working with who needs to have access, because right now I know Cyril does that, and it does seem like Bashir has access also.
+00:11:39 Speaker 1
+Yes, well, this is all conversation and trust, right?
+00:11:44 Speaker 1
+I don't think we'll need an MVP, Bashir has access.
+00:11:47 Speaker 1
+So we need to ask Bashir, how does he get access?
+00:11:50 Speaker 1
+Can he give us access?
+00:11:51 Speaker 1
+Is there a way to build an integration that kind of joins all of that?
+00:11:59 Speaker 1
+So my thing would be, let's figure out how to navigate this with Quara, and hopefully that will be a solution that will extend to all states.
+00:12:14 Speaker 1
+but maybe it deserves another conversation with Bashir for us to figure out if we can get that level of access.
+00:12:20 Speaker 1
+But you have his contact, you can contact him and ask.
+00:12:23 Speaker 2
+Yeah, we can do that.
+00:12:25 Speaker 2
+Just an addition on Bashir with the current chat MRPT.
+00:12:32 Speaker 2
+I think it's a question for Bernard.
+00:12:36 Speaker 2
+With the demo that we wanted to do the last meeting on Friday, were we supposed to get to a point where we see multiple...
+00:12:44 Speaker 2
+multiple maps or the parts that we showed, that was the last part that we were demonstrating for them.
+00:12:53 Speaker 3
+No, just more trend analysis questions, like just interaction.
+00:12:59 Speaker 2
+We're just, okay, that new feature.
+00:13:04 Speaker 2
+So there's no, there's no, we don't have a part that shows multiple maps in terms of the
+00:13:12 Speaker 2
+risk, whatever the composite score or the allocation part.
+00:13:18 Speaker 3
+That is still there in there.
+00:13:23 Speaker 2
+Or is it in the pipeline or it's something that already exists?
+00:13:27 Speaker 3
+Oh, it is.
+00:13:29 Speaker 3
+Is there normal composite scoring that we have, right?
+00:13:32 Speaker 3
+Is that what you're referring to?
+00:13:34 Speaker 2
+Yeah.
+00:13:34 Speaker 2
+that's what I'm referring to.
+00:13:35 Speaker 2
+So do they get to see the different maps from 2020 to 2025?
+00:13:43 Speaker 3
+That's what you mean.
+00:13:44 Speaker 3
+Okay.
+00:13:45 Speaker 2
+That's what I meant.
+00:13:47 Speaker 2
+So I'm trying to find out if we were going to get to that part in that call or this is something that you're still working on.
+00:13:54 Speaker 3
+Yeah, that is still in the pipeline.
+00:13:56 Speaker 3
+Okay.
+00:13:56 Speaker 3
+No, that's fine.
+00:13:58 Speaker 2
+It was just an aside question that I had and I forgot to ask.
+00:14:01 Speaker 3
+Okay.

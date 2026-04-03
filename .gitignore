@@ -223,3 +223,4 @@ contxt.md
 
 # Claude Code local settings (keep CLAUDE.md but not local settings)
 .claude/settings.local.json
+docs/env_for_colleague.txt

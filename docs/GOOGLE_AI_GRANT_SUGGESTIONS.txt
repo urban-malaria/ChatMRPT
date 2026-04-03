@@ -1,0 +1,181 @@
+Bernard's Review Notes — Google AI for Government Innovation Application
+========================================================================
+Document reviewed: 2026-03-19
+
+
+========================================================================
+SECTION FLAGGED FOR BERNARD'S INPUT
+========================================================================
+
+Ifeoma's comment: "This section needs input from Bernard"
+Section: INNOVATIVE USE OF TECHNOLOGY (Q21-26)
+
+--- Q21: What existing technologies will you use? ---
+
+CURRENT DRAFT ISSUES:
+1. "Google Earth EngineSentinel-1" — missing separator, reads as one thing
+2. "LLMsrovide" — typo, should be "LLMs provide"
+3. "senttlement" — typo, should be "settlement"
+4. R/Shiny is listed but ChatMRPT doesn't use R/Shiny — it's a Python/Flask app
+   (R/Shiny is the *original* MRPT, not ChatMRPT)
+5. The Python stack description is vague ("python scripts")
+
+SUGGESTED REWRITE for the technology list (Bernard's technical input):
+
+  The project integrates several core technologies:
+
+  Earth Observation Platforms (Google Earth Engine, Sentinel-1, Landsat,
+  Digital Elevation Models, flooding layers): Provide the computational
+  engine for processing high-resolution satellite imagery to extract
+  environmental indicators such as flood risk, surface water presence,
+  and vegetation indices.
+
+  Google OpenBuildings: Supplies large-scale building footprint data that
+  enables estimation of settlement density, urban structures, and housing
+  distribution to identify informal and slum settlements.
+
+  Python/Flask Web Application: Powers the ChatMRPT platform — a full-stack
+  web application using Flask for the backend, React for the interactive
+  frontend, and libraries including Pandas, GeoPandas, Scikit-learn,
+  Matplotlib, and Seaborn for data processing, statistical modeling, and
+  geospatial visualization.
+
+  OpenAI GPT-4o (Large Language Model): Provides the conversational AI layer
+  that translates complex analytical outputs into accessible explanations
+  and decision-support prompts. The LLM interprets user queries in natural
+  language, routes them to appropriate analysis tools, and generates
+  context-aware responses that guide government users through risk
+  assessment and prioritization workflows.
+
+  Cloud Infrastructure (Amazon Web Services): Hosts the ChatMRPT application
+  on redundant EC2 instances behind a load balancer with CloudFront CDN,
+  supporting scalable data processing, Redis-based session management, and
+  secure access for government users across multiple states.
+
+  R/Shiny: Powers the original Malaria Reprioritization Tool (MRPT) web
+  application for statistical processing and map generation, which
+  ChatMRPT builds upon and extends.
+
+NOTE: Laurette commented "I think it is not important to mention MRPT" —
+discuss with team whether to keep R/Shiny reference or fold it into
+the Python description.
+
+--- Q22: Why is your solution necessary vs alternatives? ---
+
+Laurette suggested a stronger rewrite (see her comment). Her version is
+better — more specific about the gap and less generic. Suggest adopting
+her version:
+
+  "ChatMRPT addresses this gap by embedding analytical and interpretive
+  capacity directly within the decision-support system. The platform allows
+  government officers to interactively explore their own surveillance data,
+  integrate Earth Observation indicators, and understand the drivers of
+  malaria risk without requiring advanced technical expertise. Unlike
+  existing global malaria models, which are often disconnected from national
+  planning processes and lack local context, ChatMRPT was co-developed with
+  government stakeholders to align with existing political, administrative,
+  and operational frameworks."
+
+Ifeoma also commented: "Need to mention MAP's malaria maps" — add a
+sentence acknowledging MAP (Malaria Atlas Project) maps as an existing
+alternative and how ChatMRPT differs.
+
+--- Q23: How leverage Google's pro bono support? ---
+
+Current draft is solid. Consider adding:
+  - Migration from OpenAI to Google's Gemini models (aligns with Google
+    grant context — you're asking Google for money while using OpenAI)
+  - Google Cloud Platform migration for better integration with Earth Engine
+  - Vertex AI for model training and serving
+
+This is a strategic point — the application is to Google.org, so framing
+the ask around Google's own technology stack makes it stronger.
+
+--- Q24: Ethical risks / Google AI Principles? ---
+
+This section is well-written. No major changes needed.
+
+
+========================================================================
+OTHER ISSUES & SUGGESTIONS ACROSS THE DOCUMENT
+========================================================================
+
+--- PROBLEM STATEMENT ---
+
+1. Ifeoma commented "Check this number" on the malaria stats (68.5 million
+   cases, 183,000 deaths in 2024). Verify against the latest World Malaria
+   Report.
+
+2. Laurette commented "can we use climate variability, including increasing
+   flooding unless we want to be specific to flooding" — consider broadening.
+
+3. Laurette: "we later use MVP thought to define it here" — define MVP
+   (Minimum Viable Product) on first use in the document.
+
+--- PROPOSED SOLUTION ---
+
+1. "malaia" — typo, should be "malaria" (in the evidence section)
+
+2. Laurette flagged that RAG (Retrieval-Augmented Generation) is "not part
+   of the platform at the moment" — make sure any RAG references are framed
+   as planned/future, not current.
+
+3. Laurette: "I think this is a bit inaccurate, rather we say ChatMRPT than
+   AI" — review where "AI" is used loosely and replace with "ChatMRPT" where
+   the tool specifically is meant.
+
+--- EXPECTED OUTCOMES ---
+
+1. Laurette: "20+" — she's suggesting the number of states for a metric
+   should be 20+. Check which metric this refers to.
+
+2. Laurette flagged concern about advertising R/Shiny: "Not sure if we want
+   to advertise this here?" — revisit.
+
+3. Metrics list says "nine metrics" but only lists 8 numbered items.
+   Either add a 9th or change to "eight metrics."
+
+--- FEASIBILITY ---
+
+1. Ifeoma: "Check this" — likely referring to a specific claim. Verify
+   the "43 million people across ten states" figure and "18 states
+   (33 participants)" numbers.
+
+2. Laurette suggested referencing "Ifeoma's experience in subnational
+   tailoring the modeling paper" or "the coproduction work (2023)" —
+   add specific publication references.
+
+--- SCALABILITY ---
+
+1. Financial sustainability section is close to the 50-word limit
+   (currently ~55 words). Tighten.
+
+2. Technical sustainability section is also slightly over 50 words.
+   Tighten.
+
+--- PUBLIC PRESENCE ---
+
+1. "(Insert link)" appears 3 times — these need actual URLs before
+   submission.
+
+2. Laurette asked "Does shout outs on LinkedIn count?" — if there are
+   LinkedIn posts about the project, they could be included.
+
+
+========================================================================
+PRIORITY ACTION ITEMS FOR BERNARD
+========================================================================
+
+1. REWRITE the technology list in Q21 with accurate ChatMRPT tech stack
+   (the suggested rewrite above is ready to use)
+
+2. DECIDE with team: mention Google/Gemini migration as part of the ask?
+   (strategically smart for a Google.org application)
+
+3. VERIFY numbers Ifeoma flagged (malaria stats, state counts)
+
+4. FIX typos: "LLMsrovide", "senttlement", "malaia"
+
+5. ADDRESS Laurette's Q22 rewrite suggestion
+
+6. FILL in the "(Insert link)" placeholders in Public Presence section

@@ -1,0 +1,109 @@
+================================================================================
+TPR PRE-COMPUTATION INVESTIGATION
+================================================================================
+
+CONTEXT: WHY THIS MATTERS
+-------------------------
+This is part of the "Smart TPR Combination Switching" feature. The goal is to
+allow users to switch between different TPR combinations (facility level + age
+group) without re-uploading data or recalculating from scratch.
+
+There are 16 possible TPR combinations:
+- 4 facility levels: primary, secondary, tertiary, all
+- 4 age groups: u5 (under 5), o5 (over 5), pw (pregnant women), all_ages
+
+When a user completes the TPR workflow selecting ONE combination, we want to
+pre-compute the OTHER 15 combinations in the background so they can quickly
+switch later by saying "Switch to pregnant women at primary facilities".
+
+PROBLEM SUMMARY
+---------------
+The `tpr_precomputed.db` file is not being created after the TPR workflow
+completes. This file should contain all 16 TPR combinations pre-computed for
+fast switching.
+
+The `precompute_debug.log` file (which we added for debugging) is also NOT
+being created, which means the background thread function is never executing.
+
+EXPECTED BEHAVIOR
+-----------------
+1. User completes TPR workflow (uploads data, selects state/facility/age group)
+2. TPR is calculated for the selected combination
+3. Background thread starts to pre-compute remaining 15 combinations
+4. `tpr_precomputed.db` is created in the session folder
+5. User can then say "Switch to pregnant women at primary facilities"
+6. Tool queries the pre-computed database and regenerates files
+
+ACTUAL BEHAVIOR
+---------------
+1. User completes TPR workflow - WORKS
+2. TPR is calculated - WORKS
+3. Background thread starts - THREAD NEVER EXECUTES (no logs, no debug file)
+4. `tpr_precomputed.db` - NOT CREATED
+5. User tries to switch - FAILS with "Pre-computed TPR data not found"
+
+RELATED BUGS (FIXED)
+--------------------
+1. "name 'pd' is not defined" - Fixed: Added `import pandas as pd` to tpr_query_tool.py
+2. "name 'gpd' is not defined" - Fixed: Added `import geopandas as gpd` to tpr_query_tool.py
+3. Tool not being triggered - Fixed: Added to fallbacks dict in request_interpreter.py
+
+FILES TO INVESTIGATE
+--------------------
+1. app/data_analysis_v3/core/tpr_workflow_handler.py
+   - Lines 1333-1415: Background pre-computation thread code
+   - The thread is defined but NEVER executes
+
+2. app/core/tpr_precompute.py
+   - Function: precompute_all_tpr_combinations() - lines 82-180
+   - Function: init_precompute_db() - lines 28-79
+   - Function: query_precomputed_tpr() - lines 201-321
+
+3. app/core/tpr_utils.py
+   - Function: calculate_ward_tpr() - lines 214+
+   - Used by precompute_all_tpr_combinations()
+
+KEY OBSERVATIONS
+----------------
+1. Debug logging was added to write to precompute_debug.log - FILE NOT CREATED
+   This means the thread function _precompute_background() NEVER RUNS
+
+2. The thread code is inside a try/except block
+   - Exceptions may be caught silently
+
+3. Thread is created as daemon (daemon=True)
+
+4. Uses RELATIVE path for debug file
+
+SESSION FOR TESTING
+-------------------
+Session ID: 9e51715c-cc15-475c-93bc-ebc3099ee298
+Session folder: instance/uploads/9e51715c-cc15-475c-93bc-ebc3099ee298/
+
+Files present:
+- ward_cache.pkl (587 KB) - EXISTS
+- raw_data.csv - EXISTS
+- raw_shapefile.zip - EXISTS
+- tpr_distribution_map.html - EXISTS
+- uploaded_data.csv (3.3 MB) - EXISTS
+- tpr_precomputed.db - MISSING (this is the problem)
+- precompute_debug.log - MISSING (means thread never ran)
+
+HOW TO REPRODUCE
+----------------
+1. Start the server: python run.py
+2. Go to http://localhost:5013
+3. Upload TPR data (Niger state data)
+4. Complete TPR workflow:
+   - Select state: Niger
+   - Select facility: Primary
+   - Select age group: Under 5
+5. After completion, check session folder for:
+   - tpr_precomputed.db (MISSING)
+   - precompute_debug.log (MISSING)
+6. Try: "Switch to pregnant women at primary facilities"
+7. Error: "Pre-computed TPR data not found"
+
+================================================================================
+END OF INVESTIGATION
+================================================================================

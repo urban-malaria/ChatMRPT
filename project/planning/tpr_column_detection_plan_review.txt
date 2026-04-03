@@ -1,0 +1,118 @@
+TPR Column Detection Plan — Review Report
+==========================================
+Date: 2026-03-12
+Reviewer: Claude (second-agent review + synthesis)
+Plan reviewed: project/planning/tpr_column_detection_plan.txt
+
+
+OVERALL VERDICT
+---------------
+The goal is correct. The LLM-based approach is the right long-term solution — not
+because of Kwara specifically, but because any user can arrive with a format we have
+never seen. Fixing DHIS2 deterministically would be treating a symptom. The plan
+needs corrections to the implementation design before it is ready to execute.
+
+
+WHAT THE PLAN GETS RIGHT
+------------------------
+- LLM inference is the correct architectural choice for an open-ended schema problem
+- Fallback to keyword matching is the right safety net
+- Centralising detection into _get_column() eliminates three duplicate loops
+- Value normalisation is a real requirement (DHIS2 prefixes like "kw Kwara State")
+- tpr_utils.py deferred to Step 5 is the right sequencing
+
+
+BLOCKERS — MUST FIX BEFORE ANYTHING ELSE
+-----------------------------------------
+
+1. Broken import in core/tpr_workflow_handler.py
+   The file imports: from .tpr_data_analyzer import TPRDataAnalyzer
+   That file was archived in Phase 1 cleanup. It no longer exists.
+   This will throw an ImportError before any new code runs.
+   Fix: update the import to app.data_analysis_v3.tpr.data_analyzer
+
+2. The "All Data" cascade bug
+   When analyze_states() finds no state column (which happens on every DHIS2
+   export because orgunitlevel2 does not match 'state', 'region', 'province',
+   or 'area'), it silently returns 'All Data' as the state name.
+   analyze_facility_levels() is then called with state='All Data'. The state
+   filter finds no match, so the full unfiltered 6,948-row dataframe is used.
+   Then orgunitlevel3 (16 LGA names) is picked as the facility level column.
+   The plan describes this as a keyword loop bug in analyze_states, but the
+   actual failure is the silent downstream cascade. The fix requires explicitly
+   handling the no-state-column case rather than passing a phantom value forward.
+
+
+DESIGN CORRECTIONS REQUIRED
+----------------------------
+
+3. Cache design is wrong
+   The plan caches by (session_id, hash(tuple(df.columns))).
+   Problem: TPRDataAnalyzer is instantiated per-request. There is no persistent
+   state between requests. A cross-session cache adds write paths, invalidation
+   logic, and I/O overhead to save a single LLM call that won't be reused anyway.
+   Fix: store schema as self._schema on the instance. One inference per request,
+   zero cache complexity. If the LLM call is too expensive to repeat, trigger it
+   at upload time and store in the session's file metadata — not in the analyzer.
+
+4. LLM response must be validated
+   The plan says "invoke the LLM manager" but does not define what a valid
+   response looks like or how to handle a malformed one. An LLM returning
+   {"state_column": "orgunitlevel2"} instead of {"state": "orgunitlevel2"}
+   will silently break every lookup with no error.
+   Fix: define an exact JSON schema for the response, parse with json.loads()
+   inside a try/except, validate all expected keys are present, and fall through
+   to keyword fallback on any validation failure.
+
+5. LLM call must not block the streaming UI
+   start_workflow() is the first thing the user sees. Adding a synchronous LLM
+   round-trip here stalls the response before any output appears.
+   Fix: either trigger inference at upload time (cleanest — one call when the
+   file is processed, result stored with file metadata in session) or run keyword
+   fallback immediately and correct the schema asynchronously.
+
+6. Step 4 references a file that no longer exists
+   "Update instantiations in runtime/tpr/workflow.py" — this file was archived.
+   The live workflow handler is app/data_analysis_v3/tpr/workflow_manager.py.
+   The four actual instantiation sites that need updating are:
+     - app/web/routes/analysis/chat_stream_service.py line ~116
+     - app/data_analysis_v3/tools/tpr_workflow_langgraph_tool.py line ~47
+     - app/data_analysis_v3/tpr/__init__.py (re-export)
+     - any direct test instantiations in tests/tpr/
+
+
+WHAT DOES NOT NEED THE LLM
+---------------------------
+The review agent suggested fixing DHIS2 deterministically instead of using the LLM.
+That is the right answer for Kwara but the wrong answer for the general problem.
+However, the reviewer is correct that DHIS2 is a known format. The right structure is:
+
+  Priority 1: LLM inferred schema       (any format, any language, any corruption)
+  Priority 2: Known-format fast paths   (DHIS2 orgunitlevel hierarchy, etc.)
+  Priority 3: Keyword fallback          (existing logic, last resort)
+
+Also: value normalisation for DHIS2 state prefixes ("kw ", "ad ") is already
+implemented in app/core/tpr_utils.py in normalize_ward_name() and
+extract_state_from_data(). Step 3 of the plan would re-implement this from scratch.
+Fix: import and call the existing helpers rather than writing new ones.
+
+
+RECOMMENDED EXECUTION ORDER
+----------------------------
+1. Fix broken import in core/tpr_workflow_handler.py              (blocker)
+2. Fix "All Data" cascade in analyze_states / analyze_facility_levels
+3. Add _get_column() abstraction with keyword fallback intact      (Step 2)
+4. Wire existing normalize_ward_name() into detection             (Step 3, no new code)
+5. Implement _infer_column_schema() with validated response        (Step 1)
+6. Store schema as self._schema, trigger at upload time or first call (Step 4, revised)
+7. Update tpr_utils.py to accept optional schema                   (Step 5)
+8. Tests: Format A (keyword path), Format B DHIS2 (LLM mocked), unknown (fallback)
+
+
+SUMMARY
+-------
+Two blockers to fix before implementation begins.
+Three design corrections to the LLM integration before it is production-safe.
+One piece of normalisation code that already exists and should be reused.
+The strategic direction (LLM for open-ended schema inference) is correct and
+should not be diluted into a DHIS2-only deterministic fix.

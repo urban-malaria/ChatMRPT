@@ -1,0 +1,5 @@
+Good point. Currently it's a naive (unweighted) average across wards. You're right that population-weighted averaging would be more appropriate for rates like TPR. We do have ward-level population counts available that can serve as weights.
+
+I'll update the implementation to use population-weighted averages when aggregating to LGA level. For variables like TPR, this means:
+
+LGA_TPR = Sum(ward_TPR * ward_population) / Sum(ward_population)
