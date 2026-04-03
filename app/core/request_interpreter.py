@@ -59,12 +59,10 @@ class RequestInterpreter:
         self.analysis_service = analysis_service
         self.visualization_service = visualization_service
         
-        # py-sidebot approach: Simple conversation storage
+        # Conversation storage
         self.conversation_history = {}
-        self.session_data = {}  # Store session data for access
+        self.session_data = {}
         self._memory_summary_tracker: Dict[str, Dict[str, Any]] = {}
-        self.choice_interpreter = None
-        self.tool_intent_resolver = None
         
         # Initialize memory system if available
         try:
@@ -79,52 +77,14 @@ class RequestInterpreter:
             from .session_context_service import SessionContextService
             from .data_repository import DataRepository
             from .prompt_builder import PromptBuilder
-            from .tool_runner import ToolRunner
-            from .llm_orchestrator import LLMOrchestrator
 
             self.data_repo = DataRepository()
             self.context_service = SessionContextService(self.data_repo)
             self.prompt_builder = PromptBuilder()
-            # Fallback mapping to legacy wrappers to retain compatibility
-            self.tool_runner = ToolRunner(fallbacks={
-                # Two-layer data architecture
-                'query_data': self._query_data,
-                'analyze_data': self._analyze_data_with_python,
-                # Specialized tools
-                'explain_analysis_methodology': self._explain_analysis_methodology,
-                'run_malaria_risk_analysis': self._run_malaria_risk_analysis,
-                'create_settlement_map': self._create_settlement_map,
-                'show_settlement_statistics': self._show_settlement_statistics,
-                'query_tpr_data': self._query_tpr_data,
-                'switch_tpr_combination': self._switch_tpr_combination,
-                'compare_tpr_combinations': self._compare_tpr_combinations,
-            })
-            self.orchestrator = LLMOrchestrator()
         except Exception as e:
-            logger.warning(f"Refactor services init failed (non-fatal): {e}")
+            logger.warning(f"Services init failed (non-fatal): {e}")
             self.context_service = None
             self.prompt_builder = None
-            self.tool_runner = None
-            self.orchestrator = None
-
-        try:
-            from .choice_interpreter import ChoiceInterpreter
-
-            self.choice_interpreter = ChoiceInterpreter(self.llm_manager)
-        except Exception as e:
-            logger.warning(f"ChoiceInterpreter init failed (non-fatal): {e}")
-            self.choice_interpreter = None
-
-        try:
-            from .tool_intent_resolver import ToolIntentResolver
-
-            self.tool_intent_resolver = ToolIntentResolver(self.llm_manager)
-        except Exception as e:
-            logger.warning(f"ToolIntentResolver init failed (non-fatal): {e}")
-            self.tool_intent_resolver = None
-
-        # Initialize conversational data access placeholder
-        self.conversational_data_access = None
         
         # py-sidebot pattern: Register tools as actual Python functions
         self.tools = {}
