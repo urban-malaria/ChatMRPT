@@ -14,12 +14,13 @@ This package breaks down the monolithic main.py blueprint into smaller, focused 
 
 import logging
 
+from .admin import admin_bp
 from .core_routes import core_bp
 from .upload_routes import upload_bp
 from .analysis_routes import analysis_bp
 from .analysis import analysis_bp as analysis_chat_bp  # New modular analysis routes
 from .visualization_routes import viz_bp
-from .reports_api_routes import reports_bp
+from .reports_routes import reports_bp
 from .debug_routes import debug_bp
 from .itn_routes import itn_bp, itn_embed_bp
 from .export_routes import export_bp
@@ -58,7 +59,7 @@ except ImportError as e:
 
 # Data Analysis V3 - New implementation
 try:
-    from .data_analysis_v3_routes import data_analysis_v3_bp
+    from .data_analysis_routes import data_analysis_v3_bp
     DATA_ANALYSIS_V3_AVAILABLE = True
 except ImportError as e:
     data_analysis_v3_bp = None

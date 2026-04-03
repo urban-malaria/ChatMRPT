@@ -11,7 +11,7 @@ from app.auth.decorators import require_auth
 from app.analysis.engine import AnalysisEngine
 from app.utils.decorators import handle_errors, log_execution_time, validate_session
 from app.utils.exceptions import ValidationError
-from app.runtime.standard import SessionDataMissing, get_data_handler
+from app.services.standard_workflow import SessionDataMissing, get_data_handler
 
 from . import analysis_bp, logger
 from .utils import resync_session_flags

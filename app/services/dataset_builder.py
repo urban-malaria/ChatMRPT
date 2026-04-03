@@ -833,7 +833,7 @@ class UnifiedDatasetBuilder:
                 
                 # Add composite variables metadata if available in data handler
                 try:
-                    from app.data.data_handler import DataHandler
+                    from app.services.data_handler import DataHandler
                     handler = DataHandler(self.session_id)
                     if hasattr(handler, 'composite_variables') and handler.composite_variables:
                         gdf['composite_variables_used'] = ','.join(handler.composite_variables)

@@ -124,7 +124,7 @@ class CreateVulnerabilityMap(BaseTool):
                 return self._create_error_result("No geographic boundaries found. Please upload shapefile data.")
             
             # Import the agent function
-            from app.services.agents.visualizations import create_agent_vulnerability_map
+            from app.visualization import create_agent_vulnerability_map
             
             # Create vulnerability map using existing agent function
             map_result = create_agent_vulnerability_map(
@@ -249,7 +249,7 @@ class CreateCompositeVulnerabilityMap(BaseTool):
                 return self._create_error_result("No geographic boundaries found. Please upload shapefile data.")
 
             # Import the agent function
-            from app.services.agents.visualizations import create_agent_vulnerability_map
+            from app.visualization import create_agent_vulnerability_map
 
             # Create vulnerability map using composite method specifically
             map_result = create_agent_vulnerability_map(
@@ -373,7 +373,7 @@ class CreatePCAMap(BaseTool):
                 return self._create_error_result("No geographic boundaries found. Please upload shapefile data.")
             
             # Import the agent function
-            from app.services.agents.visualizations import create_agent_pca_vulnerability_map
+            from app.visualization import create_agent_pca_vulnerability_map
             
             # Create PCA map using existing agent function
             map_result = create_agent_pca_vulnerability_map(
@@ -729,7 +729,7 @@ class CreateUrbanExtentMap(BaseTool):
                 return self._create_error_result("No geographic boundaries found. Please upload shapefile data.")
             
             # Import the agent function
-            from app.services.agents.visualizations import create_agent_urban_extent_map
+            from app.visualization import create_agent_urban_extent_map
             
             # Create urban extent map using existing agent function
             map_result = create_agent_urban_extent_map(
@@ -827,7 +827,7 @@ class CreateDecisionTree(BaseTool):
                 return self._create_error_result("No data available for analysis")
             
             # Import the agent function
-            from app.services.agents.visualizations import create_agent_decision_tree
+            from app.visualization import create_agent_decision_tree
             
             # Create decision tree using existing agent function
             tree_result = create_agent_decision_tree(
@@ -919,7 +919,7 @@ class CreateCompositeScoreMaps(BaseTool):
                 return self._create_error_result(error_msg)
             
             # Import the agent function
-            from app.services.agents.visualizations import create_agent_composite_score_maps
+            from app.visualization import create_agent_composite_score_maps
             
             # Create composite maps using existing agent function
             maps_result = create_agent_composite_score_maps(

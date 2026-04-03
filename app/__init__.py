@@ -139,7 +139,7 @@ def create_app(config_name=None):
         app.logger.info("🚀 Development mode - Using in-memory conversation tracking")
     
     # --- Register Blueprints ---
-    from .web import admin_bp, register_all_blueprints
+    from .api import admin_bp, register_all_blueprints
     # Register modern auth API (signup/signin/status/verify)
     from .auth.auth_complete import auth as auth_api_bp
 
@@ -161,7 +161,7 @@ def create_app(config_name=None):
     register_all_blueprints(app)
     
     # --- Arena System (Groq API - FREE) ---
-    from .web.routes.arena_routes import init_arena_system
+    from .api.arena_routes import init_arena_system
     try:
         init_arena_system(app)
         app.logger.info("✅ Arena system initialized successfully (Groq API)")
