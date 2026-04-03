@@ -218,10 +218,7 @@ def run_risk_analysis(
         if not result.success:
             return result.message, {}
 
-        message = result.message or "Risk analysis complete. Unified dataset created."
-        message += '\n\nYou can now try: "**plot the vulnerability map**" or "**I want to plan bed net distribution**"'
-
-        return message, {}
+        return result.message or "Risk analysis complete. Unified dataset created.", {}
     except Exception as e:
         logger.error(f"run_risk_analysis failed: {e}", exc_info=True)
         return f"Error running risk analysis: {e}", {}

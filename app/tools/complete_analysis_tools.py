@@ -1144,9 +1144,9 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
             fallback_parts.append("\n")
             fallback_parts.append("### Next Steps\n")
             fallback_parts.append("\n")
-            fallback_parts.append("- **Review** the generated maps and charts\n")
-            fallback_parts.append("- **Ask for specific ward rankings**\n")
-            fallback_parts.append("- **Request additional visualizations**\n")
+            fallback_parts.append('- **Visualize Risk Levels:** "plot the vulnerability map"\n')
+            fallback_parts.append('- **Plan Interventions:** "I want to plan bed net distribution"\n')
+            fallback_parts.append('- **View Rankings:** "show me the top 10 highest risk wards"\n')
             
             return "\n".join(fallback_parts)
 
@@ -1228,10 +1228,10 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
             # Add next steps
             summary_parts.append("### 💡 Next Steps\n")
             summary_parts.append("\n")
-            summary_parts.append("- **Review** the generated visualizations above\n")
-            summary_parts.append("- **Ask for specific ward comparisons**\n")
-            summary_parts.append("- **Request additional analysis or maps**\n")
-            summary_parts.append("- **Export results** for intervention planning\n")
+            summary_parts.append('- **Visualize Risk Levels:** "plot the vulnerability map"\n')
+            summary_parts.append('- **Plan Interventions:** "I want to plan bed net distribution"\n')
+            summary_parts.append('- **View Rankings:** "show me the top 10 highest risk wards"\n')
+            summary_parts.append('- **Export results** for intervention planning\n')
             
             return "\n".join(summary_parts)
             
