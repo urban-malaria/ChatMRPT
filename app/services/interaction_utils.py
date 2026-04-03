@@ -21,7 +21,7 @@ import re
 import uuid
 
 # Import unified utilities to replace redundant patterns
-from ..core.responses import ResponseBuilder
+from app.utils.responses import ResponseBuilder
 
 # Set up logging
 logger = logging.getLogger(__name__)

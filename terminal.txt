@@ -3,50 +3,47 @@
 [DEV] Instance folder: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance
 [DEV] OpenAI API Key: Set
 [DEV] Debug Mode: True
-[2026-04-03 14:15:59,578] WARNING in redis_config: ⚠️ Redis not available: Error 111 connecting to loccalhost:6379. Connection refused.
-[2026-04-03 14:15:59,578] INFO in redis_config: 📁 Falling back to filesystem sessions for local development
-[2026-04-03 14:15:59,812] INFO in redis_config: ✅ Filesystem session store initialized at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/flask_session
-[2026-04-03 14:15:59,876] DEBUG in container: Registered service: interaction_logger (singleton: True)
-[2026-04-03 14:15:59,877] DEBUG in container: Registered service: llm_manager (singleton: True)       
-[2026-04-03 14:15:59,877] DEBUG in container: Registered service: data_service (singleton: True)
-[2026-04-03 14:15:59,877] DEBUG in container: Registered service: analysis_service (singleton: True)  
-[2026-04-03 14:15:59,877] DEBUG in container: Registered service: visualization_service (singleton: True)
-[2026-04-03 14:15:59,877] DEBUG in container: Registered service: report_service (singleton: True)    
-[2026-04-03 14:15:59,877] DEBUG in container: Registered service: request_interpreter (singleton: True)
-[2026-04-03 14:15:59,877] INFO in container: 🚀 Starting eager initialization of core services...     
-[2026-04-03 14:15:59,889] WARNING in container: Failed to create interaction logger: No module named 'app.services.core'
-[2026-04-03 14:15:59,889] DEBUG in container: Created service instance: interaction_logger
-[2026-04-03 14:15:59,889] WARNING in container: ⚠️  interaction_logger returned None
-[2026-04-03 14:15:59,903] WARNING in container: Failed to create interaction logger: No module named 'app.services.core'
-[2026-04-03 14:15:59,903] DEBUG in container: Created service instance: interaction_logger
-[2026-04-03 14:16:09,630] INFO in container: 🔍 DEBUG: USE_VLLM = False (from env: None)
-[2026-04-03 14:16:09,630] INFO in container: 🔍 DEBUG: USE_OLLAMA = False (from env: None)
-[2026-04-03 14:16:09,630] INFO in container: ☁️ Using OpenAI for cloud inference
-[2026-04-03 14:16:09,630] INFO in llm_adapter: LLM Adapter initialized: backend=openai, model=gpt-4o  
-[2026-04-03 14:16:28,609] INFO in llm_adapter: OpenAI call: model=gpt-4o, project=unset, base_url_env=unset
-[2026-04-03 14:16:35,782] INFO in container: ✅ LLM backend verified: openai with gpt-4o
-[2026-04-03 14:16:35,782] DEBUG in container: Created service instance: llm_manager
-[2026-04-03 14:16:35,782] INFO in container: ✅ llm_manager initialized in 35.89s
-[2026-04-03 14:16:35,782] DEBUG in container: Created service instance: data_service
-[2026-04-03 14:16:35,782] INFO in container: ✅ data_service initialized in 0.00s
-[2026-04-03 14:16:36,398] WARNING in container: Failed to create analysis service: No module named 'app.analysis.pipeline_stages.data_preparation'
-[2026-04-03 14:16:36,398] DEBUG in container: Created service instance: analysis_service
-[2026-04-03 14:16:36,398] WARNING in container: ⚠️  analysis_service returned None
-[2026-04-03 14:16:36,428] WARNING in container: Failed to create visualization service: cannot import name 'create_agent_composite_score_maps' from 'app.visualization' (/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/visualization/__init__.py)
-[2026-04-03 14:16:36,428] DEBUG in container: Created service instance: visualization_service
-[2026-04-03 14:16:36,428] WARNING in container: ⚠️  visualization_service returned None
-[2026-04-03 14:16:38,088] DEBUG in container: Created service instance: report_service
-[2026-04-03 14:16:38,089] INFO in container: ✅ report_service initialized in 1.66s
-[2026-04-03 14:16:38,135] WARNING in container: Failed to create analysis service: No module named 'app.analysis.pipeline_stages.data_preparation'
-[2026-04-03 14:16:38,135] DEBUG in container: Created service instance: analysis_service
-[2026-04-03 14:16:38,145] WARNING in container: Failed to create visualization service: cannot import name 'create_agent_composite_score_maps' from 'app.visualization' (/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/visualization/__init__.py)
-[2026-04-03 14:16:38,145] DEBUG in container: Created service instance: visualization_service
-[2026-04-03 14:16:38,145] WARNING in container: Failed to create request interpreter: name 'create_request_interpreter' is not defined
-[2026-04-03 14:16:38,145] DEBUG in container: Created service instance: request_interpreter
-[2026-04-03 14:16:38,145] WARNING in container: ⚠️  request_interpreter returned None
-[2026-04-03 14:16:38,145] INFO in container: 🎯 Eager initialization complete - services ready for instant responses!
-[2026-04-03 14:16:38,145] INFO in container: Service container initialized with core services
-[2026-04-03 14:16:38,146] INFO in __init__: 🚀 Development mode - Using in-memory conversation tracking
+[2026-04-03 14:19:55,147] WARNING in redis_config: ⚠️ Redis not available: Error 111 connecting to loccalhost:6379. Connection refused.
+[2026-04-03 14:19:55,147] INFO in redis_config: 📁 Falling back to filesystem sessions for local development
+[2026-04-03 14:19:55,375] INFO in redis_config: ✅ Filesystem session store initialized at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/flask_session
+[2026-04-03 14:19:55,426] DEBUG in container: Registered service: interaction_logger (singleton: True)
+[2026-04-03 14:19:55,426] DEBUG in container: Registered service: llm_manager (singleton: True)
+[2026-04-03 14:19:55,426] DEBUG in container: Registered service: data_service (singleton: True)      
+[2026-04-03 14:19:55,426] DEBUG in container: Registered service: analysis_service (singleton: True)  
+[2026-04-03 14:19:55,427] DEBUG in container: Registered service: visualization_service (singleton: True)
+[2026-04-03 14:19:55,427] DEBUG in container: Registered service: report_service (singleton: True)    
+[2026-04-03 14:19:55,427] DEBUG in container: Registered service: request_interpreter (singleton: True)
+[2026-04-03 14:19:55,427] INFO in container: 🚀 Starting eager initialization of core services...     
+[2026-04-03 14:20:01,338] WARNING in container: Failed to create interaction logger: No module named 'app.services.core'
+[2026-04-03 14:20:01,339] DEBUG in container: Created service instance: interaction_logger
+[2026-04-03 14:20:01,339] WARNING in container: ⚠️  interaction_logger returned None
+[2026-04-03 14:20:01,355] WARNING in container: Failed to create interaction logger: No module named 'app.services.core'
+[2026-04-03 14:20:01,356] DEBUG in container: Created service instance: interaction_logger
+[2026-04-03 14:20:02,950] INFO in container: 🔍 DEBUG: USE_VLLM = False (from env: None)
+[2026-04-03 14:20:02,950] INFO in container: 🔍 DEBUG: USE_OLLAMA = False (from env: None)
+[2026-04-03 14:20:02,950] INFO in container: ☁️ Using OpenAI for cloud inference
+[2026-04-03 14:20:02,950] INFO in llm_adapter: LLM Adapter initialized: backend=openai, model=gpt-4o  
+[2026-04-03 14:20:11,602] INFO in llm_adapter: OpenAI call: model=gpt-4o, project=unset, base_url_env=unset
+[2026-04-03 14:20:16,913] INFO in container: ✅ LLM backend verified: openai with gpt-4o
+[2026-04-03 14:20:16,913] DEBUG in container: Created service instance: llm_manager
+[2026-04-03 14:20:16,914] INFO in container: ✅ llm_manager initialized in 15.57s
+[2026-04-03 14:20:16,914] DEBUG in container: Created service instance: data_service
+[2026-04-03 14:20:16,914] INFO in container: ✅ data_service initialized in 0.00s
+[2026-04-03 14:20:30,227] DEBUG in container: Created service instance: analysis_service
+[2026-04-03 14:20:30,227] INFO in container: ✅ analysis_service initialized in 13.31s
+[2026-04-03 14:20:32,696] WARNING in container: Failed to create visualization service: No module named 'app.visualization.core_utils'
+[2026-04-03 14:20:32,697] DEBUG in container: Created service instance: visualization_service
+[2026-04-03 14:20:32,697] WARNING in container: ⚠️  visualization_service returned None
+[2026-04-03 14:20:32,729] DEBUG in container: Created service instance: report_service
+[2026-04-03 14:20:32,729] INFO in container: ✅ report_service initialized in 0.03s
+[2026-04-03 14:20:32,793] WARNING in container: Failed to create visualization service: No module named 'app.visualization.core_utils'
+[2026-04-03 14:20:32,793] DEBUG in container: Created service instance: visualization_service
+[2026-04-03 14:20:32,832] WARNING in interpreter: Services init failed (non-fatal): No module named 'app.agent.session_context_service'
+[2026-04-03 14:20:32,832] DEBUG in container: Created service instance: request_interpreter
+[2026-04-03 14:20:32,832] INFO in container: ✅ request_interpreter initialized in 0.10s
+[2026-04-03 14:20:32,832] INFO in container: 🎯 Eager initialization complete - services ready for instant responses!
+[2026-04-03 14:20:32,832] INFO in container: Service container initialized with core services
+[2026-04-03 14:20:32,833] INFO in __init__: 🚀 Development mode - Using in-memory conversation tracking
 ⚠️ Redis not available: Error 111 connecting to localhost:6379. Connection refused.. Falling back to SSQLite for sessions.
 Traceback (most recent call last):
   File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/run.py", line 35, in <module>
@@ -55,5 +52,9 @@ Traceback (most recent call last):
     from .api import admin_bp, register_all_blueprints
   File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/__init__.py", line 21, in <module>       
     from .analysis import analysis_bp as analysis_chat_bp  # New modular analysis routes
-ImportError: cannot import name 'analysis_bp' from 'app.api.analysis' (/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/analysis/__init__.py)
+  File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/analysis/__init__.py", line 9, in <module>
+    from .analysis_chat import *
+  File "/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/api/analysis/analysis_chat.py", line 9, in <module>
+    from .chat_sync_service import handle_send_message
+ModuleNotFoundError: No module named 'app.api.analysis.chat_sync_service'
 (chatmrpt_venv_new) bbofori@B3NZ0:/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT$ 

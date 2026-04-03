@@ -17,7 +17,7 @@ def reset_tpr_handler_cache(session_id: Optional[str] = None) -> None:
     """Clear any cached TPR workflow state for a session.
 
     Previously lived in app.runtime.tpr.workflow. Kept here so that
-    chat_stream_service can import it from a single canonical location.
+    chat_stream can import it from a single canonical location.
     TPRWorkflowHandler instances are created per-request and not cached,
     so this is effectively a no-op — it exists to avoid import errors.
     """

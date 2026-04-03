@@ -6,8 +6,8 @@ from app.auth.decorators import require_auth
 from app.utils.decorators import handle_errors, log_execution_time, validate_session
 
 from . import analysis_bp
-from .chat_sync_service import handle_send_message
-from .chat_stream_service import handle_send_message_streaming
+from .chat_sync import handle_send_message
+from .chat_stream import handle_send_message_streaming
 
 
 @analysis_bp.route('/send_message', methods=['POST'])

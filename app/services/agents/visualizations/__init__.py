@@ -27,7 +27,7 @@ from .pca_visualizations import (
 
 # Dynamic generator removed - functionality moved to tools
 
-from .core_utils import (
+from .geo_utils import (
     prepare_unified_dataset,
     extract_plotly_json,
     save_agent_visualization

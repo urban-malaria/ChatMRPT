@@ -16,7 +16,7 @@ import geopandas as gpd
 import plotly.graph_objects as go
 from typing import Dict, Any, List, Optional
 
-from .core_utils import (
+from .geo_utils import (
     prepare_unified_dataset,
     save_agent_visualization,
     get_vulnerability_colors,

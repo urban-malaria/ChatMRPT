@@ -23,7 +23,7 @@ import sqlite3
 from typing import Dict, List, Any, Optional, Union
 
 # Local imports
-from .core import DatabaseManager
+from .interaction_core import DatabaseManager
 
 # Set up logging
 logger = logging.getLogger(__name__)

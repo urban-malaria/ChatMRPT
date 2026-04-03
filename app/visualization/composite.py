@@ -24,7 +24,7 @@ from pathlib import Path
 import time
 from datetime import datetime
 
-from .core_utils import (
+from .geo_utils import (
     prepare_unified_dataset,
     save_agent_visualization,
     get_vulnerability_colors,

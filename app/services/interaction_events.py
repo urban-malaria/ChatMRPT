@@ -29,7 +29,7 @@ from typing import Dict, List, Any, Optional, Union
 
 # Local imports
 from app.utils.core_utils import convert_to_json_serializable
-from .core import DatabaseManager
+from .interaction_core import DatabaseManager
 
 # Set up logging
 logger = logging.getLogger(__name__)

@@ -57,7 +57,7 @@ class RequestInterpreter:
         
         # Initialize extracted services (context, prompt, orchestration)
         try:
-            from .session_context_service import SessionContextService
+            from .session_context import SessionContextService
             from .data_repository import DataRepository
             from .prompt_builder import PromptBuilder
 
