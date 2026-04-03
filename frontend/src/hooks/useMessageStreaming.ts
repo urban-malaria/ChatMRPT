@@ -26,9 +26,8 @@ const useMessageStreaming = () => {
   }, [setLoading]);
   
   const sendMessage = useCallback(async (message: string, opts?: { silent?: boolean }) => {
-    // Check if we're in data analysis mode
+    // Check if we're in data analysis mode (set on upload, never toggled off)
     const dataAnalysisMode = useAnalysisStore.getState().dataAnalysisMode;
-    const setDataAnalysisMode = useAnalysisStore.getState().setDataAnalysisMode;
     
     // DEBUG LOGGING
     console.log('🎯 FRONTEND: sendMessage called');
@@ -99,9 +98,6 @@ const useMessageStreaming = () => {
         console.log('  Success:', responseData.success);
         console.log('  Visualizations:', responseData.visualizations?.length || 0);
         console.log('  Has Message:', !!responseData.message);
-        console.log('  Has Redirect Message:', !!responseData.redirect_message);
-        console.log('  Workflow:', responseData.workflow);
-        console.log('  Stage:', responseData.stage);
         console.log('  Message Preview:', responseData.message?.substring(0, 120));
         console.log('───────────────────────────────────────────────────────────');
 
