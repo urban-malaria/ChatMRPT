@@ -699,30 +699,10 @@ def data_analysis_chat():
         except Exception:
             pass
 
+        # ONE-BRAIN: workflow_transitioned no longer causes early return.
+        # After TPR completes, the agent handles all subsequent messages.
         if current_state.get('workflow_transitioned'):
-            logger.info(f"Workflow has transitioned for session {session_id}, exiting Data Analysis mode")
-
-            # 🎯 LOG TRANSITION MESSAGE
-            transition_message = 'Data has been prepared. Switching to main ChatMRPT workflow.'
-            interaction_core.log_message(
-                session_id=session_id,
-                sender='assistant',
-                content=transition_message,
-                intent='workflow_transition',
-                entities={
-                    'response_time_seconds': time.time() - request_start_time,
-                    'endpoint': '/api/v1/data-analysis/chat',
-                    'workflow': 'transition'
-                }
-            )
-
-            # ONE-BRAIN MIGRATION: Don't exit data analysis mode — stay in V3 agent
-            return _save_and_respond({
-                'success': True,
-                # 'exit_data_analysis_mode': True,  # DISABLED for one-brain migration
-                'message': transition_message,
-                'session_id': session_id
-            }, session_id)
+            logger.info(f"Workflow transitioned for session {session_id} — staying in V3 agent mode")
 
         from app.data_analysis_v3.tpr.workflow_manager import TPRWorkflowHandler
         from app.data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer
@@ -910,14 +890,6 @@ def data_analysis_chat():
             if isinstance(response, dict):
                 stage = (response.get('stage') or '').upper()
                 workflow = (response.get('workflow') or '').lower()
-
-                # ONE-BRAIN MIGRATION: Don't exit data analysis mode — stay in V3 agent
-                # if stage == 'COMPLETE' and workflow in ['tpr', 'data_upload']:
-                #     if not response.get('exit_data_analysis_mode'):
-                #         response['exit_data_analysis_mode'] = True
-                #         if workflow == 'tpr':
-                #             response['workflow'] = 'data_upload'
-                pass  # Stay in V3 mode after TPR completes
 
             return jsonify(response)
 

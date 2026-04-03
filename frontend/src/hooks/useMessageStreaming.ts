@@ -97,7 +97,7 @@ const useMessageStreaming = () => {
         console.log('───────────────────────────────────────────────────────────');
         console.log('✅ DATA ANALYSIS V3 RESPONSE');
         console.log('  Success:', responseData.success);
-        console.log('  Exit Data Analysis Mode:', responseData.exit_data_analysis_mode);
+        console.log('  Visualizations:', responseData.visualizations?.length || 0);
         console.log('  Has Message:', !!responseData.message);
         console.log('  Has Redirect Message:', !!responseData.redirect_message);
         console.log('  Workflow:', responseData.workflow);
@@ -105,37 +105,8 @@ const useMessageStreaming = () => {
         console.log('  Message Preview:', responseData.message?.substring(0, 120));
         console.log('───────────────────────────────────────────────────────────');
 
-        // Check if we should exit data analysis mode
-        if (responseData.exit_data_analysis_mode) {
-          console.log('🔄🔄🔄 WORKFLOW TRANSITION DETECTED 🔄🔄🔄');
-          console.log('  Exiting Data Analysis V3 mode');
-          console.log('  Setting dataAnalysisMode = false');
-          console.log('  Next request will go to /send_message_streaming');
-          console.log('  Transition message:', responseData.message?.substring(0, 200));
-          setDataAnalysisMode(false);
-          
-          // Display the transition message first
-          if (responseData.message) {
-            const transitionMessage: RegularMessage = {
-              id: `msg_${Date.now() + 1}`,
-              type: 'regular',
-              sender: 'assistant',
-              content: responseData.message,
-              timestamp: new Date(),
-              sessionId: session.sessionId,
-              visualizations: responseData.visualizations?.length ? responseData.visualizations : undefined,
-              downloadLinks: responseData.download_links?.length ? responseData.download_links : undefined,
-            };
-            addMessage(transitionMessage);
-          }
-          
-          // If there's a redirect message, send it to the normal chat
-          if (responseData.redirect_message) {
-            setTimeout(() => {
-              sendMessage(responseData.redirect_message);
-            }, 500); // Increased delay to ensure transition message shows first
-          }
-        } else if (responseData.success && responseData.message) {
+        // ONE-BRAIN: No mode exit — always stay in V3 agent mode after upload
+        if (responseData.success && responseData.message) {
           // Add the response as an assistant message
           const assistantMessage: RegularMessage = {
             id: `msg_${Date.now() + 1}`,
