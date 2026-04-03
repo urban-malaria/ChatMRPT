@@ -565,7 +565,7 @@ class ServiceContainer:
         """Create request interpreter - natural language processing."""
         try:
             # Use migration utility to create appropriate interpreter
-            # ARCHIVED: interpreter_migration no longer exists
+            from app.agent.interpreter import RequestInterpreter; create_request_interpreter = lambda *a, **kw: RequestInterpreter(*a, **kw)
             
             llm_manager = container.get('llm_manager')
             data_service = container.get('data_service')

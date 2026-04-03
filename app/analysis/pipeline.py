@@ -10,23 +10,11 @@ import os
 # Import the individual analysis modules
 from .metadata import AnalysisMetadata
 
-# Import all stage functions from the new pipeline_stages package
-from .pipeline_stages import (
-    # Data preparation stages
-    run_data_cleaning_stage,
-    run_relationship_stage,
-    run_normalization_stage,
-    
-    # Scoring stages
-    run_composite_scoring_stage,
-    run_vulnerability_ranking_stage,
-    run_urban_analysis_stage,
-    
-    # Note: PCA stages removed - PCA uses dedicated pca_pipeline.py
-    
-    # Utilities
-    apply_composite_scores_fix
-)
+# Pipeline stage functions — previously in pipeline_stages/ (archived)
+# These functions are now defined inline in this file or imported from analysis modules
+from .scoring import compute_composite_scores as run_composite_scoring_stage
+from .normalization import normalize_variable as run_normalization_stage
+from .imputation import handle_missing_values as run_data_cleaning_stage
 
 # Set up logging
 logger = logging.getLogger(__name__)

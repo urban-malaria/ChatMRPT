@@ -23,7 +23,7 @@ Version: 1.0.0
 """
 
 # Core imports
-from .core import (
+from .interaction_core import (
     DatabaseManager,
     SessionManager, 
     InteractionCore,
@@ -32,7 +32,7 @@ from .core import (
 )
 
 # Event tracking imports
-from .events import (
+from .interaction_events import (
     EventLogger,
     log_file_upload,
     log_analysis_event,
@@ -48,7 +48,7 @@ from .events import (
 )
 
 # Storage and retrieval imports
-from .storage import (
+from .interaction_storage import (
     StorageManager,
     get_session_history,
     get_analysis_metadata,
@@ -60,7 +60,7 @@ from .storage import (
 )
 
 # Utility imports
-from .utils import (
+from .interaction_utils import (
     validate_session_id,
     safe_json_parse,
     safe_json_dumps,
