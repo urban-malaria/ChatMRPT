@@ -1,0 +1,391 @@
+BACKEND FILES (231 .py files)
+==========================================
+
+--- app/ ---
+  __init__.py (7922 bytes)
+  routes.py (3005 bytes)
+  system_prompt.py (14855 bytes)
+
+--- app/analysis/ ---
+  __init__.py (6469 bytes)
+  engine.py (12094 bytes)
+  imputation.py (20207 bytes)
+  itn_pipeline.py (79487 bytes)
+  metadata.py (8815 bytes)
+  normalization.py (16700 bytes)
+  pca_pipeline.py (37519 bytes)
+  pca_statistical_tests.py (11011 bytes)
+  pipeline.py (26169 bytes)
+  region_aware_selection.py (34067 bytes)
+  scoring.py (22426 bytes)
+  urban_analysis.py (18599 bytes)
+  utils.py (8510 bytes)
+  variable_comparison_validator.py (10083 bytes)
+  variable_selection_coordinator.py (14879 bytes)
+
+--- app/analysis/pipeline_stages/ ---
+  __init__.py (276 bytes)
+  data_preparation.py (22507 bytes)
+  pipeline_utils.py (2153 bytes)
+  scoring_stages.py (16856 bytes)
+
+--- app/auth/ ---
+  __init__.py (41 bytes)
+  auth_complete.py (11351 bytes)
+  decorators.py (3266 bytes)
+  google_auth.py (4814 bytes)
+  session_utils.py (1695 bytes)
+  user_model.py (13990 bytes)
+
+--- app/config/ ---
+  __init__.py (1128 bytes)
+  arena.py (1977 bytes)
+  base.py (10640 bytes)
+  container.py (27504 bytes)
+  data_paths.py (3457 bytes)
+  development.py (1969 bytes)
+  production.py (2959 bytes)
+  redis_config.py (5245 bytes)
+  settings.py (34 bytes)
+  testing.py (2373 bytes)
+
+--- app/core/ ---
+  __init__.py (1621 bytes)
+  analysis_state_handler.py (7286 bytes)
+  arena_manager.py (25293 bytes)
+  arena_system_prompt.py (6149 bytes)
+  data_repository.py (2471 bytes)
+  decorators.py (3565 bytes)
+  dependency_validator.py (13543 bytes)
+  exceptions.py (1108 bytes)
+  instance_sync.py (10388 bytes)
+  llm_adapter.py (32053 bytes)
+  llm_manager.py (35620 bytes)
+  prompt_builder.py (12880 bytes)
+  redis_state_manager.py (4547 bytes)
+  request_interpreter.py (24209 bytes)
+  responses.py (10528 bytes)
+  session_context_service.py (6910 bytes)
+  session_helper.py (1397 bytes)
+  session_state.py (12135 bytes)
+  tool_schema_registry.py (4533 bytes)
+  tool_validator.py (13079 bytes)
+  tpr_precompute.py (14501 bytes)
+  tpr_precompute_service.py (7166 bytes)
+  tpr_utils.py (24119 bytes)
+  tpr_ward_cache.py (3017 bytes)
+  unified_data_state.py (12208 bytes)
+  utils.py (13915 bytes)
+  variable_matcher.py (13453 bytes)
+  workflow_state_manager.py (15836 bytes)
+
+--- app/data/ ---
+  __init__.py (56946 bytes)
+  analysis.py (32296 bytes)
+  flexible_data_access.py (25186 bytes)
+  loaders.py (15096 bytes)
+  processing.py (19887 bytes)
+  reporting.py (28956 bytes)
+  settlement_loader.py (24086 bytes)
+  unified_dataset_builder.py (106108 bytes)
+  utils.py (19879 bytes)
+  validation.py (36569 bytes)
+
+--- app/data/population_data/ ---
+  itn_population_loader.py (11797 bytes)
+
+--- app/data_analysis_v3/ ---
+  __init__.py (365 bytes)
+
+--- app/data_analysis_v3/core/ ---
+  __init__.py (0 bytes)
+  agent.py (52099 bytes)
+  agent_fixed.py (12028 bytes)
+  analytics_helpers.py (8469 bytes)
+  column_validator.py (8593 bytes)
+  data_exploration_agent.py (6525 bytes)
+  data_profiler.py (12453 bytes)
+  data_validator.py (11556 bytes)
+  encoding_handler.py (9573 bytes)
+  executor.py (30017 bytes)
+  executor_simple.py (25406 bytes)
+  formatters.py (16315 bytes)
+  lazy_loader.py (4835 bytes)
+  metadata_cache.py (22904 bytes)
+  python_tool.py (12636 bytes)
+  scope_utils.py (1572 bytes)
+  state.py (1315 bytes)
+  state_manager.py (16311 bytes)
+  system_prompt.py (6805 bytes)
+  tpr_intent_classifier.py (8654 bytes)
+  tpr_language_interface.py (23013 bytes)
+  tpr_workflow_handler.py (90466 bytes)
+
+--- app/data_analysis_v3/formatters/ ---
+  __init__.py (0 bytes)
+  response_formatter.py (8186 bytes)
+
+--- app/data_analysis_v3/prompts/ ---
+  __init__.py (0 bytes)
+  system_prompt.py (9939 bytes)
+
+--- app/data_analysis_v3/tools/ ---
+  __init__.py (0 bytes)
+  map_tools.py (14307 bytes)
+  python_tool.py (15353 bytes)
+  tpr_analysis_tool.py (71148 bytes)
+  tpr_workflow_langgraph_tool.py (45033 bytes)
+
+--- app/data_analysis_v3/tpr/ ---
+  __init__.py (568 bytes)
+  data_analyzer.py (25817 bytes)
+  workflow_manager.py (49153 bytes)
+
+--- app/helpers/ ---
+  __init__.py (599 bytes)
+  data_requirements_helper.py (13507 bytes)
+  error_recovery_helper.py (18608 bytes)
+  tool_discovery_helper.py (18657 bytes)
+  welcome_helper.py (8118 bytes)
+  workflow_progress_helper.py (16889 bytes)
+
+--- app/interaction/ ---
+  __init__.py (14337 bytes)
+  core.py (22779 bytes)
+  events.py (40022 bytes)
+  storage.py (25750 bytes)
+  utils.py (11338 bytes)
+
+--- app/models/ ---
+  analysis.py (2054 bytes)
+  data_handler.py (3317 bytes)
+  report_generator.py (2096 bytes)
+
+--- app/prepost/ ---
+  __init__.py (270 bytes)
+  models.py (12840 bytes)
+  questions.py (28167 bytes)
+  routes.py (12207 bytes)
+
+--- app/reports/ ---
+  __init__.py (815 bytes)
+
+--- app/routing/ ---
+  __init__.py (430 bytes)
+  context_bias.py (6099 bytes)
+  encoder.py (5976 bytes)
+  fallback_router.py (4288 bytes)
+  route_definitions.py (10390 bytes)
+  semantic_router.py (7832 bytes)
+
+--- app/runtime/ ---
+  __init__.py (73 bytes)
+  upload_service.py (6351 bytes)
+
+--- app/runtime/standard/ ---
+  __init__.py (411 bytes)
+  workflow.py (5798 bytes)
+
+--- app/services/ ---
+  __init__.py (166 bytes)
+  container.py (33179 bytes)
+  conversation_history.py (11122 bytes)
+  earth_engine_client.py (13888 bytes)
+  llm_adapter.py (12306 bytes)
+  memory_service.py (6354 bytes)
+  query_result.py (6128 bytes)
+  response_formatter.py (21068 bytes)
+  robust_earth_engine_client.py (22797 bytes)
+  session_memory.py (11253 bytes)
+  shapefile_fetcher.py (17834 bytes)
+  unified_data_state.py (11243 bytes)
+  universal_viz_explainer.py (27413 bytes)
+  variable_resolution_service.py (19171 bytes)
+
+--- app/services/agents/ ---
+  __init__.py (686 bytes)
+
+--- app/services/agents/visualizations/ ---
+  __init__.py (1434 bytes)
+  composite_visualizations.py (68556 bytes)
+  core_utils.py (16194 bytes)
+  pca_visualizations.py (8538 bytes)
+  tpr_visualization_service.py (8442 bytes)
+
+--- app/services/reports/ ---
+  __init__.py (141 bytes)
+  modern_generator.py (9231 bytes)
+
+--- app/services/tools/ ---
+  get_unified_dataset.py (944 bytes)
+  standardized_analysis_tools.py (29571 bytes)
+
+--- app/services/visualization/ ---
+  __init__.py (237 bytes)
+  chart_service.py (38152 bytes)
+
+--- app/survey/ ---
+  __init__.py (1623 bytes)
+  models.py (8957 bytes)
+  populate_questions.py (3341 bytes)
+  questions.py (54745 bytes)
+  routes.py (8793 bytes)
+
+--- app/tools/ ---
+  __init__.py (15663 bytes)
+  base.py (16090 bytes)
+  chatmrpt_help_tool.py (24196 bytes)
+  complete_analysis_tools.py (91034 bytes)
+  custom_analysis_parser.py (10411 bytes)
+  data_description_tools.py (9835 bytes)
+  export_tools.py (70266 bytes)
+  itn_planning_tools.py (20218 bytes)
+  methodology_explanation_tools.py (9156 bytes)
+  settlement_intervention_tools.py (44712 bytes)
+  settlement_validation_tools.py (25487 bytes)
+  settlement_visualization_tools.py (12735 bytes)
+  tpr_query_tool.py (25567 bytes)
+  variable_distribution.py (36475 bytes)
+  visualization_charts_tools.py (96164 bytes)
+  visualization_maps_tools.py (45088 bytes)
+
+--- app/tools/visualization_charts/ ---
+  __init__.py (1131 bytes)
+  advanced.py (17886 bytes)
+  categorical.py (8696 bytes)
+  common.py (1747 bytes)
+  comparative.py (13777 bytes)
+  distribution.py (16102 bytes)
+  ranking.py (5447 bytes)
+  relationship.py (24411 bytes)
+  spatial.py (11042 bytes)
+
+--- app/utils/ ---
+  geospatial_levels.py (4192 bytes)
+  lga_boundaries.py (4340 bytes)
+  map_overlays.py (5236 bytes)
+  security.py (3012 bytes)
+  visualization_controls.py (9296 bytes)
+
+--- app/web/ ---
+  __init__.py (532 bytes)
+  admin.py (10818 bytes)
+
+--- app/web/routes/ ---
+  __init__.py (5866 bytes)
+  analysis_routes.py (86416 bytes)
+  api_routes.py (16404 bytes)
+  arena_routes.py (7819 bytes)
+  compatibility.py (16213 bytes)
+  conversation_routes.py (9454 bytes)
+  core_routes.py (36122 bytes)
+  data_analysis_v3_routes.py (46473 bytes)
+  debug_routes.py (3033 bytes)
+  export_routes.py (8514 bytes)
+  itn_routes.py (5938 bytes)
+  llm_manager.py (36429 bytes)
+  react_route.py (516 bytes)
+  reports_api_routes.py (21119 bytes)
+  session_routes.py (3472 bytes)
+  tpr_routes.py (11104 bytes)
+  upload_routes.py (25555 bytes)
+  visualization_routes.py (39477 bytes)
+
+--- app/web/routes/analysis/ ---
+  __init__.py (473 bytes)
+  analysis_chat.py (844 bytes)
+  analysis_exec.py (4882 bytes)
+  analysis_vote.py (3249 bytes)
+  arena_helpers.py (3509 bytes)
+  chat_routing.py (2554 bytes)
+  chat_stream_service.py (23848 bytes)
+  chat_sync_service.py (18188 bytes)
+  utils.py (1981 bytes)
+
+
+FRONTEND FILES (45 .ts/.tsx files)
+==========================================
+
+--- frontend/src/ ---
+  App.tsx (4571 bytes)
+  main.tsx (249 bytes)
+  vite-env.d.ts (39 bytes)
+
+--- frontend/src/components/ ---
+  MainInterface.tsx (2047 bytes)
+
+--- frontend/src/components/Analysis/ ---
+  DualMethodDisplay.tsx (5094 bytes)
+  MethodCard.tsx (5245 bytes)
+
+--- frontend/src/components/Arena/ ---
+  DualResponsePanel.tsx (3817 bytes)
+  VotingButtons.tsx (1783 bytes)
+
+--- frontend/src/components/Auth/ ---
+  LandingPage.tsx (5908 bytes)
+  LoginModal.tsx (9291 bytes)
+  SignupModal.tsx (12280 bytes)
+
+--- frontend/src/components/Chat/ ---
+  ArenaMessage.tsx (8412 bytes)
+  ChatContainer.tsx (7655 bytes)
+  ClarificationMessage.tsx (2839 bytes)
+  InputArea.tsx (8759 bytes)
+  MessageList.tsx (1012 bytes)
+  RegularMessage.tsx (10738 bytes)
+  SystemMessage.tsx (2347 bytes)
+
+--- frontend/src/components/Export/ ---
+  ExportDropdown.tsx (9000 bytes)
+
+--- frontend/src/components/Icons/ ---
+  WelcomeIcons.tsx (2880 bytes)
+
+--- frontend/src/components/Modal/ ---
+  ConfirmationModal.tsx (5020 bytes)
+  Modal.tsx (4796 bytes)
+  PrivacyModal.tsx (6610 bytes)
+  SettingsModal.tsx (11537 bytes)
+  UploadModal.tsx (24200 bytes)
+
+--- frontend/src/components/Profile/ ---
+  ProfileSection.tsx (4209 bytes)
+  UserAvatar.tsx (1834 bytes)
+
+--- frontend/src/components/Sidebar/ ---
+  ConversationList.tsx (7230 bytes)
+  Sidebar.tsx (14246 bytes)
+
+--- frontend/src/components/Toolbar/ ---
+  Toolbar.tsx (17892 bytes)
+
+--- frontend/src/components/Visualization/ ---
+  VisualizationContainer.tsx (7692 bytes)
+  VisualizationControls.tsx (6338 bytes)
+  VisualizationFrame.tsx (4248 bytes)
+
+--- frontend/src/contexts/ ---
+  ThemeContext.tsx (1298 bytes)
+
+--- frontend/src/hooks/ ---
+  useMessageStreaming.ts (15688 bytes)
+  useVisualization.ts (3442 bytes)
+
+--- frontend/src/services/ ---
+  api.ts (6833 bytes)
+  auth.ts (6364 bytes)
+  exportService.ts (7553 bytes)
+
+--- frontend/src/stores/ ---
+  analysisStore.ts (1877 bytes)
+  chatStore.ts (8355 bytes)
+  conversationHistoryStore.ts (1096 bytes)
+  userStore.ts (1399 bytes)
+
+--- frontend/src/types/ ---
+  index.ts (3419 bytes)
+
+--- frontend/src/utils/ ---
+  storage.ts (3398 bytes)
+
