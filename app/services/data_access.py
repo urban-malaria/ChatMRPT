@@ -462,7 +462,7 @@ class FlexibleDataAccess:
         
         try:
             # Create a temporary DataHandler for analysis
-            from ..data import DataHandler
+            from .data_handler import DataHandler
             temp_handler = DataHandler(str(self.session_folder))
             temp_handler._csv_data = clean_data.drop('geometry', axis=1)
             temp_handler._shapefile_data = clean_data[['WardName', 'geometry']]

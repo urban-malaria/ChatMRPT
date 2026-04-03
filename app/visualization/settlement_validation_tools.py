@@ -49,7 +49,7 @@ def load_building_data(session_id: str = None) -> Optional[gpd.GeoDataFrame]:
     """Load building polygon data dynamically from any available source"""
     try:
         # Use SettlementLoader for dynamic path resolution
-        from ..data.settlement_loader import SettlementLoader
+        from app.services.settlement_loader import SettlementLoader
         
         # Initialize loader with session (or dummy session if none provided)
         loader = SettlementLoader(session_id or "default")

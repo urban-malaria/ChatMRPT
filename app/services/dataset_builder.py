@@ -964,7 +964,7 @@ class UnifiedDatasetBuilder:
             from ..analysis.region_aware_selection import detect_geopolitical_zone
             
             # Load original CSV data for zone detection
-            from ..data import DataHandler
+            from .data_handler import DataHandler
             data_handler = DataHandler(self.session_folder)
             
             if data_handler.csv_data is not None:

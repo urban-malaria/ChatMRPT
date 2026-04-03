@@ -514,8 +514,8 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
             )
         
         try:
-            from ..analysis.engine import AnalysisEngine
-            from ..data import DataHandler
+            from .engine import AnalysisEngine
+            from app.services.data_handler import DataHandler
             
             # Convert session_id to session_folder path
             session_folder = f"instance/uploads/{session_id}"
@@ -620,7 +620,7 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
         
         try:
             from ..analysis.pca_pipeline import run_independent_pca_analysis
-            from ..data import DataHandler
+            from app.services.data_handler import DataHandler
             
             # Convert session_id to session_folder path
             session_folder = f"instance/uploads/{session_id}"
