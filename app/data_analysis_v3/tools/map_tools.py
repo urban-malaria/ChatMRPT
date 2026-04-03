@@ -218,12 +218,8 @@ def run_risk_analysis(
         if not result.success:
             return result.message, {}
 
-        message = result.message or "Risk analysis complete."
-        message += "\n\n**Recommended Next Steps:**"
-        message += '\n\n📍 **Step 1: Visualize Risk Levels**\nTry: "plot the vulnerability map" to see ward risk classification (High/Medium/Low)'
-        message += '\n\n📊 **Step 2: View Rankings**\nTry: "show me the top 10 highest risk wards" or "which wards are most vulnerable?"'
-        message += '\n\n🛏️ **Step 3: Plan ITN Distribution**\nTry: "plan bed net distribution with 500000 nets" to allocate nets optimally'
-        message += '\n\n🏙️ **Step 4: Urban vs Rural Analysis**\nTry: "show urban extent map" to see risk in rural vs urban areas'
+        message = result.message or "Risk analysis complete. Unified dataset created."
+        message += '\n\nYou can now try: "**plot the vulnerability map**" or "**I want to plan bed net distribution**"'
 
         return message, {}
     except Exception as e:
