@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List, Callable
 from pathlib import Path
 import pandas as pd
 
-from .unified_data_state import get_data_state_manager
+from app.services.data_state import get_data_state_manager
 
 logger = logging.getLogger(__name__)
 

@@ -141,7 +141,7 @@ Before responding, verify:
             column_info = ""
             df = None
             try:
-                from .unified_data_state import get_data_state
+                from app.services.data_state import get_data_state
                 data_state = get_data_state(session_context.get("session_id")) if hasattr(session_context, "get") else None
                 if data_state:
                     df = data_state.current_data

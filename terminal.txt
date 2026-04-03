@@ -1,12 +1,112 @@
-host:6379. Connection refused.. Using fallback storage.
-[2026-04-03 14:55:33,078] INFO in manager: Loaded arena stats from disk
-[2026-04-03 14:55:33,078] INFO in manager: Arena Manager initialized with 4 models (Groq backend)     
-[2026-04-03 14:55:33,078] INFO in manager: Redis storage: Fallback mode
-[2026-04-03 14:55:33,078] INFO in arena_routes: Arena system initialized with 4 models (Groq)
-[2026-04-03 14:55:33,078] INFO in __init__: ✅ Arena system initialized successfully (Groq API)       
-[2026-04-03 14:55:33,110] INFO in __init__: ChatMRPT v3.0 - Modern Architecture Initialized
-[2026-04-03 14:55:33,110] INFO in __init__: Configuration: DevelopmentConfig
-[2026-04-03 14:55:33,111] INFO in __init__: Services: Available
+[2026-04-03 15:03:03,173] DEBUG in container: Created service instance: analysis_service
+[2026-04-03 15:03:03,173] INFO in container: ✅ analysis_service initialized in 10.87s
+[2026-04-03 15:03:05,978] DEBUG in container: Created service instance: visualization_service
+[2026-04-03 15:03:05,978] INFO in container: ✅ visualization_service initialized in 2.80s
+[2026-04-03 15:03:06,077] DEBUG in container: Created service instance: report_service
+[2026-04-03 15:03:06,078] INFO in container: ✅ report_service initialized in 0.10s
+[2026-04-03 15:03:06,248] WARNING in interpreter: Services init failed (non-fatal): No module named 'app.agent.session_context'
+[2026-04-03 15:03:06,248] DEBUG in container: Created service instance: request_interpreter
+[2026-04-03 15:03:06,248] INFO in container: ✅ request_interpreter initialized in 0.17s
+[2026-04-03 15:03:06,248] INFO in container: 🎯 Eager initialization complete - services ready for instant responses!
+[2026-04-03 15:03:06,248] INFO in container: Service container initialized with core services
+[2026-04-03 15:03:06,249] INFO in __init__: 🚀 Development mode - Using in-memory conversation tracking
+⚠️ Redis not available: Error 111 connecting to localhost:6379. Connection refused.. Falling back to SSQLite for sessions.
+[2026-04-03 15:03:13,911] INFO in __init__: ✅ Survey database already has 99 questions
+[2026-04-03 15:03:14,275] INFO in interaction_core: Interaction database initialized at instance/interactions.db
+[2026-04-03 15:03:17,929] INFO in __init__: ✅ Google OAuth initialized
+[2026-04-03 15:03:17,956] INFO in __init__: ✅ Export routes registered
+[2026-04-03 15:03:17,957] INFO in __init__: ✅ Session routes registered
+[2026-04-03 15:03:17,957] INFO in __init__: ✅ Arena routes registered
+[2026-04-03 15:03:17,957] INFO in __init__: ✅ Conversation history routes registered
+[2026-04-03 15:03:17,957] INFO in __init__: ✅ API routes registered
+[2026-04-03 15:03:17,957] INFO in __init__: ✅ Survey routes registered
+[2026-04-03 15:03:17,957] INFO in __init__: ✅ Pre-Post Test routes registered
+[2026-04-03 15:03:17,960] INFO in __init__: ✅ Data Analysis V3 routes registered
+[2026-04-03 15:03:18,091] WARNING in manager: Could not connect to Redis: Error 111 connecting to localhost:6379. Connection refused.. Using fallback storage.
+[2026-04-03 15:03:18,097] INFO in manager: Loaded arena stats from disk
+[2026-04-03 15:03:18,097] INFO in manager: Arena Manager initialized with 4 models (Groq backend)     
+[2026-04-03 15:03:18,097] INFO in manager: Redis storage: Fallback mode
+[2026-04-03 15:03:18,097] INFO in arena_routes: Arena system initialized with 4 models (Groq)
+[2026-04-03 15:03:18,097] INFO in __init__: ✅ Arena system initialized successfully (Groq API)       
+[2026-04-03 15:03:18,130] INFO in __init__: ChatMRPT v3.0 - Modern Architecture Initialized
+[2026-04-03 15:03:18,130] INFO in __init__: Configuration: DevelopmentConfig
+[2026-04-03 15:03:18,130] INFO in __init__: Services: Available
+Starting ChatMRPT v3.0
+Environment: development
+URL: http://0.0.0.0:5013
+Debug Mode: True
+Tool Scoring: True
+API Key: Configured [OK]
+ * Serving Flask app 'app'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5013
+ * Running on http://172.27.137.203:5013
+Press CTRL+C to quit
+ * Restarting with stat
+[DEV] ChatMRPT Development Mode
+[DEV] Instance folder: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance
+[DEV] OpenAI API Key: Set
+[DEV] Debug Mode: True
+[2026-04-03 15:03:20,927] WARNING in redis_config: ⚠️ Redis not available: Error 111 connecting to loccalhost:6379. Connection refused.
+[2026-04-03 15:03:20,928] INFO in redis_config: 📁 Falling back to filesystem sessions for local development
+[2026-04-03 15:03:21,244] INFO in redis_config: ✅ Filesystem session store initialized at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/flask_session
+[2026-04-03 15:03:21,344] DEBUG in container: Registered service: interaction_logger (singleton: True)
+[2026-04-03 15:03:21,344] DEBUG in container: Registered service: llm_manager (singleton: True)       
+[2026-04-03 15:03:21,344] DEBUG in container: Registered service: data_service (singleton: True)
+[2026-04-03 15:03:21,344] DEBUG in container: Registered service: analysis_service (singleton: True)  
+[2026-04-03 15:03:21,344] DEBUG in container: Registered service: visualization_service (singleton: True)
+[2026-04-03 15:03:21,345] DEBUG in container: Registered service: report_service (singleton: True)    
+[2026-04-03 15:03:21,345] DEBUG in container: Registered service: request_interpreter (singleton: True)
+[2026-04-03 15:03:21,345] INFO in container: 🚀 Starting eager initialization of core services...     
+[2026-04-03 15:03:25,465] INFO in interaction_init: Interaction package v1.0.0 initialized with 39 exported functions
+[2026-04-03 15:03:25,492] INFO in interaction_core: Interaction database initialized at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/interactions.db
+[2026-04-03 15:03:25,492] DEBUG in container: Created service instance: interaction_logger
+[2026-04-03 15:03:25,492] INFO in container: ✅ interaction_logger initialized in 4.15s
+[2026-04-03 15:03:27,237] INFO in container: 🔍 DEBUG: USE_VLLM = False (from env: None)
+[2026-04-03 15:03:27,237] INFO in container: 🔍 DEBUG: USE_OLLAMA = False (from env: None)
+[2026-04-03 15:03:27,237] INFO in container: ☁️ Using OpenAI for cloud inference
+[2026-04-03 15:03:27,238] INFO in llm_adapter: LLM Adapter initialized: backend=openai, model=gpt-4o  
+[2026-04-03 15:03:38,241] INFO in llm_adapter: OpenAI call: model=gpt-4o, project=unset, base_url_env=unset
+[2026-04-03 15:03:43,547] INFO in container: ✅ LLM backend verified: openai with gpt-4o
+[2026-04-03 15:03:43,547] DEBUG in container: Created service instance: llm_manager
+[2026-04-03 15:03:43,547] INFO in container: ✅ llm_manager initialized in 18.06s
+[2026-04-03 15:03:43,547] DEBUG in container: Created service instance: data_service
+[2026-04-03 15:03:43,547] INFO in container: ✅ data_service initialized in 0.00s
+[2026-04-03 15:03:49,325] DEBUG in container: Created service instance: analysis_service
+[2026-04-03 15:03:49,326] INFO in container: ✅ analysis_service initialized in 5.78s
+[2026-04-03 15:03:50,858] DEBUG in container: Created service instance: visualization_service
+[2026-04-03 15:03:50,858] INFO in container: ✅ visualization_service initialized in 1.53s
+[2026-04-03 15:03:50,902] DEBUG in container: Created service instance: report_service
+[2026-04-03 15:03:50,902] INFO in container: ✅ report_service initialized in 0.04s
+[2026-04-03 15:03:50,979] WARNING in interpreter: Services init failed (non-fatal): No module named 'app.agent.session_context'
+[2026-04-03 15:03:50,979] DEBUG in container: Created service instance: request_interpreter
+[2026-04-03 15:03:50,979] INFO in container: ✅ request_interpreter initialized in 0.08s
+[2026-04-03 15:03:50,979] INFO in container: 🎯 Eager initialization complete - services ready for instant responses!
+[2026-04-03 15:03:50,979] INFO in container: Service container initialized with core services
+[2026-04-03 15:03:50,980] INFO in __init__: 🚀 Development mode - Using in-memory conversation tracking
+⚠️ Redis not available: Error 111 connecting to localhost:6379. Connection refused.. Falling back to SSQLite for sessions.
+[2026-04-03 15:03:55,580] INFO in __init__: ✅ Survey database already has 99 questions
+[2026-04-03 15:03:55,751] INFO in interaction_core: Interaction database initialized at instance/interactions.db
+[2026-04-03 15:03:58,730] INFO in __init__: ✅ Google OAuth initialized
+[2026-04-03 15:03:58,755] INFO in __init__: ✅ Export routes registered
+[2026-04-03 15:03:58,756] INFO in __init__: ✅ Session routes registered
+[2026-04-03 15:03:58,756] INFO in __init__: ✅ Arena routes registered
+[2026-04-03 15:03:58,756] INFO in __init__: ✅ Conversation history routes registered
+[2026-04-03 15:03:58,756] INFO in __init__: ✅ API routes registered
+[2026-04-03 15:03:58,756] INFO in __init__: ✅ Survey routes registered
+[2026-04-03 15:03:58,756] INFO in __init__: ✅ Pre-Post Test routes registered
+[2026-04-03 15:03:58,758] INFO in __init__: ✅ Data Analysis V3 routes registered
+[2026-04-03 15:03:58,809] WARNING in manager: Could not connect to Redis: Error 111 connecting to localhost:6379. Connection refused.. Using fallback storage.
+[2026-04-03 15:03:58,814] INFO in manager: Loaded arena stats from disk
+[2026-04-03 15:03:58,814] INFO in manager: Arena Manager initialized with 4 models (Groq backend)     
+[2026-04-03 15:03:58,814] INFO in manager: Redis storage: Fallback mode
+[2026-04-03 15:03:58,814] INFO in arena_routes: Arena system initialized with 4 models (Groq)
+[2026-04-03 15:03:58,814] INFO in __init__: ✅ Arena system initialized successfully (Groq API)       
+[2026-04-03 15:03:58,823] INFO in __init__: ChatMRPT v3.0 - Modern Architecture Initialized
+[2026-04-03 15:03:58,823] INFO in __init__: Configuration: DevelopmentConfig
+[2026-04-03 15:03:58,824] INFO in __init__: Services: Available
 Starting ChatMRPT v3.0
 Environment: development
 URL: http://0.0.0.0:5013
@@ -15,200 +115,754 @@ Tool Scoring: True
 API Key: Configured [OK]
  * Debugger is active!
  * Debugger PIN: 922-859-429
-[2026-04-03 14:55:55,965] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775245623469_hsoijdbn6
-[2026-04-03 14:55:55,966] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775245623469_hsoijdbn6
-127.0.0.1 - - [03/Apr/2026 14:55:56] "GET /survey/api/status/session_1775245623469_hsoijdbn6 HTTP/1.1" 200 -
-127.0.0.1 - - [03/Apr/2026 14:55:56] "GET /survey/api/status/session_1775245623469_hsoijdbn6 HTTP/1.1" 200 -
-[2026-04-03 14:56:03,300] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775245623469_hsoijdbn6
-127.0.0.1 - - [03/Apr/2026 14:56:03] "GET /survey/api/status/session_1775245623469_hsoijdbn6 HTTP/1.1" 200 -
-[2026-04-03 14:56:04,252] DEBUG in development: Request: GET http://127.0.0.1:5013/?conversation_id=4f8c8016-ea39-4317-9f7f-9b4831b5bc7f
-[2026-04-03 14:56:04,291] INFO in interaction_core: Logged session start: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:04,291] INFO in core_routes: TPR workflow state reset for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d - new session or external navigation
-[2026-04-03 14:56:04,291] INFO in core_routes: Session 6e19ffca-e1b7-4bc6-86ba-b651a605453d initialized with py-sidebot pattern
-[2026-04-03 14:56:04,291] INFO in core_routes: Serving React app for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:04,311] INFO in decorators: index executed in 0.02 seconds
-[2026-04-03 14:56:04,352] INFO in interaction_events: Logged endpoint_response_timing event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-127.0.0.1 - - [03/Apr/2026 14:56:04] "GET /?conversation_id=4f8c8016-ea39-4317-9f7f-9b4831b5bc7f HTTP/1.1" 200 -
-[2026-04-03 14:56:04,620] DEBUG in development: Request: GET http://127.0.0.1:5013/static/js/survey_button.js
-[2026-04-03 14:56:04,621] DEBUG in development: Request: GET http://127.0.0.1:5013/assets/index-DEkihWic.js
-[2026-04-03 14:56:04,623] DEBUG in development: Request: GET http://127.0.0.1:5013/static/js/prepost_button.js
-127.0.0.1 - - [03/Apr/2026 14:56:04] "GET /static/js/survey_button.js HTTP/1.1" 304 -
-[2026-04-03 14:56:04,663] INFO in interaction_core: Logged session start: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-127.0.0.1 - - [03/Apr/2026 14:56:04] "GET /static/js/prepost_button.js HTTP/1.1" 304 -
-[2026-04-03 14:56:04,718] INFO in interaction_events: Logged endpoint_response_timing event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-127.0.0.1 - - [03/Apr/2026 14:56:04] "GET /assets/index-DEkihWic.js HTTP/1.1" 304 -
-[2026-04-03 14:56:04,951] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775245623469_hsoijdbn6
-127.0.0.1 - - [03/Apr/2026 14:56:04] "GET /survey/api/status/session_1775245623469_hsoijdbn6 HTTP/1.1" 200 -
-[2026-04-03 14:56:05,223] DEBUG in development: Request: GET http://127.0.0.1:5013/get_welcome_content
-[2026-04-03 14:56:05,227] DEBUG in development: Request: GET http://127.0.0.1:5013/auth/status
-[2026-04-03 14:56:05,233] DEBUG in development: Request: GET http://127.0.0.1:5013/session_info       
-127.0.0.1 - - [03/Apr/2026 14:56:05] "GET /auth/status HTTP/1.1" 200 -
-[2026-04-03 14:56:05,258] INFO in interaction_core: Logged session start: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:05,259] INFO in core_routes: Welcome content requested for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:05,288] INFO in interaction_core: Logged session start: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-127.0.0.1 - - [03/Apr/2026 14:56:05] "GET /get_welcome_content HTTP/1.1" 200 -
-[2026-04-03 14:56:05,323] INFO in interaction_events: Logged endpoint_response_timing event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-127.0.0.1 - - [03/Apr/2026 14:56:05] "GET /session_info HTTP/1.1" 200 -
-[2026-04-03 14:56:06,029] DEBUG in development: Request: GET http://127.0.0.1:5013/get_welcome_content
-[2026-04-03 14:56:06,030] DEBUG in development: Request: GET http://127.0.0.1:5013/session_info
-[2026-04-03 14:56:06,067] INFO in interaction_core: Logged session start: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:06,102] INFO in interaction_core: Logged session start: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:06,103] INFO in core_routes: Welcome content requested for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-127.0.0.1 - - [03/Apr/2026 14:56:06] "GET /session_info HTTP/1.1" 200 -
-[2026-04-03 14:56:06,142] INFO in interaction_events: Logged endpoint_response_timing event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-127.0.0.1 - - [03/Apr/2026 14:56:06] "GET /get_welcome_content HTTP/1.1" 200 -
-[2026-04-03 14:56:09,577] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
-[2026-04-03 14:56:09,578] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:09,578] INFO in data_analysis_routes: [DEBUG] Message received: run malaria risk analysis
-[2026-04-03 14:56:09,613] INFO in interaction_core: Logged user message for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:09,613] INFO in data_analysis_routes: ✅ Logged user message for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:09,686] INFO in state_manager: StateManager initialized for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:14,305] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
-[2026-04-03 14:56:14,574] INFO in state_manager: StateManager initialized for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:14,583] INFO in data_analysis_routes: [AGENT CONTEXT] Session 6e19ffca-e1b7-4bc6-86ba-b651a605453d → stage=data_exploring columns=32
-[2026-04-03 14:56:14,584] INFO in agent: ====================================================================================================
-[2026-04-03 14:56:14,584] INFO in agent: [AGENT] 🤖 AGENT.ANALYZE() CALLED
-[2026-04-03 14:56:14,584] INFO in agent: [AGENT] Session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d        
-[2026-04-03 14:56:14,584] INFO in agent: [AGENT] Query: 'run malaria risk analysis...'
-[2026-04-03 14:56:14,584] INFO in agent: [AGENT] Workflow context present: True
-[2026-04-03 14:56:14,584] INFO in agent: ====================================================================================================
-[2026-04-03 14:56:14,584] INFO in agent: [AGENT] Workflow context details: {'workflow': 'data_analysis_v3', 'stage': 'data_exploring', 'valid_options': [], 'data_loaded': True, 'session_id': '6e19ffca-e1b7-4bc6-86ba-b651a605453d', 'data_columns': ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy <5yrs.1', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)', 'Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT <5yrs.1', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)', 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)', 'Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy <5yrs.1', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)', 'Severe Malaria cases seen', 'Persons with Severe Malaria treated with Artesu0te injection', 'PW who received LLIN', 'Children <5 yrs who received LLIN ', 'Test Positivity Rate(TPR) (Microscopy)', 'Test Positivity Rate(TPR) (RDT)'], 'columns_total': 32, 'data_shape': {'rows': 6948, 'cols': 32}, 'data_types': {'float64': 26, 'object': 5, 'int64': 1}, 'dataset_name': 'uploaded_data.csv', 'numeric_samples': ['period0me', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years'], 'categorical_samples': ['orgunitlevel2', 'orgunitlevel3', 'Facility level'], 'column_schema_description': 'Known column meanings (from schema inference):\n  State → column: "orgunitlevel2"\n  LGA (Local Government Area) → column: "orgunitlevel3"\n  Ward → column: "Ward"\n  Facility name → column: "organisationunit0me"\n  Facility level (Primary/Secondary/Tertiary) → column: "Facility level"\n  Reporting period → column: "period0me"\n  Under-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT <5yrs"\n  Under-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT <5yrs"\n  Over-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)"\n  Over-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT >=5years"\n  Pregnant women RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT Preg Women (PW)"\n  Pregnant women RDT positive (numerator) → column: "Persons tested positive for malaria by RDT Preg Women (PW)"\n  Under-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy <5yrs"\n  Under-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy <5yrs"\n  Over-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)"\n  Over-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy >=5years"\n  Pregnant women Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy Preg Women (PW)"\n  Pregnant women Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy Preg Women (PW)"'}
-[2026-04-03 14:56:14,585] INFO in agent: [AGENT STEP 1] Loading input data via _get_input_data()...   
-[2026-04-03 14:56:14,585] INFO in agent: ====================================================================================================
-[2026-04-03 14:56:14,585] INFO in agent: [_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA
-[2026-04-03 14:56:14,585] INFO in agent: [_GET_INPUT_DATA] Session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:14,585] INFO in agent: ====================================================================================================
-[2026-04-03 14:56:14,585] INFO in agent: [_GET_INPUT_DATA STEP 1] Session folder: instance/uploads/6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:14,585] INFO in agent: [_GET_INPUT_DATA STEP 1] Absolute path: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:14,588] INFO in agent: [_GET_INPUT_DATA STEP 1] Folder exists: True
-[2026-04-03 14:56:14,597] INFO in agent: [_GET_INPUT_DATA STEP 1] Files in folder: ['.agent_state.json', '.data_analysis_mode', '.risk_ready', '.tpr_complete', 'Burden_distribution_map_20260403_145105.html', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'raw_data.csv', 'raw_shapefile.zip', 'shapefile', 'tpr_analysis_debug.json', 'tpr_distribution_map.html', 'tpr_precomputed.db', 'tpr_precompute_status.json', 'tpr_results.csv', 'tpr_time_series.csv', 'uploaded_data.csv', 'visualizations', 'ward_cache.pkl', 'workflow_state.json']
-[2026-04-03 14:56:14,600] INFO in agent: [_GET_INPUT_DATA STEP 2] Analysis complete flag exists: False
-[2026-04-03 14:56:14,600] INFO in agent: [_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)
-[2026-04-03 14:56:14,600] INFO in agent: [_GET_INPUT_DATA STEP 2] Smart loading - priority order: ['raw_data.csv', 'tpr_results.csv', 'data_analysis.csv', 'uploaded_data.csv']
-[2026-04-03 14:56:14,600] INFO in agent: [_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available
-[2026-04-03 14:56:14,600] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Checking: raw_data.csv
-[2026-04-03 14:56:14,601] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Full path: instance/uploads/6e19ffca-e1b7-4bc6-86ba-b651a605453d/raw_data.csv
-[2026-04-03 14:56:14,605] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Exists: True
-[2026-04-03 14:56:14,609] INFO in agent: [_GET_INPUT_DATA STEP 2.1] ✅ File found: raw_data.csv       
-[2026-04-03 14:56:14,614] INFO in agent: [_GET_INPUT_DATA STEP 2.1] File size: 35867 bytes
-[2026-04-03 14:56:14,615] INFO in agent: [_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...
-[2026-04-03 14:56:14,635] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
-[2026-04-03 14:56:14,652] INFO in encoding_handler: Successfully read instance/uploads/6e19ffca-e1b7-4bc6-86ba-b651a605453d/raw_data.csv with ascii encoding
-[2026-04-03 14:56:14,675] INFO in agent: [_GET_INPUT_DATA STEP 3] ✅ CSV loaded in 0.06s
-[2026-04-03 14:56:14,675] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame shape: (193, 16)
-[2026-04-03 14:56:14,675] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
-[2026-04-03 14:56:14,675] INFO in agent: [_GET_INPUT_DATA STEP 4] Creating data object...
-[2026-04-03 14:56:14,675] INFO in agent: [_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in ''data' key
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA STEP 4] ✅ Data object created
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object keys: ['variable_name', 'data_description', 'data', 'columns']
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object 'data' type: <class 'pandas.core.frame.DataFrame'>
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA STEP 5] ✅ Loaded raw_data.csv: 193 rows, 16 columns
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA STEP 5] 📊 Dataset context: TPR + ENVIRONMENTAL (prepared for risk analysis)
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions
-[2026-04-03 14:56:14,676] INFO in agent: ====================================================================================================
-[2026-04-03 14:56:14,676] INFO in agent: [_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS
-[2026-04-03 14:56:14,677] INFO in agent: ====================================================================================================
-[2026-04-03 14:56:14,692] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
-[2026-04-03 14:56:14,700] INFO in encoding_handler: Successfully read instance/uploads/6e19ffca-e1b7-4bc6-86ba-b651a605453d/tpr_time_series.csv with ascii encoding
-[2026-04-03 14:56:14,707] INFO in agent: [_GET_INPUT_DATA] Also loaded tpr_time_series.csv: (182, 6)  
-[2026-04-03 14:56:14,707] INFO in agent: [_GET_INPUT_DATA FINAL] Total datasets loaded: 2
-[2026-04-03 14:56:14,707] INFO in agent: [AGENT STEP 1] ✅ Input data loaded: 2 datasets
-[2026-04-03 14:56:14,707] INFO in agent: [AGENT STEP 1] First dataset keys: ['variable_name', 'data_description', 'data', 'columns']
-[2026-04-03 14:56:14,710] INFO in agent: [AGENT] Workflow context message created:
-[2026-04-03 14:56:14,711] INFO in agent:    - Stage: data_exploring
-[2026-04-03 14:56:14,711] INFO in agent:    - Data columns: 32
-[2026-04-03 14:56:14,711] INFO in agent:    - First 5 columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
-[2026-04-03 14:56:14,773] INFO in agent: [AGENT] Invoking graph with 12 messages
-[2026-04-03 14:56:14,775] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
-[2026-04-03 14:56:14,776] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
-[2026-04-03 14:56:14,776] INFO in agent: [_AGENT_NODE] Incoming messages count: 12
-[2026-04-03 14:56:14,776] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
-[2026-04-03 14:56:14,787] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters    
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
-[2026-04-03 14:56:14,788] WARNING in agent: [_AGENT_NODE MESSAGE TRUNCATION] Message history too long: 12 messages
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE MESSAGE TRUNCATION] Kept last 10 messages (smart)
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE MESSAGE TRUNCATION] Truncated: 12 → 10 messages 
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...  
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 11
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...       
-[2026-04-03 14:56:14,788] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
-[2026-04-03 14:56:15,904] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 1.12s
-[2026-04-03 14:56:15,904] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
-[2026-04-03 14:56:15,904] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-03 15:05:32,634] DEBUG in development: Request: GET http://localhost:5013/
+[2026-04-03 15:05:32,685] INFO in interaction_core: Logged session start: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:32,716] DEBUG in conversation_history: Registered conversation 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6 for user local-dev-user
+[2026-04-03 15:05:32,716] INFO in core_routes: New session marked as modified for persistence: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:32,717] INFO in core_routes: TPR workflow state reset for session 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6 - new session or external navigation
+[2026-04-03 15:05:32,717] INFO in core_routes: Session 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6 initialized with py-sidebot pattern
+[2026-04-03 15:05:32,717] INFO in core_routes: Serving React app for session 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:32,747] INFO in decorators: index executed in 0.11 seconds
+[2026-04-03 15:05:32,780] INFO in interaction_events: Logged endpoint_response_timing event for session: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6, success: True
+127.0.0.1 - - [03/Apr/2026 15:05:32] "GET / HTTP/1.1" 200 -
+[2026-04-03 15:05:32,993] DEBUG in development: Request: GET http://localhost:5013/static/css/toolbar.css
+[2026-04-03 15:05:33,062] DEBUG in development: Request: GET http://localhost:5013/assets/index-DEkihWic.js
+127.0.0.1 - - [03/Apr/2026 15:05:33] "GET /static/css/toolbar.css HTTP/1.1" 200 -
+[2026-04-03 15:05:33,129] INFO in interaction_core: Logged session start: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:33,198] INFO in interaction_events: Logged endpoint_response_timing event for session: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6, success: True
+127.0.0.1 - - [03/Apr/2026 15:05:33] "GET /assets/index-DEkihWic.js HTTP/1.1" 200 -
+[2026-04-03 15:05:33,369] DEBUG in development: Request: GET http://localhost:5013/assets/index-miDplMYl.css
+[2026-04-03 15:05:33,370] DEBUG in development: Request: GET http://localhost:5013/static/js/survey_button.js
+[2026-04-03 15:05:33,371] DEBUG in development: Request: GET http://localhost:5013/static/js/prepost_button.js
+[2026-04-03 15:05:33,402] INFO in interaction_core: Logged session start: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+127.0.0.1 - - [03/Apr/2026 15:05:33] "GET /static/js/survey_button.js HTTP/1.1" 200 -
+127.0.0.1 - - [03/Apr/2026 15:05:33] "GET /static/js/prepost_button.js HTTP/1.1" 200 -
+127.0.0.1 - - [03/Apr/2026 15:05:33] "GET /assets/index-miDplMYl.css HTTP/1.1" 200 -
+[2026-04-03 15:05:33,913] DEBUG in development: Request: GET http://localhost:5013/survey/api/status/session_1775246733962_n8wkua4e5
+127.0.0.1 - - [03/Apr/2026 15:05:34] "GET /survey/api/status/session_1775246733962_n8wkua4e5 HTTP/1.1" 200 -
+[2026-04-03 15:05:34,186] DEBUG in development: Request: GET http://localhost:5013/auth/status
+127.0.0.1 - - [03/Apr/2026 15:05:34] "GET /auth/status HTTP/1.1" 200 -
+[2026-04-03 15:05:35,115] DEBUG in development: Request: GET http://localhost:5013/get_welcome_content
+[2026-04-03 15:05:35,158] INFO in interaction_core: Logged session start: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:35,159] INFO in core_routes: Welcome content requested for session: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+127.0.0.1 - - [03/Apr/2026 15:05:35] "GET /get_welcome_content HTTP/1.1" 200 -
+[2026-04-03 15:05:35,494] DEBUG in development: Request: GET http://localhost:5013/session_info
+[2026-04-03 15:05:35,553] INFO in interaction_core: Logged session start: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:35,622] INFO in interaction_events: Logged endpoint_response_timing event for session: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6, success: True
+127.0.0.1 - - [03/Apr/2026 15:05:35] "GET /session_info HTTP/1.1" 200 -
+[2026-04-03 15:05:35,916] DEBUG in development: Request: GET http://localhost:5013/vite.svg
+[2026-04-03 15:05:35,974] INFO in interaction_core: Logged session start: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:05:36,101] INFO in interaction_events: Logged endpoint_response_timing event for session: 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6, success: False
+127.0.0.1 - - [03/Apr/2026 15:05:36] "GET /vite.svg HTTP/1.1" 404 -
+[2026-04-03 15:05:57,294] DEBUG in development: Request: POST http://localhost:5013/api/data-analysis/upload
+[2026-04-03 15:05:57,294] INFO in data_analysis_routes: 📊 Generated new session ID for upload: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:05:57,414] INFO in data_analysis_routes: 📊 Stored upload_session_id=d221d32f-5edc-47f7-8c58-8d37426b27c1 in base session 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6
+[2026-04-03 15:06:03,538] DEBUG in development: Request: GET http://localhost:5013/survey/api/status/session_1775246733962_n8wkua4e5
+127.0.0.1 - - [03/Apr/2026 15:06:03] "GET /survey/api/status/session_1775246733962_n8wkua4e5 HTTP/1.1" 200 -
+[2026-04-03 15:06:16,153] INFO in data_analyzer: LLM schema response: {'header_row': 1, 'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT >=5years', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy >=5years', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-03 15:06:17,111] INFO in data_analyzer: Schema inferred from Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls: {'header_row': 1, 'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT >=5years', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy >=5years', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-03 15:06:17,339] INFO in data_analysis_routes: ✅ Schema inferred at upload: header_row=1, shape=(6948, 32), columns=['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-03 15:06:17,339] INFO in data_analysis_routes: 📊 Extracting metadata for Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls...
+[2026-04-03 15:06:18,039] INFO in metadata_cache: Metadata cache saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:18,906] INFO in metadata_cache: Metadata cache saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:19,263] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:06:19,303] INFO in encoding_handler: Successfully read /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:06:20,139] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:06:20,154] INFO in encoding_handler: Successfully read /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:06:20,286] INFO in metadata_cache: Metadata cache saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,286] INFO in data_analysis_routes: 📊 Profiled uploaded_data.csv for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,286] INFO in data_analysis_routes: 📊 Data Analysis file uploaded: Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,287] INFO in data_analysis_routes: ✓ Data Analysis V3 mode activated for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,394] INFO in workflow_state: 🔄 Transitioning workflow for d221d32f-5edc-47f7-8c58-8d37426b27c1: standard → data_analysis_v3
+[2026-04-03 15:06:20,400] INFO in workflow_state: 📊 State transition for d221d32f-5edc-47f7-8c58-8d37426b27c1: unknown/initial → data_analysis_v3/uploaded
+[2026-04-03 15:06:20,407] DEBUG in workflow_state: ✅ State updated for d221d32f-5edc-47f7-8c58-8d37426b27c1: {'workflow_source': 'data_analysis_v3', 'workflow_stage': 'uploaded', 'previous_workflow': 'standard', 'workflow_transitioned': False, 'analysis_complete': False, 'tpr_completed': False}
+[2026-04-03 15:06:20,407] INFO in data_analysis_routes: Transitioned to Data Analysis V3 workflow for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,414] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,431] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:20,432] INFO in data_analysis_routes: ✅ Cleared DataAnalysisStateManager flags, saved schema (header_row=1) for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:21,510] WARNING in instance_sync: Could not determine current instance IP
+[2026-04-03 15:06:21,510] INFO in data_analysis_routes: 🔄 Initiated sync for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:21,514] WARNING in data_analysis_routes: Could not mirror artefacts to base session 4ba9525b-3ab0-44c1-ae49-f97bbd4ec9a6: 'UploadService' object has no attribute 'mirror_artifacts'      
+127.0.0.1 - - [03/Apr/2026 15:06:21] "POST /api/data-analysis/upload HTTP/1.1" 200 -
+[2026-04-03 15:06:21,900] DEBUG in development: Request: POST http://localhost:5013/api/data-analysis/activate-mode
+[2026-04-03 15:06:21,900] INFO in data_analysis_routes: 📊 Data Analysis V3 mode activated for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+127.0.0.1 - - [03/Apr/2026 15:06:21] "POST /api/data-analysis/activate-mode HTTP/1.1" 200 -
+[2026-04-03 15:06:22,472] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:06:22,472] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:22,472] INFO in data_analysis_routes: [DEBUG] Message received: analyze uploaded data
+[2026-04-03 15:06:22,517] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:22,517] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:22,549] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:28,239] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:06:28,510] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:28,518] INFO in data_analysis_routes: [AGENT CONTEXT] Session d221d32f-5edc-47f7-8c58-8d37426b27c1 → stage=data_exploring columns=32
+[2026-04-03 15:06:28,521] INFO in agent: ====================================================================================================
+[2026-04-03 15:06:28,521] INFO in agent: [AGENT] 🤖 AGENT.ANALYZE() CALLED
+[2026-04-03 15:06:28,521] INFO in agent: [AGENT] Session: d221d32f-5edc-47f7-8c58-8d37426b27c1        
+[2026-04-03 15:06:28,521] INFO in agent: [AGENT] Query: 'analyze uploaded data...'
+[2026-04-03 15:06:28,521] INFO in agent: [AGENT] Workflow context present: True
+[2026-04-03 15:06:28,521] INFO in agent: ====================================================================================================
+[2026-04-03 15:06:28,521] INFO in agent: [AGENT] Workflow context details: {'workflow': 'data_analysis_v3', 'stage': 'data_exploring', 'valid_options': [], 'data_loaded': True, 'session_id': 'd221d32f-5edc-47f7-8c58-8d37426b27c1', 'data_columns': ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy <5yrs.1', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)', 'Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT <5yrs.1', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)', 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)', 'Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy <5yrs.1', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)', 'Severe Malaria cases seen', 'Persons with Severe Malaria treated with Artesu0te injection', 'PW who received LLIN', 'Children <5 yrs who received LLIN ', 'Test Positivity Rate(TPR) (Microscopy)', 'Test Positivity Rate(TPR) (RDT)'], 'columns_total': 32, 'data_shape': {'rows': 6948, 'cols': 32}, 'data_types': {'float64': 26, 'object': 5, 'int64': 1}, 'dataset_name': 'uploaded_data.csv', 'numeric_samples': ['period0me', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years'], 'categorical_samples': ['orgunitlevel2', 'orgunitlevel3', 'Facility level'], 'column_schema_description': 'Known column meanings (from schema inference):\n  State → column: "orgunitlevel2"\n  LGA (Local Government Area) → column: "orgunitlevel3"\n  Ward → column: "Ward"\n  Facility name → column: "organisationunit0me"\n  Facility level (Primary/Secondary/Tertiary) → column: "Facility level"\n  Reporting period → column: "period0me"\n  Under-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT <5yrs"\n  Under-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT <5yrs"\n  Over-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT >=5years"\n  Over-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT >=5years"\n  Pregnant women RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT Preg Women (PW)"\n  Pregnant women RDT positive (numerator) → column: "Persons tested positive for malaria by RDT Preg Women (PW)"\n  Under-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy <5yrs"\n  Under-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy <5yrs"\n  Over-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy >=5years"\n  Over-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy >=5years"\n  Pregnant women Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy Preg Women (PW)"\n  Pregnant women Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy Preg Women (PW)"'}
+[2026-04-03 15:06:28,522] INFO in agent: [AGENT STEP 1] Loading input data via _get_input_data()...   
+[2026-04-03 15:06:28,522] INFO in agent: ====================================================================================================
+[2026-04-03 15:06:28,522] INFO in agent: [_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA
+[2026-04-03 15:06:28,522] INFO in agent: [_GET_INPUT_DATA] Session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:28,522] INFO in agent: ====================================================================================================
+[2026-04-03 15:06:28,522] INFO in agent: [_GET_INPUT_DATA STEP 1] Session folder: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:28,522] INFO in agent: [_GET_INPUT_DATA STEP 1] Absolute path: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:28,527] INFO in agent: [_GET_INPUT_DATA STEP 1] Folder exists: True
+[2026-04-03 15:06:28,536] INFO in agent: [_GET_INPUT_DATA STEP 1] Files in folder: ['.agent_state.json', '.data_analysis_mode', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'uploaded_data.csv', 'workflow_state.json']
+[2026-04-03 15:06:28,540] INFO in agent: [_GET_INPUT_DATA STEP 2] Analysis complete flag exists: False
+[2026-04-03 15:06:28,540] INFO in agent: [_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)
+[2026-04-03 15:06:28,540] INFO in agent: [_GET_INPUT_DATA STEP 2] Smart loading - priority order: ['raw_data.csv', 'tpr_results.csv', 'data_analysis.csv', 'uploaded_data.csv']
+[2026-04-03 15:06:28,540] INFO in agent: [_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available
+[2026-04-03 15:06:28,540] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Checking: raw_data.csv
+[2026-04-03 15:06:28,540] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Full path: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/raw_data.csv
+[2026-04-03 15:06:28,544] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Exists: False
+[2026-04-03 15:06:28,549] INFO in agent: [_GET_INPUT_DATA STEP 2.2] Checking: tpr_results.csv
+[2026-04-03 15:06:28,549] INFO in agent: [_GET_INPUT_DATA STEP 2.2] Full path: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/tpr_results.csv
+[2026-04-03 15:06:28,552] INFO in agent: [_GET_INPUT_DATA STEP 2.2] Exists: False
+[2026-04-03 15:06:28,555] INFO in agent: [_GET_INPUT_DATA STEP 2.3] Checking: data_analysis.csv
+[2026-04-03 15:06:28,555] INFO in agent: [_GET_INPUT_DATA STEP 2.3] Full path: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/data_analysis.csv
+[2026-04-03 15:06:28,560] INFO in agent: [_GET_INPUT_DATA STEP 2.3] Exists: False
+[2026-04-03 15:06:28,564] INFO in agent: [_GET_INPUT_DATA STEP 2.4] Checking: uploaded_data.csv       
+[2026-04-03 15:06:28,564] INFO in agent: [_GET_INPUT_DATA STEP 2.4] Full path: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv
+[2026-04-03 15:06:28,568] INFO in agent: [_GET_INPUT_DATA STEP 2.4] Exists: True
+[2026-04-03 15:06:28,572] INFO in agent: [_GET_INPUT_DATA STEP 2.4] ✅ File found: uploaded_data.csv  
+[2026-04-03 15:06:28,574] INFO in agent: [_GET_INPUT_DATA STEP 2.4] File size: 1411908 bytes
+[2026-04-03 15:06:28,574] INFO in agent: [_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...
+[2026-04-03 15:06:28,899] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:06:28,934] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:06:29,475] INFO in agent: [_GET_INPUT_DATA STEP 3] ✅ CSV loaded in 0.90s
+[2026-04-03 15:06:29,475] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame shape: (6948, 32)
+[2026-04-03 15:06:29,476] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years']
+[2026-04-03 15:06:29,476] INFO in agent: [_GET_INPUT_DATA STEP 4] Creating data object...
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in ''data' key
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 4] ✅ Data object created
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object 'data' type: <class 'pandas.core.frame.DataFrame'>
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 5] ✅ Loaded uploaded_data.csv: 6948 rows, 32 columns
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 5] 📊 Dataset context: RAW FACILITY DATA (initial upload)
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions
+[2026-04-03 15:06:29,477] INFO in agent: ====================================================================================================
+[2026-04-03 15:06:29,477] INFO in agent: [_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS
+[2026-04-03 15:06:29,477] INFO in agent: ====================================================================================================
+[2026-04-03 15:06:29,482] INFO in agent: [_GET_INPUT_DATA FINAL] Total datasets loaded: 1
+[2026-04-03 15:06:29,482] INFO in agent: [AGENT STEP 1] ✅ Input data loaded: 1 datasets
+[2026-04-03 15:06:29,483] INFO in agent: [AGENT STEP 1] First dataset keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-03 15:06:29,488] INFO in agent: [AGENT] Workflow context message created:
+[2026-04-03 15:06:29,488] INFO in agent:    - Stage: data_exploring
+[2026-04-03 15:06:29,489] INFO in agent:    - Data columns: 32
+[2026-04-03 15:06:29,489] INFO in agent:    - First 5 columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-03 15:06:29,548] INFO in agent: [AGENT] Invoking graph with 3 messages
+[2026-04-03 15:06:29,554] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-03 15:06:29,554] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-03 15:06:29,554] INFO in agent: [_AGENT_NODE] Incoming messages count: 3
+[2026-04-03 15:06:29,554] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-03 15:06:29,604] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 6159 characters
+[2026-04-03 15:06:29,604] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-03 15:06:29,604] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...  
+[2026-04-03 15:06:29,605] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 4
+[2026-04-03 15:06:29,605] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...       
+[2026-04-03 15:06:29,605] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
+[2026-04-03 15:06:34,150] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 4.54s
+[2026-04-03 15:06:34,150] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-03 15:06:34,150] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-03 15:06:34,151] INFO in agent: [AGENT] Graph completed in 4.60 seconds
+[2026-04-03 15:06:34,156] INFO in agent: [AGENT] Analysis complete, 0 visualizations
+[2026-04-03 15:06:34,204] INFO in interaction_core: Logged assistant message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:34,205] INFO in data_analysis_routes: ✅ Logged agent response for session d221d32f-5edc-47f7-8c58-8d37426b27c1 (response_time=11.70s)
+127.0.0.1 - - [03/Apr/2026 15:06:34] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-03 15:06:34,879] DEBUG in development: Request: GET http://localhost:5013/survey/api/status/session_1775246733962_n8wkua4e5
+127.0.0.1 - - [03/Apr/2026 15:06:34] "GET /survey/api/status/session_1775246733962_n8wkua4e5 HTTP/1.1" 200 -
+[2026-04-03 15:06:42,672] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:06:42,673] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:42,673] INFO in data_analysis_routes: [DEBUG] Message received: start the tpr workflow
+[2026-04-03 15:06:42,704] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:42,704] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:42,732] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:42,742] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:06:42,810] INFO in data_analysis_routes: [BRIDGE] Detected TPR start request: 'start the tpr workflow'
+[2026-04-03 15:06:55,447] INFO in data_analyzer: LLM schema response: {'header_row': 0, 'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT >=5years', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy >=5years', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-03 15:06:55,747] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:06:55,793] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:06:56,264] INFO in data_analyzer: Schema inferred from uploaded_data.csv: {'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT >=5years', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy >=5years', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-03 15:06:56,290] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:56,316] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:56,340] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:56,340] INFO in workflow_manager: Starting TPR workflow
+[2026-04-03 15:06:56,378] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:56,378] INFO in workflow_manager: TPR workflow marked as ACTIVE, awaiting user confirmation
+[2026-04-03 15:06:56,400] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:06:56,427] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+127.0.0.1 - - [03/Apr/2026 15:06:56] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-03 15:07:01,881] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:07:01,882] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:01,882] INFO in data_analysis_routes: [DEBUG] Message received: yes
+[2026-04-03 15:07:01,916] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:01,917] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:01,948] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:01,959] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:07:02,027] INFO in data_analysis_routes: [2-ROUTE] TPR workflow active for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:02,039] INFO in data_analysis_routes: [2-ROUTE] Restored column_schema from state_manager (18 mapped fields)
+[2026-04-03 15:07:02,404] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:07:02,453] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:07:02,970] INFO in workflow_manager: Loaded state: stage=ConversationStage.TPR_STATE_SELECTION, selections={}
+[2026-04-03 15:07:02,994] INFO in data_analysis_routes: [CONFIRMATION] TPR workflow awaiting confirmation
+[2026-04-03 15:07:02,994] INFO in data_analysis_routes: [CONFIRMATION] Detected confirmation keyword in: 'yes'
+[2026-04-03 15:07:02,994] INFO in workflow_manager: 🔧 Executing workflow confirmation
+[2026-04-03 15:07:03,026] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:03,026] INFO in workflow_manager: 🔧 Auto-selecting single state: kw Kwara State
+[2026-04-03 15:07:03,057] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:03,085] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:04,010] DEBUG in development: Request: GET http://localhost:5013/survey/api/status/session_1775246733962_n8wkua4e5
+127.0.0.1 - - [03/Apr/2026 15:07:04] "GET /survey/api/status/session_1775246733962_n8wkua4e5 HTTP/1.1" 200 -
+[2026-04-03 15:07:09,454] INFO in workflow_manager: Generated 2 facility visualizations
+[2026-04-03 15:07:09,481] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+127.0.0.1 - - [03/Apr/2026 15:07:09] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-03 15:07:15,138] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:07:15,139] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:15,139] INFO in data_analysis_routes: [DEBUG] Message received: primary
+[2026-04-03 15:07:15,175] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:15,175] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:15,203] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:15,214] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:07:15,289] INFO in data_analysis_routes: [2-ROUTE] TPR workflow active for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:15,299] INFO in data_analysis_routes: [2-ROUTE] Restored column_schema from state_manager (18 mapped fields)
+[2026-04-03 15:07:15,615] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:07:15,663] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:07:16,167] INFO in workflow_manager: Loaded state: stage=ConversationStage.TPR_FACILITY_LEVEL, selections={'state': 'kw Kwara State', 'state_timestamp': '2026-04-03T15:07:03.038423', 'state_selected_at': '2026-04-03T15:07:03.038423'}
+[2026-04-03 15:07:16,189] INFO in language: 🎯 Classifying intent for: 'primary' (stage=TPR_FACILITY_LEVEL)
+[2026-04-03 15:07:16,189] INFO in language:    Valid options: ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
+[2026-04-03 15:07:16,189] INFO in language: ⚡ Exact match: 'primary' → 'primary' (stage=TPR_FACILITY_LEVEL)
+[2026-04-03 15:07:16,189] INFO in language: ✅ Extracted selection after keyword checks: 'primary'    
+[2026-04-03 15:07:16,189] INFO in data_analysis_routes: [INTENT] Selection detected (confidence=0.95) 
+[2026-04-03 15:07:16,190] INFO in data_analysis_routes:    Rationale: Detected selection 'primary'    
+[2026-04-03 15:07:16,190] INFO in language: ⚡ Exact match: 'primary' → 'primary' (stage=TPR_FACILITY_LEVEL)
+[2026-04-03 15:07:16,190] INFO in data_analysis_routes: [INTENT→COMMAND] Extracted: 'primary' → 'primary'
+[2026-04-03 15:07:16,190] INFO in workflow_manager: 🔧 Executing command: 'primary' at stage: ConversationStage.TPR_FACILITY_LEVEL
+[2026-04-03 15:07:16,202] INFO in workflow_manager: 🔧 Executing facility selection: primary
+[2026-04-03 15:07:16,228] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:16,257] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:16,517] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:16,562] INFO in interaction_core: Logged assistant message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:16,562] INFO in data_analysis_routes: ✅ Logged assistant response for session d221d32f-5edc-47f7-8c58-8d37426b27c1 (response_time=1.38s)
+127.0.0.1 - - [03/Apr/2026 15:07:16] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-03 15:07:21,035] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:07:21,035] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:21,035] INFO in data_analysis_routes: [DEBUG] Message received: u5
+[2026-04-03 15:07:21,073] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:21,074] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:21,110] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:21,125] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:07:21,201] INFO in data_analysis_routes: [2-ROUTE] TPR workflow active for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:21,210] INFO in data_analysis_routes: [2-ROUTE] Restored column_schema from state_manager (18 mapped fields)
+[2026-04-03 15:07:21,532] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:07:21,590] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:07:22,317] INFO in workflow_manager: Loaded state: stage=ConversationStage.TPR_AGE_GROUP, selections={'state': 'kw Kwara State', 'state_timestamp': '2026-04-03T15:07:03.038423', 'state_selected_at': '2026-04-03T15:07:03.038423', 'facility_level': 'primary', 'facility_level_timestamp': '2026-04-03T15:07:16.215192', 'facility_level_selected_at': '2026-04-03T15:07:16.215192'}
+[2026-04-03 15:07:22,342] INFO in language: 🎯 Classifying intent for: 'u5' (stage=TPR_AGE_GROUP)
+[2026-04-03 15:07:22,342] INFO in language:    Valid options: ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']
+[2026-04-03 15:07:22,342] INFO in language: ⚡ Exact match: 'u5' → 'u5' (stage=TPR_AGE_GROUP)
+[2026-04-03 15:07:22,342] INFO in language: ✅ Extracted selection after keyword checks: 'u5'
+[2026-04-03 15:07:22,343] INFO in data_analysis_routes: [INTENT] Selection detected (confidence=0.95) 
+[2026-04-03 15:07:22,343] INFO in data_analysis_routes:    Rationale: Detected selection 'u5'
+[2026-04-03 15:07:22,343] INFO in language: ⚡ Exact match: 'u5' → 'u5' (stage=TPR_AGE_GROUP)
+[2026-04-03 15:07:22,343] INFO in data_analysis_routes: [INTENT→COMMAND] Extracted: 'u5' → 'u5'       
+[2026-04-03 15:07:22,343] INFO in workflow_manager: 🔧 Executing command: 'u5' at stage: ConversationStage.TPR_AGE_GROUP
+[2026-04-03 15:07:22,358] INFO in workflow_manager: 🔧 Executing age selection: u5
+[2026-04-03 15:07:22,392] DEBUG in state_manager: State saved for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:25,052] INFO in workflow_manager: 🎯 Calling TPR tool with options: {'age_group': 'u5', 'facility_level': 'primary', 'test_method': 'both'}
+[2026-04-03 15:07:25,384] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-03 15:07:25,427] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/uploaded_data.csv with utf-8 encoding
+[2026-04-03 15:07:25,995] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:07:26,007] INFO in analysis_tool: Calculating TPR - Age: u5, Method: both, Facilities: primary
+[2026-04-03 15:07:26,012] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
 
-🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
-🚨 RISK ANALYSIS TOOL EXECUTE() CALLED!
-🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
-Session ID: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-Kwargs keys: ['session_id']
-Called at: 2026-04-03 14:56:15
-🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
 
-[2026-04-03 14:56:15,997] CRITICAL in complete_tools: 🚨 RISK ANALYSIS TOOL EXECUTING - Session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:16,031] INFO in interaction_events: Logged tool_execution_start event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-[2026-04-03 14:56:16,031] INFO in complete_tools: ============================================================
-[2026-04-03 14:56:16,031] INFO in complete_tools: 🔍 DEBUG COMPLETE ANALYSIS: Starting execution      
-[2026-04-03 14:56:16,032] INFO in complete_tools: 🔍 Session ID: 6e19ffca-e1b7-4bc6-86ba-b651a605453d 
-[2026-04-03 14:56:16,032] INFO in complete_tools: 🔍 Composite variables: None
-[2026-04-03 14:56:16,032] INFO in complete_tools: 🔍 PCA variables: None
-[2026-04-03 14:56:16,032] INFO in complete_tools: 🔍 Create unified dataset: True
-[2026-04-03 14:56:16,039] INFO in complete_tools: 🔍 Files in session BEFORE analysis: ['.agent_state.json', '.data_analysis_mode', '.risk_ready', '.tpr_complete', 'Burden_distribution_map_20260403_145105.html', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'raw_data.csv', 'raw_shapefile.zip']
-[2026-04-03 14:56:16,046] INFO in complete_tools: 🔍   ✅ raw_data.csv exists (35,867 bytes)
-[2026-04-03 14:56:16,055] INFO in complete_tools: 🔍   ✅ raw_shapefile.zip exists (123,298 bytes)    
-[2026-04-03 14:56:16,060] INFO in complete_tools: 🔍   ❌ unified_dataset.csv NOT found
-[2026-04-03 14:56:16,067] INFO in complete_tools: 🔍   ✅ tpr_results.csv exists (12,946 bytes)       
-[2026-04-03 14:56:16,067] INFO in complete_tools: ============================================================
-[2026-04-03 14:56:16,068] INFO in complete_tools: Starting complete dual-method analysis for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:16,068] INFO in complete_tools: Custom variables - Composite: None, PCA: None       
-[2026-04-03 14:56:16,098] INFO in interaction_events: Logged variable_validation event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-[2026-04-03 14:56:16,098] INFO in complete_tools: 🚀 Starting composite analysis...
-[2026-04-03 14:56:16,128] INFO in interaction_events: Logged composite_analysis_start event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-[2026-04-03 14:56:16,173] INFO in interaction_core: Logged error for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:16,202] INFO in interaction_events: Logged composite_analysis_failed event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: False
-[2026-04-03 14:56:16,202] ERROR in complete_tools: Composite analysis error: No module named 'app.data'
-[2026-04-03 14:56:16,203] ERROR in complete_tools: ❌ Composite analysis failed: Composite analysis failed: No module named 'app.data'
-[2026-04-03 14:56:16,203] INFO in complete_tools: 🔬 Starting PCA analysis...
+2026-04-03 15:08:47,200] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-03 15:08:47,233] INFO in utils: Schema column detection (age=o5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT >=5years'], rdt_pos=['Persons tested positive for malaria by RDT >=5years'], micro_tested=['Persons presenting with fever and tested by Microscopy >=5years'], micro_pos=['Persons tested positive for malaria by Microscopy >=5years']
+[2026-04-03 15:08:49,135] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-03 15:08:49,141] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-03 15:08:49,176] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-03 15:08:57,877] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:08:57,878] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:57,878] INFO in data_analysis_routes: [DEBUG] Message received: map malaria burden distribution
+[2026-04-03 15:08:57,929] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:57,930] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:57,949] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:57,968] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:08:58,061] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:58,067] INFO in data_analysis_routes: [AGENT CONTEXT] Session d221d32f-5edc-47f7-8c58-8d37426b27c1 → stage=data_exploring columns=32
+[2026-04-03 15:08:58,068] INFO in agent: ====================================================================================================
+[2026-04-03 15:08:58,068] INFO in agent: [AGENT] 🤖 AGENT.ANALYZE() CALLED
+[2026-04-03 15:08:58,068] INFO in agent: [AGENT] Session: d221d32f-5edc-47f7-8c58-8d37426b27c1        
+[2026-04-03 15:08:58,068] INFO in agent: [AGENT] Query: 'map malaria burden distribution...'
+[2026-04-03 15:08:58,069] INFO in agent: [AGENT] Workflow context present: True
+[2026-04-03 15:08:58,069] INFO in agent: ====================================================================================================
+[2026-04-03 15:08:58,069] INFO in agent: [AGENT] Workflow context details: {'workflow': 'data_analysis_v3', 'stage': 'data_exploring', 'valid_options': [], 'data_loaded': True, 'session_id': 'd221d32f-5edc-47f7-8c58-8d37426b27c1', 'data_columns': ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy <5yrs.1', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)', 'Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT <5yrs.1', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)', 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)', 'Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy <5yrs.1', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)', 'Severe Malaria cases seen', 'Persons with Severe Malaria treated with Artesu0te injection', 'PW who received LLIN', 'Children <5 yrs who received LLIN ', 'Test Positivity Rate(TPR) (Microscopy)', 'Test Positivity Rate(TPR) (RDT)'], 'columns_total': 32, 'data_shape': {'rows': 6948, 'cols': 32}, 'data_types': {'float64': 26, 'object': 5, 'int64': 1}, 'dataset_name': 'uploaded_data.csv', 'numeric_samples': ['period0me', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years'], 'categorical_samples': ['orgunitlevel2', 'orgunitlevel3', 'Facility level'], 'column_schema_description': 'Known column meanings (from schema inference):\n  State → column: "orgunitlevel2"\n  LGA (Local Government Area) → column: "orgunitlevel3"\n  Ward → column: "Ward"\n  Facility name → column: "organisationunit0me"\n  Facility level (Primary/Secondary/Tertiary) → column: "Facility level"\n  Reporting period → column: "period0me"\n  Under-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT <5yrs"\n  Under-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT <5yrs"\n  Over-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT >=5years"\n  Over-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT >=5years"\n  Pregnant women RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT Preg Women (PW)"\n  Pregnant women RDT positive (numerator) → column: "Persons tested positive for malaria by RDT Preg Women (PW)"\n  Under-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy <5yrs"\n  Under-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy <5yrs"\n  Over-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy >=5years"\n  Over-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy >=5years"\n  Pregnant women Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy Preg Women (PW)"\n  Pregnant women Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy Preg Women (PW)"'}
+[2026-04-03 15:08:58,069] INFO in agent: [AGENT STEP 1] Loading input data via _get_input_data()...   
+[2026-04-03 15:08:58,070] INFO in agent: ====================================================================================================
+[2026-04-03 15:08:58,070] INFO in agent: [_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA
+[2026-04-03 15:08:58,070] INFO in agent: [_GET_INPUT_DATA] Session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:58,070] INFO in agent: ====================================================================================================
+[2026-04-03 15:08:58,070] INFO in agent: [_GET_INPUT_DATA STEP 1] Session folder: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:58,070] INFO in agent: [_GET_INPUT_DATA STEP 1] Absolute path: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:58,071] INFO in agent: [_GET_INPUT_DATA STEP 1] Folder exists: True
+[2026-04-03 15:08:58,074] INFO in agent: [_GET_INPUT_DATA STEP 1] Files in folder: ['.agent_state.json', '.data_analysis_mode', '.risk_ready', '.tpr_complete', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'raw_data.csv', 'raw_shapefile.zip', 'tpr_analysis_debug.json', 'tpr_distribution_map.html', 'tpr_precomputed.db', 'tpr_precompute_status.json', 'tpr_results.csv', 'tpr_time_series.csv', 'uploaded_data.csv', 'visualizations', 'ward_cache.pkl', 'workflow_state.json']
+[2026-04-03 15:08:58,074] INFO in agent: [_GET_INPUT_DATA STEP 2] Analysis complete flag exists: False
+[2026-04-03 15:08:58,075] INFO in agent: [_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)
+[2026-04-03 15:08:58,075] INFO in agent: [_GET_INPUT_DATA STEP 2] Smart loading - priority order: ['raw_data.csv', 'tpr_results.csv', 'data_analysis.csv', 'uploaded_data.csv']
+[2026-04-03 15:08:58,075] INFO in agent: [_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available
+[2026-04-03 15:08:58,075] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Checking: raw_data.csv
+[2026-04-03 15:08:58,075] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Full path: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/raw_data.csv
+[2026-04-03 15:08:58,077] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Exists: True
+[2026-04-03 15:08:58,079] INFO in agent: [_GET_INPUT_DATA STEP 2.1] ✅ File found: raw_data.csv       
+[2026-04-03 15:08:58,081] INFO in agent: [_GET_INPUT_DATA STEP 2.1] File size: 35867 bytes
+[2026-04-03 15:08:58,082] INFO in agent: [_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...
+[2026-04-03 15:08:58,100] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
+[2026-04-03 15:08:58,109] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/raw_data.csv with ascii encoding
+[2026-04-03 15:08:58,133] INFO in agent: [_GET_INPUT_DATA STEP 3] ✅ CSV loaded in 0.05s
+[2026-04-03 15:08:58,137] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame shape: (193, 16)
+[2026-04-03 15:08:58,137] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
+[2026-04-03 15:08:58,138] INFO in agent: [_GET_INPUT_DATA STEP 4] Creating data object...
+[2026-04-03 15:08:58,138] INFO in agent: [_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in ''data' key
+[2026-04-03 15:08:58,138] INFO in agent: [_GET_INPUT_DATA STEP 4] ✅ Data object created
+[2026-04-03 15:08:58,139] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-03 15:08:58,139] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object 'data' type: <class 'pandas.core.frame.DataFrame'>
+[2026-04-03 15:08:58,139] INFO in agent: [_GET_INPUT_DATA STEP 5] ✅ Loaded raw_data.csv: 193 rows, 16 columns
+[2026-04-03 15:08:58,140] INFO in agent: [_GET_INPUT_DATA STEP 5] 📊 Dataset context: TPR + ENVIRONMENTAL (prepared for risk analysis)
+[2026-04-03 15:08:58,140] INFO in agent: [_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions
+[2026-04-03 15:08:58,140] INFO in agent: ====================================================================================================
+[2026-04-03 15:08:58,141] INFO in agent: [_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS
+[2026-04-03 15:08:58,142] INFO in agent: ====================================================================================================
+[2026-04-03 15:08:58,154] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
+[2026-04-03 15:08:58,161] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/tpr_time_series.csv with ascii encoding
+[2026-04-03 15:08:58,170] INFO in agent: [_GET_INPUT_DATA] Also loaded tpr_time_series.csv: (182, 6)
+[2026-04-03 15:08:58,170] INFO in agent: [_GET_INPUT_DATA FINAL] Total datasets loaded: 2
+[2026-04-03 15:08:58,170] INFO in agent: [AGENT STEP 1] ✅ Input data loaded: 2 datasets
+[2026-04-03 15:08:58,171] INFO in agent: [AGENT STEP 1] First dataset keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-03 15:08:58,172] INFO in agent: [AGENT] Workflow context message created:
+[2026-04-03 15:08:58,172] INFO in agent:    - Stage: data_exploring
+[2026-04-03 15:08:58,172] INFO in agent:    - Data columns: 32
+[2026-04-03 15:08:58,172] INFO in agent:    - First 5 columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-03 15:08:58,233] INFO in agent: [AGENT] Invoking graph with 6 messages
+[2026-04-03 15:08:58,242] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-03 15:08:58,243] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-03 15:08:58,243] INFO in agent: [_AGENT_NODE] Incoming messages count: 6
+[2026-04-03 15:08:58,243] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-03 15:08:58,255] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
+[2026-04-03 15:08:58,256] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-03 15:08:58,256] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...  
+[2026-04-03 15:08:58,256] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 7
+[2026-04-03 15:08:58,256] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...       
+[2026-04-03 15:08:58,256] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
+[2026-04-03 15:08:59,580] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 1.32s
+[2026-04-03 15:08:59,581] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-03 15:08:59,581] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-03 15:08:59,625] INFO in variable_distribution: ============================================================
+[2026-04-03 15:08:59,626] INFO in variable_distribution: 🔍 DEBUG VARIABLE DISTRIBUTION: Starting for variable 'Burden'
+[2026-04-03 15:08:59,626] INFO in variable_distribution: 🔍 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:59,627] INFO in variable_distribution: 🔍 Checking data files:
+[2026-04-03 15:08:59,628] INFO in variable_distribution: 🔍   raw_data.csv: EXISTS
+[2026-04-03 15:08:59,628] INFO in variable_distribution: 🔍   unified_dataset.csv: NOT FOUND
+[2026-04-03 15:08:59,629] INFO in variable_distribution: 🔍   raw_shapefile.zip: EXISTS
+[2026-04-03 15:08:59,630] INFO in variable_distribution: ============================================================
+[2026-04-03 15:08:59,630] INFO in variable_distribution: 🗺️ Creating distribution map for variable: Buurden
+[2026-04-03 15:08:59,630] INFO in variable_distribution: 🔍 DEBUG _load_data: Starting data load      
+[2026-04-03 15:08:59,630] INFO in variable_distribution: 🔍 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:08:59,637] INFO in variable_distribution: 🔍 DEBUG: CSV loaded successfully
+[2026-04-03 15:08:59,637] INFO in variable_distribution: 🔍   Shape: (193, 16)
+[2026-04-03 15:08:59,637] INFO in variable_distribution: 🔍   Columns (first 10): ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
+[2026-04-03 15:08:59,638] INFO in variable_distribution: 🔍   ALL Columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-03 15:08:59,638] INFO in variable_distribution: 🔍   ✅ Variable 'Burden' FOUND in CSV       
+[2026-04-03 15:08:59,698] INFO in variable_distribution: Extracted raw shapefile from instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/raw_shapefile.zip
+[2026-04-03 15:08:59,798] INFO in variable_distribution: Loaded shapefile data: 193 features
+[2026-04-03 15:08:59,798] INFO in variable_distribution: 🔍 DEBUG: Shapefile columns: ['StateCode', 'WardCode', 'WardName', 'LGACode', 'Urban', 'Source', 'Timestamp', 'GlobalID', 'AMAPCODE', 'StateName', 'LGAName', 'WardName_n', 'WardName_b', 'LGA', 'Burden', 'Total_Posi', 'Population', 'State', 'Geopolitic', 'NighttimeL', 'HousingQua', 'SoilWetnes', 'DistanceTo', 'Ndmi', 'urban_perc', 'geometry']        
+[2026-04-03 15:08:59,799] DEBUG in variable_resolver: Exact match: 'Burden' → 'Burden'
+[2026-04-03 15:08:59,850] INFO in variable_distribution: Successfully merged data on column: WardName
+[2026-04-03 15:08:59,852] INFO in variable_distribution: 🔍 DEBUG: Merged data shape: (193, 41)
+[2026-04-03 15:08:59,852] INFO in variable_distribution: 🔍 DEBUG: Merged data columns: ['StateCode_shp', 'WardCode_shp', 'WardName', 'LGACode_shp', 'Urban', 'Source', 'Timestamp', 'GlobalID', 'AMAPCODE', 'StateName', 'LGAName', 'WardName_n', 'WardName_b', 'LGA_shp', 'Burden_shp', 'Total_Posi', 'Population_shp', 'State_shp', 'Geopolitic', 'NighttimeL', 'HousingQua', 'SoilWetnes', 'DistanceTo', 'Ndmi_shp', 'urban_perc', 'geometry', 'WardCode', 'StateCode', 'LGACode', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-03 15:08:59,853] INFO in variable_distribution: 🔍 DEBUG: Looking for variable 'Burden' in merged data...
+[2026-04-03 15:09:02,658] INFO in variable_distribution: 📊 Tracked exploration: Burden (count: 1)
+[2026-04-03 15:09:02,661] INFO in map_tools: Added viz to graph state: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/Burden_distribution_map_20260403_150900.html
+[2026-04-03 15:09:02,663] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-03 15:09:02,663] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-03 15:09:02,663] INFO in agent: [_AGENT_NODE] Incoming messages count: 8
+[2026-04-03 15:09:02,663] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-03 15:09:02,683] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
+[2026-04-03 15:09:02,684] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-03 15:09:02,685] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...  
+[2026-04-03 15:09:02,685] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 9
+[2026-04-03 15:09:02,685] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...       
+[2026-04-03 15:09:02,685] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
+[2026-04-03 15:09:03,344] DEBUG in development: Request: GET http://localhost:5013/survey/api/status/session_1775246733962_n8wkua4e5
+127.0.0.1 - - [03/Apr/2026 15:09:03] "GET /survey/api/status/session_1775246733962_n8wkua4e5 HTTP/1.1" 200 -
+[2026-04-03 15:09:05,100] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 2.41s
+[2026-04-03 15:09:05,100] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-03 15:09:05,100] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-03 15:09:05,102] INFO in agent: [AGENT] Graph completed in 6.87 seconds
+[2026-04-03 15:09:05,662] INFO in agent: Served HTML visualization: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/Burden_distribution_map_20260403_150900.html → /serve_viz_file/d221d32f-5edc-47f7-8c58-8d37426b27c1/visualizations/Burden_distribution_map_20260403_150900.html
+[2026-04-03 15:09:05,664] INFO in agent: [AGENT] Analysis complete, 1 visualizations
+[2026-04-03 15:09:05,730] INFO in interaction_core: Logged assistant message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:05,730] INFO in data_analysis_routes: ✅ Logged agent response for session d221d32f-5edc-47f7-8c58-8d37426b27c1 (response_time=7.81s)
+127.0.0.1 - - [03/Apr/2026 15:09:05] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-03 15:09:06,341] DEBUG in development: Request: GET http://localhost:5013/serve_viz_file/d221d32f-5edc-47f7-8c58-8d37426b27c1/visualizations/Burden_distribution_map_20260403_150900.html
+[2026-04-03 15:09:08,703] INFO in decorators: serve_viz_file executed in 2.36 seconds
+127.0.0.1 - - [03/Apr/2026 15:09:08] "GET /serve_viz_file/d221d32f-5edc-47f7-8c58-8d37426b27c1/visualizations/Burden_distribution_map_20260403_150900.html HTTP/1.1" 200 -
+[2026-04-03 15:09:13,671] INFO in utils: Calculated burden for 183 wards using o5 age group
+[2026-04-03 15:09:13,728] INFO in precompute: Stored 183 wards for primary/o5
+[2026-04-03 15:09:13,734] INFO in precompute: Computing TPR for primary/pw
+[2026-04-03 15:09:13,758] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-03 15:09:13,782] INFO in utils: Schema column detection (age=pw, method=both): rdt_tested=['Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy Preg Women (PW)']  
+[2026-04-03 15:09:16,275] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-03 15:09:16,281] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-03 15:09:16,325] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-03 15:09:19,488] DEBUG in development: Request: POST http://localhost:5013/api/v1/data-analysis/chat
+[2026-04-03 15:09:19,489] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,489] INFO in data_analysis_routes: [DEBUG] Message received: run malaria risk analysis
+[2026-04-03 15:09:19,541] INFO in interaction_core: Logged user message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,542] INFO in data_analysis_routes: ✅ Logged user message for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,580] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,598] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-03 15:09:19,762] INFO in state_manager: StateManager initialized for session d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,769] INFO in data_analysis_routes: [AGENT CONTEXT] Session d221d32f-5edc-47f7-8c58-8d37426b27c1 → stage=data_exploring columns=32
+[2026-04-03 15:09:19,770] INFO in agent: ====================================================================================================
+[2026-04-03 15:09:19,770] INFO in agent: [AGENT] 🤖 AGENT.ANALYZE() CALLED
+[2026-04-03 15:09:19,770] INFO in agent: [AGENT] Session: d221d32f-5edc-47f7-8c58-8d37426b27c1        
+[2026-04-03 15:09:19,771] INFO in agent: [AGENT] Query: 'run malaria risk analysis...'
+[2026-04-03 15:09:19,771] INFO in agent: [AGENT] Workflow context present: True
+[2026-04-03 15:09:19,771] INFO in agent: ====================================================================================================
+[2026-04-03 15:09:19,771] INFO in agent: [AGENT] Workflow context details: {'workflow': 'data_analysis_v3', 'stage': 'data_exploring', 'valid_options': [], 'data_loaded': True, 'session_id': 'd221d32f-5edc-47f7-8c58-8d37426b27c1', 'data_columns': ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy <5yrs.1', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)', 'Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT <5yrs.1', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)', 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)', 'Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy <5yrs.1', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)', 'Severe Malaria cases seen', 'Persons with Severe Malaria treated with Artesu0te injection', 'PW who received LLIN', 'Children <5 yrs who received LLIN ', 'Test Positivity Rate(TPR) (Microscopy)', 'Test Positivity Rate(TPR) (RDT)'], 'columns_total': 32, 'data_shape': {'rows': 6948, 'cols': 32}, 'data_types': {'float64': 26, 'object': 5, 'int64': 1}, 'dataset_name': 'uploaded_data.csv', 'numeric_samples': ['period0me', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years'], 'categorical_samples': ['orgunitlevel2', 'orgunitlevel3', 'Facility level'], 'column_schema_description': 'Known column meanings (from schema inference):\n  State → column: "orgunitlevel2"\n  LGA (Local Government Area) → column: "orgunitlevel3"\n  Ward → column: "Ward"\n  Facility name → column: "organisationunit0me"\n  Facility level (Primary/Secondary/Tertiary) → column: "Facility level"\n  Reporting period → column: "period0me"\n  Under-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT <5yrs"\n  Under-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT <5yrs"\n  Over-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT >=5years"\n  Over-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT >=5years"\n  Pregnant women RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT Preg Women (PW)"\n  Pregnant women RDT positive (numerator) → column: "Persons tested positive for malaria by RDT Preg Women (PW)"\n  Under-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy <5yrs"\n  Under-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy <5yrs"\n  Over-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy >=5years"\n  Over-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy >=5years"\n  Pregnant women Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy Preg Women (PW)"\n  Pregnant women Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy Preg Women (PW)"'}
+[2026-04-03 15:09:19,771] INFO in agent: [AGENT STEP 1] Loading input data via _get_input_data()...   
+[2026-04-03 15:09:19,772] INFO in agent: ====================================================================================================
+[2026-04-03 15:09:19,772] INFO in agent: [_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA
+[2026-04-03 15:09:19,772] INFO in agent: [_GET_INPUT_DATA] Session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,772] INFO in agent: ====================================================================================================
+[2026-04-03 15:09:19,772] INFO in agent: [_GET_INPUT_DATA STEP 1] Session folder: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,772] INFO in agent: [_GET_INPUT_DATA STEP 1] Absolute path: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:19,773] INFO in agent: [_GET_INPUT_DATA STEP 1] Folder exists: True
+[2026-04-03 15:09:19,777] INFO in agent: [_GET_INPUT_DATA STEP 1] Files in folder: ['.agent_state.json', '.data_analysis_mode', '.risk_ready', '.tpr_complete', 'Burden_distribution_map_20260403_150900.html', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'raw_data.csv', 'raw_shapefile.zip', 'shapefile', 'tpr_analysis_debug.json', 'tpr_distribution_map.html', 'tpr_precomputed.db', 'tpr_precompute_status.json', 'tpr_results.csv', 'tpr_time_series.csv', 'uploaded_data.csv', 'visualizations', 'ward_cache.pkl', 'workflow_state.json']
+[2026-04-03 15:09:19,778] INFO in agent: [_GET_INPUT_DATA STEP 2] Analysis complete flag exists: False
+[2026-04-03 15:09:19,778] INFO in agent: [_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)
+[2026-04-03 15:09:19,779] INFO in agent: [_GET_INPUT_DATA STEP 2] Smart loading - priority order: ['raw_data.csv', 'tpr_results.csv', 'data_analysis.csv', 'uploaded_data.csv']
+[2026-04-03 15:09:19,779] INFO in agent: [_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available
+[2026-04-03 15:09:19,779] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Checking: raw_data.csv
+[2026-04-03 15:09:19,779] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Full path: instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/raw_data.csv
+[2026-04-03 15:09:19,781] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Exists: True
+[2026-04-03 15:09:19,784] INFO in agent: [_GET_INPUT_DATA STEP 2.1] ✅ File found: raw_data.csv       
+[2026-04-03 15:09:19,786] INFO in agent: [_GET_INPUT_DATA STEP 2.1] File size: 35867 bytes
+[2026-04-03 15:09:19,787] INFO in agent: [_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...
+[2026-04-03 15:09:19,812] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
+[2026-04-03 15:09:19,821] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/raw_data.csv with ascii encoding
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 3] ✅ CSV loaded in 0.06s
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame shape: (193, 16)
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 4] Creating data object...
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in ''data' key
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 4] ✅ Data object created
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object 'data' type: <class 'pandas.core.frame.DataFrame'>
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 5] ✅ Loaded raw_data.csv: 193 rows, 16 columns
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 5] 📊 Dataset context: TPR + ENVIRONMENTAL (prepared for risk analysis)
+[2026-04-03 15:09:19,850] INFO in agent: [_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions
+[2026-04-03 15:09:19,851] INFO in agent: ====================================================================================================
+[2026-04-03 15:09:19,851] INFO in agent: [_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS
+[2026-04-03 15:09:19,851] INFO in agent: ====================================================================================================
+[2026-04-03 15:09:19,862] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)       
+[2026-04-03 15:09:19,869] INFO in encoding_handler: Successfully read instance/uploads/d221d32f-5edc-47f7-8c58-8d37426b27c1/tpr_time_series.csv with ascii encoding
+[2026-04-03 15:09:19,878] INFO in agent: [_GET_INPUT_DATA] Also loaded tpr_time_series.csv: (182, 6)
+[2026-04-03 15:09:19,879] INFO in agent: [_GET_INPUT_DATA FINAL] Total datasets loaded: 2
+[2026-04-03 15:09:19,879] INFO in agent: [AGENT STEP 1] ✅ Input data loaded: 2 datasets
+[2026-04-03 15:09:19,879] INFO in agent: [AGENT STEP 1] First dataset keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-03 15:09:19,880] INFO in agent: [AGENT] Workflow context message created:
+[2026-04-03 15:09:19,880] INFO in agent:    - Stage: data_exploring
+[2026-04-03 15:09:19,880] INFO in agent:    - Data columns: 32
+[2026-04-03 15:09:19,880] INFO in agent:    - First 5 columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-03 15:09:19,947] INFO in agent: [AGENT] Invoking graph with 8 messages
+[2026-04-03 15:09:19,951] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-03 15:09:19,951] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-03 15:09:19,951] INFO in agent: [_AGENT_NODE] Incoming messages count: 8
+[2026-04-03 15:09:19,951] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-03 15:09:19,971] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
+[2026-04-03 15:09:19,971] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-03 15:09:19,971] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...  
+[2026-04-03 15:09:19,971] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 9
+[2026-04-03 15:09:19,971] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...       
+[2026-04-03 15:09:19,971] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
+[2026-04-03 15:09:27,110] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
+[2026-04-03 15:09:29,533] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 2.42s
+[2026-04-03 15:09:29,533] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-03 15:09:29,533] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-03 15:09:29,534] INFO in agent: [AGENT] Graph completed in 9.59 seconds
+[2026-04-03 15:09:29,538] INFO in agent: [AGENT] Analysis complete, 0 visualizations
+[2026-04-03 15:09:29,591] INFO in interaction_core: Logged assistant message for session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+[2026-04-03 15:09:29,591] INFO in data_analysis_routes: ✅ Logged agent response for session d221d32f-5edc-47f7-8c58-8d37426b27c1 (response_time=10.07s)
+127.0.0.1 - - [03/Apr/2026 15:09:29] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-03 15:09:33,645] DEBUG in development: Request: GET http://localhost:5013/survey/api/status/session_1775246733962_n8wkua4e5
+127.0.0.1 - - [03/Apr/2026 15:09:33] "GET /survey/api/status/session_1775246733962_n8wkua4e5 HTTP/1.1" 200 -
+[2026-04-03 15:09:34,459] INFO in utils: Calculated burden for 183 wards using pw age group
+[2026-04-03 15:09:34,538] INFO in precompute: Stored 183 wards for primary/pw
+[2026-04-03 15:09:34,547] INFO in precompute: Computing TPR for primary/all_ages
+[2026-04-03 15:09:34,585] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-03 15:09:34,615] INFO in utils: Schema column detection (age=all_ages, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-03 15:09:37,768] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-03 15:09:37,777] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-03 15:09:37,841] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-03 15:09:43,938] INFO in utils: Calculated burden for 183 wards using all_ages age group
+[2026-04-03 15:09:43,995] INFO in precompute: Stored 183 wards for primary/all_ages
+[2026-04-03 15:09:44,002] INFO in precompute: Computing TPR for secondary/u5
+[2026-04-03 15:09:44,025] INFO in utils: Filtered to secondary: 168/6948 records
+[2026-04-03 15:09:44,027] INFO in utils: Schema column detection (age=u5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs']
+[2026-04-03 15:09:45,859] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-03 15:09:45,867] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-03 15:09:45,887] INFO in utils: Fuzzy-matched 5 ward names: {'ajasse 1': 'ajase 1', 'ajasse 2': 'ajase 2', 'erin ile north': 'erin north', 'otte balla': 'otte ballah', 'patigi 3': 'pategi 3'}    
 
-🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣
-🔬 CALLING _run_pca_analysis()
-   Session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-   Variables: None
-🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣
 
 
-🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
-🎯 _run_pca_analysis() CALLED!
-   Session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-   Custom vars: None
-🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
+BROWSER CONSOLE
+ 🔵 SurveyButton: Script loaded, creating instance
+ 🔵 SurveyButton: Constructor called
+ 🔵 SurveyButton: Init called, readyState: loading
+ 🔵 SurveyButton: Waiting for DOMContentLoaded
+ 🔵 SurveyButton: Instance created: true
+ 🟢 PrePostButton: Script loaded, creating instance
+ 🟢 PrePostButton: Constructor called
+ 🟢 PrePostButton: Init called
+ 🟢 PrePostButton: Instance created: true
+ 🔵 SurveyButton: Setup called
+ 🔵 SurveyButton: CreateSurveyButton called
+ 🔵 SurveyButton: Attempt 1/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? false Found Download? false
+ 🟢 PrePostButton: Setup called
+ 🟢 PrePostButton: CreatePrePostButton called
+ 🟢 PrePostButton: Attempt 1/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? false Found Download? false
+ 🔵 APP: Render - isAuthenticated: false isLoading: false user: null
+ 🔵 APP: Rendering UI - isLoading: false isAuthenticated: false
+ 🔵 APP: Showing landing page (not authenticated)
+ 🔵 APP: useEffect triggered
+ 🔵 APP: Added conversation_id to URL: 45d2fbf0-a3c0-44e1-a22b-26af4bd5691e
+ 🔐 AUTH: checkAuth() called
+ 🔐 AUTH: Token in sessionStorage: NONE
+ 🔐 AUTH: Checking auth status at /auth/status
+ 🔵 APP: Render - isAuthenticated: false isLoading: true user: null
+ 🔵 APP: Rendering UI - isLoading: true isAuthenticated: false
+ 🔵 APP: Showing loading spinner
+ 🔐 AUTH: Status response status: 200
+ 🔵 SurveyButton: Attempt 2/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? false Found Download? false
+ 🟢 PrePostButton: Attempt 2/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? false Found Download? false
+ 🔐 AUTH: Status response data: Object
+ 🔐 AUTH: User authenticated! Setting user: Object
+ 🔐 AUTH: Store state after checkAuth: Object
+ 🔵 APP: Render - isAuthenticated: true isLoading: false user: Object
+ 🔵 APP: Rendering UI - isLoading: false isAuthenticated: true
+ 🔵 APP: Showing main interface (authenticated)
+ InputArea - showUploadModal: false
+ 🔵 APP: checkAuth result: true
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🔵 SurveyButton: Attempt 3/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? true Found Download? true
+ 🟢 PrePostButton: Attempt 3/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? true Found Download? true
+ 🟢 PrePostButton: Button inserted successfully
+ READ - Host validation failed: Object
+ InputArea - showUploadModal: false
+ Host is not supported
+ Host is not valid or supported
+ Host is not in insights whitelist
+:5013/vite.svg:1  Failed to load resource: the server responded with a status of 404 (NOT FOUND)
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ Starting data analysis upload with formData: FormData
+ Data analysis upload response: Object
+ Response data: Object
+ Response data status: success
+ Using backend session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ Triggering data analysis chat API with session: d221d32f-5edc-47f7-8c58-8d37426b27c1
+ Data analysis chat response: 200
+ Data analysis triggered successfully: Object
+ Data analysis mode activated
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: start the tpr workflow
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: start the tpr workflow
+   Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-03T20:06:41.861Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: ## Malaria Burden Analysis Workflow
 
-[2026-04-03 14:56:16,203] CRITICAL in complete_tools: 🎯 PCA ANALYSIS METHOD CALLED - Session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:16,231] INFO in interaction_events: Logged pca_analysis_start event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: True
-[2026-04-03 14:56:16,264] INFO in interaction_core: Logged error for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:16,292] INFO in interaction_events: Logged pca_analysis_failed event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: False
-[2026-04-03 14:56:16,292] ERROR in complete_tools: PCA analysis error: No module named 'app.data'     
-[2026-04-03 14:56:16,292] ERROR in complete_tools: ❌ PCA analysis failed: PCA analysis failed: No module named 'app.data'
-[2026-04-03 14:56:16,292] INFO in complete_tools: 🔄 Both analyses completed sequentially in 0.19 seconds
-[2026-04-03 14:56:16,333] INFO in interaction_events: Logged sequential_analysis_complete event for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d, success: False
-[2026-04-03 14:56:16,361] INFO in interaction_core: Logged error for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:16,362] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
-[2026-04-03 14:56:16,363] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
-[2026-04-03 14:56:16,363] INFO in agent: [_AGENT_NODE] Incoming messages count: 14
-[2026-04-03 14:56:16,363] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
-[2026-04-03 14:56:16,374] WARNING in agent: [_AGENT_NODE MESSAGE TRUNCATION] Message history too long: 14 messages
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE MESSAGE TRUNCATION] Kept last 10 messages (smart)
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE MESSAGE TRUNCATION] Truncated: 14 → 10 messages 
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...  
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 11
-[2026-04-03 14:56:16,374] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...       
-[2026-04-03 14:56:16,375] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORRS
-[2026-04-03 14:56:18,316] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 1.94s
-[2026-04-03 14:56:18,316] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
-[2026-04-03 14:56:18,316] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
-[2026-04-03 14:56:18,317] INFO in agent: [AGENT] Graph completed in 3.54 seconds
-[2026-04-03 14:56:18,325] INFO in agent: [AGENT] Analysis complete, 0 visualizations
-[2026-04-03 14:56:18,372] INFO in interaction_core: Logged assistant message for session: 6e19ffca-e1b7-4bc6-86ba-b651a605453d
-[2026-04-03 14:56:18,373] INFO in data_analysis_routes: ✅ Logged agent response for session 6e19ffca-e1b7-4bc6-86ba-b651a605453d (response_time=8.76s)
-127.0.0.1 - - [03/Apr/2026 14:56:18] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+Great! Let's analyze your malaria testing data to calculate ward-level Malaria Burd
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: yes
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: yes
+   Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-03T20:07:01.618Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: **State:** kw Kwara State (auto-selected)
+
+Now, which health facility level would you like to analyze?
+
+- **primary** **
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: primary
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: primary
+   Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-03T20:07:15.452Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: Perfect! You've selected **Primary** facilities. These facilities conducted 259,488 tests.
+
+Perfect! **Primary facilitie
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: u5
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:279 📊 DATA ANALYSIS V3 REQUEST
+index-DEkihWic.js:279   Message: u5
+index-DEkihWic.js:279   Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+index-DEkihWic.js:279   Endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   Timestamp: 2026-04-03T20:07:21.471Z
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+?conversation_id=45d…a22b-26af4bd5691e:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+?conversation_id=45d…a22b-26af4bd5691e:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+?conversation_id=45d…a22b-26af4bd5691e:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+?conversation_id=45d…a22b-26af4bd5691e:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+?conversation_id=45d…a22b-26af4bd5691e:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:279 ✅ DATA ANALYSIS V3 RESPONSE
+index-DEkihWic.js:279   Success: true
+index-DEkihWic.js:279   Visualizations: 0
+index-DEkihWic.js:279   Has Message: true
+index-DEkihWic.js:279   Message Preview: ## Malaria Burden Analysis Complete
+
+Using primary facilities and focusing on children under 5 years, I calculated malar
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:279 🎯 FRONTEND: sendMessage called
+index-DEkihWic.js:279   📝 Message: map malaria burden distribution
+index-DEkihWic.js:279   🔍 Data Analysis Mode: true
+index-DEkihWic.js:279   🆔 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+index-DEkihWic.js:279 🎯 FRONTEND: Endpoint Selection
+index-DEkihWic.js:279   🌐 Using endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   🔍 Data Analysis Mode: true
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:279 📊 DATA ANALYSIS V3 REQUEST
+index-DEkihWic.js:279   Message: map malaria burden distribution
+index-DEkihWic.js:279   Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+index-DEkihWic.js:279   Endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   Timestamp: 2026-04-03T20:08:57.362Z
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:279 ✅ DATA ANALYSIS V3 RESPONSE
+index-DEkihWic.js:279   Success: true
+index-DEkihWic.js:279   Visualizations: 1
+index-DEkihWic.js:279   Has Message: true
+index-DEkihWic.js:279   Message Preview: I've created a spatial distribution map showing how the **Burden** of malaria varies across the wards in your study area
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+Burden_distribution_map_20260403_150900.html:1 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+Burden_distribution_map_20260403_150900.html:22 WARN: mapbox subplots and traces are deprecated! Please consider switching to `map` subplots and traces. Learn more at: https://plotly.com/python/maplibre-migration/ as well as https://plotly.com/javascript/maplibre-migration/
+Eq.warn @ Burden_distribution_map_20260403_150900.html:22
+Np.plot @ Burden_distribution_map_20260403_150900.html:3215
+ld.drawData @ Burden_distribution_map_20260403_150900.html:25
+li.syncOrAsync @ Burden_distribution_map_20260403_150900.html:24
+nht @ Burden_distribution_map_20260403_150900.html:25
+lht @ Burden_distribution_map_20260403_150900.html:25
+(anonymous) @ Burden_distribution_…03_150900.html:3883
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:279 🎯 FRONTEND: sendMessage called
+index-DEkihWic.js:279   📝 Message: run malaria risk analysis
+index-DEkihWic.js:279   🔍 Data Analysis Mode: true
+index-DEkihWic.js:279   🆔 Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+index-DEkihWic.js:279 🎯 FRONTEND: Endpoint Selection
+index-DEkihWic.js:279   🌐 Using endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   🔍 Data Analysis Mode: true
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:279 📊 DATA ANALYSIS V3 REQUEST
+index-DEkihWic.js:279   Message: run malaria risk analysis
+index-DEkihWic.js:279   Session ID: d221d32f-5edc-47f7-8c58-8d37426b27c1
+index-DEkihWic.js:279   Endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   Timestamp: 2026-04-03T20:09:19.592Z
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:279 ✅ DATA ANALYSIS V3 RESPONSE
+index-DEkihWic.js:279   Success: true
+index-DEkihWic.js:279   Visualizations: 0
+index-DEkihWic.js:279   Has Message: true
+index-DEkihWic.js:279   Message Preview: It seems there was an error while attempting to run the comprehensive malaria risk analysis. The system encountered an i
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:280 InputArea - showUploadModal: false
