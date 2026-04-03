@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.analysis.engine import AnalysisEngine
-from app.data import DataHandler
+from app.services.data_handler import DataHandler
 from app.upload.upload_service import UploadService
 
 logger = logging.getLogger(__name__)

@@ -13,7 +13,7 @@ from pydantic import Field, validator
 
 from .base import BaseTool, ToolCategory, ToolExecutionResult
 from app.analysis.itn_pipeline import calculate_itn_distribution
-from app.data import DataHandler
+from app.services.data_handler import DataHandler
 from app.services.container import get_service_container
 
 logger = logging.getLogger(__name__)

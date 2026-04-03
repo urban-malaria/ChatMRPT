@@ -1,7 +1,7 @@
 """ITN Distribution Routes."""
 from flask import Blueprint, request, jsonify, session, send_from_directory, current_app
 from app.analysis.itn_pipeline import calculate_itn_distribution
-from app.data import DataHandler
+from app.services.data_handler import DataHandler
 import logging
 import os
 

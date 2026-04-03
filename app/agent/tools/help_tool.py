@@ -9,7 +9,7 @@ import logging
 
 # Import helpers for proactive assistance
 try:
-    from app.helpers import (
+    from app.utils import (
         WelcomeHelper,
         DataRequirementsHelper,
         WorkflowProgressHelper,

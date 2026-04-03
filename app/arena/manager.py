@@ -37,7 +37,7 @@ def get_interaction_logger():
     global _interaction_logger
     if _interaction_logger is None:
         try:
-            from app.interaction import InteractionLogger
+            from app.services.interaction_init import InteractionLogger
             _interaction_logger = InteractionLogger()
             logger.info("Arena interaction logger initialized")
         except Exception as e:

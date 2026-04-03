@@ -127,7 +127,7 @@ class UnifiedDatasetBuilder:
             }
             
             # Load original data through DataHandler
-            from app.data import DataHandler
+            from app.services.data_handler import DataHandler
             data_handler = DataHandler(self.session_folder)
             
             if data_handler.csv_data is not None and not data_handler.csv_data.empty:
@@ -298,7 +298,7 @@ class UnifiedDatasetBuilder:
                     module = __import__(module_path, fromlist=[function_name])
                     pca_function = getattr(module, function_name)
                     
-                    from app.data import DataHandler
+                    from app.services.data_handler import DataHandler
                     data_handler = DataHandler(self.session_folder)
                     
                     # Try to run PCA analysis
@@ -1823,7 +1823,7 @@ def _load_settlement_free_data_sources(session_folder: str) -> Dict[str, Any]:
         }
         
         # Load original data through DataHandler (without settlement integration)
-        from app.data import DataHandler
+        from app.services.data_handler import DataHandler
         data_handler = DataHandler(session_folder)
         
         if data_handler.csv_data is not None:

@@ -41,7 +41,7 @@ def _is_semantic_router_enabled() -> bool:
 
 async def _route_with_semantic_router(message: str, session_context: dict) -> str:
     """Route using the semantic router."""
-    from app.routing import SemanticChatRouter, get_semantic_router
+    from app.agent.semantic_router import SemanticChatRouter, get_semantic_router
 
     router = get_semantic_router()
     result = router.route(message, session_context)
