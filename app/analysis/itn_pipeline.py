@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import plotly.graph_objects as go
 from pandas.api.types import is_datetime64_any_dtype
 from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
-from app.data.population_data.itn_population_loader import get_population_loader
+from app.planning.population_loader import get_population_loader
 from app.utils.geospatial_levels import (
     apply_lga_highlight,
     collect_lga_options,
@@ -802,7 +802,7 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
         
         # Store ITN parameters in Redis for multi-worker access
         try:
-            from ..core.redis_state_manager import get_redis_state_manager
+            from app.services.redis_state import get_redis_state_manager
             redis_manager = get_redis_state_manager()
             itn_params = {
                 'total_nets': total_nets,

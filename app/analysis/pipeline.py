@@ -397,7 +397,7 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
         # Create/update unified dataset with region metadata
         try:
             print("PIPELINE DEBUG: Creating unified dataset with region metadata...")
-            from ..data.unified_dataset_builder import build_unified_dataset, load_unified_dataset
+            from app.services.dataset_builder import build_unified_dataset, load_unified_dataset
             
             unified_result = build_unified_dataset(session_id)
             if unified_result['status'] == 'success':

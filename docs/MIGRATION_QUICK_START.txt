@@ -1,0 +1,255 @@
+================================================================================
+CHATMRPT MIGRATION: QUICK START REFERENCE
+================================================================================
+
+WHAT WAS DONE:
+This is a READ-ONLY mapping document. NO FILES HAVE BEEN MOVED YET.
+
+DOCUMENTS CREATED (in /docs/):
+1. COMPLETE_FILE_MAPPING.md      — Full mapping with explanations
+2. MIGRATION_BY_SOURCE_DIRECTORY.md — Step-by-step execution phases (13 phases)
+3. FILE_MIGRATION_CSV.csv        — Machine-readable: CURRENT_PATH,NEW_PATH,RENAME,NOTES
+4. MAPPING_SUMMARY.txt           — This summary overview
+
+================================================================================
+FILE ALLOCATION SUMMARY (185 files)
+================================================================================
+
+NO CHANGE (54 files):
+  app/__init__.py
+  app/analysis/* (14 files - except itn_pipeline.py)
+  app/auth/* (6 files)
+  app/config/* (9 files)
+  app/prepost/models.py + questions.py + __init__.py (3 files)
+  app/survey/models.py + populate_questions.py + questions.py + __init__.py (4 files)
+  app/utils/geospatial_levels.py, lga_boundaries.py, map_overlays.py, security.py (4 files)
+
+MOVES & RENAMES (131 files across 13 phases):
+  Phase 2: analysis/ → planning/ (1 file)
+  Phase 3: core/ → 6 destinations (28 files)
+  Phase 4: data/ → 3 destinations (11 files)
+  Phase 5: data_analysis_v3/ → 5 destinations (~30 files)
+  Phase 6: helpers/ → 2 destinations (5 files)
+  Phase 7: interaction/ → services/ (5 files)
+  Phase 8: routing/ → agent/ (1 file)
+  Phase 9: runtime/ → 2 destinations (3 files)
+  Phase 10: services/ → redistribute (7 files move out)
+  Phase 11: tools/ → 4 destinations (15 files)
+  Phase 12: utils/ → visualization/ (1 file)
+  Phase 13: web/routes/ → api/ (24 files)
+
+================================================================================
+NEW DIRECTORY STRUCTURE (AFTER MIGRATION)
+================================================================================
+
+app/
+├── __init__.py                    [Factory function]
+├── analysis/       (14 files)    [Risk analysis: composite, PCA, normalization]
+├── agent/          (25 files)    [ONE-BRAIN: orchestration, tools, execution]
+├── api/            (35 files)    [ALL Flask routes + sub-routes]
+├── api/analysis/   (9 files)     [Analysis routes subdirectory]
+├── arena/          (2 files)     [Arena mode: comparison, system prompts]
+├── auth/           (6 files)     [OAuth, login, sessions]
+├── config/         (9 files)     [Configuration: base, dev, prod, redis]
+├── conversation/   (5 files)     [History, state, workflow, resume]
+├── planning/       (8 files)     [ITN planning, distribution, reports]
+├── prepost/        (3 files)     [Pre/post tests: models, questions]
+├── services/       (25 files)    [Infrastructure: LLM, memory, data, loaders]
+├── survey/         (4 files)     [Survey system: models, questions]
+├── tpr/            (12 files)    [TPR workflow: intent, language, analysis]
+├── upload/         (1 file)      [File upload handling]
+├── utils/          (19 files)    [Shared utilities, helpers, validators]
+└── visualization/  (12 files)    [Maps, charts, visual explanations]
+
+DELETED DIRECTORIES (redistributed):
+  ✗ app/core/
+  ✗ app/data/
+  ✗ app/data_analysis_v3/
+  ✗ app/helpers/
+  ✗ app/interaction/
+  ✗ app/routing/
+  ✗ app/runtime/
+  ✗ app/web/
+
+================================================================================
+KEY MIGRATION DECISIONS
+================================================================================
+
+1. USER JOURNEY DRIVEN:
+   Path from signup → upload → TPR/analysis → visualization → planning
+   → Each stage has its own directory
+
+2. ONE-BRAIN AGENT (app/agent/):
+   - Core orchestration in request_interpreter.py
+   - Execution engines (executor.py, executor_simple.py)
+   - Tool management (base.py, complete_analysis_tools.py)
+   - State management (state.py, state_manager.py)
+
+3. TPR WORKFLOW (app/tpr/):
+   - Isolated intent classification
+   - Language interface for natural language → TPR mapping
+   - Analysis tools specific to TPR
+   - Separated from general agent concerns
+
+4. VISUALIZATION (app/visualization/):
+   - All rendering: maps, charts, explanations
+   - Map and settlement tools
+   - Visual explanation service
+
+5. SHARED INFRASTRUCTURE (app/services/):
+   - LLM manager and adapters
+   - Session/memory management
+   - Data loading and repositories
+   - Analysis helpers and formatters
+
+6. ALL ROUTES → app/api/:
+   - Clean separation of Flask routes from logic
+   - Sub-routes in app/api/analysis/
+   - All route files have _routes.py suffix (or routes.py)
+
+================================================================================
+HOW TO EXECUTE MIGRATION
+================================================================================
+
+AUTOMATED APPROACH (bash script):
+1. Review MIGRATION_BY_SOURCE_DIRECTORY.md
+2. Create a migration script from the phase instructions
+3. Execute phases 2-13 sequentially
+4. Update imports (largest task)
+5. Run tests
+
+MANUAL APPROACH:
+1. Open MIGRATION_BY_SOURCE_DIRECTORY.md
+2. Execute each phase (1-13) line by line
+3. After each phase, verify no import breaks
+4. Update imports as you go
+
+CSV APPROACH (for refactoring tools):
+1. Use FILE_MIGRATION_CSV.csv with IDE refactoring tools
+2. Some tools (VS Code, PyCharm) can bulk-move files
+3. May auto-update some imports
+
+CURRENT STATE:
+- All files still in original locations
+- This mapping is complete and ready for execution
+- No breaking changes yet made
+
+================================================================================
+IMPORTANT NOTES FOR EXECUTION
+================================================================================
+
+1. IMPORT UPDATES REQUIRED:
+   Every moved file needs import updates. This is the largest effort.
+   Examples:
+     from app.core.llm_manager import ... → from app.services.llm_manager import ...
+     from app.tools.base import ... → from app.agent.tools.base import ...
+     from app.web.routes.core_routes import ... → from app.api.core_routes import ...
+
+2. FILE RENAMES:
+   ~40 files get renamed when moved (see "RENAME" column in CSV).
+   This requires updating both import statements AND module references.
+
+3. NEW __init__.py FILES:
+   Create __init__.py in each new directory if it doesn't exist.
+
+4. TEST COVERAGE:
+   After migration, run:
+     python -m pytest tests/ -v
+   To catch any import/routing issues.
+
+5. FLASK BLUEPRINT REGISTRATION:
+   Routes in app/api/ need to be registered in the Flask factory.
+   Currently done in app/web/__init__.py — this will move to app/api/__init__.py
+   or app/__init__.py.
+
+6. DOCUMENTATION UPDATE:
+   After migration, update:
+     - CLAUDE.md (if it references old paths)
+     - architecture/ARCHITECTURE.md (directory structure section)
+     - Any internal wikis/readmes
+
+================================================================================
+ROLLBACK PLAN (IF NEEDED)
+================================================================================
+
+Git makes this easy:
+  git reset --hard origin/main  # If changes aren't committed
+  git revert <commit-hash>      # If changes are committed
+
+Better: Create a feature branch first
+  git checkout -b refactor/restructure-directories
+  [Run migration on this branch]
+  [Test thoroughly]
+  git push origin refactor/restructure-directories
+  [Create PR for review]
+
+================================================================================
+SUCCESS CRITERIA (POST-MIGRATION)
+================================================================================
+
+Checklist:
+  ✓ All 185 files in new locations
+  ✓ All imports updated and resolve correctly
+  ✓ All unit tests pass (pytest)
+  ✓ All integration tests pass
+  ✓ All routes accessible (/api/*, /upload/*, /visualization/*, etc.)
+  ✓ Agent orchestration works (request_interpreter.py)
+  ✓ TPR workflow functional
+  ✓ Arena mode operational
+  ✓ File uploads working
+  ✓ Visualization rendering working
+  ✓ Pre/post survey system working
+  ✓ Survey system working
+
+Health checks (local):
+  1. python run.py (should start without errors)
+  2. curl http://localhost:5013/ping (should return 200)
+  3. curl http://localhost:5013/api/routes (should list all routes)
+  4. Browser access: http://localhost:5013 (should load UI)
+
+Health checks (production):
+  1. SSH to instance and check service status
+  2. Verify logs show no import errors
+  3. Test all major workflows end-to-end
+
+================================================================================
+TIME ESTIMATE
+================================================================================
+
+Task breakdown:
+  - File moves (phases 2-13): 30 minutes (automated script)
+  - Import updates: 2-3 hours (bulk refactoring + manual fixes)
+  - Testing: 1-2 hours (unit + integration + manual)
+  - Documentation: 30 minutes
+
+Total: ~4-6 hours
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Read MIGRATION_BY_SOURCE_DIRECTORY.md in detail
+2. Create bash migration script from the phase commands
+3. Create feature branch: git checkout -b refactor/restructure-directories
+4. Run migration script (phases 2-13)
+5. Update imports (use PyCharm/VS Code bulk refactoring)
+6. Run tests: python -m pytest tests/ -v
+7. Verify all routes accessible
+8. Test major workflows
+9. Commit changes
+10. Create PR for code review
+11. Deploy to staging first
+12. Deploy to production (both instances)
+
+================================================================================
+QUESTIONS?
+================================================================================
+
+Refer to:
+  1. COMPLETE_FILE_MAPPING.md — Full details with reasons
+  2. MIGRATION_BY_SOURCE_DIRECTORY.md — Phase-by-phase instructions
+  3. FILE_MIGRATION_CSV.csv — Simple table format for tools
+  4. MAPPING_SUMMARY.txt — This overview document
+
+All documents are in /docs/ directory.
+

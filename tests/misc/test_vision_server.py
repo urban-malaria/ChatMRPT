@@ -18,7 +18,7 @@ def test_vision():
     os.environ['ENABLE_VISION_EXPLANATIONS'] = 'true'
 
     # Import after setting env
-    from app.services.universal_viz_explainer import UniversalVisualizationExplainer
+    from app.visualization.explainer import UniversalVisualizationExplainer
 
     print("\n1️⃣ Testing vision system...")
     explainer = UniversalVisualizationExplainer()

@@ -1,0 +1,391 @@
+================================================================================
+CHATMRPT COMPLETE FILE MIGRATION MAPPING
+================================================================================
+
+TOTAL FILES: 185 Python modules
+
+OVERVIEW OF NEW STRUCTURE:
+================================================================================
+
+app/
+├── __init__.py                    [Factory, stays in place]
+├── analysis/ (14 files)           [Risk analysis pipelines: composite, PCA, normalization]
+├── agent/ (25 files)              [ONE-BRAIN LangGraph: orchestration, execution, tools]
+├── api/ (35 files)                [All Flask routes: core, analysis, visualization, etc.]
+├── arena/ (2 files)               [Arena mode: model comparison, system prompts]
+├── auth/ (6 files)                [Google OAuth, login, user sessions]
+├── config/ (9 files)              [Configuration: base, dev, prod, redis, settings]
+├── conversation/ (5 files)        [Conversation history, workflow state, resume]
+├── planning/ (8 files)            [ITN distribution planning, reports]
+├── prepost/ (3 files)             [Pre/post tests: models, questions (routes→api/)]
+├── services/ (25 files)           [Shared infrastructure: LLM, memory, state, loaders, data]
+├── survey/ (4 files)              [Survey system: models, questions (routes→api/)]
+├── tpr/ (12 files)                [TPR workflow: intent, language interface, analyzers]
+├── upload/ (1 file)               [File upload handling]
+├── utils/ (15 files)              [Shared utilities: exceptions, helpers, validators]
+└── visualization/ (12 files)      [Maps, charts, visual explanations]
+
+================================================================================
+DIRECTORY-BY-DIRECTORY MAPPING
+================================================================================
+
+FILE STAYS IN PLACE (54 files — NO CHANGES):
+================================================================================
+
+app/
+  __init__.py                       → app/__init__.py
+
+app/analysis/ (except itn_pipeline.py):
+  __init__.py                       → app/analysis/__init__.py
+  engine.py, imputation.py, metadata.py, normalization.py, pca_pipeline.py
+  pca_statistical_tests.py, pipeline.py, pipeline_stages/__init__.py
+  region_aware_selection.py, scoring.py, urban_analysis.py, utils.py
+  variable_comparison_validator.py, variable_selection_coordinator.py
+  [All 14 core analysis files stay]
+
+app/auth/ (6 files):
+  __init__.py, auth_complete.py, decorators.py, google_auth.py
+  session_utils.py, user_model.py
+  [All OAuth/auth stays]
+
+app/config/ (9 files):
+  __init__.py, arena.py, base.py, data_paths.py, development.py
+  production.py, redis_config.py, settings.py, testing.py
+  [All config stays]
+
+app/prepost/ (3 files):
+  __init__.py, models.py, questions.py
+  routes.py → app/api/prepost_routes.py (move later)
+
+app/survey/ (4 files):
+  __init__.py, models.py, populate_questions.py, questions.py
+  routes.py → app/api/survey_routes.py (move later)
+
+app/utils/ (4 files stay, 1 moves):
+  geospatial_levels.py, lga_boundaries.py, map_overlays.py, security.py
+  [These 4 stay; visualization_controls.py → app/visualization/]
+
+
+MOVES & RENAMES (131 files):
+================================================================================
+
+PHASE 2: app/analysis/ → app/planning/
+  itn_pipeline.py                   → app/planning/itn_pipeline.py
+
+PHASE 3: app/core/ DISTRIBUTED (28 files)
+  → app/services/ (10 files):
+    llm_manager.py, llm_adapter.py, session_state.py
+    session_context_service.py, session_helper.py, data_repository.py
+    unified_data_state.py, instance_sync.py, responses.py
+    utils.py → core_utils.py [RENAME]
+
+  → app/agent/ (4 files):
+    request_interpreter.py, prompt_builder.py
+    tool_schema_registry.py, tool_validator.py
+
+  → app/conversation/ (3 files):
+    redis_state_manager.py, workflow_state_manager.py
+    analysis_state_handler.py
+
+  → app/arena/ (2 files):
+    arena_manager.py, arena_system_prompt.py
+
+  → app/tpr/ (5 files):
+    tpr_precompute.py, tpr_precompute_service.py, tpr_utils.py
+    tpr_ward_cache.py, variable_matcher.py
+
+  → app/utils/ (3 files):
+    exceptions.py, decorators.py, dependency_validator.py
+
+PHASE 4: app/data/ DISTRIBUTED (11 files)
+  → app/services/ (5 files):
+    unified_dataset_builder.py, flexible_data_access.py
+    loaders.py → data_loaders.py [RENAME]
+    settlement_loader.py
+    population_data/itn_population_loader.py → itn_population_loader.py [RENAME]
+
+  → app/analysis/ (2 files, RENAME):
+    analysis.py → data_analysis_utils.py
+    utils.py → data_utils.py
+
+  → app/utils/ (4 files, RENAME):
+    __init__.py → data_init.py
+    validation.py → data_validation.py
+    processing.py → data_processing.py
+    reporting.py → data_reporting.py
+
+PHASE 5: app/data_analysis_v3/ DISTRIBUTED (~30 files)
+  → app/agent/ (5 files):
+    core/agent.py → data_analysis_agent.py [RENAME]
+    core/executor.py, core/executor_simple.py
+    core/state_manager.py, core/state.py
+
+  → app/tpr/ (2 files, RENAME):
+    core/tpr_intent_classifier.py → intent_classifier.py
+    core/tpr_language_interface.py → language_interface.py
+
+  → app/services/ (9 files, RENAME some):
+    core/formatters.py → analysis_formatters.py
+    core/metadata_cache.py, lazy_loader.py, data_profiler.py
+    core/data_validator.py, column_validator.py, encoding_handler.py
+
+  → app/utils/ (2 files):
+    core/scope_utils.py, core/analytics_helpers.py
+
+  → app/visualization/ (1 file):
+    tools/map_tools.py
+
+  → app/agent/ (1 file):
+    tools/python_tool.py
+    core/data_exploration_agent.py
+
+  → app/tpr/ (2 files, RENAME):
+    tools/tpr_analysis_tool.py → analysis_tool.py
+    tools/tpr_workflow_langgraph_tool.py
+
+  → app/agent/prompts/ (2 files):
+    prompts/__init__.py, prompts/system_prompt.py
+
+  → app/agent/tools/ (1 file):
+    tools/__init__.py
+
+  → app/tpr/ (2 files):
+    tpr/__init__.py, tpr/data_analyzer.py, tpr/workflow_manager.py
+
+PHASE 6: app/helpers/ DISTRIBUTED (5 files)
+  → app/agent/ (2 files):
+    tool_discovery_helper.py, workflow_progress_helper.py
+
+  → app/utils/ (3 files):
+    welcome_helper.py, data_requirements_helper.py
+    error_recovery_helper.py
+
+PHASE 7: app/interaction/ DISTRIBUTED (5 files, all RENAME)
+  → app/services/ (4 files, RENAME):
+    core.py → interaction_core.py
+    events.py → interaction_events.py
+    storage.py → interaction_storage.py
+    utils.py → interaction_utils.py
+
+PHASE 8: app/routing/ DISTRIBUTED (1 file)
+  → app/agent/ (1 file):
+    semantic_router.py
+
+PHASE 9: app/runtime/ DISTRIBUTED (3 files)
+  → app/upload/ (1 file):
+    upload_service.py
+
+  → app/agent/ (1 file, RENAME):
+    standard/workflow.py → standard_workflow.py
+
+PHASE 10: app/services/ REORGANIZED (7 files move out, 25 stay/expand)
+  → app/conversation/ (1 file, RENAME):
+    conversation_history.py → history.py
+
+  → app/visualization/ (5 files, RENAME some):
+    agents/visualizations/composite_visualizations.py
+    agents/visualizations/core_utils.py
+    agents/visualizations/pca_visualizations.py
+    agents/visualizations/tpr_visualization_service.py
+    universal_viz_explainer.py → viz_explainer.py
+
+  → app/planning/ (1 file, RENAME):
+    reports/modern_generator.py → report_generator.py
+
+  [STAY in app/services/ (25 files):
+    __init__.py, container.py, memory_service.py, query_result.py
+    response_formatter.py, session_memory.py, shapefile_fetcher.py
+    variable_resolution_service.py
+    PLUS all new files from phases 3, 4, 5, 7]
+
+PHASE 11: app/tools/ DISTRIBUTED (15 files)
+  → app/visualization/ (5 files, RENAME some):
+    visualization_maps_tools.py → maps_tools.py
+    settlement_visualization_tools.py → settlement_tools.py
+    settlement_intervention_tools.py
+    variable_distribution.py → variable_distribution_charts.py
+
+  → app/planning/ (2 files):
+    itn_planning_tools.py, export_tools.py
+
+  → app/agent/tools/ (3 files, RENAME one):
+    base.py, complete_analysis_tools.py
+    tpr_query_tool.py → tpr_query_tools.py
+
+  → app/utils/ (5 files):
+    custom_analysis_parser.py, chatmrpt_help_tool.py
+    methodology_explanation_tools.py, settlement_validation_tools.py
+    data_description_tools.py
+
+PHASE 12: app/utils/ MINOR REORGANIZE (1 file moves)
+  → app/visualization/ (1 file):
+    visualization_controls.py
+
+PHASE 13: app/web/routes/ ALL → app/api/ (24 files, plus app/routes.py, prepost/routes.py, survey/routes.py)
+  Main routes (13 files, RENAME some) → app/api/:
+    analysis_routes.py, api_routes.py, arena_routes.py
+    compatibility.py → compatibility_routes.py
+    conversation_routes.py, core_routes.py, data_analysis_v3_routes.py
+    debug_routes.py, export_routes.py, itn_routes.py
+    reports_api_routes.py, session_routes.py, upload_routes.py
+    visualization_routes.py, __init__.py → app/api/__init__.py
+
+  Analysis sub-routes (9 files, RENAME some) → app/api/analysis/:
+    __init__.py
+    analysis_chat.py → chat.py
+    analysis_exec.py → exec.py
+    analysis_vote.py → vote.py
+    arena_helpers.py, chat_routing.py, chat_stream_service.py
+    chat_sync_service.py, utils.py
+
+  Admin routes (1 file, RENAME) → app/api/:
+    app/web/admin.py → admin_routes.py
+
+  Root routes (1 file) → app/api/:
+    app/routes.py
+
+  PrePost routes (1 file, RENAME) → app/api/:
+    app/prepost/routes.py → prepost_routes.py
+
+  Survey routes (1 file, RENAME) → app/api/:
+    app/survey/routes.py → survey_routes.py
+
+================================================================================
+FILE COUNT SUMMARY
+================================================================================
+
+Source Directory → Destinations (NEW COUNT)
+
+✓ app/ → app/                                      1 file (stays)
+✓ app/analysis/ (15 total) →
+  - app/analysis/                                  14 files
+  - app/planning/                                  1 file (itn_pipeline.py)
+
+✓ app/auth/ → app/auth/                            6 files (stays)
+✓ app/config/ → app/config/                        9 files (stays)
+
+X app/core/ (28 files) →
+  - app/services/                                  10 files
+  - app/agent/                                     4 files
+  - app/conversation/                              3 files
+  - app/arena/                                     2 files
+  - app/tpr/                                       5 files
+  - app/utils/                                     3 files
+  DELETED: app/core/
+
+X app/data/ (11 files) →
+  - app/services/                                  5 files
+  - app/analysis/                                  2 files
+  - app/utils/                                     4 files
+  DELETED: app/data/
+
+X app/data_analysis_v3/ (~30 files) →
+  - app/agent/                                     6 files
+  - app/tpr/                                       6 files
+  - app/services/                                  9 files
+  - app/utils/                                     2 files
+  - app/visualization/                             1 file
+  DELETED: app/data_analysis_v3/
+
+X app/helpers/ (5 files) →
+  - app/agent/                                     2 files
+  - app/utils/                                     3 files
+  DELETED: app/helpers/
+
+X app/interaction/ (5 files) →
+  - app/services/                                  4 files
+  DELETED: app/interaction/
+
+X app/routing/ (1 file) →
+  - app/agent/                                     1 file
+  DELETED: app/routing/
+
+X app/runtime/ (3 files) →
+  - app/upload/                                    1 file
+  - app/agent/                                     1 file
+  DELETED: app/runtime/
+
+✓ app/prepost/ (4 total) →
+  - app/prepost/                                   3 files (stays)
+  - app/api/                                       1 file (routes.py)
+
+✓ app/services/ (10 existing files) →
+  - app/services/ (25 total after reorganization) [8 stay, 7 move out, + 22 new]
+  - app/conversation/                              1 file
+  - app/visualization/                             5 files
+  - app/planning/                                  1 file
+
+✓ app/survey/ (4 total) →
+  - app/survey/                                    4 files (stays)
+  - app/api/                                       1 file (routes.py)
+
+X app/tools/ (15 files) →
+  - app/visualization/                             5 files
+  - app/planning/                                  2 files
+  - app/agent/tools/                               3 files
+  - app/utils/                                     5 files
+  DELETED: app/tools/
+
+✓ app/utils/ (5 files) →
+  - app/utils/ (19 total after reorganization)     4 files (stay)
+  - app/visualization/                             1 file
+
+X app/web/ (24 files + 1 + 1 + 1 = 27 total) →
+  - app/api/                                       13 files (main)
+  - app/api/analysis/                              9 files (sub-routes)
+  - app/api/                                       5 files (admin, routes, prepost, survey)
+  DELETED: app/web/
+
+================================================================================
+FINAL DIRECTORY STRUCTURE (AFTER MIGRATION)
+================================================================================
+
+NEW DIRECTORIES CREATED:
+  app/agent/          (25 files)    — LangGraph orchestration, tools, execution
+  app/api/            (35 files)    — All Flask blueprint routes
+  app/api/analysis/   (9 files)     — Analysis-specific routes
+  app/arena/          (2 files)     — Arena mode system
+  app/conversation/   (5 files)     — Conversation state & history
+  app/planning/       (8 files)     — ITN distribution, reporting
+  app/tpr/            (12 files)    — TPR workflow system
+  app/upload/         (1 file)      — Upload handling
+  app/visualization/  (12 files)    — Maps, charts, visual explanations
+
+EXISTING DIRECTORIES EXPANDED:
+  app/analysis/       (14 files)    — Risk analysis pipelines
+  app/auth/           (6 files)     — OAuth & authentication
+  app/config/         (9 files)     — Configuration
+  app/prepost/        (3 files)     — Pre/post tests (models, questions)
+  app/services/       (25 files)    — Shared infrastructure, LLM, memory, data
+  app/survey/         (4 files)     — Survey system
+  app/utils/          (19 files)    — Shared utilities
+
+DIRECTORIES DELETED:
+  app/core/
+  app/data/
+  app/data_analysis_v3/
+  app/helpers/
+  app/interaction/
+  app/routing/
+  app/runtime/
+  app/web/
+
+================================================================================
+USAGE NOTES
+================================================================================
+
+1. This mapping accounts for ALL 185 Python files in the codebase.
+
+2. Files marked [RENAME] need name changes when moved (see MIGRATION_BY_SOURCE_DIRECTORY.md).
+
+3. After completing migration:
+   - Create __init__.py in new directories (if empty)
+   - Update all imports throughout the codebase
+   - Run pytest to verify no import breaks
+   - Test all routes and functionality
+
+4. Two reference documents generated:
+   - COMPLETE_FILE_MAPPING.md — Full detailed mapping with reasons
+   - MIGRATION_BY_SOURCE_DIRECTORY.md — Step-by-step execution phases
+   - FILE_MIGRATION_CSV.csv — Machine-readable format
+

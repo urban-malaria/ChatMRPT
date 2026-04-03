@@ -12,7 +12,7 @@ from flask import Blueprint, request, current_app, send_file, redirect, url_for
 from flask_login import login_required, current_user
 from io import StringIO
 
-from ..core.decorators import handle_errors, log_execution_time
+from app.utils.decorators import handle_errors, log_execution_time
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ os.environ['ENABLE_VISION_EXPLANATIONS'] = 'true'
 os.environ['FLASK_ENV'] = 'development'
 
 # Import after setting env
-from app.services.universal_viz_explainer import UniversalVisualizationExplainer
+from app.visualization.explainer import UniversalVisualizationExplainer
 
 def test_explain():
     """Test the explainer with a real HTML file."""

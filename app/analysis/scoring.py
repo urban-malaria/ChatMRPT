@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any, Union
 import concurrent.futures
 
 # Set up logging
-from app.services.variable_resolution_service import variable_resolver
+from app.services.variable_resolver import variable_resolver
 logger = logging.getLogger(__name__)
 
 

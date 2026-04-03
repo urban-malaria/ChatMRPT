@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import requests
 import json
-from app.services.variable_resolution_service import variable_resolver
+from app.services.variable_resolver import variable_resolver
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from app.tools.itn_planning_tools import PlanITNDistribution
+from app.planning.itn_tools import PlanITNDistribution
 from app.models.data_handler import DataHandler
 import pandas as pd
 
@@ -51,7 +51,7 @@ def test_conversational_flow():
     print("\n\nTesting Conversational Flow")
     print("=" * 50)
     
-    from app.core.request_interpreter import RequestInterpreter
+    from app.agent.interpreter import RequestInterpreter
     from app.services.container import get_service_container
     
     # Initialize interpreter

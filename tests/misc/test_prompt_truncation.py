@@ -65,7 +65,7 @@ sys.path.append('/home/ec2-user/ChatMRPT')
 os.environ['FLASK_ENV'] = 'production'
 os.environ['OPENAI_API_KEY'] = 'dummy'
 
-from app.core.arena_system_prompt import get_arena_system_prompt
+from app.arena.prompts import get_arena_system_prompt
 large_prompt = get_arena_system_prompt()
 
 print(f"Prompt size: {len(large_prompt)} chars")

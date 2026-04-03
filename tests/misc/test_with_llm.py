@@ -13,8 +13,8 @@ os.environ['ENABLE_VISION_EXPLANATIONS'] = 'true'
 os.environ['FLASK_ENV'] = 'development'
 
 # Import after setting env
-from app.services.universal_viz_explainer import UniversalVisualizationExplainer
-from app.core.llm_manager import LLMManager
+from app.visualization.explainer import UniversalVisualizationExplainer
+from app.services.llm_manager import LLMManager
 
 def test_with_llm():
     """Test the explainer with LLM manager."""

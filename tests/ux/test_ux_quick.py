@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.data_analysis_v3.core.tpr_intent_classifier import TPRIntent, TPRIntentClassifier
+from app.tpr.intent import TPRIntent, TPRIntentClassifier
 from app.data_analysis_v3.core.tpr_workflow_handler import TPRWorkflowHandler
 
 
@@ -163,7 +163,7 @@ class TestRedWarningRemoval:
 
     def test_no_warning_symbols(self):
         """Test that warning symbols are not used."""
-        from app.data_analysis_v3.core.agent import DataAnalysisAgent
+        from app.agent.agent import DataAnalysisAgent
 
         agent = DataAnalysisAgent('test-session')
         agent.state = {
@@ -218,10 +218,10 @@ class TestProgressiveDisclosure:
 def test_imports():
     """Test all necessary modules can be imported."""
     try:
-        from app.data_analysis_v3.core.tpr_intent_classifier import TPRIntentClassifier
+        from app.tpr.intent import TPRIntentClassifier
         from app.data_analysis_v3.core.tpr_workflow_handler import TPRWorkflowHandler
-        from app.data_analysis_v3.core.agent import DataAnalysisAgent
-        from app.core.prompt_builder import PromptBuilder
+        from app.agent.agent import DataAnalysisAgent
+        from app.agent.prompt_builder import PromptBuilder
         assert True
     except ImportError as e:
         pytest.fail(f"Import failed: {e}")

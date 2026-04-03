@@ -25,7 +25,7 @@ def test_redis_on_aws():
 
     try:
         # Import Redis manager
-        from app.core.redis_state_manager import get_redis_state_manager
+        from app.services.redis_state import get_redis_state_manager
 
         print("\n✅ Imported redis_state_manager successfully")
 

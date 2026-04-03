@@ -121,7 +121,7 @@ class TestSemanticRouter:
     @pytest.fixture
     def mock_router(self):
         """Create a router with mock encoder."""
-        from app.routing.semantic_router import SemanticChatRouter
+        from app.agent.semantic_router import SemanticChatRouter
         from app.routing.context_bias import ContextBiaser
 
         router = SemanticChatRouter(
@@ -134,7 +134,7 @@ class TestSemanticRouter:
 
     def test_router_returns_route_result(self, mock_router):
         """Router should return a RouteResult object."""
-        from app.routing.semantic_router import RouteResult
+        from app.agent.semantic_router import RouteResult
 
         result = mock_router.route("Hello", {})
 
@@ -191,7 +191,7 @@ class TestPatternFallback:
 
     def test_greeting_fallback(self):
         """Greetings should route correctly in fallback."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         result = _route_with_patterns("Hello", {})
         assert result == "can_answer"
@@ -201,14 +201,14 @@ class TestPatternFallback:
 
     def test_thanks_fallback(self):
         """Thanks should route correctly in fallback."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         result = _route_with_patterns("Thanks", {})
         assert result == "can_answer"
 
     def test_analysis_mode_routes_data_queries_to_tools(self):
         """Data analysis mode should route data queries to tools."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         # Data queries in data mode should go to tools
         result = _route_with_patterns(
@@ -219,7 +219,7 @@ class TestPatternFallback:
 
     def test_knowledge_questions_go_to_arena_even_in_data_mode(self):
         """Knowledge questions should go to Arena even when in data mode."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         # Pure knowledge questions should go to Arena, not tools
         result = _route_with_patterns(
@@ -230,7 +230,7 @@ class TestPatternFallback:
 
     def test_result_query_with_analysis_complete(self):
         """Result queries should route to tools when analysis is complete."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         result = _route_with_patterns(
             "What are the top ranked wards",
@@ -240,7 +240,7 @@ class TestPatternFallback:
 
     def test_knowledge_without_data(self):
         """Knowledge questions should route to arena without data."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         result = _route_with_patterns(
             "What is malaria",
@@ -257,7 +257,7 @@ class TestIntegration:
         """Test the main routing function with semantic router."""
         # This test requires mocking the encoder to avoid API calls
         with patch.dict(os.environ, {"SEMANTIC_ROUTER_ENABLED": "false"}):
-            from app.web.routes.analysis.chat_routing import route_with_mistral
+            from app.api.analysis.chat_routing import route_with_mistral
 
             # With semantic router disabled, should use patterns
             result = await route_with_mistral("Hello", {})
@@ -267,10 +267,10 @@ class TestIntegration:
     async def test_route_with_mistral_fallback(self):
         """Test fallback to patterns when semantic router fails."""
         with patch.dict(os.environ, {"SEMANTIC_ROUTER_ENABLED": "true"}):
-            from app.web.routes.analysis.chat_routing import route_with_mistral
+            from app.api.analysis.chat_routing import route_with_mistral
 
             # Mock the semantic router to fail
-            with patch("app.routing.semantic_router.get_semantic_router") as mock_get:
+            with patch("app.agent.semantic_router.get_semantic_router") as mock_get:
                 mock_get.side_effect = Exception("API error")
 
                 result = await route_with_mistral("Hello", {})
@@ -286,7 +286,7 @@ class TestKeyScenario:
 
         This should route to data_query (needs_tools), not knowledge (can_answer).
         """
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         # Pattern fallback should handle this correctly
         result = _route_with_patterns(
@@ -300,7 +300,7 @@ class TestKeyScenario:
 
     def test_knowledge_question_without_context(self):
         """Knowledge questions without data should go to arena."""
-        from app.web.routes.analysis.chat_routing import _route_with_patterns
+        from app.api.analysis.chat_routing import _route_with_patterns
 
         result = _route_with_patterns(
             "What causes malaria?",

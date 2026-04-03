@@ -9,7 +9,7 @@ mocked by conftest.py's autouse fixture.
 import pytest
 import pandas as pd
 import numpy as np
-from app.data_analysis_v3.tpr.data_analyzer import TPRDataAnalyzer
+from app.tpr.data_analyzer import TPRDataAnalyzer
 
 
 @pytest.fixture

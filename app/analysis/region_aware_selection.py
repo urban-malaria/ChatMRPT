@@ -16,7 +16,7 @@ import geopandas as gpd
 from typing import Dict, List, Optional, Tuple, Any
 from difflib import SequenceMatcher
 import re
-from ..core.variable_matcher import variable_matcher
+from app.utils.variable_matcher import variable_matcher
 
 logger = logging.getLogger(__name__)
 

@@ -167,7 +167,7 @@ class VariableSelectionCoordinator:
             }
         
         # Import the variable matcher
-        from ..core.variable_matcher import match_user_variables
+        from app.utils.variable_matcher import match_user_variables
         
         # Get all available columns for matching
         all_columns = list(cleaned_data.columns)

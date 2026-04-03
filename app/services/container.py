@@ -10,7 +10,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from flask import Flask
 
-from ..core.exceptions import ConfigurationError
+from app.utils.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 

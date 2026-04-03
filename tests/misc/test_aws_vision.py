@@ -107,8 +107,8 @@ def create_test_visualizations():
 def test_vision_explanation(viz_type, file_path):
     """Test the vision explanation for a specific visualization."""
     try:
-        from app.services.universal_viz_explainer import UniversalVisualizationExplainer
-        from app.core.llm_manager import LLMManager
+        from app.visualization.explainer import UniversalVisualizationExplainer
+        from app.services.llm_manager import LLMManager
 
         # Initialize with LLM manager
         llm_manager = LLMManager()

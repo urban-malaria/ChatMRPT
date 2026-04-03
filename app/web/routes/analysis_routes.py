@@ -19,9 +19,9 @@ from flask import Blueprint, session, request, current_app, jsonify, Response, s
 from app.auth.decorators import require_auth
 from pathlib import Path
 
-from ...core.decorators import handle_errors, log_execution_time, validate_session
-from ...core.exceptions import ValidationError
-from ...core.utils import convert_to_json_serializable
+from app.utils.decorators import handle_errors, log_execution_time, validate_session
+from app.utils.exceptions import ValidationError
+from app.utils.core_utils import convert_to_json_serializable
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ async def route_with_mistral(message: str, session_context: dict) -> str:
         'needs_clarification' - Ask user for clarification
     """
     # Import from the modular routing module to ensure consistent behavior
-    from app.web.routes.analysis.chat_routing import route_with_mistral as modular_route
+    from app.api.analysis.chat_routing import route_with_mistral as modular_route
 
     return await modular_route(message, session_context)
 
@@ -68,7 +68,7 @@ def run_analysis():
         
         # Ensure session data is available locally (multi-instance safety)
         try:
-            from app.core.instance_sync import ensure_session_available
+            from app.services.instance_sync import ensure_session_available
             ensured = ensure_session_available(session_id)
             if ensured:
                 logger.info(f"[DEBUG] run_analysis: ensured session files locally for {session_id}")
@@ -337,7 +337,7 @@ def send_message():
 
         # Ensure session files are available locally (multi-instance safety)
         try:
-            from app.core.instance_sync import ensure_session_available
+            from app.services.instance_sync import ensure_session_available
             ensure_session_available(session_id)
         except Exception:
             pass
@@ -494,7 +494,7 @@ def send_message():
             
             # Use the shared Arena manager configured with GPT-4o (Model D)
             from flask import current_app as _cur_app
-            from app.web.routes.arena_routes import arena_manager as _shared_arena_manager, init_arena_system as _init_arena
+            from app.api.arena_routes import arena_manager as _shared_arena_manager, init_arena_system as _init_arena
             if _shared_arena_manager is None:
                 _init_arena(_cur_app)
             arena_manager = _shared_arena_manager
@@ -552,7 +552,7 @@ def send_message():
 
             try:
                 import asyncio
-                from app.data_analysis_v3.core.agent import DataAnalysisAgent
+                from app.agent.agent import DataAnalysisAgent
 
                 # Initialize the Data Analysis V3 agent
                 agent = DataAnalysisAgent(session_id=session_id)
@@ -842,8 +842,8 @@ def vote_arena():
         logger.info(f"Arena vote received: battle_id={battle_id}, vote={vote}, session={session_id}")
         
         # Get Arena manager and system prompt
-        from app.core.arena_manager import ArenaManager
-        from app.core.arena_system_prompt import get_arena_system_prompt
+        from app.arena.manager import ArenaManager
+        from app.arena.prompts import get_arena_system_prompt
         arena_manager = ArenaManager()
         arena_system_prompt = get_arena_system_prompt()
         
@@ -1294,7 +1294,7 @@ def _old_send_message_streaming_DISABLED():
 
             # Use the shared Arena manager configured with GPT-4o (Model D)
             from flask import current_app as _cur_app
-            from app.web.routes.arena_routes import arena_manager as _shared_arena_manager, init_arena_system as _init_arena
+            from app.api.arena_routes import arena_manager as _shared_arena_manager, init_arena_system as _init_arena
             if _shared_arena_manager is None:
                 _init_arena(_cur_app)
             arena_manager = _shared_arena_manager

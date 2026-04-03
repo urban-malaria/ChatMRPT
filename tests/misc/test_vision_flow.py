@@ -25,7 +25,7 @@ with app.app_context():
     
     # 2. Test the explainer
     print("\n2. Testing UniversalVisualizationExplainer:")
-    from app.services.universal_viz_explainer import UniversalVisualizationExplainer
+    from app.visualization.explainer import UniversalVisualizationExplainer
     
     explainer = UniversalVisualizationExplainer(llm_manager=llm)
     print(f"   Explainer created")
