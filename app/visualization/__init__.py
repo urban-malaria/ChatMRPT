@@ -2,6 +2,7 @@
 
 # Re-export rendering functions for backward compatibility
 from .composite import (
+    create_agent_box_plot_ranking,
     create_agent_vulnerability_map,
     create_agent_composite_score_maps,
 )

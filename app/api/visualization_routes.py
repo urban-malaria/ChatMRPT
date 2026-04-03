@@ -26,9 +26,9 @@ from app.auth.decorators import require_auth
 from app.utils.decorators import handle_errors, log_execution_time, validate_session
 from app.utils.exceptions import ValidationError
 from app.utils.core_utils import convert_to_json_serializable
-from ...services.universal_viz_explainer import get_universal_viz_explainer
-from ...analysis.itn_pipeline import generate_itn_map
-from ...tools.variable_distribution import VariableDistribution
+from app.visualization.explainer import get_universal_viz_explainer
+from app.analysis.itn_pipeline import generate_itn_map
+from app.tools.variable_distribution import VariableDistribution
 
 logger = logging.getLogger(__name__)
 
