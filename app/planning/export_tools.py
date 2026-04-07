@@ -1458,33 +1458,6 @@ NOTES
             logger.error(f"Error creating summary report: {e}")
             return None
     
-    def _create_metadata(self, export_data: Dict[str, Any], export_dir: Path) -> Optional[Path]:
-        """Create metadata file with export information"""
-        try:
-            metadata = {
-                'export_type': 'itn_distribution',
-                'export_date': export_data['export_date'].isoformat(),
-                'session_id': export_data['session_id'],
-                'analysis_method': export_data['analysis_method'],
-                'total_wards': export_data['total_wards'],
-                'files_included': {
-                    'dashboard': 'itn_distribution_dashboard.html',
-                    'csv': 'itn_distribution_results.csv',
-                    'maps': [f.name for f in export_dir.glob('*.html')]
-                },
-                'summary_stats': export_data.get('summary_stats', {})
-            }
-            
-            metadata_path = export_dir / 'export_metadata.json'
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            
-            return metadata_path
-            
-        except Exception as e:
-            logger.error(f"Error creating metadata: {e}")
-            return None
-    
     def _create_zip_package(self, files: List[Path], export_dir: Path, session_id: str) -> Path:
         """Create ZIP file with all export components"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

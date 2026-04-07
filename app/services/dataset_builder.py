@@ -1691,50 +1691,7 @@ def load_unified_dataset(session_id: str, require_geometry: bool = False) -> Opt
     return None
 
 
-def export_unified_dataset(session_id: str, format: str = 'csv') -> Optional[str]:
-    """Export unified dataset in specified format"""
-    
-    gdf = load_unified_dataset(session_id)
-    if gdf is None:
-        return None
-    
-    session_folder = f"instance/uploads/{session_id}"
-    
-    if format == 'csv':
-        csv_df = gdf.drop(columns=['geometry']) if 'geometry' in gdf.columns else gdf
-        csv_path = os.path.join(session_folder, 'unified_dataset_export.csv')
-        csv_df.to_csv(csv_path, index=False)
-        return csv_path
-    
-    elif format == 'geojson' and 'geometry' in gdf.columns:
-        geojson_path = os.path.join(session_folder, 'unified_dataset_export.geojson')
-        gdf.to_file(geojson_path, driver='GeoJSON')
-        return geojson_path
-    
-    elif format == 'shapefile' and 'geometry' in gdf.columns:
-        shapefile_dir = os.path.join(session_folder, 'unified_dataset_export_shp')
-        os.makedirs(shapefile_dir, exist_ok=True)
-        shapefile_path = os.path.join(shapefile_dir, 'unified_dataset.shp')
-        gdf.to_file(shapefile_path)
-        return shapefile_path
-    
-    return None
-
-
-def get_columns_by_category(session_id: str, category: str) -> List[str]:
-    """Get all columns in a specific category using smart metadata"""
-    
-    # Load metadata from last build
-    session_folder = f"instance/uploads/{session_id}"
-    metadata_path = os.path.join(session_folder, 'column_metadata.json')
-    
-    if os.path.exists(metadata_path):
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
-        
-        return [col for col, meta in metadata.items() if meta['category'] == category]
-    
-    return []
+# REMOVED: export_unified_dataset and get_columns_by_category - dead code, never called
 
 
 def create_settlement_free_unified_dataset(session_folder: str) -> Dict[str, Any]:
