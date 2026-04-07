@@ -17,8 +17,7 @@ import logging
 from .admin import admin_bp
 from .core_routes import core_bp
 from .upload_routes import upload_bp
-from .analysis_routes import analysis_bp
-from .analysis import analysis_bp as analysis_chat_bp  # New modular analysis routes
+from .analysis import analysis_bp  # Modular analysis routes (chat, exec, vote)
 from .visualization_routes import viz_bp
 from .reports_routes import reports_bp
 from .debug_routes import debug_bp
@@ -78,7 +77,6 @@ __all__ = [
     'core_bp',
     'upload_bp',
     'analysis_bp',
-    'analysis_chat_bp',
     'viz_bp',
     'reports_bp',
     'debug_bp',
@@ -103,9 +101,6 @@ def register_all_blueprints(app):
     
     # Register analysis routes (analysis processing and AI chat)
     app.register_blueprint(analysis_bp)
-
-    # Register modular analysis chat routes (streaming with arena support)
-    app.register_blueprint(analysis_chat_bp)
     
     # Register visualization routes (visualization generation and navigation)
     app.register_blueprint(viz_bp)
