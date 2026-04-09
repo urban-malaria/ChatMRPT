@@ -439,8 +439,25 @@ class DataAnalysisAgent:
         # Add session_id to state for tools to access
         state_with_session = {**state, "session_id": self.session_id}
 
-        # Execute tools and return result
-        return self.tool_node.invoke(state_with_session)
+        # Execute tools
+        result = self.tool_node.invoke(state_with_session)
+
+        # Update guardrail counters — MUST return in result dict for LangGraph to see
+        new_tool_count = state.get('tool_call_count', 0) + 1
+
+        # Check if tool result contains an execution error (precise marker)
+        new_error_count = state.get('consecutive_error_count', 0)
+        messages = result.get('messages', [])
+        if messages:
+            content = getattr(messages[-1], 'content', str(messages[-1]))
+            if '⚠️ **Execution Error:**' in content or 'Timeout:' in content:
+                new_error_count += 1
+            else:
+                new_error_count = 0  # Reset on success
+
+        result['tool_call_count'] = new_tool_count
+        result['consecutive_error_count'] = new_error_count
+        return result
 
     def _route_from_planner(self, state: DataAnalysisState) -> Literal['agent']:
         """Planner always hands off to agent after preparing messages."""
@@ -931,6 +948,8 @@ class DataAnalysisAgent:
             "output_plots": [],
             "insights": [],
             "errors": [],
+            "tool_call_count": 0,
+            "consecutive_error_count": 0,
         }
 
         try:
