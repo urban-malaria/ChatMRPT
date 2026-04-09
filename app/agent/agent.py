@@ -65,9 +65,9 @@ class DataAnalysisAgent:
             self.llm = ChatOpenAI(
                 model="gpt-4o",
                 api_key=openai_key,
-                temperature=0.7,
-                max_tokens=2000,
-                timeout=50
+                temperature=0.1,
+                max_tokens=8000,
+                timeout=90
             )
 
             # Set up tools - Python analysis + all specialized tools
@@ -246,7 +246,7 @@ class DataAnalysisAgent:
         return result
 
     @staticmethod
-    def _build_value_profile(df, max_chars: int = 12000) -> str:
+    def _build_value_profile(df, max_chars: int = 20000) -> str:
         """Build a rich value profile from a DataFrame for LLM context.
 
         Includes exact values for categorical columns, numeric ranges,
@@ -385,28 +385,21 @@ class DataAnalysisAgent:
         )
         logger.info(f"[_AGENT_NODE STEP 1] ✅ Data context message created")
 
-        # FIX #2: Message truncation to prevent context overflow
-        # Keep only last 10 messages to avoid exceeding GPT-4's 128k token limit
+        # Message truncation — keep last 20 messages
+        # GPT-4o has 128K context, 20 messages is well within budget
         # CRITICAL: Must preserve tool_calls/tool message pairs for OpenAI API
-        # CRITICAL: Don't modify state in place - create a copy for the model
-        messages = list(state.get("messages", []))  # Create a copy!
-        if len(messages) > 10:
-            logger.warning(f"[_AGENT_NODE MESSAGE TRUNCATION] Message history too long: {len(messages)} messages")
+        messages = list(state.get("messages", []))
+        if len(messages) > 20:
+            logger.warning(f"[_AGENT_NODE MESSAGE TRUNCATION] {len(messages)} messages — truncating to 20")
 
-            # Check if we have workflow context
             first_msg = messages[0]
             is_workflow_context = isinstance(first_msg, HumanMessage) and '[WORKFLOW CONTEXT]' in first_msg.content
 
-            # Smart truncation: preserve tool_calls/tool pairs
             if is_workflow_context:
-                # Keep first message + last N messages (preserving pairs)
-                truncated = self._smart_truncate_messages(messages[1:], keep=9)
+                truncated = self._smart_truncate_messages(messages[1:], keep=19)
                 messages = [messages[0]] + truncated
-                logger.info(f"[_AGENT_NODE MESSAGE TRUNCATION] Kept workflow context + last 9 messages (smart)")
             else:
-                # Keep last N messages (preserving pairs)
-                messages = self._smart_truncate_messages(messages, keep=10)
-                logger.info(f"[_AGENT_NODE MESSAGE TRUNCATION] Kept last 10 messages (smart)")
+                messages = self._smart_truncate_messages(messages, keep=20)
 
             logger.info(f"[_AGENT_NODE MESSAGE TRUNCATION] Truncated: {len(state.get('messages', []))} → {len(messages)} messages")
 
@@ -465,8 +458,8 @@ class DataAnalysisAgent:
         consecutive_error_count = state.get('consecutive_error_count', 0)
 
         # Check tool call limit
-        if tool_call_count >= 5:
-            logger.warning(f"[ROUTE_FROM_TOOLS] Tool call limit reached ({tool_call_count}/5)")
+        if tool_call_count >= 10:
+            logger.warning(f"[ROUTE_FROM_TOOLS] Tool call limit reached ({tool_call_count}/10)")
             # Add fallback message explaining the issue
             fallback_msg = (
                 "I've tried multiple approaches but haven't been able to complete this analysis. "

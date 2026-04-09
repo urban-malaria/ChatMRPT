@@ -475,7 +475,7 @@ class SimpleExecutor:
         sys.stdout = StringIO()
 
         # Get timeout
-        timeout_ms = int(os.getenv('CHATMRPT_ANALYZE_TIMEOUT_MS', '20000'))  # 20s default
+        timeout_ms = int(os.getenv('CHATMRPT_ANALYZE_TIMEOUT_MS', '60000'))  # 60s default
         timeout_sec = timeout_ms / 1000.0
 
         formatted_tables: List[Dict[str, Any]] = []
