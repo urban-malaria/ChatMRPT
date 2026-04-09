@@ -24,11 +24,24 @@ def analyze_data(
     thought: str,
     python_code: str
 ) -> Tuple[str, Dict[str, Any]]:
-    """Execute Python code for data analysis
+    """Execute Python code for data analysis on the loaded dataset.
+
+    Use this for any data question: rankings, statistics, comparisons,
+    correlations, regressions, clustering, visualizations.
 
     Args:
-        thought: Internal thought about what analysis to perform and why
-        python_code: Python code to execute. Use print() to show outputs. Data is available as 'df'.
+        thought: Your reasoning about what to analyze, which columns to
+                 use, and what output to expect.
+        python_code: Python code to execute.
+
+    Rules:
+    - MUST use print() for all outputs — code without print produces nothing
+    - Data available as: df (primary), ts_df (time series), uploaded_df (original)
+    - Plotly figures: append to plotly_figures list (auto-displayed)
+    - Helpers: top_n(), ensure_numeric(), suggest_columns(), capture_table(),
+      run_trend_analysis(), create_map()
+    - Libraries: pandas, numpy, scipy.stats, sklearn, plotly, matplotlib, geopandas
+    - Timeout: 60 seconds — for large data use df.sample() or df.head()
     """
     # Get session ID from graph state
     session_id = graph_state.get('session_id', 'default')
