@@ -20,6 +20,8 @@ from app.agent.tools.python_tool import analyze_data
 from app.agent.prompts.system_prompt import MAIN_SYSTEM_PROMPT, TPR_WORKFLOW_GUIDANCE
 from .encoding_handler import EncodingHandler
 from .formatters import ResponseFormatter
+from .data_loader import get_input_data
+from .viz_processor import process_visualizations
 
 logger = logging.getLogger(__name__)
 
@@ -148,69 +150,6 @@ class DataAnalysisAgent:
         workflow.set_entry_point('agent')  # Start at agent, not planner
 
         return workflow.compile()
-
-    def _planner_node(self, state: DataAnalysisState):
-        """Lightweight planner that decomposes compound requests and feeds subtasks sequentially."""
-        # Copy messages so we can modify without side effects
-        messages = list(state.get('messages', []))
-        pending = list(state.get('pending_subtasks', []))
-
-        # If there are queued subtasks, push the next one as a HumanMessage
-        if pending:
-            next_task = pending[0]
-            remaining = pending[1:]
-            # Avoid duplicating if the next task is already the most recent human message
-            if not messages or not isinstance(messages[-1], HumanMessage) or messages[-1].content != next_task:
-                messages.append(HumanMessage(content=next_task))
-            return {
-                'messages': messages,
-                'pending_subtasks': remaining
-            }
-
-        # No pending queue: analyze latest user message for compound instructions
-        latest_user = None
-        for msg in reversed(messages):
-            if isinstance(msg, HumanMessage):
-                latest_user = msg
-                break
-        if not latest_user:
-            return {'messages': messages, 'pending_subtasks': pending}
-
-        subtasks = self._split_into_subtasks(latest_user.content)
-        if len(subtasks) <= 1:
-            return {'messages': messages, 'pending_subtasks': pending}
-
-        # Replace the latest message with the first subtask and queue the rest
-        base_messages = messages[:-1]
-        base_messages.append(HumanMessage(content=subtasks[0]))
-        return {
-            'messages': base_messages,
-            'pending_subtasks': subtasks[1:]
-        }
-
-    def _split_into_subtasks(self, text: str) -> List[str]:
-        """Naive splitter for compound sentences using coordinating conjunctions."""
-        if not text:
-            return []
-        lowered = text.lower()
-        # Use markers that commonly separate sequential instructions
-        separators = [' then ', ' afterwards ', ' after that ', ';', ' and then ']
-        temp = text
-        for sep in separators:
-            temp = temp.replace(sep, '|')
-        # Final fallback: split on ' and ' only if text seems to contain multiple verbs
-        if '|' not in temp and lowered.count(' and ') >= 1:
-            temp = temp.replace(' and ', '|')
-        parts = [part.strip() for part in temp.split('|')]
-        # Filter out empty or duplicate segments
-        cleaned = []
-        for part in parts:
-            if not part or part.lower() in {'then', 'after that'}:
-                continue
-            if cleaned and part == cleaned[-1]:
-                continue
-            cleaned.append(part)
-        return cleaned if cleaned else [text]
 
     def _smart_truncate_messages(self, messages: List[BaseMessage], keep: int) -> List[BaseMessage]:
         """
@@ -459,10 +398,6 @@ class DataAnalysisAgent:
         result['consecutive_error_count'] = new_error_count
         return result
 
-    def _route_from_planner(self, state: DataAnalysisState) -> Literal['agent']:
-        """Planner always hands off to agent after preparing messages."""
-        return 'agent'
-
     def _route_from_tools(
         self,
         state: DataAnalysisState,
@@ -537,254 +472,11 @@ class DataAnalysisAgent:
 
     def _get_input_data(self) -> List[Dict[str, Any]]:
         """Load most comprehensive dataset available for data-aware responses."""
-        logger.info(f"=" * 100)
-        logger.info(f"[_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA")
-        logger.info(f"[_GET_INPUT_DATA] Session: {self.session_id}")
-        logger.info(f"=" * 100)
-
-        input_data_list = []
-
-        session_folder = f"instance/uploads/{self.session_id}"
-        logger.info(f"[_GET_INPUT_DATA STEP 1] Session folder: {session_folder}")
-        logger.info(f"[_GET_INPUT_DATA STEP 1] Absolute path: {os.path.abspath(session_folder)}")
-        logger.info(f"[_GET_INPUT_DATA STEP 1] Folder exists: {os.path.exists(session_folder)}")
-
-        if os.path.exists(session_folder):
-            files_in_folder = os.listdir(session_folder)
-            logger.info(f"[_GET_INPUT_DATA STEP 1] Files in folder: {files_in_folder}")
-        else:
-            logger.error(f"[_GET_INPUT_DATA STEP 1] ❌ Session folder does not exist!")
-
-        # 🔧 FIX: Check if risk analysis is complete before loading unified dataset
-        # This prevents loading incomplete unified_dataset.csv without rankings
-        analysis_complete_flag = os.path.join(session_folder, '.analysis_complete')
-        analysis_complete = os.path.exists(analysis_complete_flag)
-        
-        logger.info(f"[_GET_INPUT_DATA STEP 2] Analysis complete flag exists: {analysis_complete}")
-        
-        # SMART DATA LOADING: Load most comprehensive dataset in priority order
-        # This ensures agent always has best available context for data-aware responses
-        if analysis_complete:
-            # After risk analysis: prioritize unified dataset with rankings
-            file_patterns = [
-                'unified_dataset.csv',      # After risk analysis (MOST COMPLETE: TPR + env + rankings)
-                'raw_data.csv',             # After TPR workflow (TPR + environmental variables)
-                'tpr_results.csv',          # After TPR calculation (ward-level TPR)
-                'data_analysis.csv',        # Alternative data file
-                'uploaded_data.csv'         # Initial upload (raw facility-level data)
-            ]
-            logger.info(f"[_GET_INPUT_DATA STEP 2] Mode: POST-ANALYSIS (prioritize unified_dataset.csv)")
-        else:
-            # Before risk analysis: use raw_data.csv with TPR + environmental
-            file_patterns = [
-                'raw_data.csv',             # After TPR workflow (TPR + environmental variables) ← PRIORITY
-                'tpr_results.csv',          # After TPR calculation (ward-level TPR)
-                'data_analysis.csv',        # Alternative data file
-                'uploaded_data.csv'         # Initial upload (raw facility-level data)
-                # NOTE: unified_dataset.csv excluded - will be created after risk analysis
-            ]
-            logger.info(f"[_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)")
-
-        logger.info(f"[_GET_INPUT_DATA STEP 2] Smart loading - priority order: {file_patterns}")
-        logger.info(f"[_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available")
-
-        import pandas as pd
-
-        for idx, pattern in enumerate(file_patterns, 1):
-            csv_path = os.path.join(session_folder, pattern)
-            logger.info(f"[_GET_INPUT_DATA STEP 2.{idx}] Checking: {pattern}")
-            logger.info(f"[_GET_INPUT_DATA STEP 2.{idx}] Full path: {csv_path}")
-            logger.info(f"[_GET_INPUT_DATA STEP 2.{idx}] Exists: {os.path.exists(csv_path)}")
-
-            if os.path.exists(csv_path):
-                logger.info(f"[_GET_INPUT_DATA STEP 2.{idx}] ✅ File found: {pattern}")
-                logger.info(f"[_GET_INPUT_DATA STEP 2.{idx}] File size: {os.path.getsize(csv_path)} bytes")
-
-                try:
-                    logger.info(f"[_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...")
-                    import time
-                    load_start = time.time()
-                    df = EncodingHandler.read_csv_with_encoding(csv_path)
-                    load_time = time.time() - load_start
-                    logger.info(f"[_GET_INPUT_DATA STEP 3] ✅ CSV loaded in {load_time:.2f}s")
-                    logger.info(f"[_GET_INPUT_DATA STEP 3] DataFrame shape: {df.shape}")
-                    logger.info(f"[_GET_INPUT_DATA STEP 3] DataFrame columns: {df.columns.tolist()[:10]}")
-
-                    # Prepare data object (use 'data' key to match python_tool expectations)
-                    logger.info(f"[_GET_INPUT_DATA STEP 4] Creating data object...")
-                    logger.info(f"[_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in 'data' key")
-                    data_obj = {
-                        'variable_name': 'df',
-                        'data_description': f"Dataset with {len(df)} rows and {len(df.columns)} columns",
-                        'data': df,  # CRITICAL: This stores the actual DataFrame!
-                        'columns': df.columns.tolist()
-                    }
-                    logger.info(f"[_GET_INPUT_DATA STEP 4] ✅ Data object created")
-                    logger.info(f"[_GET_INPUT_DATA STEP 4] Data object keys: {list(data_obj.keys())}")
-                    logger.info(f"[_GET_INPUT_DATA STEP 4] Data object 'data' type: {type(data_obj['data'])}")
-
-                    input_data_list.append(data_obj)
-                    logger.info(f"[_GET_INPUT_DATA STEP 5] ✅ Loaded {pattern}: {len(df)} rows, {len(df.columns)} columns")
-
-                    # Log which dataset was chosen and why
-                    dataset_context = {
-                        'unified_dataset.csv': 'COMPREHENSIVE (TPR + environmental + risk rankings)',
-                        'raw_data.csv': 'TPR + ENVIRONMENTAL (prepared for risk analysis)',
-                        'tpr_results.csv': 'WARD-LEVEL TPR (after TPR workflow)',
-                        'data_analysis.csv': 'ANALYSIS DATA',
-                        'uploaded_data.csv': 'RAW FACILITY DATA (initial upload)'
-                    }
-                    context_desc = dataset_context.get(pattern, 'UNKNOWN')
-                    logger.info(f"[_GET_INPUT_DATA STEP 5] 📊 Dataset context: {context_desc}")
-                    logger.info(f"[_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions")
-
-                    logger.info(f"=" * 100)
-                    logger.info(f"[_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS")
-                    logger.info(f"=" * 100)
-                    break
-
-                except Exception as e:
-                    logger.error(f"[_GET_INPUT_DATA STEP 3] ❌ Error loading {pattern}: {e}", exc_info=True)
-                    continue
-
-        # Also load time-series data if available (alongside main dataset for trend analysis)
-        ts_path = os.path.join(session_folder, 'tpr_time_series.csv')
-        if os.path.exists(ts_path):
-            try:
-                ts_df = EncodingHandler.read_csv_with_encoding(ts_path)
-                input_data_list.append({
-                    'variable_name': 'ts_df',
-                    'data_description': f"Time-series TPR data by ward and year ({len(ts_df)} rows, columns: {ts_df.columns.tolist()})",
-                    'data': ts_df,
-                    'columns': ts_df.columns.tolist()
-                })
-                logger.info(f"[_GET_INPUT_DATA] Also loaded tpr_time_series.csv: {ts_df.shape}")
-            except Exception as e:
-                logger.warning(f"[_GET_INPUT_DATA] Could not load time-series data: {e}")
-
-        if not input_data_list:
-            logger.warning(f"[_GET_INPUT_DATA] ⚠️  No datasets loaded via priority list. Falling back to scan session folder.")
-
-            try:
-                all_files = sorted(os.listdir(session_folder)) if os.path.exists(session_folder) else []
-            except Exception as exc:
-                logger.error(f"[_GET_INPUT_DATA FALLBACK] Unable to list session folder: {exc}")
-                all_files = []
-
-            # Load saved header_row from schema (e.g. DHIS2 XLS has blank row 0, headers in row 1)
-            _fallback_header_row = 0
-            try:
-                from app.agent.state_manager import DataAnalysisStateManager
-                _saved_state = DataAnalysisStateManager(self.session_id).load_state() or {}
-                _fallback_header_row = (_saved_state.get('column_schema') or {}).get('header_row', 0)
-            except Exception:
-                pass
-
-            fallback_extensions = ('.csv', '.xlsx', '.xls')
-            for fname in all_files:
-                if not fname.lower().endswith(fallback_extensions):
-                    continue
-
-                fallback_path = os.path.join(session_folder, fname)
-                logger.info(f"[_GET_INPUT_DATA FALLBACK] Attempting to load {fallback_path}")
-
-                try:
-                    if fname.lower().endswith('.csv'):
-                        df = EncodingHandler.read_csv_with_encoding(fallback_path)
-                    else:
-                        # Use header_row from schema inferred at upload time.
-                        # If schema inference failed at upload, this defaults to 0.
-                        logger.info(f"[_GET_INPUT_DATA FALLBACK] Reading Excel with header_row={_fallback_header_row}")
-                        df = EncodingHandler.read_excel_with_encoding(fallback_path, header=_fallback_header_row)
-
-                    data_obj = {
-                        'variable_name': 'df',
-                        'data_description': f"Dataset with {len(df)} rows and {len(df.columns)} columns",
-                        'data': df,
-                        'columns': df.columns.tolist()
-                    }
-                    input_data_list.append(data_obj)
-                    logger.info(f"[_GET_INPUT_DATA FALLBACK] ✅ Loaded {fname}: {df.shape}")
-                    break
-                except Exception as exc:
-                    logger.error(f"[_GET_INPUT_DATA FALLBACK] Error loading {fname}: {exc}", exc_info=True)
-                    continue
-
-        if not input_data_list:
-            logger.warning(f"[_GET_INPUT_DATA] ⚠️  No datasets loaded after fallback.")
-
-        logger.info(f"[_GET_INPUT_DATA FINAL] Total datasets loaded: {len(input_data_list)}")
-        return input_data_list
+        return get_input_data(self.session_id)
 
     def _process_visualizations(self, output_plots: List) -> List[Dict[str, Any]]:
         """Process output plots (pickle files) into visualization objects."""
-        visualizations = []
-
-        # Save visualizations into the session's visualizations folder
-        # so they are served via /serve_viz_file/<session_id>/visualizations/<file>
-        session_viz_dir = os.path.join(f"instance/uploads/{self.session_id}", "visualizations")
-        os.makedirs(session_viz_dir, exist_ok=True)
-
-        import pickle
-        import uuid
-
-        for plot_path in output_plots:
-            if isinstance(plot_path, str) and os.path.exists(plot_path):
-                try:
-                    # HTML files (from map tools) — already rendered, just serve
-                    if plot_path.endswith('.html'):
-                        html_filename = os.path.basename(plot_path)
-                        # If not already in the viz dir, copy it there
-                        target_path = os.path.join(session_viz_dir, html_filename)
-                        if os.path.abspath(plot_path) != os.path.abspath(target_path):
-                            import shutil
-                            shutil.copy2(plot_path, target_path)
-                        web_url = f"/serve_viz_file/{self.session_id}/visualizations/{html_filename}"
-                        visualizations.append({
-                            'type': 'iframe',
-                            'url': web_url,
-                            'title': html_filename.replace('_', ' ').replace('.html', '').title(),
-                            'height': 600
-                        })
-                        logger.info(f"Served HTML visualization: {plot_path} → {web_url}")
-                        continue
-
-                    # Pickle files (from analyze_data Plotly captures) — convert to HTML
-                    with open(plot_path, 'rb') as f:
-                        fig = pickle.load(f)
-
-                    # Generate unique HTML filename
-                    viz_id = str(uuid.uuid4())
-                    html_filename = f"data_analysis_{viz_id}.html"
-                    html_path = os.path.join(session_viz_dir, html_filename)
-
-                    # Save as HTML
-                    viz_html = fig.to_html(include_plotlyjs=True)
-                    with open(html_path, 'w') as html_file:
-                        html_file.write(viz_html)
-
-                    # Create web-accessible URL via serve_viz_file route
-                    web_url = f"/serve_viz_file/{self.session_id}/visualizations/{html_filename}"
-
-                    # Extract title from the Plotly figure layout
-                    fig_title = 'Data Analysis Visualization'
-                    try:
-                        if hasattr(fig, 'layout') and fig.layout.title and fig.layout.title.text:
-                            fig_title = fig.layout.title.text
-                    except Exception:
-                        pass
-
-                    visualizations.append({
-                        'type': 'iframe',
-                        'url': web_url,
-                        'title': fig_title,
-                        'height': 600
-                    })
-                    logger.info(f"Converted visualization: {plot_path} → {web_url}")
-                except Exception as e:
-                    logger.error(f"Error processing visualization {plot_path}: {e}")
-
-        return visualizations
+        return process_visualizations(self.session_id, output_plots)
 
     async def analyze(self, user_query: str, workflow_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -1005,11 +697,6 @@ class DataAnalysisAgent:
                 "message": f"Error during analysis: {str(e)}",
                 "session_id": self.session_id
             }
-
-    def reset_chat(self):
-        """Reset conversation history."""
-        self.chat_history = []
-        logger.info(f"[CLEAN AGENT] Chat history reset for session {self.session_id}")
 
     async def _analyze_with_stub(self, user_query: str, workflow_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Offline-friendly pathway that returns deterministic responses for tests."""
