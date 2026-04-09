@@ -1,112 +1,203 @@
-# Agent Improvement Plan (Reviewed & Updated)
+# Agent Improvement Plan — Final Version
 
 ## Date: April 7, 2026
-## Status: REVIEWED — Ready to implement
-## Reviewer feedback: PASS with reservations — all issues addressed below
+## Status: READY FOR REVIEW — Do not implement until approved
+## Sources: OpenAI GPT-4.1 Guide, GPT-5.4 Guide, PandasAI, Julius AI, 
+##          Open Interpreter, academic research (Liu et al. 2024)
 
 ---
 
-## Part 1: Config Changes (low risk, immediate impact)
+## Research-Backed Design Decisions
 
-### 1.1 max_tokens: 2,000 → 8,000
-- File: `app/agent/agent.py:69`
-- Why: Primary cause of cut-short responses. GPT-4o supports 16,384.
-- Cost: ~4x more on output tokens per response. Worth it.
+### Prompt Section Order (from OpenAI + "Lost in the Middle" research)
+Models pay strongest attention to the BEGINNING and END of prompts,
+with 30% accuracy drop for middle content. Therefore:
+- Critical rules at TOP (error recovery, tool use)
+- Few-shot examples AFTER core instructions
+- Final reminders at BOTTOM (repeat most-violated rules)
 
-### 1.2 Temperature: 0.7 → 0.1
-- File: `app/agent/agent.py:68`
-- Why: Data analysis should be deterministic, not creative. 0.7 causes
-  hallucinated column names → KeyError → error loops. Lower temperature
-  produces consistent, reliable code.
-- Risk: None for data analysis. Slightly less varied language.
+### Few-Shot Examples (from research)
+- 2-5 examples is optimal (diminishing returns beyond 5)
+- Last example gets most weight (recency bias)
+- Format must be identical across all examples
+- Show: user question → code → output → interpretation
 
-### 1.3 Execution timeout: 20s → 60s
-- File: `app/agent/executor_simple.py:478`
-- Why: Complex analysis on real datasets times out. ChatGPT uses 60s.
-- Note: daemon threads mean timed-out code keeps running in background.
-  Acceptable for now, monitor under load.
+### Temperature (from reviewer + research)
+- 0.1 for data analysis (deterministic code generation)
+- 0.7 causes hallucinated column names → KeyError loops
 
-### 1.4 LLM call timeout: 50s → 90s
-- File: `app/agent/agent.py:70`
-- Why: Reviewer caught that executor timeout (60s) > LLM timeout (50s).
-  The LLM call can fail before code even runs. Must be higher than executor.
+### Error Recovery (from OpenAI GPT-4.1 guide)
+- "Without retry instructions, models often give up after a single failure"
+- Must explicitly say: "retry at least once, try alternative approach"
 
-### 1.5 Message context: 10 → 20
-- File: `app/agent/agent.py:393`
-- Why: Agent forgets earlier context after 10 exchanges.
-- Cost: More tokens per request. Data profile is prepended on EVERY loop
-  iteration (reviewer caught this). Budget: ~40-60K tokens per multi-hop call.
-  GPT-4o handles 128K, so still within limits.
+---
 
-### 1.6 Data profile: 12KB → 20KB
-- File: `app/agent/agent.py:249`
-- Why: Large datasets get profile truncated, agent can't see all columns.
+## Part 1: Config Changes
+
+| Setting | Current | New | File:Line | Why |
+|---------|---------|-----|-----------|-----|
+| temperature | 0.7 | 0.1 | agent.py:68 | Deterministic code, fewer hallucinated columns |
+| max_tokens | 2,000 | 8,000 | agent.py:69 | Stop cutting responses short |
+| LLM timeout | 50s | 90s | agent.py:70 | Must exceed executor timeout |
+| Executor timeout | 20s | 60s | executor_simple.py:478 | Complex analysis needs more time |
+| Message context | 10 | 20 | agent.py:393 | Better conversation memory |
+| Data profile | 12KB | 20KB | agent.py:249 | See more of large datasets |
 
 ---
 
 ## Part 2: Fix Broken Guardrails
 
-### 2.1 Add missing state fields
-- File: `app/agent/state.py`
-- Add: `tool_call_count: int` and `consecutive_error_count: int`
+### 2.1 Add state fields
+File: `app/agent/state.py`
+```python
+# Add to DataAnalysisState TypedDict:
+tool_call_count: int           # Tracks total tool calls
+consecutive_error_count: int   # Tracks consecutive failures
+```
 
-### 2.2 Increment counters in _tools_node (NOT _route_from_tools)
-- File: `app/agent/agent.py` — `_tools_node` method
-- After tool execution: increment `tool_call_count`
-- If tool result contains error: increment `consecutive_error_count`
-- If tool result is success: reset `consecutive_error_count` to 0
-- Reviewer caught: _route_from_tools is the CONSUMER, _tools_node is
-  where increment must happen.
+### 2.2 Increment in _tools_node (not _route_from_tools)
+File: `app/agent/agent.py` — `_tools_node` method
+```python
+# After tool execution:
+state['tool_call_count'] = state.get('tool_call_count', 0) + 1
+
+# Check if result is an error:
+if 'error' in str(tool_result).lower():
+    state['consecutive_error_count'] = state.get('consecutive_error_count', 0) + 1
+else:
+    state['consecutive_error_count'] = 0  # Reset on success
+```
 
 ---
 
-## Part 3: System Prompt Improvements
+## Part 3: System Prompt Rewrite
 
-### Principles (from reviewer):
-- Put most important instructions FIRST (GPT-4o follows top 80% reliably)
-- No "I REPEAT" — doesn't help, just adds tokens
-- Explain AFTER executing, not before (Julius pattern — faster UX)
-- Keep additions concrete and actionable, not vague
+### Structure (following OpenAI recommended order):
+```
+1. Role and Identity                    [TOP — primacy effect]
+2. Error Recovery                       [TOP — most critical behavior]
+3. Output Management                    [TOP — quality control]
+4. Guiding Principles                   [CORE — behavioral rules]
+5. Tooling                              [CORE — what tools exist, how to use]
+6. Tool Selection Table                 [CORE — when to use which tool]
+7. Malaria Domain Knowledge             [DOMAIN — compact reference tables]
+8. Analysis Patterns (few-shot)         [EXAMPLES — 5 concrete patterns]
+9. Column Interpretation                [DETAIL — data-specific rules]
+10. Response Style                      [STYLE — output formatting]
+11. Trend Analysis                      [SPECIALTY — specific workflow]
+12. Data Pipeline Order                 [REFERENCE — prerequisite chain]
+13. Final Reminders                     [BOTTOM — recency effect]
+```
 
-### 3.1 Error Recovery (HIGHEST VALUE — add near top of prompt)
-Insert after "Tooling" section:
+### 3.1 EXACT PROMPT TEXT — New sections to add:
 
+#### Section: Error Recovery (insert at TOP, after Role)
 ```
 ## Error Recovery
 - If code fails, read the error carefully, fix the issue, and retry.
-  Try at least 3 different approaches before telling the user you cannot
-  do something.
+  Try at least 3 different approaches before telling the user you
+  cannot do something.
 - KeyError? Check the data profile for the exact column name — names
   are case-sensitive.
 - ValueError on numeric conversion? Use pd.to_numeric(col, errors='coerce')
   and report how many values could not be converted.
-- Timeout? Simplify — sample the data with df.sample(1000) or reduce
-  groupby categories.
+- Timeout? Simplify — use df.sample(1000) or reduce groupby categories.
 - Visualization fails? Try a simpler chart type before giving up.
-- NEVER respond with just "there was an error." Always explain what went
-  wrong, what you tried, and what you'll try next.
-- NEVER fabricate data or statistics. If you cannot find the answer in
-  the data, say so and suggest what data would be needed.
+- NEVER respond with just "there was an error." Always explain what
+  went wrong and what you're trying next.
+- NEVER fabricate data or statistics. If you cannot find the answer
+  in the data, say so explicitly.
 ```
 
-### 3.2 Output Management (add after Error Recovery)
-
+#### Section: Output Management (insert after Error Recovery)
 ```
 ## Output Management
-- For DataFrames with more than 20 rows, show the top 10 with a summary
-  (total count, min, max, mean) rather than printing everything.
+- For DataFrames with more than 20 rows, show the top 10 with a
+  summary (total count, min, max, mean).
 - When results are large, summarize key findings in 3-5 bullet points
-  and offer to show full details if the user wants.
+  and offer to show full details.
 - Always use print() for every result. Code without print() produces
   no visible output.
-- After getting results, sanity-check them: Do numbers make sense given
-  the dataset? Are percentages between 0-100? If something looks off,
-  investigate before presenting.
+- After getting results, sanity-check: Do numbers make sense? Are
+  percentages between 0-100? If something looks off, investigate
+  before presenting.
 ```
 
-### 3.3 Confidence & Persistence (modify existing Response Style)
-Add to Response Style section:
+#### Section: Malaria Domain Knowledge (NEW — compact reference tables)
+```
+## Malaria Domain Knowledge
 
+### TPR Interpretation
+- TPR > 50%: Very high transmission — urgent intervention needed
+- TPR 25-50%: High transmission — priority for resource allocation
+- TPR 10-25%: Moderate transmission — sustained control measures
+- TPR < 10%: Low transmission — approaching pre-elimination
+
+### Key Epidemiological Rules
+- Increasing TPR = WORSENING (more positive relative to tested)
+- Decreasing TPR = IMPROVING
+- TPR is more reliable than raw case counts (adjusts for testing volume)
+- Ward-level analysis reveals hotspots masked by LGA aggregation
+- Malaria transmission follows rainfall with 4-6 week lag
+
+### Nigerian Admin Hierarchy
+Country → State → LGA (Local Government Area) → Ward → Health Facility
+
+### Interventions
+- ITN: insecticide-treated nets (>80% coverage target)
+- IRS: indoor residual spraying (>85% structure coverage)
+- ACTs: artemisinin-based combination therapy
+- Reprioritization: reallocating resources to highest-burden areas
+```
+
+#### Section: Analysis Patterns (NEW — 5 few-shot examples)
+```
+## Analysis Patterns
+
+When users ask common questions, follow these patterns:
+
+### Pattern: Ranking
+User: "Which wards have the highest malaria burden?"
+Code: top = df.nlargest(10, 'Burden')[['WardName', 'Burden', 'LGA']]
+      print(top.to_string(index=False))
+Interpret: Name the top wards, note the range, suggest which LGAs
+need attention.
+
+### Pattern: Comparison
+User: "Compare TPR across facility levels"
+Code: result = df.groupby('Facility level')['TPR'].agg(['mean','median','count'])
+      print(result.sort_values('mean', ascending=False))
+Interpret: Note which level has highest TPR, whether sample sizes
+are comparable, what this means for resource allocation.
+
+### Pattern: Correlation
+User: "Is rainfall related to TPR?"
+Code: from scipy.stats import pearsonr
+      r, p = pearsonr(df['rainfall'].dropna(), df['TPR'].dropna())
+      print(f"Pearson r={r:.3f}, p={p:.4f}")
+Interpret: r > 0.5 strong, 0.3-0.5 moderate, < 0.3 weak.
+Report significance (p < 0.05).
+
+### Pattern: Distribution
+User: "Show me the distribution of Burden"
+Code: fig = px.histogram(df, x='Burden', nbins=30,
+           title='Distribution of Malaria Burden per 1,000')
+      plotly_figures.append(fig)
+      print(f"Mean: {df['Burden'].mean():.1f}, Median: {df['Burden'].median():.1f}")
+      print(f"Range: {df['Burden'].min():.1f} to {df['Burden'].max():.1f}")
+Interpret: Note skewness, compare mean vs median, flag outliers.
+
+### Pattern: Statistical Test
+User: "Is there a significant difference between LGAs?"
+Code: from scipy.stats import kruskal
+      groups = [g['Burden'].values for _, g in df.groupby('LGA')]
+      stat, p = kruskal(*groups)
+      print(f"Kruskal-Wallis H={stat:.2f}, p={p:.4f}")
+Interpret: p < 0.05 means significant difference between LGAs.
+Identify which LGAs drive the difference.
+```
+
+#### Section: Confidence & Persistence (add to Guiding Principles)
 ```
 - You are a capable data analyst. When the user asks a question,
   proactively analyze the data and present findings. Do not ask
@@ -116,76 +207,119 @@ Add to Response Style section:
   give up after one attempt.
 ```
 
-### 3.4 Improve tool docstring
-- File: `app/agent/tools/python_tool.py:22-32`
-- Add to docstring:
-  - Available helpers: top_n(), suggest_columns(), capture_table(),
-    run_trend_analysis()
-  - Plotly figures: append to plotly_figures list (auto-captured)
-  - Timeout: 60 seconds max
-  - Must use print() — no output = no result
-  - For large datasets: use .head(), .sample(), or groupby to manage size
+#### Section: Tooling update (expand existing)
+```
+- Available helper functions:
+  - top_n(df, by, n=10) — get top N rows by column
+  - ensure_numeric(obj, cols) — convert columns to numeric safely
+  - suggest_columns(name, df) — fuzzy-match column names
+  - capture_table(df, name) — register DataFrame for download
+  - run_trend_analysis(df, time_col, value_col, group_col) — trends
+  - create_map(variable_name, geographic_level) — choropleth map
+- Available libraries: pandas, numpy, scipy.stats, sklearn (KMeans,
+  PCA, LinearRegression, StandardScaler), plotly.express,
+  plotly.graph_objects, matplotlib, seaborn, geopandas
+- Execution timeout: 60 seconds. For large datasets, sample first.
+```
+
+#### Section: Final Reminders (add at BOTTOM of prompt)
+```
+## Final Reminders
+- Always use tools to answer data questions — never guess from memory.
+- Always use print() — no output = no result.
+- Never fabricate numbers. Present real data, then interpret.
+- If something fails, try again with a different approach.
+```
+
+#### Section: Tool Selection Table (replace existing text list)
+```
+### Tool Selection
+
+| User Intent | Tool | When |
+|---|---|---|
+| Rankings, statistics, charts | analyze_data | Any data question |
+| Map any variable | create_variable_map | "Map X", "show Y distribution" |
+| Risk classification map | create_vulnerability_map | AFTER run_risk_analysis |
+| Full risk analysis | run_risk_analysis | Creates unified dataset |
+| ITN allocation | plan_itn_distribution | AFTER run_risk_analysis |
+| Trends over time | analyze_data + run_trend_analysis() | "trends", "improving" |
+| Switch data subset | switch_tpr_combination | Change facility/age |
+
+NEVER call a downstream tool before its prerequisites are complete.
+```
 
 ---
 
-## Part 4: Future Roadmap (NOT implementing now)
+## Part 4: Tool Docstring Update
 
-These are the "next level" improvements identified by the reviewer.
-Tracked here for future sessions:
+File: `app/agent/tools/python_tool.py:22-32`
 
-### 4.1 Streaming Responses (HIGHEST IMPACT)
-- Currently: V3 endpoint returns JSON blob after full processing
-- Target: Stream tokens as generated, like ChatGPT
-- Impact: 10-second response that streams feels like 2 seconds
-- Effort: Requires changes to route handler + frontend
-- LangGraph supports streaming via astream_events
+Current:
+```python
+"""Execute Python code for data analysis
 
-### 4.2 Proactive Insights
-- Currently: Agent only responds to what's asked
-- Target: After analysis, suggest interesting findings
-  "I notice 3 wards have TPR above 80% — want to investigate?"
-- Effort: Post-tool insight node in LangGraph
+Args:
+    thought: Internal thought about what analysis to perform and why
+    python_code: Python code to execute. Use print() to show outputs.
+                 Data is available as 'df'.
+"""
+```
 
-### 4.3 Smart Tool Output Truncation
-- Currently: print(df.head(50)) stays in context through all future turns
-- Target: Truncate tool outputs to 5 rows + summary in context
-- Effort: Modify _smart_truncate_messages to detect DataFrame outputs
+New:
+```python
+"""Execute Python code for data analysis on the loaded dataset.
 
-### 4.4 Multi-step Workflow Chaining
-- Currently: _planner_node exists but is dead code (never wired into graph)
-- Target: "Run risk analysis, show top 10 on a map, then plan ITN for 50K nets"
-- Effort: Wire planner into graph, replace naive string splitter with LLM decomposer
+Use this for any data question: rankings, statistics, comparisons,
+correlations, regressions, clustering, visualizations.
 
-### 4.5 Persistent Variable Display
-- Currently: Users don't know what DataFrames are loaded
-- Target: Show df, ts_df, unified_df status in sidebar/status message
+Args:
+    thought: Your reasoning about what to analyze, which columns to
+             use, and what output to expect.
+    python_code: Python code to execute.
+
+Rules:
+- MUST use print() for all outputs — code without print produces nothing
+- Data available as: df (primary), ts_df (time series), uploaded_df (original)
+- Plotly figures: append to plotly_figures list (auto-displayed)
+- Helpers: top_n(), suggest_columns(), capture_table(), run_trend_analysis()
+- Libraries: pandas, numpy, scipy.stats, sklearn, plotly, matplotlib, geopandas
+- Timeout: 60 seconds — for large data use df.sample() or df.head()
+"""
+```
+
+---
+
+## Part 5: Future Roadmap (NOT this session)
+
+| Item | Impact | Effort |
+|------|--------|--------|
+| Streaming responses | Highest UX impact | Route handler + frontend |
+| Proactive insights | Makes agent assistive | Post-tool LLM node |
+| Smart tool output truncation | Saves tokens | Modify _smart_truncate |
+| Multi-step workflows | Complex queries | Wire planner node |
+| Variable display | User awareness | Frontend sidebar |
 
 ---
 
 ## Implementation Order
 
-1. Config changes (Part 1) — 6 one-liners, one commit
+1. Config changes (Part 1) — 6 values, one commit
 2. Fix guardrails (Part 2) — state.py + agent.py, one commit
-3. System prompt + tool docstring (Part 3) — one commit
-4. Test locally — full workflow
-5. Future roadmap — separate sessions
+3. System prompt rewrite (Part 3) — one file, one commit
+4. Tool docstring (Part 4) — one file, one commit
+5. Test locally with Kwara data — full workflow + new analysis questions
 
 ---
 
-## Success Criteria
+## Test Plan
 
-After implementation, the agent should:
-- [ ] Never cut a response short mid-sentence
-- [ ] Retry at least once when code fails (not just say "error occurred")
-- [ ] Validate results before presenting (no nonsensical numbers)
-- [ ] Remember context from 20 exchanges ago
-- [ ] Handle 6,948-row dataset analysis without timeout
-- [ ] Produce consistent code (no hallucinated column names)
-- [ ] Give clear error messages with what it's trying next
+After implementation, test these questions to verify improvement:
 
-## What We're NOT Changing (this round)
-- LLM model (staying with GPT-4o)
-- LangGraph architecture
-- Response format (JSON, not streaming — that's future roadmap)
-- Frontend
-- Tool registration pattern
+1. "What's the correlation between rainfall and Burden?" — should use scipy
+2. "Show me the distribution of TPR" — should create histogram
+3. "Compare primary vs secondary facilities" — should groupby + compare
+4. "Which wards are outliers?" — should compute z-scores
+5. "Run a regression predicting Burden from environmental variables" — should use sklearn
+6. "What does this data tell us about malaria risk?" — should do exploratory analysis
+7. Ask a question that causes a KeyError — should retry, not give up
+8. Ask for a very long analysis — response should NOT be cut short
