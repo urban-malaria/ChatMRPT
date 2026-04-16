@@ -52,7 +52,7 @@ def _run_year(session_id: str, session_folder: str, year: int,
         from app.services.data_handler import DataHandler
         from app.analysis.engine import AnalysisEngine
 
-        data_handler = DataHandler(session_id=session_id)
+        data_handler = DataHandler(session_folder)
         data_handler.load_raw_data(year_tag=year_tag)
 
         engine = AnalysisEngine(data_handler=data_handler)
@@ -117,7 +117,7 @@ def _execute_multi_year(session_id: str, years: List[int],
         from app.services.data_handler import DataHandler
         from app.analysis.engine import AnalysisEngine
 
-        data_handler = DataHandler(session_id=session_id)
+        data_handler = DataHandler(session_folder)
         data_handler.load_raw_data(year_tag='')
         engine = AnalysisEngine(data_handler=data_handler)
         engine.run_composite_analysis(session_id=session_id, year_tag='')
