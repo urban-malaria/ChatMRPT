@@ -305,7 +305,115 @@ class DataAnalysisAgent:
         if summary:
             summary += "\n\n**This data is loaded and ready for analysis. Use the exact column names and values shown above.**"
 
+        # Append DHIS2 cleaning notes if the cleaner ran on this session's data.
+        # This tells the LLM about column renames and duplicate merges so it can
+        # explain to the user why numbers may differ from their original Excel.
+        try:
+            cleaning_note = self._build_cleaning_note()
+            if cleaning_note:
+                summary += "\n\n" + cleaning_note
+        except Exception as exc:
+            logger.debug(f"Could not build cleaning note: {exc}")
+
+        # Append multi-year context if this is a multi-year dataset
+        try:
+            session_folder = f"instance/uploads/{self.session_id}"
+            my_ctx = self._build_multi_year_context(session_folder)
+            if my_ctx:
+                summary += "\n\n" + my_ctx
+        except Exception as exc:
+            logger.debug(f"Could not build multi-year context: {exc}")
+
         return summary
+
+    def _build_multi_year_context(self, session_folder: str) -> str:
+        """Return multi-year awareness context for the LLM if this is a multi-year session."""
+        import json
+        ts_path = os.path.join(session_folder, 'tpr_time_series.csv')
+        if not os.path.exists(ts_path):
+            return ''
+        try:
+            import pandas as pd
+            ts_df = pd.read_csv(ts_path, nrows=5000)
+            if 'Period' not in ts_df.columns:
+                return ''
+            years = sorted(ts_df['Period'].dropna().unique())
+            if len(years) <= 1:
+                return ''
+
+            status_path = os.path.join(session_folder, 'multi_year_status.json')
+            bg_status = 'unknown'
+            year_detail: dict = {}
+            if os.path.exists(status_path):
+                with open(status_path) as f:
+                    s = json.load(f)
+                bg_status = s.get('status', 'unknown')
+                year_detail = s.get('detail', {})
+
+            ready_years = [
+                y for y in years
+                if os.path.exists(os.path.join(session_folder, f'unified_dataset_{y}.csv'))
+            ]
+            trend_ready = os.path.exists(os.path.join(session_folder, 'trend_summary.csv'))
+
+            ctx = f'\nMULTI-YEAR DATA: {years[0]}–{years[-1]} ({len(years)} years)\n'
+            ctx += f'Available years: {list(years)}\n'
+            ctx += f'Risk analysis ready for years: {ready_years or "computing in background"}\n'
+            ctx += f'Trend summary ready (slope/direction/delta per ward): {trend_ready}\n'
+            ctx += (
+                'tpr_time_series.csv available for open-ended trend analysis '
+                '(WardName, LGA, Period, Burden, Total_Positive, Total_Tested, TPR)\n'
+            )
+            ctx += (
+                'Use analyze_data tool against tpr_time_series.csv for any trend question: '
+                'year comparisons, threshold crossings, volatility, LGA aggregates, '
+                'statistical significance, custom time ranges.\n'
+            )
+            ctx += f'Background computation status: {bg_status}\n'
+            if year_detail:
+                ctx += f'Per-year status: {year_detail}\n'
+            return ctx
+        except Exception:
+            return ''
+
+    def _build_cleaning_note(self) -> str:
+        """Read cleaning_report.json from session folder and format notes for LLM."""
+        import json
+        report_path = f"instance/uploads/{self.session_id}/cleaning_report.json"
+        if not os.path.exists(report_path):
+            return ""
+        try:
+            with open(report_path) as f:
+                report = json.load(f)
+        except Exception:
+            return ""
+
+        if not report.get('cleaning_applied'):
+            return ""
+
+        lines = ["**Data cleaning notes (DHIS2 export):**"]
+
+        renames = report.get('mojibake_fixed') or []
+        if renames:
+            lines.append(f"- Fixed {len(renames)} corrupted column name(s):")
+            for r in renames[:5]:
+                lines.append(f"    • `{r['from']}` → `{r['to']}`")
+
+        merges = report.get('duplicates_merged') or []
+        if merges:
+            lines.append(f"- Merged {len(merges)} duplicate column group(s):")
+            for m in merges[:5]:
+                base = (m.get('base_column') or '')[:60]
+                strategy = m.get('strategy', 'merge')
+                lines.append(f"    • `{base}` ({strategy})")
+
+        warnings = report.get('data_quality_warnings') or []
+        if warnings:
+            lines.append(f"- {len(warnings)} data quality warning(s) — see cleaning_report.json")
+
+        if len(lines) == 1:
+            return ""  # Only the header, no useful content
+        return "\n".join(lines)
 
     def _agent_node(self, state: DataAnalysisState):
         """Agent node - calls GPT-4o with tools."""

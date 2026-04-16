@@ -28,7 +28,8 @@ class AnalysisEngine:
         self.logger = logger
         self.data_handler = data_handler
         
-    def run_composite_analysis(self, session_id: str, variables: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run_composite_analysis(self, session_id: str, variables: Optional[List[str]] = None,
+                               year_tag: str = '') -> Dict[str, Any]:
         """
         Run standalone composite scoring analysis.
         
@@ -47,12 +48,13 @@ class AnalysisEngine:
             result = run_full_analysis_pipeline(
                 data_handler=self.data_handler,
                 selected_variables=variables,
-                session_id=session_id
+                session_id=session_id,
+                year_tag=year_tag
             )
-            
+
             if result.get('status') == 'error':
                 return result
-            
+
             return {
                 'status': 'success',
                 'message': 'Composite analysis completed successfully.',
@@ -81,7 +83,8 @@ class AnalysisEngine:
                 }
             }
     
-    def run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run_pca_analysis(self, session_id: str, variables: Optional[List[str]] = None,
+                         year_tag: str = '') -> Dict[str, Any]:
         """
         Run standalone PCA analysis.
         
@@ -100,7 +103,8 @@ class AnalysisEngine:
             result = run_independent_pca_analysis(
                 data_handler=self.data_handler,
                 selected_variables=variables,
-                session_id=session_id
+                session_id=session_id,
+                year_tag=year_tag
             )
             
             if result.get('status') == 'error':

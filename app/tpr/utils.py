@@ -7,6 +7,7 @@ burden per 1,000 population using ward-level case data and population rasters.
 
 import pandas as pd
 import geopandas as gpd
+import numpy as np
 import re
 import os
 from typing import Dict, List, Optional, Any
@@ -505,6 +506,37 @@ def calculate_ward_tpr_timeseries(df: pd.DataFrame, age_group: str = 'all_ages',
 
     logger.info(f"Time-series TPR: {len(results)} ward-period rows generated")
     return pd.DataFrame(results)
+
+
+def add_burden_to_timeseries(ts_df: pd.DataFrame, ward_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge ward-level population from calculate_ward_tpr() output into the
+    time-series DataFrame and compute per-year Burden per 1,000 population.
+
+    Both ts_df.WardName and ward_df.WardName use normalized names produced by
+    normalize_ward_name() — the merge is safe without extra normalization.
+
+    Args:
+        ts_df:   Output of calculate_ward_tpr_timeseries() —
+                 WardName (normalized), LGA, Period, Total_Positive, Total_Tested, TPR
+        ward_df: Output of calculate_ward_tpr() or tpr_results.csv —
+                 WardName (normalized), Population
+    Returns:
+        ts_df with Population and Burden (per 1,000) columns added.
+        Wards missing from ward_df get NaN Burden.
+    """
+    if ts_df.empty:
+        return ts_df
+    pop = ward_df[['WardName', 'Population']].drop_duplicates('WardName')
+    merged = ts_df.merge(pop, on='WardName', how='left')
+    merged['Burden'] = (
+        merged['Total_Positive'] / merged['Population'].replace(0, np.nan)
+    ) * 1000
+    logger.info(
+        f"add_burden_to_timeseries: {merged['Burden'].notna().sum()}/{len(merged)} "
+        f"rows have valid Burden"
+    )
+    return merged
 
 
 def get_geopolitical_zone(state: str) -> str:

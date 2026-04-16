@@ -30,8 +30,9 @@ class UnifiedDatasetBuilder:
     - Optimized GeoParquet format for fast access
     """
     
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, year_tag: str = ''):
         self.session_id = session_id
+        self.year_tag = year_tag
         self.session_folder = f"instance/uploads/{session_id}"
         self.column_metadata = {}
         
@@ -1460,7 +1461,7 @@ class UnifiedDatasetBuilder:
         file_paths = {}
         
         # Save as GeoParquet (primary format)
-        geoparquet_path = os.path.join(self.session_folder, 'unified_dataset.geoparquet')
+        geoparquet_path = os.path.join(self.session_folder, f'unified_dataset{self.year_tag}.geoparquet')
         try:
             gdf.to_parquet(geoparquet_path, compression='snappy')
             file_paths['geoparquet'] = geoparquet_path
@@ -1468,9 +1469,9 @@ class UnifiedDatasetBuilder:
         except Exception as e:
             print(f"⚠️ Error saving GeoParquet: {e}")
             raise
-        
+
         # Save as CSV backup (optional, exclude geometry)
-        csv_path = os.path.join(self.session_folder, 'unified_dataset.csv')
+        csv_path = os.path.join(self.session_folder, f'unified_dataset{self.year_tag}.csv')
         try:
             # Create a copy without geometry for CSV
             csv_data = gdf.drop(columns=['geometry']) if 'geometry' in gdf.columns else gdf.copy()
@@ -1485,7 +1486,7 @@ class UnifiedDatasetBuilder:
             file_paths['csv'] = None
         
         # Save as pickle backup (optional)
-            pickle_path = os.path.join(self.session_folder, 'unified_dataset.pkl')
+        pickle_path = os.path.join(self.session_folder, f'unified_dataset{self.year_tag}.pkl')
         try:
             gdf.to_pickle(pickle_path)
             file_paths['pickle'] = pickle_path
@@ -1597,10 +1598,9 @@ class UnifiedDatasetBuilder:
 
 # === UTILITY FUNCTIONS ===
 
-def build_unified_dataset(session_id: str) -> Dict[str, Any]:
+def build_unified_dataset(session_id: str, year_tag: str = '') -> Dict[str, Any]:
     """Main function to build unified GeoParquet dataset"""
-    
-    builder = UnifiedDatasetBuilder(session_id)
+    builder = UnifiedDatasetBuilder(session_id, year_tag=year_tag)
     return builder.build_unified_dataset()
 
 
@@ -2093,27 +2093,28 @@ def _optimize_for_settlement_free_tools(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFra
     return gdf
 
 
-def _save_settlement_free_dataset(gdf: gpd.GeoDataFrame, session_folder: str) -> Dict[str, str]:
+def _save_settlement_free_dataset(gdf: gpd.GeoDataFrame, session_folder: str,
+                                   year_tag: str = '') -> Dict[str, str]:
     """Save the settlement-free unified dataset"""
-    
+
     file_paths = {}
-    
+
     try:
         # Save as GeoParquet
-        geoparquet_path = os.path.join(session_folder, 'unified_dataset.geoparquet')
+        geoparquet_path = os.path.join(session_folder, f'unified_dataset{year_tag}.geoparquet')
         gdf.to_parquet(geoparquet_path)
         file_paths['geoparquet'] = geoparquet_path
         print(f"💾 Saved GeoParquet: {geoparquet_path}")
-        
+
         # Save as CSV backup
-        csv_path = os.path.join(session_folder, 'unified_dataset.csv')
+        csv_path = os.path.join(session_folder, f'unified_dataset{year_tag}.csv')
         df_for_csv = gdf.drop(columns=['geometry']) if 'geometry' in gdf.columns else gdf
         df_for_csv.to_csv(csv_path, index=False)
         file_paths['csv'] = csv_path
         print(f"📄 Saved CSV backup: {csv_path}")
-        
+
         # Save as pickle backup
-        pickle_path = os.path.join(session_folder, 'unified_dataset.pkl')
+        pickle_path = os.path.join(session_folder, f'unified_dataset{year_tag}.pkl')
         gdf.to_pickle(pickle_path)
         file_paths['pickle'] = pickle_path
         print(f"🗃️ Saved pickle backup: {pickle_path}")

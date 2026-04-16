@@ -229,6 +229,21 @@ def run_risk_analysis(
 # ─────────────────────────────────────────────────────────────────────
 
 @tool
+def _load_year_specific_unified_dataset(session_folder: str, year: int,
+                                        data_handler) -> bool:
+    """
+    Load unified_dataset_{year}.csv into data_handler.unified_dataset.
+    Returns True if loaded, False if file not yet available.
+    """
+    import pandas as pd
+    path = os.path.join(session_folder, f'unified_dataset_{year}.csv')
+    if not os.path.exists(path):
+        return False
+    data_handler.unified_dataset = pd.read_csv(path)
+    logger.info(f"Loaded unified_dataset_{year}.csv for ITN planning ({len(data_handler.unified_dataset)} rows)")
+    return True
+
+
 def plan_itn_distribution(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
@@ -236,6 +251,7 @@ def plan_itn_distribution(
     avg_household_size: float = 5.0,
     urban_threshold: float = 75.0,
     method: str = "composite",
+    year: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Plan optimal ITN (bed net) distribution across wards.
 
@@ -251,9 +267,32 @@ def plan_itn_distribution(
         avg_household_size: Average household size (default 5.0).
         urban_threshold: Urban % cutoff for rural priority (default 75%).
         method: 'composite' (default) or 'pca' ranking method.
+        year: Optional year (e.g. 2023) for year-specific ITN planning in
+              multi-year datasets. None uses the aggregate unified_dataset.
     """
     session_id = graph_state.get('session_id', 'default')
     try:
+        # Year-specific ITN: load the correct unified_dataset into the DataHandler
+        # so that PlanITNDistribution reads from the right year's risk rankings.
+        if year is not None:
+            session_folder = os.path.join('instance', 'uploads', session_id)
+            status_path = os.path.join(session_folder, 'multi_year_status.json')
+            year_ready = os.path.exists(os.path.join(session_folder, f'unified_dataset_{year}.csv'))
+            if not year_ready:
+                bg_status = 'computing'
+                if os.path.exists(status_path):
+                    import json
+                    with open(status_path) as f:
+                        s = json.load(f)
+                    bg_status = s.get('detail', {}).get(str(year), 'pending')
+                return (
+                    f"Risk analysis for {year} is still {bg_status}. "
+                    f"Please try again in a moment.", {}
+                )
+            from app.services.data_handler import DataHandler
+            dh = DataHandler(session_id=session_id)
+            _load_year_specific_unified_dataset(session_folder, year, dh)
+
         from app.planning.itn_tools import PlanITNDistribution
         result = PlanITNDistribution(
             total_nets=total_nets,

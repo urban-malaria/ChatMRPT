@@ -1,4 +1,51 @@
-# LGA Boundary Overlays & Enhanced Hover Fix Plan
+# Multi-Year Analysis Plan v2
+*Written: 2026-04-14 — reviewed and corrected after independent code review*
+*Updated: 2026-04-16 — Phase 7 (multi-year maps) moved in-scope*
+*Review found 4 blockers + 3 gaps + 2 incorrect assumptions — all fixed in v2*
+*Full plan: `project/planning/multi_year_analysis_plan.md`*
+
+**Status: AWAITING APPROVAL**
+
+---
+
+## Summary
+- 11+ files modified, 2 files created (Phase 7 adds 4-5 more map files)
+- 27 implementation tasks across 7 phases
+- 12 unit tests
+- Backward compatible — single-year data (Adamawa) unchanged
+- Key design: `year_tag=''` default everywhere — all existing callers unaffected
+- Phase 7: multi-year map requests auto-generate all year maps + comparison grid; zero frontend changes (existing carousel handles pagination)
+
+## Files Modified
+1. `app/tpr/utils.py` — add `add_burden_to_timeseries()`
+2. `app/services/data_handler.py` — add `load_raw_data(year_tag='')`
+3. `app/services/dataset_builder.py` — `year_tag` across all 7 hardcoded paths
+4. `app/analysis/pipeline.py` — `year_tag` param + 4 paths + line 395 call
+5. `app/analysis/pca_pipeline.py` — `year_tag` to `__init__`, line 770, 4 paths
+6. `app/analysis/engine.py` — `year_tag` param to both functions
+7. `app/tpr/workflow_manager.py` — multi-year detection + completion message
+8. `app/agent/agent.py` — `_build_multi_year_context()`
+9. `app/agent/tools/map_tools.py` — year-specific ITN routing
+10. `app/tpr/analysis_tool.py` — comment only (no functional change)
+
+## Files Created
+11. `app/tpr/trend_analyzer.py` — pre-computes trend_summary.csv (slope, direction, delta per ward)
+    Trend analysis is NOT fixed — agent handles open-ended questions dynamically
+    via analyze_data tool against tpr_time_series.csv
+12. `app/tpr/multi_year_service.py`
+
+## Implementation Phases
+- Phase 1: Foundation + tests (trend_analyzer, add_burden_to_timeseries)
+- Phase 2: year_tag support across analysis stack + full test suite
+- Phase 3: Background service
+- Phase 4: Workflow wiring + local Kwara test
+- Phase 5: Agent context + ITN routing
+- Phase 6: Full integration + Adamawa regression
+- Phase 7: Multi-year map generation (all viz types, comparison grid, zero frontend changes)
+
+---
+
+# ARCHIVED — LGA Boundary Overlays & Enhanced Hover Fix Plan
 
 **Branch:** `bernard`
 **Date:** January 23, 2026

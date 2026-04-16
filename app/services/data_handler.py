@@ -640,6 +640,25 @@ class DataHandler:
                 'issues': [str(e)]
             }
     
+    def load_raw_data(self, year_tag: str = '') -> 'pd.DataFrame':
+        """
+        Load raw_data{year_tag}.csv from session folder into self.cleaned_data.
+
+        year_tag=''      → loads aggregate raw_data.csv (existing behaviour)
+        year_tag='_2024' → loads raw_data_2024.csv
+
+        Returns the loaded DataFrame. Raises FileNotFoundError if the file
+        does not exist so callers can distinguish missing vs error.
+        """
+        import pandas as pd
+        filename = f'raw_data{year_tag}.csv'
+        raw_path = os.path.join(self.session_folder, filename)
+        if not os.path.exists(raw_path):
+            raise FileNotFoundError(f'{filename} not found in {self.session_folder}')
+        self.cleaned_data = pd.read_csv(raw_path)
+        self.logger.info(f'DataHandler.load_raw_data: loaded {filename} shape={self.cleaned_data.shape}')
+        return self.cleaned_data
+
     def _attempt_data_reload(self):
         """Attempt to reload data from session files - PRIORITIZING CLEANED DATA"""
         try:

@@ -811,6 +811,115 @@ class TPRWorkflowHandler:
             except Exception as precompute_exc:
                 logger.warning("Could not schedule TPR pre-computation: %s", precompute_exc)
 
+            # --- Multi-year enrichment ---
+            ts_df = None
+            try:
+                import pandas as pd
+                import numpy as np
+                from app.tpr.utils import (
+                    calculate_ward_tpr_timeseries,
+                    add_burden_to_timeseries,
+                    normalize_ward_name,
+                )
+                from app.tpr.trend_analyzer import compute_trend
+                from app.tpr.multi_year_service import schedule_multi_year_risk_analysis
+
+                session_folder = os.path.join('instance', 'uploads', self.session_id)
+
+                # Load schema from state manager (same pattern as analysis_tool.py line 971)
+                column_schema = (self.state_manager.load_state() or {}).get('column_schema') or {}
+                period_col = column_schema.get('period')
+
+                # Detect multi-year
+                years = []
+                if period_col and period_col in df.columns:
+                    years = sorted(int(y) for y in df[period_col].dropna().unique() if str(y).strip())
+
+                if len(years) > 1:
+                    logger.info(f"[MULTI_YEAR] Detected {len(years)} years: {years}")
+
+                    # 1. Compute per-year TPR time series + add Burden
+                    ts_df = calculate_ward_tpr_timeseries(df, schema=column_schema,
+                                                          age_group=age_group,
+                                                          facility_level=facility_level)
+                    tpr_results_path = os.path.join(session_folder, 'tpr_results.csv')
+                    if not ts_df.empty and os.path.exists(tpr_results_path):
+                        ward_df = pd.read_csv(tpr_results_path)
+                        ts_df = add_burden_to_timeseries(ts_df, ward_df)
+                        ts_df.to_csv(os.path.join(session_folder, 'tpr_time_series.csv'), index=False)
+                        logger.info(f"[MULTI_YEAR] Saved tpr_time_series.csv ({len(ts_df)} rows)")
+
+                    # 2. Build per-year raw_data_YEAR.csv
+                    raw_data_path = os.path.join(session_folder, 'raw_data.csv')
+                    if not ts_df.empty and os.path.exists(raw_data_path):
+                        raw_data = pd.read_csv(raw_data_path)
+                        raw_data['_ward_key'] = raw_data['WardName'].apply(normalize_ward_name)
+                        for year in years:
+                            year_rows = ts_df[ts_df['Period'] == year]
+                            if year_rows.empty:
+                                continue
+                            year_data = year_rows[['WardName', 'Total_Positive', 'Burden']].rename(
+                                columns={'WardName': '_ward_key'}
+                            )
+                            year_raw = (
+                                raw_data
+                                .drop(columns=['Burden', 'Total_Positive'], errors='ignore')
+                                .merge(year_data, on='_ward_key', how='left')
+                                .drop(columns=['_ward_key'])
+                            )
+                            year_raw.to_csv(
+                                os.path.join(session_folder, f'raw_data_{year}.csv'), index=False
+                            )
+                        logger.info(f"[MULTI_YEAR] Saved raw_data_YEAR.csv for years {years}")
+
+                    # 3. Trend summary
+                    if not ts_df.empty:
+                        trend_df = compute_trend(ts_df)
+                        if not trend_df.empty:
+                            trend_df.to_csv(os.path.join(session_folder, 'trend_summary.csv'), index=False)
+                            logger.info(f"[MULTI_YEAR] Saved trend_summary.csv ({len(trend_df)} wards)")
+
+                    # 4. Schedule background risk analysis
+                    schedule_multi_year_risk_analysis(
+                        session_id=self.session_id,
+                        years=years,
+                        session_folder=session_folder,
+                        state_manager=self.state_manager,
+                    )
+
+                    # 5. Inject year table into completion message
+                    if message and not ts_df.empty and 'Burden' in ts_df.columns:
+                        year_rows_table = []
+                        prev_burden = None
+                        for year in years:
+                            yr_slice = ts_df[ts_df['Period'] == year]['Burden'].dropna()
+                            if yr_slice.empty:
+                                continue
+                            burden = round(float(yr_slice.mean()), 1)
+                            if prev_burden is None:
+                                change = '—'
+                            else:
+                                delta = burden - prev_burden
+                                arrow = '↑' if delta > 0 else '↓'
+                                change = f'{arrow} {abs(delta):.1f}'
+                            year_rows_table.append(f'| {year} | {burden} | {change} |')
+                            prev_burden = burden
+
+                        if year_rows_table:
+                            year_range = f'{years[0]}–{years[-1]}'
+                            table_md = (
+                                f'\n\n**Year-by-Year Breakdown ({year_range})**\n\n'
+                                '| Year | Burden per 1,000 | Change |\n'
+                                '|------|-----------------|--------|\n'
+                                + '\n'.join(year_rows_table)
+                                + '\n\n*Full vulnerability rankings for each year are computing '
+                                'in the background and will be ready shortly.*'
+                            )
+                            message = message + table_md
+
+            except Exception as my_exc:
+                logger.warning(f"[MULTI_YEAR] Non-fatal multi-year enrichment error: {my_exc}", exc_info=True)
+
             return {
                 "success": True,
                 "message": message,
