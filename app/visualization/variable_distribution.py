@@ -656,7 +656,14 @@ class VariableDistribution(BaseTool):
       var btn = document.getElementById('btn-' + year);
       var panel = document.getElementById('panel-' + year);
       if (btn) btn.classList.add('active');
-      if (panel) panel.classList.add('active');
+      if (panel) {{
+        panel.classList.add('active');
+        // Plotly mapbox needs resize after becoming visible (was rendered at 0px)
+        var plotDiv = document.getElementById('plotly-' + year);
+        if (plotDiv) {{
+          setTimeout(function() {{ Plotly.Plots.resize(plotDiv); }}, 50);
+        }}
+      }}
     }}
     showYear({first_year});
   </script>
