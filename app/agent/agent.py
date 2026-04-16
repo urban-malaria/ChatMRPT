@@ -331,6 +331,15 @@ class DataAnalysisAgent:
         import json
         ts_path = os.path.join(session_folder, 'tpr_time_series.csv')
         if not os.path.exists(ts_path):
+            # If there's uploaded data but no time-series yet, guide the agent
+            raw_exists = os.path.exists(os.path.join(session_folder, 'raw_data.csv'))
+            if raw_exists:
+                return (
+                    'MULTI-YEAR TREND DATA: not yet available. '
+                    'ts_df and trend_df are not loaded. '
+                    'If the user asks about trends, year-on-year changes, or time-series analysis, '
+                    'tell them to run the TPR analysis first — that generates the time-series data.'
+                )
             return ''
         try:
             import pandas as pd
