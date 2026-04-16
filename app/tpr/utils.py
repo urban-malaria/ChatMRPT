@@ -183,7 +183,8 @@ def fix_column_encoding(df: pd.DataFrame) -> pd.DataFrame:
 
 def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                       test_method: str = 'both', facility_level: str = 'all',
-                      schema: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+                      schema: Optional[Dict[str, Any]] = None,
+                      state_gdf=None, pop_cache: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
     """
     Calculate Malaria Burden per 1,000 population.
 
@@ -312,7 +313,8 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
         logger.warning("Could not determine state from schema, burden calculation may fail")
 
     # Load shapefile and match wards to get geometries for population extraction
-    state_gdf = load_state_shapefile(state_name)
+    if state_gdf is None:
+        state_gdf = load_state_shapefile(state_name)
 
     if state_gdf is not None and not state_gdf.empty:
         # Normalize ward names for matching
@@ -368,8 +370,12 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                 logger.warning(f"Filtering out {null_geom_count} wards with null geometries")
                 merged = merged[merged.geometry.notna()].copy()
 
-            # Extract population based on age group
-            pop_series = extract_ward_population(merged, age_group)
+            # Extract population based on age group (use cache if available)
+            if pop_cache is not None and age_group in pop_cache:
+                merged['Population'] = merged['WardName_norm'].map(pop_cache[age_group]).fillna(0)
+                pop_series = merged['Population']
+            else:
+                pop_series = extract_ward_population(merged, age_group)
 
             if pop_series is not None:
                 merged['Population'] = pop_series.values

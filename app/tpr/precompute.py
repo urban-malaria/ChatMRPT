@@ -87,7 +87,9 @@ def precompute_all_tpr_combinations(
     data: pd.DataFrame,
     state: str,
     exclude_combination: Optional[Dict[str, str]] = None,
-    progress_callback: ProgressCallback = None
+    progress_callback: ProgressCallback = None,
+    state_gdf=None,
+    pop_cache: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Pre-compute all 16 TPR combinations and store in SQLite.
@@ -118,6 +120,42 @@ def precompute_all_tpr_combinations(
             logger.warning("No column schema in state manager — pre-computation may produce empty results")
     except Exception as exc:
         logger.warning("Could not load column schema for pre-computation: %s", exc)
+
+    # --- Load shapefile once (shared across all combinations) ---
+    from app.tpr.utils import load_state_shapefile, extract_ward_population, normalize_ward_name
+    import re as _re
+
+    if state_gdf is None:
+        clean_state = _re.sub(r'^[a-z]{2}\s+', '', state, flags=_re.IGNORECASE)
+        clean_state = _re.sub(r'\s+State$', '', clean_state, flags=_re.IGNORECASE)
+        clean_state = ' '.join(w.capitalize() for w in clean_state.replace('-', ' ').split())
+        state_gdf = load_state_shapefile(clean_state)
+        if state_gdf is not None:
+            logger.info("Loaded shapefile once for precompute (%d wards)", len(state_gdf))
+
+    # Normalise ward names on state_gdf so pop_cache can be keyed by WardName_norm
+    if state_gdf is not None and 'WardName_norm' not in state_gdf.columns:
+        ward_col = next((c for c in ['WardName', 'Ward', 'ADM3_EN'] if c in state_gdf.columns), None)
+        if ward_col:
+            state_gdf = state_gdf.copy()
+            state_gdf['WardName_norm'] = state_gdf[ward_col].apply(normalize_ward_name)
+
+    # --- Extract population for each age group in parallel (4 calls → wall-clock ~1×) ---
+    if pop_cache is None and state_gdf is not None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _extract_pop(age_grp: str):
+            series = extract_ward_population(state_gdf, age_grp)
+            if series is not None:
+                return age_grp, pd.Series(series.values, index=state_gdf['WardName_norm'].values)
+            return age_grp, None
+
+        pop_cache = {}
+        with ThreadPoolExecutor(max_workers=4) as _pool:
+            for _ag, _pop in _pool.map(_extract_pop, AGE_GROUPS):
+                if _pop is not None:
+                    pop_cache[_ag] = _pop
+        logger.info("Pre-extracted population for %d age groups in parallel", len(pop_cache))
 
     # Initialize database
     db_path = init_precompute_db(session_id)
@@ -159,13 +197,15 @@ def precompute_all_tpr_combinations(
                         {}
                     )
 
-                # Calculate TPR for this combination
+                # Calculate TPR for this combination (shapefile + population pre-loaded)
                 tpr_df = calculate_ward_tpr(
                     df=data.copy(),
                     age_group=age_group,
                     test_method='both',
                     facility_level=facility_level,
                     schema=schema,
+                    state_gdf=state_gdf,
+                    pop_cache=pop_cache,
                 )
 
                 if tpr_df is None or tpr_df.empty:
