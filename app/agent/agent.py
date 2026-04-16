@@ -361,13 +361,16 @@ class DataAnalysisAgent:
             ctx += f'Risk analysis ready for years: {ready_years or "computing in background"}\n'
             ctx += f'Trend summary ready (slope/direction/delta per ward): {trend_ready}\n'
             ctx += (
-                'tpr_time_series.csv available for open-ended trend analysis '
-                '(WardName, LGA, Period, Burden, Total_Positive, Total_Tested, TPR)\n'
+                'PRE-LOADED variables available in analyze_data:\n'
+                '  ts_df  — tpr_time_series.csv (WardName, LGAName, Period, Burden, '
+                'Total_Positive, Total_Tested, TPR) — one row per ward per year\n'
+                '  trend_df — trend_summary.csv (WardName, trend_slope, trend_direction, '
+                'peak_year, mean_burden, delta_burden) — one row per ward\n'
             )
             ctx += (
-                'Use analyze_data tool against tpr_time_series.csv for any trend question: '
-                'year comparisons, threshold crossings, volatility, LGA aggregates, '
-                'statistical significance, custom time ranges.\n'
+                'Use analyze_data for ANY multi-year question: trend lines, year-on-year '
+                'comparison, delta maps, LGA aggregates, Mann-Kendall, volatility, '
+                'threshold crossings — ts_df and trend_df are ready, no file path needed.\n'
             )
             ctx += f'Background computation status: {bg_status}\n'
             if year_detail:

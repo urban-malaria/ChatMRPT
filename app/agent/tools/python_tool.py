@@ -39,7 +39,7 @@ def analyze_data(
     - Data available as: df (primary), ts_df (time series), uploaded_df (original)
     - Plotly figures: append to plotly_figures list (auto-displayed)
     - Helpers: top_n(), ensure_numeric(), suggest_columns(), capture_table(),
-      run_trend_analysis(), create_map()
+      create_map()
     - Libraries: pandas, numpy, scipy.stats, sklearn, plotly, matplotlib, geopandas
     - Timeout: 60 seconds — for large data use df.sample() or df.head()
     """
@@ -99,6 +99,22 @@ def analyze_data(
                 logger.info(f"Loaded df from UnifiedDataState for session {session_id}: {current_data['df'].shape}")
         except Exception as e:
             logger.debug(f"UnifiedDataState fallback failed: {e}")
+
+    # Pre-load multi-year files so the agent can use them without knowing file paths
+    session_folder = os.path.join('instance', 'uploads', session_id)
+    _multi_year_files = {
+        'ts_df':    'tpr_time_series.csv',
+        'trend_df': 'trend_summary.csv',
+    }
+    for var, fname in _multi_year_files.items():
+        if var not in current_data:
+            fpath = os.path.join(session_folder, fname)
+            if os.path.exists(fpath):
+                try:
+                    current_data[var] = pd.read_csv(fpath)
+                    logger.info(f"Pre-loaded {var} from {fname}: {current_data[var].shape}")
+                except Exception as e:
+                    logger.debug(f"Could not pre-load {fname}: {e}")
 
     # Note: Column resolver removed - not needed with simple executor
     # Agent can use pandas directly like the original AgenticDataAnalysis
