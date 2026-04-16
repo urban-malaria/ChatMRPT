@@ -1617,11 +1617,15 @@ def load_unified_dataset(session_id: str, require_geometry: bool = False, year_t
         GeoDataFrame with or without geometry based on requirements
     """
     session_folder = f'instance/uploads/{session_id}'
+    csv_path = os.path.join(session_folder, f'unified_dataset{year_tag}.csv')
+    geoparquet_path = os.path.join(session_folder, f'unified_dataset{year_tag}.geoparquet')
+
+    # Fast-path: if neither file exists yet, don't burn retry sleeps
+    if not os.path.exists(csv_path) and not os.path.exists(geoparquet_path):
+        return None
 
     for attempt in range(3):
         try:
-            csv_path = os.path.join(session_folder, f'unified_dataset{year_tag}.csv')
-            geoparquet_path = os.path.join(session_folder, f'unified_dataset{year_tag}.geoparquet')
             
             # If geometry is required, prioritize GeoParquet
             if require_geometry:
@@ -1678,15 +1682,15 @@ def load_unified_dataset(session_id: str, require_geometry: bool = False, year_t
                     except Exception as geo_err:
                         logger.error(f'GeoParquet load error: {geo_err}')
             
-            # If neither exists yet, wait (for sync delays)
+            # Files exist but couldn't be loaded — brief retry for transient read errors
             if attempt < 2:
-                logger.warning(f'Files not found (attempt {attempt+1}), waiting...')
-                time.sleep(1)
-                
+                logger.warning(f'Files found but load failed (attempt {attempt+1}), retrying...')
+                time.sleep(0.1)
+
         except Exception as e:
             logger.error(f'Load attempt {attempt+1} failed: {e}')
             if attempt < 2:
-                time.sleep(1)
+                time.sleep(0.1)
     
     logger.error(f'❌ All load attempts failed for session {session_id}')
     return None

@@ -823,7 +823,6 @@ class TPRWorkflowHandler:
                     normalize_ward_name,
                 )
                 from app.tpr.trend_analyzer import compute_trend
-                from app.tpr.multi_year_service import schedule_multi_year_risk_analysis
 
                 session_folder = os.path.join('instance', 'uploads', self.session_id)
 
@@ -880,15 +879,7 @@ class TPRWorkflowHandler:
                             trend_df.to_csv(os.path.join(session_folder, 'trend_summary.csv'), index=False)
                             logger.info(f"[MULTI_YEAR] Saved trend_summary.csv ({len(trend_df)} wards)")
 
-                    # 4. Schedule background risk analysis
-                    schedule_multi_year_risk_analysis(
-                        session_id=self.session_id,
-                        years=years,
-                        session_folder=session_folder,
-                        state_manager=self.state_manager,
-                    )
-
-                    # 5. Inject year table into completion message
+                    # 4. Inject year table into completion message
                     if message and not ts_df.empty and 'Burden' in ts_df.columns:
                         year_rows_table = []
                         prev_burden = None
@@ -913,8 +904,7 @@ class TPRWorkflowHandler:
                                 '| Year | Burden per 1,000 | Change |\n'
                                 '|------|-----------------|--------|\n'
                                 + '\n'.join(year_rows_table)
-                                + '\n\n*Full vulnerability rankings for each year are computing '
-                                'in the background and will be ready shortly.*'
+                                + '\n\nRun **"malaria risk analysis"** to generate vulnerability rankings for any year.'
                             )
                             message = message + table_md
 
