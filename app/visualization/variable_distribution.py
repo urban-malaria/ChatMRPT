@@ -45,6 +45,10 @@ class VariableDistribution(BaseTool):
         default=None,
         description="Optional list of LGA codes to highlight when rendering",
     )
+    year_tag: str = Field(
+        '',
+        description="Year suffix for multi-year datasets e.g. '_2022'. Empty string uses aggregate.",
+    )
 
     @validator('geographic_level')
     def validate_geographic_level(cls, value: str) -> str:
@@ -85,7 +89,7 @@ class VariableDistribution(BaseTool):
             
             # Check what data files exist
             session_dir = f'instance/uploads/{session_id}'
-            raw_csv = os.path.join(session_dir, 'raw_data.csv')
+            raw_csv = os.path.join(session_dir, f'raw_data{self.year_tag}.csv')
             unified_csv = os.path.join(session_dir, 'unified_dataset.csv')
             shapefile_zip = os.path.join(session_dir, 'raw_shapefile.zip')
             
@@ -212,7 +216,7 @@ class VariableDistribution(BaseTool):
             
             # Load raw CSV data
             csv_data = None
-            csv_path = os.path.join(upload_dir, 'raw_data.csv')
+            csv_path = os.path.join(upload_dir, f'raw_data{self.year_tag}.csv')
             if os.path.exists(csv_path):
                 csv_data = pd.read_csv(csv_path)
             logger.info(f"🔍 DEBUG: CSV loaded successfully")

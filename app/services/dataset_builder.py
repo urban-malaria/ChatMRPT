@@ -1604,23 +1604,24 @@ def build_unified_dataset(session_id: str, year_tag: str = '') -> Dict[str, Any]
     return builder.build_unified_dataset()
 
 
-def load_unified_dataset(session_id: str, require_geometry: bool = False) -> Optional[gpd.GeoDataFrame]:
+def load_unified_dataset(session_id: str, require_geometry: bool = False, year_tag: str = '') -> Optional[gpd.GeoDataFrame]:
     """
     Load unified dataset from disk - intelligently choosing between CSV and GeoParquet.
-    
+
     Args:
         session_id: Session identifier
         require_geometry: If True, will prioritize GeoParquet to ensure geometry column is available
-    
+        year_tag: Optional year suffix e.g. '_2022' for multi-year datasets. Defaults to '' (aggregate).
+
     Returns:
         GeoDataFrame with or without geometry based on requirements
     """
     session_folder = f'instance/uploads/{session_id}'
-    
+
     for attempt in range(3):
         try:
-            csv_path = os.path.join(session_folder, 'unified_dataset.csv')
-            geoparquet_path = os.path.join(session_folder, 'unified_dataset.geoparquet')
+            csv_path = os.path.join(session_folder, f'unified_dataset{year_tag}.csv')
+            geoparquet_path = os.path.join(session_folder, f'unified_dataset{year_tag}.geoparquet')
             
             # If geometry is required, prioritize GeoParquet
             if require_geometry:

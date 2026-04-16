@@ -430,7 +430,7 @@ def validate_session_data_exists(session_id: str) -> bool:
         return False
 
 
-def get_session_unified_dataset(session_id: str, require_geometry: bool = False):
+def get_session_unified_dataset(session_id: str, require_geometry: bool = False, year_tag: str = ''):
     """
     Get unified dataset for session with error handling and automatic creation.
     
@@ -446,7 +446,7 @@ def get_session_unified_dataset(session_id: str, require_geometry: bool = False)
         from app.services.dataset_builder import load_unified_dataset, UnifiedDatasetBuilder
         
         # First try to load existing unified dataset with geometry requirement
-        gdf = load_unified_dataset(session_id, require_geometry=require_geometry)
+        gdf = load_unified_dataset(session_id, require_geometry=require_geometry, year_tag=year_tag)
         if gdf is not None:
             return gdf
         
@@ -468,7 +468,7 @@ def get_session_unified_dataset(session_id: str, require_geometry: bool = False)
             if result['status'] == 'success':
                 logger.info(f"Successfully created unified dataset for session {session_id}")
                 # Try to load it again with geometry requirement
-                return load_unified_dataset(session_id, require_geometry=require_geometry)
+                return load_unified_dataset(session_id, require_geometry=require_geometry, year_tag=year_tag)
             else:
                 logger.error(f"Failed to build unified dataset: {result.get('message')}")
         

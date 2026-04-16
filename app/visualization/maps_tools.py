@@ -63,11 +63,16 @@ class CreateVulnerabilityMap(BaseTool):
         True,
         description="Include statistics panel on the map"
     )
-    
+
+    year_tag: str = Field(
+        '',
+        description="Year suffix for multi-year datasets e.g. '_2022'. Empty string uses aggregate."
+    )
+
     @classmethod
     def get_category(cls) -> ToolCategory:
         return ToolCategory.VISUALIZATION
-    
+
     @classmethod
     def get_examples(cls) -> List[str]:
         return [
@@ -88,9 +93,9 @@ class CreateVulnerabilityMap(BaseTool):
             logger.info(f"🔍 Classification method: {self.classification_method}")
             
             # Check for unified dataset
-            unified_path = f'instance/uploads/{session_id}/unified_dataset.csv'
+            unified_path = f'instance/uploads/{session_id}/unified_dataset{self.year_tag}.csv'
             raw_path = f'instance/uploads/{session_id}/raw_data.csv'
-            
+
             logger.info(f"🔍 Checking for unified dataset at: {unified_path}")
             if os.path.exists(unified_path):
                 logger.info(f"🔍 ✅ Unified dataset EXISTS")
@@ -104,9 +109,9 @@ class CreateVulnerabilityMap(BaseTool):
                 return self._create_error_result(
                     "No data available for this session. Please upload data first."
                 )
-            
+
             # Get unified dataset with geometry required for map visualization
-            gdf = get_session_unified_dataset(session_id, require_geometry=True)
+            gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag=self.year_tag)
             if gdf is None:
                 return self._create_error_result("No data available for analysis")
             
@@ -196,11 +201,16 @@ class CreatePCAMap(BaseTool):
         True,
         description="Show color scale legend"
     )
-    
+
+    year_tag: str = Field(
+        '',
+        description="Year suffix for multi-year datasets e.g. '_2022'. Empty string uses aggregate."
+    )
+
     @classmethod
     def get_category(cls) -> ToolCategory:
         return ToolCategory.VISUALIZATION
-    
+
     @classmethod
     def get_examples(cls) -> List[str]:
         return [
@@ -220,10 +230,10 @@ class CreatePCAMap(BaseTool):
                 )
             
             # Get unified dataset with geometry required for map visualization
-            gdf = get_session_unified_dataset(session_id, require_geometry=True)
+            gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag=self.year_tag)
             if gdf is None:
                 return self._create_error_result("No data available for analysis")
-            
+
             # Check for PCA scores
             exists, resolved_col = variable_resolver.check_column_exists('pca_score', list(gdf.columns))
             if not exists:
@@ -324,11 +334,16 @@ class CreateUrbanExtentMap(BaseTool):
         description="Analysis method: 'percentage' or 'categorical'",
         pattern="^(percentage|categorical)$"
     )
-    
+
+    year_tag: str = Field(
+        '',
+        description="Year suffix for multi-year datasets e.g. '_2022'. Empty string uses aggregate."
+    )
+
     @classmethod
     def get_category(cls) -> ToolCategory:
         return ToolCategory.VISUALIZATION
-    
+
     @classmethod
     def get_examples(cls) -> List[str]:
         return [
@@ -348,10 +363,10 @@ class CreateUrbanExtentMap(BaseTool):
                 )
             
             # Get unified dataset with geometry required for map visualization
-            gdf = get_session_unified_dataset(session_id, require_geometry=True)
+            gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag=self.year_tag)
             if gdf is None:
                 return self._create_error_result("No data available for analysis")
-            
+
             # Check for urban indicators
             urban_cols = [col for col in gdf.columns if any(term in col.lower() 
                          for term in ['urban', 'percentage', 'settlement'])]
@@ -439,11 +454,16 @@ class CreateCompositeScoreMaps(BaseTool):
         description="Page number to display",
         ge=1
     )
-    
+
+    year_tag: str = Field(
+        '',
+        description="Year suffix for multi-year datasets e.g. '_2022'. Empty string uses aggregate."
+    )
+
     @classmethod
     def get_category(cls) -> ToolCategory:
         return ToolCategory.VISUALIZATION
-    
+
     @classmethod
     def get_examples(cls) -> List[str]:
         return [
@@ -463,10 +483,10 @@ class CreateCompositeScoreMaps(BaseTool):
                 )
             
             # Get unified dataset with geometry required for map visualization
-            gdf = get_session_unified_dataset(session_id, require_geometry=True)
+            gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag=self.year_tag)
             if gdf is None:
                 return self._create_error_result("No data available for analysis")
-            
+
             # Check for composite scores
             exists, resolved_col = variable_resolver.check_column_exists('composite_score', list(gdf.columns))
             if not exists:

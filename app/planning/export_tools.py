@@ -48,6 +48,11 @@ class ExportITNResults(BaseTool):
         True,
         description="Include standalone map files"
     )
+
+    year_tag: str = Field(
+        '',
+        description="Year suffix for multi-year datasets e.g. '_2022'. Empty string uses aggregate."
+    )
     
     @classmethod
     def get_tool_name(cls) -> str:
@@ -170,7 +175,7 @@ class ExportITNResults(BaseTool):
         """Gather all data needed for export"""
         try:
             # Load unified dataset with geometry
-            gdf = load_unified_dataset(session_id, require_geometry=True)
+            gdf = load_unified_dataset(session_id, require_geometry=True, year_tag=self.year_tag)
             if gdf is None:
                 logger.error("No unified dataset found")
                 return None

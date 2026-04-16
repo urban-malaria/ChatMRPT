@@ -13,6 +13,7 @@ Pattern: each wrapper
   5. Returns (message, {}) tuple for LangGraph
 """
 
+import json
 import os
 import logging
 from typing import Tuple, Dict, Any, Annotated, Optional, List
@@ -31,6 +32,27 @@ def _add_viz_to_state(graph_state: dict, file_path: str) -> None:
         logger.info(f"Added viz to graph state: {file_path}")
 
 
+def _resolve_year_tag(session_id: str, year: Optional[int],
+                      required_file: str = 'unified_dataset') -> Tuple[str, Optional[str]]:
+    """Return (year_tag, error_message). error_message is None when year data is ready."""
+    if year is None:
+        return '', None
+    year_tag = f'_{year}'
+    session_folder = os.path.join('instance', 'uploads', session_id)
+    check_path = os.path.join(session_folder, f'{required_file}{year_tag}.csv')
+    if not os.path.exists(check_path):
+        bg_status = 'computing'
+        status_path = os.path.join(session_folder, 'multi_year_status.json')
+        if os.path.exists(status_path):
+            with open(status_path) as f:
+                s = json.load(f)
+            bg_status = s.get('detail', {}).get(str(year), 'pending')
+        return year_tag, (
+            f"Data for {year} is still {bg_status}. Please try again in a moment."
+        )
+    return year_tag, None
+
+
 # ─────────────────────────────────────────────────────────────────────
 # 1. VARIABLE DISTRIBUTION MAP
 # ─────────────────────────────────────────────────────────────────────
@@ -41,6 +63,7 @@ def create_variable_map(
     thought: str,
     variable_name: str,
     geographic_level: str = "ward",
+    year: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Create a spatial distribution map for any variable in the dataset.
 
@@ -52,13 +75,20 @@ def create_variable_map(
         thought: Your reasoning about what variable to map and why.
         variable_name: The column name to visualize. Fuzzy-matched.
         geographic_level: 'ward' (default) or 'lga' (aggregated).
+        year: Optional year (e.g. 2023) for multi-year datasets. None uses
+              the aggregate (single-year or merged) data.
     """
     session_id = graph_state.get('session_id', 'default')
     try:
+        year_tag, err = _resolve_year_tag(session_id, year, required_file='raw_data')
+        if err:
+            return err, {}
+
         from app.visualization.variable_distribution import VariableDistribution
         result = VariableDistribution(
             variable_name=variable_name,
             geographic_level=geographic_level,
+            year_tag=year_tag,
         ).execute(session_id=session_id)
 
         if not result.success:
@@ -81,6 +111,7 @@ def create_vulnerability_map(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
     method: str = "composite",
+    year: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Create a vulnerability/risk classification map showing ward risk levels.
 
@@ -91,15 +122,21 @@ def create_vulnerability_map(
         thought: Your reasoning about which method to show and why.
         method: 'composite' (default) or 'pca'. Use 'composite' for the
                 weighted variable approach, 'pca' for principal component approach.
+        year: Optional year (e.g. 2022) to map year-specific risk results.
+              None uses the aggregate unified dataset.
     """
     session_id = graph_state.get('session_id', 'default')
     try:
+        year_tag, err = _resolve_year_tag(session_id, year)
+        if err:
+            return err, {}
+
         if method.lower() == 'pca':
             from app.visualization.maps_tools import CreatePCAMap
-            result = CreatePCAMap().execute(session_id=session_id)
+            result = CreatePCAMap(year_tag=year_tag).execute(session_id=session_id)
         else:
             from app.visualization.maps_tools import CreateVulnerabilityMap
-            result = CreateVulnerabilityMap().execute(session_id=session_id)
+            result = CreateVulnerabilityMap(year_tag=year_tag).execute(session_id=session_id)
 
         if not result.success:
             return result.message, {}
@@ -121,6 +158,7 @@ def create_composite_score_maps(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
     page: int = 1,
+    year: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Create paginated maps showing individual risk model breakdowns.
 
@@ -130,13 +168,19 @@ def create_composite_score_maps(
     Args:
         thought: Your reasoning about showing model breakdowns.
         page: Page number (default 1). Each page shows up to 4 models.
+        year: Optional year for year-specific model breakdown maps.
     """
     session_id = graph_state.get('session_id', 'default')
     try:
+        year_tag, err = _resolve_year_tag(session_id, year)
+        if err:
+            return err, {}
+
         from app.visualization.maps_tools import CreateCompositeScoreMaps
         result = CreateCompositeScoreMaps(
             models_per_page=4,
             page=page,
+            year_tag=year_tag,
         ).execute(session_id=session_id)
 
         if not result.success:
@@ -159,6 +203,7 @@ def create_urban_extent_map(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
     threshold: float = 50.0,
+    year: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Create a map showing urban vs rural areas with risk overlay.
 
@@ -169,12 +214,18 @@ def create_urban_extent_map(
         thought: Your reasoning about urban/rural analysis.
         threshold: Urban percentage cutoff (0-100). Default 50%.
                    Wards below this % are considered rural and greyed out.
+        year: Optional year for year-specific urban extent maps.
     """
     session_id = graph_state.get('session_id', 'default')
     try:
+        year_tag, err = _resolve_year_tag(session_id, year)
+        if err:
+            return err, {}
+
         from app.visualization.maps_tools import CreateUrbanExtentMap
         result = CreateUrbanExtentMap(
             threshold=threshold,
+            year_tag=year_tag,
         ).execute(session_id=session_id)
 
         if not result.success:
@@ -228,22 +279,19 @@ def run_risk_analysis(
 # 6. ITN DISTRIBUTION PLANNING
 # ─────────────────────────────────────────────────────────────────────
 
-@tool
 def _load_year_specific_unified_dataset(session_folder: str, year: int,
                                         data_handler) -> bool:
-    """
-    Load unified_dataset_{year}.csv into data_handler.unified_dataset.
-    Returns True if loaded, False if file not yet available.
-    """
+    """Load unified_dataset_{year}.csv into data_handler.unified_dataset."""
     import pandas as pd
     path = os.path.join(session_folder, f'unified_dataset_{year}.csv')
     if not os.path.exists(path):
         return False
     data_handler.unified_dataset = pd.read_csv(path)
-    logger.info(f"Loaded unified_dataset_{year}.csv for ITN planning ({len(data_handler.unified_dataset)} rows)")
+    logger.info(f"Loaded unified_dataset_{year}.csv ({len(data_handler.unified_dataset)} rows)")
     return True
 
 
+@tool
 def plan_itn_distribution(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
@@ -272,25 +320,13 @@ def plan_itn_distribution(
     """
     session_id = graph_state.get('session_id', 'default')
     try:
-        # Year-specific ITN: load the correct unified_dataset into the DataHandler
-        # so that PlanITNDistribution reads from the right year's risk rankings.
         if year is not None:
             session_folder = os.path.join('instance', 'uploads', session_id)
-            status_path = os.path.join(session_folder, 'multi_year_status.json')
-            year_ready = os.path.exists(os.path.join(session_folder, f'unified_dataset_{year}.csv'))
-            if not year_ready:
-                bg_status = 'computing'
-                if os.path.exists(status_path):
-                    import json
-                    with open(status_path) as f:
-                        s = json.load(f)
-                    bg_status = s.get('detail', {}).get(str(year), 'pending')
-                return (
-                    f"Risk analysis for {year} is still {bg_status}. "
-                    f"Please try again in a moment.", {}
-                )
+            year_tag, err = _resolve_year_tag(session_id, year)
+            if err:
+                return err, {}
             from app.services.data_handler import DataHandler
-            dh = DataHandler(session_id=session_id)
+            dh = DataHandler(session_folder)
             _load_year_specific_unified_dataset(session_folder, year, dh)
 
         from app.planning.itn_tools import PlanITNDistribution
@@ -305,10 +341,8 @@ def plan_itn_distribution(
             return result.message, {}
 
         data = result.data or {}
-        # ITN produces a map
         _add_viz_to_state(graph_state, data.get('file_path'))
 
-        # Include download links in the message
         message = result.message or "ITN distribution plan created."
         download_links = data.get('download_links', [])
         if download_links:
