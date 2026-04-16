@@ -127,19 +127,24 @@ def get_input_data(session_id: str) -> List[Dict[str, Any]]:
                 continue
 
     # Also load time-series data if available (alongside main dataset for trend analysis)
-    ts_path = os.path.join(session_folder, 'tpr_time_series.csv')
-    if os.path.exists(ts_path):
-        try:
-            ts_df = EncodingHandler.read_csv_with_encoding(ts_path)
-            input_data_list.append({
-                'variable_name': 'ts_df',
-                'data_description': f"Time-series TPR data by ward and year ({len(ts_df)} rows, columns: {ts_df.columns.tolist()})",
-                'data': ts_df,
-                'columns': ts_df.columns.tolist()
-            })
-            logger.info(f"[_GET_INPUT_DATA] Also loaded tpr_time_series.csv: {ts_df.shape}")
-        except Exception as e:
-            logger.warning(f"[_GET_INPUT_DATA] Could not load time-series data: {e}")
+    _supplemental = {
+        'ts_df':    'tpr_time_series.csv',
+        'trend_df': 'trend_summary.csv',
+    }
+    for var_name, fname in _supplemental.items():
+        sup_path = os.path.join(session_folder, fname)
+        if os.path.exists(sup_path):
+            try:
+                sup_df = EncodingHandler.read_csv_with_encoding(sup_path)
+                input_data_list.append({
+                    'variable_name': var_name,
+                    'data_description': f"{fname} ({len(sup_df)} rows, columns: {sup_df.columns.tolist()})",
+                    'data': sup_df,
+                    'columns': sup_df.columns.tolist()
+                })
+                logger.info(f"[_GET_INPUT_DATA] Loaded {var_name} from {fname}: {sup_df.shape}")
+            except Exception as e:
+                logger.warning(f"[_GET_INPUT_DATA] Could not load {fname}: {e}")
 
     if not input_data_list:
         logger.warning(f"[_GET_INPUT_DATA] ⚠️  No datasets loaded via priority list. Falling back to scan session folder.")

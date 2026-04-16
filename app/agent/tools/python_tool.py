@@ -100,22 +100,6 @@ def analyze_data(
         except Exception as e:
             logger.debug(f"UnifiedDataState fallback failed: {e}")
 
-    # Pre-load multi-year files so the agent can use them without knowing file paths
-    session_folder = os.path.join('instance', 'uploads', session_id)
-    _multi_year_files = {
-        'ts_df':    'tpr_time_series.csv',
-        'trend_df': 'trend_summary.csv',
-    }
-    for var, fname in _multi_year_files.items():
-        if var not in current_data:
-            fpath = os.path.join(session_folder, fname)
-            if os.path.exists(fpath):
-                try:
-                    current_data[var] = pd.read_csv(fpath)
-                    logger.info(f"Pre-loaded {var} from {fname}: {current_data[var].shape}")
-                except Exception as e:
-                    logger.debug(f"Could not pre-load {fname}: {e}")
-
     # Note: Column resolver removed - not needed with simple executor
     # Agent can use pandas directly like the original AgenticDataAnalysis
     # If column name fuzzy matching is needed, agent can use suggest_columns() helper
