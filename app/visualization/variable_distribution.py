@@ -509,8 +509,6 @@ class VariableDistribution(BaseTool):
                     name=name_suffix or variable
                 ))
 
-            has_imputed = '_imputed' in plot_data.columns and plot_data['_imputed'].any()
-
             if highlight_codes:
                 faded = plot_data[~plot_data['_is_selected_lga']]
                 highlighted = plot_data[plot_data['_is_selected_lga']]
@@ -518,13 +516,9 @@ class VariableDistribution(BaseTool):
                           colorscale_override=[[0, '#d1d5db'], [1, '#9ca3af']],
                           name_suffix='Other LGAs')
                 add_trace(highlighted, show_scale=True, opacity=0.85, name_suffix='Selected LGA')
-            elif has_imputed:
-                # Render real and imputed wards as separate traces so opacity differs
-                real_data    = plot_data[~plot_data['_imputed']]
-                imputed_data = plot_data[plot_data['_imputed']]
-                add_trace(real_data,    show_scale=True,  opacity=0.75, name_suffix=variable)
-                add_trace(imputed_data, show_scale=False, opacity=0.40, name_suffix='Aggregate estimate')
             else:
+                # Single trace — imputed wards distinguished in hover text only,
+                # not by splitting traces (two Choroplethmapbox traces break colorscale)
                 add_trace(plot_data, show_scale=True, opacity=0.75)
 
             if plot_level == 'ward':
@@ -639,7 +633,7 @@ class VariableDistribution(BaseTool):
 <html>
 <head>
   <meta charset="utf-8">
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     body {{ margin: 0; font-family: sans-serif; }}
     .year-nav {{
