@@ -883,6 +883,26 @@ class TPRWorkflowHandler:
                                             src[['Total_Positive', 'Burden']].values
                                         logger.debug(f"[MULTI_YEAR] Fuzzy matched '{year_raw.loc[idx,'WardName']}' → '{src['WardName']}' (score={score})")
 
+                            # Aggregate fallback: wards still missing get their all-years value
+                            # from raw_data.csv (already correctly matched via fuzzy in analysis_tool)
+                            # Mark them as imputed so the map can visually distinguish them
+                            year_raw['_imputed'] = False
+                            still_missing = year_raw['Burden'].isna()
+                            if still_missing.any():
+                                agg_lookup = raw_data.set_index('_ward_key') if '_ward_key' in raw_data.columns \
+                                    else raw_data.assign(_ward_key=raw_data['WardName'].apply(normalize_ward_name)).set_index('_ward_key')
+                                for idx in year_raw[still_missing].index:
+                                    ward_key = normalize_ward_name(year_raw.loc[idx, 'WardName'])
+                                    if ward_key in agg_lookup.index:
+                                        agg_row = agg_lookup.loc[ward_key]
+                                        for col in ['Burden', 'Total_Positive', 'TPR']:
+                                            if col in agg_row.index and pd.notna(agg_row[col]):
+                                                year_raw.loc[idx, col] = agg_row[col]
+                                        year_raw.loc[idx, '_imputed'] = True
+                                imputed_count = year_raw['_imputed'].sum()
+                                logger.info(f"[MULTI_YEAR] {year}: imputed {imputed_count} wards from aggregate")
+
+                            year_raw.drop(columns=['_ward_key'], errors='ignore', inplace=True)
                             year_raw.to_csv(
                                 os.path.join(session_folder, f'raw_data_{year}.csv'), index=False
                             )

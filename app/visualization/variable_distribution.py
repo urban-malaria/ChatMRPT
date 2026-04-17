@@ -459,6 +459,7 @@ class VariableDistribution(BaseTool):
                     lga_name = row.get('LGAName') or row.get('lga_name') or 'Unknown'
                     val = row.get(variable)
                     lga_code = row.get('LGACode')
+                    is_imputed = bool(row.get('_imputed', False))
 
                     text = f"<b>Ward:</b> {ward_name}<br><b>LGA:</b> {lga_name}<br>"
                     if pd.notna(val):
@@ -469,6 +470,8 @@ class VariableDistribution(BaseTool):
                         else:
                             val_str = f"{val:.2f}"
                         text += f"<br><b>{var_label}:</b> {val_str}{var_unit}"
+                        if is_imputed:
+                            text += "<br><i style='color:#e67e22'>⚠ No data for this year — showing aggregate value</i>"
                         if lga_code and lga_code in lga_averages:
                             lga_avg = lga_averages[lga_code]
                             diff = val - lga_avg
@@ -506,6 +509,8 @@ class VariableDistribution(BaseTool):
                     name=name_suffix or variable
                 ))
 
+            has_imputed = '_imputed' in plot_data.columns and plot_data['_imputed'].any()
+
             if highlight_codes:
                 faded = plot_data[~plot_data['_is_selected_lga']]
                 highlighted = plot_data[plot_data['_is_selected_lga']]
@@ -513,16 +518,14 @@ class VariableDistribution(BaseTool):
                           colorscale_override=[[0, '#d1d5db'], [1, '#9ca3af']],
                           name_suffix='Other LGAs')
                 add_trace(highlighted, show_scale=True, opacity=0.85, name_suffix='Selected LGA')
+            elif has_imputed:
+                # Render real and imputed wards as separate traces so opacity differs
+                real_data    = plot_data[~plot_data['_imputed']]
+                imputed_data = plot_data[plot_data['_imputed']]
+                add_trace(real_data,    show_scale=True,  opacity=0.75, name_suffix=variable)
+                add_trace(imputed_data, show_scale=False, opacity=0.40, name_suffix='Aggregate estimate')
             else:
                 add_trace(plot_data, show_scale=True, opacity=0.75)
-
-            # Grey trace for wards with no data for this variable/year
-            if not no_data.empty and plot_level == 'ward':
-                no_data_plot = no_data.copy()
-                no_data_plot[variable] = 0  # constant z so Choroplethmapbox renders the fill
-                add_trace(no_data_plot, show_scale=False, opacity=0.3,
-                          colorscale_override=[[0, '#cccccc'], [1, '#cccccc']],
-                          name_suffix='No data')
 
             if plot_level == 'ward':
                 add_lga_boundary_overlay(fig, clean_data)
