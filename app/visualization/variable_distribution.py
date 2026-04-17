@@ -581,7 +581,13 @@ class VariableDistribution(BaseTool):
         variable: str,
         session_id: str,
     ) -> Dict[str, str]:
-        """Bundle per-year figures into a single tabbed HTML file."""
+        """Bundle per-year figures into a single tabbed HTML file.
+
+        Uses lazy initialization: figure JSON is stored in JS variables and
+        Plotly.newPlot() is called only when a panel first becomes visible.
+        This avoids the mapbox choropleth fill bug where fills are silently
+        dropped when a figure is initialized inside a display:none container.
+        """
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{variable}_multi_year_distribution_{timestamp}.html"
@@ -596,21 +602,22 @@ class VariableDistribution(BaseTool):
         os.makedirs(session_dir, exist_ok=True)
         file_path = os.path.join(session_dir, filename)
 
-        # Build nav buttons and panels
         nav_buttons = ''
         panels = ''
+        fig_data_js = 'var _allFigs = {};\n'
         first_year = year_figures[0][0]
 
         for year, fig, plot_data, plot_level in year_figures:
-            # Suppress plotlyjs — we'll load it once in the wrapper
-            fig_html = fig.to_html(full_html=False, include_plotlyjs=False,
-                                   div_id=f'plotly-{year}')
+            # Store figure as JSON — panels are empty divs, rendered on demand
+            fig_data_js += f'_allFigs[{year}] = {fig.to_json()};\n'
             nav_buttons += (
                 f'<button class="year-btn" id="btn-{year}" '
                 f'onclick="showYear({year})">{year}</button>\n'
             )
             panels += (
-                f'<div class="year-panel" id="panel-{year}">{fig_html}</div>\n'
+                f'<div class="year-panel" id="panel-{year}">'
+                f'<div id="plotly-{year}" style="height:600px;width:100%;"></div>'
+                f'</div>\n'
             )
 
         html = f"""<!DOCTYPE html>
@@ -646,6 +653,9 @@ class VariableDistribution(BaseTool):
   </div>
   {panels}
   <script>
+    {fig_data_js}
+    var _rendered = {{}};
+
     function showYear(year) {{
       document.querySelectorAll('.year-btn').forEach(function(b) {{
         b.classList.remove('active');
@@ -658,10 +668,16 @@ class VariableDistribution(BaseTool):
       if (btn) btn.classList.add('active');
       if (panel) {{
         panel.classList.add('active');
-        // Plotly mapbox needs resize after becoming visible (was rendered at 0px)
         var plotDiv = document.getElementById('plotly-' + year);
         if (plotDiv) {{
-          setTimeout(function() {{ Plotly.Plots.resize(plotDiv); }}, 50);
+          if (!_rendered[year]) {{
+            // First time: container is visible, render at correct dimensions
+            var fd = _allFigs[year];
+            Plotly.newPlot(plotDiv, fd.data, fd.layout, {{responsive: true}});
+            _rendered[year] = true;
+          }} else {{
+            Plotly.Plots.resize(plotDiv);
+          }}
         }}
       }}
     }}
