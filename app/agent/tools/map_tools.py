@@ -39,16 +39,19 @@ def _resolve_year_tag(session_id: str, year: Optional[int],
         return '', None
     year_tag = f'_{year}'
     session_folder = os.path.join('instance', 'uploads', session_id)
-    check_path = os.path.join(session_folder, f'{required_file}{year_tag}.csv')
-    if not os.path.exists(check_path):
+    # Check .geoparquet first (per-year unified datasets are saved as geoparquet)
+    geoparquet_path = os.path.join(session_folder, f'{required_file}{year_tag}.geoparquet')
+    csv_path = os.path.join(session_folder, f'{required_file}{year_tag}.csv')
+    if not (os.path.exists(geoparquet_path) or os.path.exists(csv_path)):
         bg_status = 'computing'
-        status_path = os.path.join(session_folder, 'multi_year_status.json')
+        status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
         if os.path.exists(status_path):
             with open(status_path) as f:
                 s = json.load(f)
-            bg_status = s.get('detail', {}).get(str(year), 'pending')
+            completed = s.get('completed_years', [])
+            bg_status = 'complete' if year_tag in completed else 'still computing'
         return year_tag, (
-            f"Data for {year} is still {bg_status}. Please try again in a moment."
+            f"Data for {year} is {bg_status}. Please try again in a moment."
         )
     return year_tag, None
 
@@ -131,7 +134,31 @@ def create_vulnerability_map(
         if err:
             return err, {}
 
-        if method.lower() == 'pca':
+        session_folder = os.path.join('instance', 'uploads', session_id)
+
+        # Detect multi-year mode: per-year unified datasets present + no specific year requested
+        import glob as _glob
+        year_geoparquets = _glob.glob(os.path.join(session_folder, 'unified_dataset_*.geoparquet'))
+        use_multi_year = bool(year_geoparquets) and year is None
+
+        if use_multi_year:
+            if method.lower() == 'pca':
+                from app.visualization.maps_tools import CreateMultiYearPCAMap
+                result = CreateMultiYearPCAMap().execute(session_id=session_id)
+            else:
+                from app.visualization.maps_tools import CreateMultiYearVulnerabilityMap
+                result = CreateMultiYearVulnerabilityMap().execute(session_id=session_id)
+
+                # Also build PCA multi-year map if PCA data available
+                pca_status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+                try:
+                    from app.visualization.maps_tools import CreateMultiYearPCAMap
+                    pca_result = CreateMultiYearPCAMap().execute(session_id=session_id)
+                    if pca_result.success and pca_result.data:
+                        _add_viz_to_state(graph_state, pca_result.data.get('file_path'))
+                except Exception as pca_err:
+                    logger.info(f"PCA multi-year map skipped: {pca_err}")
+        elif method.lower() == 'pca':
             from app.visualization.maps_tools import CreatePCAMap
             result = CreatePCAMap(year_tag=year_tag).execute(session_id=session_id)
         else:

@@ -16,8 +16,11 @@ app/services/agents/visualizations/composite_visualizations.py
 app/services/agents/visualizations/pca_visualizations.py
 """
 
+import glob
+import json
 import logging
 import os
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from pydantic import Field, validator
 import pandas as pd
@@ -539,10 +542,279 @@ class CreateCompositeScoreMaps(BaseTool):
 # REMOVED: CreateInterventionMap - dead code, never imported or called
 
 
+def _build_choropleth_fig(gdf, color_col: str, category_col: str, title: str,
+                          colorscale: str = 'RdYlGn_r') -> 'go.Figure':
+    """Build a Plotly Choroplethmapbox for a unified dataset GeoDataFrame."""
+    import plotly.graph_objects as go
+    import json as _json
+
+    geojson = _json.loads(gdf.to_json())
+    gdf = gdf.copy()
+    gdf['_idx'] = gdf.index.astype(str)
+
+    ward_col = 'WardName' if 'WardName' in gdf.columns else gdf.columns[0]
+    hover_cols = [ward_col, color_col]
+    if category_col and category_col in gdf.columns:
+        hover_cols.append(category_col)
+
+    customdata = gdf[hover_cols].values
+    hover_template = '<br>'.join(f'<b>{c}</b>: %{{customdata[{i}]}}' for i, c in enumerate(hover_cols))
+    hover_template += '<extra></extra>'
+
+    center_lat = gdf.geometry.centroid.y.mean()
+    center_lon = gdf.geometry.centroid.x.mean()
+
+    cat_order = {'High': 3, 'Medium': 2, 'Low': 1}
+    if category_col and category_col in gdf.columns:
+        color_vals = gdf[category_col].map(cat_order).fillna(0)
+    else:
+        color_vals = gdf[color_col]
+
+    fig = go.Figure(go.Choroplethmapbox(
+        geojson=geojson,
+        locations=gdf['_idx'],
+        z=color_vals,
+        featureidkey='id',
+        colorscale=colorscale,
+        showscale=False,
+        customdata=customdata,
+        hovertemplate=hover_template,
+    ))
+    fig.update_layout(
+        mapbox_style='carto-positron',
+        mapbox_center={'lat': center_lat, 'lon': center_lon},
+        mapbox_zoom=7,
+        margin={'r': 0, 't': 40, 'l': 0, 'b': 0},
+        title={'text': title, 'x': 0.5, 'xanchor': 'center', 'font': {'size': 16}},
+    )
+    return fig
+
+
+class CreateMultiYearVulnerabilityMap(BaseTool):
+    """Create a tabbed HTML vulnerability map with one tab per available year plus All Years aggregate."""
+
+    @classmethod
+    def get_category(cls) -> ToolCategory:
+        return ToolCategory.VISUALIZATION
+
+    @classmethod
+    def get_examples(cls) -> List[str]:
+        return [
+            "Create multi-year vulnerability map",
+            "Show vulnerability maps for all years",
+        ]
+
+    def execute(self, session_id: str) -> ToolExecutionResult:
+        from app.visualization.tab_html_builder import build_tabbed_html
+        from app.utils.tool_base import get_session_unified_dataset
+
+        session_folder = f'instance/uploads/{session_id}'
+        status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+
+        # Determine which years are ready
+        completed_tags: List[str] = []
+        if os.path.exists(status_path):
+            try:
+                with open(status_path) as f:
+                    st = json.load(f)
+                completed_tags = st.get('completed_years', [])
+            except Exception:
+                pass
+
+        if not completed_tags:
+            # Fall back to detecting geoparquet files directly
+            pattern = os.path.join(session_folder, 'unified_dataset_*.geoparquet')
+            completed_tags = sorted([
+                '_' + os.path.basename(p)[len('unified_dataset_'):-len('.geoparquet')]
+                for p in glob.glob(pattern)
+            ])
+
+        tabs = []
+
+        # Aggregate (All Years) tab
+        agg_gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag='')
+        if agg_gdf is not None and 'composite_score' in agg_gdf.columns:
+            cat_col = 'vulnerability_category' if 'vulnerability_category' in agg_gdf.columns else ''
+            fig = _build_choropleth_fig(
+                agg_gdf, 'composite_score', cat_col,
+                'Composite Vulnerability — All Years (Aggregate)'
+            )
+            tabs.append(('agg', 'All Years', fig))
+
+        for year_tag in completed_tags:
+            year_label = year_tag.lstrip('_')
+            # Try combined_category (burden-blended) first, fall back to composite
+            gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag=year_tag)
+            if gdf is None:
+                continue
+
+            score_col = 'composite_score' if 'composite_score' in gdf.columns else None
+            if score_col is None:
+                continue
+
+            cat_col = 'combined_category' if 'combined_category' in gdf.columns else \
+                      'vulnerability_category' if 'vulnerability_category' in gdf.columns else ''
+
+            title = (f'Combined Environmental + Epidemiological Risk — {year_label}'
+                     if cat_col == 'combined_category'
+                     else f'Composite Vulnerability — {year_label}')
+
+            fig = _build_choropleth_fig(gdf, score_col, cat_col, title)
+            tabs.append((int(year_label) if year_label.isdigit() else year_tag, year_label, fig))
+
+        if not tabs:
+            return self._create_error_result(
+                "No vulnerability data found. Please run risk analysis first."
+            )
+
+        if len(tabs) == 1:
+            # Only aggregate — still useful, just one tab
+            pass
+
+        filename = f"vulnerability_map_composite_multi_year_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        save = build_tabbed_html(
+            tabs=tabs,
+            nav_label='Composite Vulnerability by year:',
+            filename=filename,
+            session_id=session_id,
+        )
+
+        year_labels = [label for _, label, _ in tabs if label != 'All Years']
+        method_note = 'Composite Environmental Vulnerability'
+        if any('Combined' in (_, lab, _)[1] for _, lab, _ in tabs if lab != 'All Years'):
+            method_note = 'Combined Environmental + Epidemiological Risk (per year)'
+
+        message = (
+            f"Created composite vulnerability map with {len(tabs)} tab(s): "
+            f"All Years aggregate" +
+            (f" + {len(year_labels)} individual years ({', '.join(year_labels)})" if year_labels else '') +
+            f".\n\nMethod: {method_note}."
+        )
+
+        return self._create_success_result(
+            message=message,
+            data={
+                'web_path': save['web_path'],
+                'file_path': save['file_path'],
+                'tabs': [label for _, label, _ in tabs],
+                'map_type': 'multi_year_vulnerability_map',
+            }
+        )
+
+
+class CreateMultiYearPCAMap(BaseTool):
+    """Create a tabbed HTML PCA vulnerability map with one tab per available year plus All Years aggregate."""
+
+    @classmethod
+    def get_category(cls) -> ToolCategory:
+        return ToolCategory.VISUALIZATION
+
+    @classmethod
+    def get_examples(cls) -> List[str]:
+        return [
+            "Create multi-year PCA map",
+            "Show PCA vulnerability maps for all years",
+        ]
+
+    def execute(self, session_id: str) -> ToolExecutionResult:
+        from app.visualization.tab_html_builder import build_tabbed_html
+        from app.utils.tool_base import get_session_unified_dataset
+
+        session_folder = f'instance/uploads/{session_id}'
+        status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+
+        completed_tags: List[str] = []
+        if os.path.exists(status_path):
+            try:
+                with open(status_path) as f:
+                    st = json.load(f)
+                completed_tags = st.get('completed_years', [])
+            except Exception:
+                pass
+
+        if not completed_tags:
+            pattern = os.path.join(session_folder, 'unified_dataset_*.geoparquet')
+            completed_tags = sorted([
+                '_' + os.path.basename(p)[len('unified_dataset_'):-len('.geoparquet')]
+                for p in glob.glob(pattern)
+            ])
+
+        tabs = []
+
+        pca_cols = ('pca_score', 'pc1_risk_score', 'pca_risk_score', 'pc1_score')
+
+        def _find_pca_col(gdf):
+            for c in pca_cols:
+                if c in gdf.columns:
+                    return c
+            return None
+
+        agg_gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag='')
+        if agg_gdf is not None:
+            pca_col = _find_pca_col(agg_gdf)
+            if pca_col:
+                cat_col = 'pca_category' if 'pca_category' in agg_gdf.columns else ''
+                fig = _build_choropleth_fig(
+                    agg_gdf, pca_col, cat_col,
+                    'PCA Vulnerability — All Years (Aggregate)',
+                    colorscale='Viridis'
+                )
+                tabs.append(('agg', 'All Years', fig))
+
+        for year_tag in completed_tags:
+            year_label = year_tag.lstrip('_')
+            gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag=year_tag)
+            if gdf is None:
+                continue
+            pca_col = _find_pca_col(gdf)
+            if pca_col is None:
+                continue
+            cat_col = 'pca_category' if 'pca_category' in gdf.columns else ''
+            fig = _build_choropleth_fig(
+                gdf, pca_col, cat_col,
+                f'PCA Vulnerability — {year_label}',
+                colorscale='Viridis'
+            )
+            tabs.append((int(year_label) if year_label.isdigit() else year_tag, year_label, fig))
+
+        if not tabs:
+            return self._create_error_result(
+                "No PCA data found. PCA may not have been suitable for this dataset, or run risk analysis first."
+            )
+
+        filename = f"vulnerability_map_pca_multi_year_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        save = build_tabbed_html(
+            tabs=tabs,
+            nav_label='PCA Vulnerability by year:',
+            filename=filename,
+            session_id=session_id,
+        )
+
+        year_labels = [label for _, label, _ in tabs if label != 'All Years']
+        message = (
+            f"Created PCA vulnerability map with {len(tabs)} tab(s): "
+            f"All Years aggregate" +
+            (f" + {len(year_labels)} individual years ({', '.join(year_labels)})" if year_labels else '') +
+            f".\n\nMethod: Principal Component Analysis (PCA) of environmental variables."
+        )
+
+        return self._create_success_result(
+            message=message,
+            data={
+                'web_path': save['web_path'],
+                'file_path': save['file_path'],
+                'tabs': [label for _, label, _ in tabs],
+                'map_type': 'multi_year_pca_map',
+            }
+        )
+
+
 # Register tools for discovery
 __all__ = [
     'CreateVulnerabilityMap',
     'CreatePCAMap',
     'CreateUrbanExtentMap',
     'CreateCompositeScoreMaps',
+    'CreateMultiYearVulnerabilityMap',
+    'CreateMultiYearPCAMap',
 ]

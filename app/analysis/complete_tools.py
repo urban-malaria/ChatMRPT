@@ -5,8 +5,12 @@ This module provides the coordinated dual-method analysis workflow without any
 settlement integration, as per the updated post-permission workflow overhaul.
 """
 
+import glob
+import json
 import logging
 import os
+import shutil
+import threading
 import time
 import traceback
 from typing import Dict, Any, Optional, List
@@ -347,7 +351,11 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
             
             # Mark comprehensive analysis as complete for workflow guidance
             self._mark_analysis_complete(session_id)
-            
+
+            # Start per-year risk pipeline in background (fire-and-forget)
+            pca_passed = not pca_result.get('pca_skipped', True)
+            self._run_per_year_risk(session_id, final_composite_vars, pca_passed)
+
             # Extract key metrics for success message
             wards_analyzed = composite_result.get('data', {}).get('wards_analyzed', 'N/A')
             components_found = pca_result.get('data', {}).get('components_found', 'N/A')
@@ -1388,12 +1396,205 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
             from flask import session
             if 'partial_analyses_complete' not in session:
                 session['partial_analyses_complete'] = []
-            
+
             if analysis_type not in session['partial_analyses_complete']:
                 session['partial_analyses_complete'].append(analysis_type)
                 logger.info(f"✅ Marked {analysis_type} analysis complete for session {session_id}")
         except Exception as e:
             logger.warning(f"Failed to mark {analysis_type} analysis complete: {e}")
+
+    # ─────────────────────────────────────────────────────────────────
+    # PER-YEAR RISK PIPELINE (background thread)
+    # ─────────────────────────────────────────────────────────────────
+
+    def _find_per_year_tags(self, session_folder: str) -> List[str]:
+        """Return sorted list of year_tags like ['_2020', '_2021', ...] from raw_data_YYYY.csv files."""
+        pattern = os.path.join(session_folder, 'raw_data_[0-9][0-9][0-9][0-9].csv')
+        matches = sorted(glob.glob(pattern))
+        tags = []
+        for path in matches:
+            basename = os.path.basename(path)
+            year_str = basename[len('raw_data_'):-len('.csv')]
+            if year_str.isdigit() and len(year_str) == 4:
+                tags.append(f'_{year_str}')
+        return tags
+
+    def _blend_burden_into_composite(self, session_folder: str, year_tag: str) -> None:
+        """Blend composite_rank + burden_rank into combined_rank for one year.
+
+        Reads analysis_vulnerability_rankings{year_tag}.csv and
+        raw_data{year_tag}.csv. Writes
+        analysis_vulnerability_rankings_combined{year_tag}.csv.
+        """
+        import pandas as pd
+        rankings_path = os.path.join(
+            session_folder, f'analysis_vulnerability_rankings{year_tag}.csv'
+        )
+        raw_path = os.path.join(session_folder, f'raw_data{year_tag}.csv')
+
+        if not os.path.exists(rankings_path):
+            logger.warning(f"Rankings file missing for {year_tag}: {rankings_path}")
+            return
+        if not os.path.exists(raw_path):
+            logger.warning(f"Raw data missing for {year_tag}: {raw_path}")
+            return
+
+        try:
+            rankings = pd.read_csv(rankings_path)
+            raw = pd.read_csv(raw_path)
+
+            burden_col = None
+            for col in ('Burden', 'burden', 'total_positive', 'Total_Positive'):
+                if col in raw.columns:
+                    burden_col = col
+                    break
+
+            if burden_col is None:
+                logger.warning(f"No Burden column found in {raw_path} — skipping burden blend")
+                return
+
+            # Merge burden into rankings on WardName
+            ward_col = 'WardName' if 'WardName' in rankings.columns else 'ward_name'
+            raw_ward_col = 'WardName' if 'WardName' in raw.columns else 'ward_name'
+            merged = rankings.merge(
+                raw[[raw_ward_col, burden_col]].rename(columns={raw_ward_col: ward_col}),
+                on=ward_col, how='left'
+            )
+
+            # For imputed wards, substitute median of non-imputed wards
+            imputed_col = '_imputed' if '_imputed' in merged.columns else None
+            burden = merged[burden_col].copy()
+            if imputed_col:
+                non_imputed_mask = ~merged[imputed_col].astype(bool)
+                median_burden = burden[non_imputed_mask].median()
+                burden = burden.where(non_imputed_mask, other=median_burden)
+
+            burden_rank = burden.rank(ascending=False, method='average')
+
+            composite_rank_col = None
+            for col in ('composite_rank', 'rank', 'composite_score_rank'):
+                if col in merged.columns:
+                    composite_rank_col = col
+                    break
+
+            if composite_rank_col is None:
+                logger.warning(f"No composite_rank column in {rankings_path} — skipping blend")
+                return
+
+            merged['burden_rank'] = burden_rank
+            merged['combined_rank'] = (merged[composite_rank_col] + burden_rank) / 2.0
+
+            n = len(merged)
+            tercile = n / 3.0
+            merged['combined_category'] = merged['combined_rank'].apply(
+                lambda r: 'High' if r <= tercile else ('Low' if r > 2 * tercile else 'Medium')
+            )
+
+            out_path = os.path.join(
+                session_folder, f'analysis_vulnerability_rankings_combined{year_tag}.csv'
+            )
+            merged.to_csv(out_path, index=False)
+            logger.info(f"Saved combined rankings: {out_path}")
+
+        except Exception as e:
+            logger.error(f"_blend_burden_into_composite failed for {year_tag}: {e}")
+
+    def _copy_aggregate_pca_scores(self, session_folder: str, year_tag: str) -> None:
+        """Copy aggregate PCA results file to per-year path (avoids redundant computation)."""
+        src = os.path.join(session_folder, 'analysis_pca_results.csv')
+        dst = os.path.join(session_folder, f'analysis_pca_results{year_tag}.csv')
+        if not os.path.exists(src):
+            logger.warning(f"Aggregate PCA results not found: {src}")
+            return
+        try:
+            shutil.copy2(src, dst)
+            logger.info(f"Copied PCA results → {dst}")
+        except Exception as e:
+            logger.error(f"Failed to copy PCA results for {year_tag}: {e}")
+
+    def _update_per_year_status(self, session_folder: str, year_tag: str,
+                                all_tags: List[str], completed: List[str]) -> None:
+        status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+        try:
+            data = {
+                'status': 'running',
+                'completed_years': completed,
+                'total_years': all_tags,
+            }
+            with open(status_path, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            logger.warning(f"Could not write per-year status: {e}")
+
+    def _run_per_year_risk(self, session_id: str, composite_vars: Optional[List[str]],
+                           pca_passed: bool) -> None:
+        """Launch per-year composite (+ optional PCA copy) analysis in a background thread."""
+        session_folder = f"instance/uploads/{session_id}"
+        year_tags = self._find_per_year_tags(session_folder)
+        if not year_tags:
+            logger.info(f"No per-year raw_data files found for {session_id} — skipping per-year pipeline")
+            return
+
+        # Capture app object before spawning (current_app proxy not available in thread)
+        try:
+            app = current_app._get_current_object()
+        except RuntimeError:
+            logger.error("Cannot capture Flask app for per-year background thread")
+            return
+
+        def _background(app, session_id, session_folder, year_tags, composite_vars, pca_passed):
+            with app.app_context():
+                logger.info(f"Per-year pipeline started: {year_tags}")
+                completed: List[str] = []
+
+                # Write initial status
+                status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+                try:
+                    with open(status_path, 'w') as f:
+                        json.dump({'status': 'running', 'completed_years': [], 'total_years': year_tags}, f)
+                except Exception as e:
+                    logger.warning(f"Status init failed: {e}")
+
+                for year_tag in year_tags:
+                    try:
+                        from .engine import AnalysisEngine
+                        from app.services.data_handler import DataHandler
+
+                        engine = AnalysisEngine(DataHandler(session_folder))
+                        engine.run_composite_analysis(session_id, variables=composite_vars, year_tag=year_tag)
+
+                        self._blend_burden_into_composite(session_folder, year_tag)
+
+                        if pca_passed:
+                            self._copy_aggregate_pca_scores(session_folder, year_tag)
+
+                        from app.services.dataset_builder import UnifiedDatasetBuilder
+                        builder = UnifiedDatasetBuilder(session_id, year_tag=year_tag)
+                        builder.build_unified_dataset()
+
+                        completed.append(year_tag)
+                        self._update_per_year_status(session_folder, year_tag, year_tags, completed)
+                        logger.info(f"Per-year pipeline done for {year_tag}")
+
+                    except Exception as e:
+                        logger.error(f"Per-year pipeline error for {year_tag}: {e}", exc_info=True)
+
+                # Mark complete
+                try:
+                    with open(status_path, 'w') as f:
+                        json.dump({'status': 'complete', 'completed_years': completed, 'total_years': year_tags}, f)
+                except Exception as e:
+                    logger.warning(f"Status finalize failed: {e}")
+
+                logger.info(f"Per-year pipeline complete. Completed: {completed}")
+
+        thread = threading.Thread(
+            target=_background,
+            args=(app, session_id, session_folder, year_tags, composite_vars, pca_passed),
+            daemon=True,
+        )
+        thread.start()
+        logger.info(f"Per-year risk pipeline launched in background for {len(year_tags)} years")
 
 
 # REMOVED: GenerateComprehensiveAnalysisSummary and GenerateComprehensiveAnalysisSummaryInput

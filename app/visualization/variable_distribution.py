@@ -31,6 +31,7 @@ from app.utils.map_overlays import (
     add_lga_boundary_overlay,
     calculate_lga_averages,
 )
+from app.visualization.tab_html_builder import build_tabbed_html
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,7 @@ class VariableDistribution(BaseTool):
 
     def _execute_multi_year(self, session_id: str, session_dir: str,
                             years: List[int]) -> ToolExecutionResult:
-        """Build one choropleth per year, embed all in a single paginated HTML."""
+        """Build one choropleth per year + aggregate, embed all in a single tabbed HTML."""
         shapefile_data = self._load_shapefile(session_id)
         if shapefile_data is None:
             return ToolExecutionResult(
@@ -253,9 +254,49 @@ class VariableDistribution(BaseTool):
                 error_details="No figures generated"
             )
 
-        save_result = self._save_multi_year_html(year_figures, resolved_variable, session_id)
+        # Build aggregate 'All Years' tab from raw_data.csv
+        tabs = []
+        agg_csv_path = os.path.join(session_dir, 'raw_data.csv')
+        if os.path.exists(agg_csv_path):
+            try:
+                agg_data = pd.read_csv(agg_csv_path)
+                agg_available_lgas = collect_lga_options(agg_data, shapefile_data)
+                agg_selected_lgas = self._normalize_selected_lgas(agg_available_lgas)
+                agg_result = self._build_map_figure(
+                    agg_data, shapefile_data, resolved_variable, session_id, agg_selected_lgas
+                )
+                if agg_result is not None:
+                    agg_fig, _, _ = agg_result
+                    agg_fig.update_layout(title={
+                        'text': f'{resolved_variable.upper()} Distribution — All Years (Aggregate)',
+                        'x': 0.5, 'xanchor': 'center',
+                        'font': {'size': 18, 'color': '#2E3440'}
+                    })
+                    tabs.append(('agg', 'All Years', agg_fig))
+            except Exception as e:
+                logger.warning(f"Could not build aggregate tab: {e}")
+
+        for year, fig, _, _ in year_figures:
+            tabs.append((year, str(year), fig))
+
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{resolved_variable}_multi_year_distribution_{timestamp}.html"
+        save_result = build_tabbed_html(
+            tabs=tabs,
+            nav_label=f"{resolved_variable.upper()} by year:",
+            filename=filename,
+            session_id=session_id,
+        )
 
         stats_lines = []
+        if os.path.exists(agg_csv_path):
+            try:
+                df = pd.read_csv(agg_csv_path)
+                vals = df[resolved_variable].dropna()
+                stats_lines.append(f"**All Years:** mean {vals.mean():.1f}, range [{vals.min():.1f}–{vals.max():.1f}]")
+            except Exception:
+                pass
         for year, *_ in year_figures:
             csv_path = os.path.join(session_dir, f'raw_data_{year}.csv')
             try:
@@ -266,9 +307,10 @@ class VariableDistribution(BaseTool):
                 pass
 
         years_shown = [y for y, *_ in year_figures]
+        agg_note = " (includes 'All Years' aggregate tab)" if any(k == 'agg' for k, *_ in tabs) else ""
         response_text = (
             f"**{resolved_variable.upper()} — Year-by-Year Distribution** "
-            f"({len(years_shown)} years: {min(years_shown)}–{max(years_shown)})\n\n"
+            f"({len(years_shown)} years: {min(years_shown)}–{max(years_shown)}){agg_note}\n\n"
             + "\n".join(stats_lines)
             + f"\n\nUse the year buttons at the top of the map to navigate between years."
         )

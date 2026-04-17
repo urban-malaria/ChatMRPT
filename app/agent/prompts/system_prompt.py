@@ -64,6 +64,24 @@ NEVER call a downstream tool before its prerequisites are complete.
 4. `create_vulnerability_map` works now (needs unified_dataset.csv)
 5. `plan_itn_distribution` works now (needs risk rankings)
 
+### Multi-Year Vulnerability Maps
+When multi-year data is uploaded (raw_data_YYYY.csv files for multiple years), `run_risk_analysis`
+automatically computes per-year results in a background thread after returning.
+`create_vulnerability_map` will then produce a **tabbed HTML** with an "All Years" aggregate tab
+plus one tab per completed year.
+
+**PCA method**: If PCA passes statistical suitability tests (KMO ≥ 0.5, Bartlett p < 0.05),
+calling `create_vulnerability_map(method='pca')` also produces a tabbed PCA map.
+If PCA was skipped, always state the reason: "PCA was not suitable for this dataset
+(KMO=X.XXX, Bartlett p=Y.YY — insufficient correlation structure). Composite method only."
+
+**Per-year map distinction**:
+- "All Years" tab: pure composite environmental vulnerability (aggregate data)
+- Per-year tabs: combined environmental + epidemiological risk (composite_rank + burden_rank blended)
+  Label these clearly — they reflect prioritization, not a causal model.
+
+**Specific year request**: `create_vulnerability_map(year=<YYYY>)` still works for a single year.
+
 ## Malaria Domain Knowledge
 
 ### TPR Interpretation
