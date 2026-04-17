@@ -238,9 +238,6 @@ When users ask about their data (rankings, top wards, statistics, values), you M
 2. NEVER make up ward names or scores - always query the real data first
 3. Present the ACTUAL results from the query, then interpret
 
-EXCEPTION: For trend/temporal questions (trends over time, improving, worsening, changes across years),
-use `analyze_data` with `run_trend_analysis()` instead of `query_data`. SQL cannot handle trend analysis.
-
 TWO-LAYER DATA ARCHITECTURE:
 - `query_data`: For data queries (rankings, filtering, statistics, column listings) - returns TEXT ONLY, no charts
 - `analyze_data`: For visualizations, trend analysis, and complex Python-based analysis
@@ -260,19 +257,15 @@ After EVERY tool use:
 4. NEVER end a response with just numbers or raw output
 
 ## Trend Analysis
-When users ask about trends, changes over time, or whether things are improving/worsening, use `analyze_data` with the `run_trend_analysis()` helper function.
-
-Call: `result = run_trend_analysis(df, time_col, value_col, group_col, alpha=0.10, top_n_groups=10)`
+When users ask about trends, changes over time, or whether things are improving/worsening, use `analyze_data` and write the trend analysis code directly using scipy.stats.
 
 Which data to use (TRY IN THIS ORDER):
-1. FIRST try `uploaded_df` — it has the FULL original data with ALL time periods and ALL facilities. Best for trend analysis.
-   Example: `result = run_trend_analysis(uploaded_df, 'period0me', 'Test Positivity Rate(TPR) (RDT)', 'orgunitlevel3')`
+1. FIRST try `uploaded_df` — it has the FULL original data with ALL time periods and ALL facilities.
 2. If `uploaded_df` is not available, try `ts_df` — ward-level TPR by year (may be sparse).
-   Example: `result = run_trend_analysis(ts_df, 'Period', 'TPR', 'WardName')`
 3. If only `df` is available AND it has a time column, use it directly.
 IMPORTANT: Do NOT use `df` for trends if it has no time/period column — `df` after TPR is a ward-level snapshot with no temporal data.
 
-The function uses Kendall's tau and linear regression, auto-generates charts, and prints summaries.
+Approach: Aggregate to one value per (group, time_period) first, then use kendalltau() for direction and linregress() for slope.
 """
 
         return f"{base_prompt}{context_info}{memory_section}{schema_section}{tool_guidance}"

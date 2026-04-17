@@ -10,7 +10,7 @@ import geopandas as gpd
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from app.analysis.itn_pipeline import calculate_itn_distribution, detect_state, load_population_data
-from app.models.data_handler import DataHandler
+from app.services.data_handler import DataHandler
 
 def load_test_data():
     """Load test data from the Kano session."""

@@ -328,6 +328,46 @@ def upload_for_analysis():
             from app.tpr.data_analyzer import TPRDataAnalyzer as _Analyzer
             _analyzer = _Analyzer()
             df_upload, schema_at_upload = _analyzer.infer_schema_from_file(filepath)
+
+            # --- DHIS2 Cleaner (v4) ---
+            # Runs after schema inference. If it merges duplicates or fixes
+            # mojibake, we apply the rename_map to schema_at_upload so
+            # downstream code sees consistent column names.
+            try:
+                from app.utils.dhis2_cleaner import (
+                    clean_dhis2_export, get_cleaner_mode, apply_rename_map_to_schema
+                )
+                _cleaner_mode = get_cleaner_mode()
+                if _cleaner_mode != 'off':
+                    df_upload, _cleaning_report = clean_dhis2_export(df_upload, mode=_cleaner_mode)
+                    if _cleaning_report.column_rename_map:
+                        schema_at_upload = apply_rename_map_to_schema(
+                            schema_at_upload, _cleaning_report.column_rename_map
+                        )
+                        logger.info(
+                            f"[DHIS2_CLEANER] Updated schema for "
+                            f"{len(_cleaning_report.column_rename_map)} renamed columns"
+                        )
+                    # Persist cleaning report for audit + agent context
+                    try:
+                        import json as _json
+                        _report_path = os.path.join(upload_dir, 'cleaning_report.json')
+                        with open(_report_path, 'w') as _rf:
+                            _json.dump(_cleaning_report.to_dict(), _rf, indent=2)
+                    except Exception as _report_exc:
+                        logger.warning(f"[DHIS2_CLEANER] Could not save cleaning report: {_report_exc}")
+                    if _cleaning_report.cleaning_applied:
+                        logger.info(
+                            f"[DHIS2_CLEANER] mode={_cleaner_mode} "
+                            f"detected={_cleaning_report.detected_as} "
+                            f"duplicates={len(_cleaning_report.duplicates_merged)} "
+                            f"mojibake={len(_cleaning_report.mojibake_fixed)} "
+                            f"warnings={len(_cleaning_report.data_quality_warnings)}"
+                        )
+            except Exception as _clean_exc:
+                # NEVER let cleaner failure break upload
+                logger.exception(f"[DHIS2_CLEANER] Failed (using uncleaned data): {_clean_exc}")
+
             df_upload.to_csv(uploaded_csv_path, index=False)
             logger.info(
                 f"✅ Schema inferred at upload: header_row={schema_at_upload.get('header_row')}, "
@@ -343,6 +383,23 @@ def upload_for_analysis():
                     df_upload = _EH.read_excel_with_encoding(filepath, header=0)
                 else:
                     df_upload = _EH.read_csv_with_encoding(filepath)
+
+                # Still apply cleaner in fallback path (no schema to update here —
+                # Path C will re-infer from the cleaned uploaded_data.csv later)
+                try:
+                    from app.utils.dhis2_cleaner import clean_dhis2_export, get_cleaner_mode
+                    _cleaner_mode = get_cleaner_mode()
+                    if _cleaner_mode != 'off':
+                        df_upload, _cr = clean_dhis2_export(df_upload, mode=_cleaner_mode)
+                        if _cr.cleaning_applied:
+                            logger.info(
+                                f"[DHIS2_CLEANER fallback] Applied on raw read: "
+                                f"duplicates={len(_cr.duplicates_merged)} "
+                                f"mojibake={len(_cr.mojibake_fixed)}"
+                            )
+                except Exception as _clean_exc:
+                    logger.exception(f"[DHIS2_CLEANER fallback] Failed: {_clean_exc}")
+
                 df_upload.to_csv(uploaded_csv_path, index=False)
                 logger.info(f"✅ Fallback: saved uploaded_data.csv with header=0, shape={df_upload.shape}")
             except Exception as _exc2:
@@ -741,20 +798,55 @@ def data_analysis_chat():
 
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
 
-            # Load data using header_row from saved schema so columns match what was inferred
+            # Load data using header_row from saved schema so columns match what was inferred.
+            # v4: Prefer cleaned uploaded_data.csv (canonical post-cleaner output);
+            # fall back to re-reading the raw user upload and applying the cleaner inline.
             df = None
             try:
                 data_dir = os.path.join('instance', 'uploads', session_id)
-                data_files = glob.glob(os.path.join(data_dir, '*.csv')) + \
-                            glob.glob(os.path.join(data_dir, '*.xlsx')) + \
-                            glob.glob(os.path.join(data_dir, '*.xls'))
-                if data_files:
-                    latest = max(data_files, key=os.path.getctime)
-                    if latest.endswith(('.xlsx', '.xls')):
-                        header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
-                        df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
-                    else:
-                        df = EncodingHandler.read_csv_with_encoding(latest)
+                uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
+                if os.path.exists(uploaded_csv):
+                    df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
+                    logger.info(f"[2-ROUTE] Loaded cleaned uploaded_data.csv ({df.shape[0]} rows, {df.shape[1]} cols)")
+                else:
+                    data_files = glob.glob(os.path.join(data_dir, '*.csv')) + \
+                                glob.glob(os.path.join(data_dir, '*.xlsx')) + \
+                                glob.glob(os.path.join(data_dir, '*.xls'))
+                    if data_files:
+                        # Use shared helper to exclude intermediate files
+                        from app.utils.dhis2_cleaner import (
+                            _select_raw_upload_file,
+                            clean_dhis2_export,
+                            get_cleaner_mode,
+                            apply_rename_map_to_schema,
+                        )
+                        try:
+                            latest = _select_raw_upload_file(data_files)
+                        except FileNotFoundError:
+                            logger.warning("[2-ROUTE] No raw file candidates found")
+                            latest = None
+
+                        if latest:
+                            if latest.endswith(('.xlsx', '.xls')):
+                                header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
+                                df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
+                            else:
+                                df = EncodingHandler.read_csv_with_encoding(latest)
+
+                            # Apply cleaner to raw re-read + update + persist schema
+                            _cleaner_mode = get_cleaner_mode()
+                            if _cleaner_mode != 'off':
+                                try:
+                                    df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
+                                    if _cr.column_rename_map:
+                                        saved_schema = apply_rename_map_to_schema(
+                                            saved_schema or {}, _cr.column_rename_map
+                                        )
+                                        state_manager.update_state({'column_schema': saved_schema})
+                                    logger.info(f"[2-ROUTE] Applied cleaner on raw re-read (mode={_cleaner_mode})")
+                                except Exception as _cexc:
+                                    logger.exception(f"[2-ROUTE] Cleaner failed: {_cexc}")
+                if df is not None:
                     tpr_handler.set_data(df)
             except Exception as load_err:
                 logger.error(f"[2-ROUTE] Failed to load dataset for TPR workflow: {load_err}")
@@ -909,12 +1001,22 @@ def data_analysis_chat():
                     'session_id': session_id
                 }, session_id)
 
-            latest = max(data_files, key=os.path.getctime)
             tpr_analyzer = TPRDataAnalyzer()
 
-            # If schema was already fully inferred at upload time, reuse it — skip
-            # the second LLM call. A schema is "complete" when it has at least one
-            # core TPR column mapped (the LLM found the data columns, not just header_row).
+            # v4: Prefer cleaned uploaded_data.csv over the raw XLS.
+            # The cleaner ran at upload, so uploaded_data.csv has merged
+            # duplicates and fixed mojibake. The saved schema in state_manager
+            # already reflects those changes.
+            from app.utils.dhis2_cleaner import (
+                _select_raw_upload_file,
+                clean_dhis2_export,
+                get_cleaner_mode,
+                apply_rename_map_to_schema,
+            )
+
+            data_dir = os.path.join('instance', 'uploads', session_id)
+            uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
+
             _saved_state = state_manager.load_state() or {}
             _saved_schema = _saved_state.get('column_schema') or {}
             _tpr_cols = ('tested_pos', 'u5_pos', 'o5_pos', 'pw_pos', 'total_tested')
@@ -923,32 +1025,79 @@ def data_analysis_chat():
                 and any(_saved_schema.get(c) for c in _tpr_cols)
             )
 
-            if _schema_complete:
-                logger.info(f"[TPR START] Reusing schema from upload (header_row={_saved_schema.get('header_row')})")
-                schema = _saved_schema
-                tpr_analyzer._schema = schema
-                header_row = int(schema.get('header_row', 0))
+            if os.path.exists(uploaded_csv):
+                # Canonical path: cleaned CSV + saved schema
+                from app.agent.encoding_handler import EncodingHandler as _EH
+                df = _EH.read_csv_with_encoding(uploaded_csv)
+                if _schema_complete:
+                    schema = _saved_schema
+                    tpr_analyzer._schema = schema
+                    logger.info(f"[TPR START] Using cleaned uploaded_data.csv + saved schema ({df.shape[0]} rows)")
+                else:
+                    # Schema missing/incomplete — re-infer from cleaned CSV
+                    # (cleaner already ran, no rename_map needed)
+                    try:
+                        df, schema = tpr_analyzer.infer_schema_from_file(uploaded_csv)
+                        state_manager.update_state({'column_schema': schema})
+                        logger.info(f"[TPR START] Re-inferred schema from cleaned uploaded_data.csv")
+                    except RuntimeError as exc:
+                        logger.error(f"Schema inference failed for {uploaded_csv}: {exc}")
+                        return _save_and_respond({
+                            'success': False,
+                            'message': f'Could not parse your data file: {exc}',
+                            'session_id': session_id,
+                        }, session_id)
+            else:
+                # Fallback: re-read original raw user upload (legacy sessions)
                 try:
-                    from app.agent.encoding_handler import EncodingHandler as _EH
-                    if latest.lower().endswith(('.xlsx', '.xls')):
-                        df = _EH.read_excel_with_encoding(latest, header=header_row)
-                    else:
-                        df = _EH.read_csv_with_encoding(latest)
-                except Exception as exc:
-                    logger.warning(f"[TPR START] Re-read failed ({exc}), falling back to full inference")
-                    _schema_complete = False
-
-            if not _schema_complete:
-                try:
-                    df, schema = tpr_analyzer.infer_schema_from_file(latest)
-                except RuntimeError as exc:
-                    logger.error(f"Schema inference failed for {latest}: {exc}")
+                    latest = _select_raw_upload_file(data_files)
+                except FileNotFoundError:
+                    logger.error("[TPR START] No raw file candidates found (all intermediates)")
                     return _save_and_respond({
                         'success': False,
-                        'message': f'Could not parse your data file: {exc}',
-                        'session_id': session_id,
+                        'message': 'No data file found. Please re-upload your dataset.',
+                        'session_id': session_id
                     }, session_id)
-                state_manager.update_state({'column_schema': schema})
+
+                if _schema_complete:
+                    logger.info(f"[TPR START] Reusing schema from upload (header_row={_saved_schema.get('header_row')})")
+                    schema = _saved_schema
+                    tpr_analyzer._schema = schema
+                    header_row = int(schema.get('header_row', 0))
+                    try:
+                        from app.agent.encoding_handler import EncodingHandler as _EH
+                        if latest.lower().endswith(('.xlsx', '.xls')):
+                            df = _EH.read_excel_with_encoding(latest, header=header_row)
+                        else:
+                            df = _EH.read_csv_with_encoding(latest)
+                    except Exception as exc:
+                        logger.warning(f"[TPR START] Re-read failed ({exc}), falling back to full inference")
+                        _schema_complete = False
+
+                if not _schema_complete:
+                    try:
+                        df, schema = tpr_analyzer.infer_schema_from_file(latest)
+                    except RuntimeError as exc:
+                        logger.error(f"Schema inference failed for {latest}: {exc}")
+                        return _save_and_respond({
+                            'success': False,
+                            'message': f'Could not parse your data file: {exc}',
+                            'session_id': session_id,
+                        }, session_id)
+                    state_manager.update_state({'column_schema': schema})
+
+                # Apply cleaner to raw re-read + update + persist schema
+                _cleaner_mode = get_cleaner_mode()
+                if _cleaner_mode != 'off':
+                    try:
+                        df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
+                        if _cr.column_rename_map:
+                            schema = apply_rename_map_to_schema(schema, _cr.column_rename_map)
+                            tpr_analyzer._schema = schema
+                            state_manager.update_state({'column_schema': schema})
+                        logger.info(f"[TPR START] Applied cleaner to raw re-read (mode={_cleaner_mode})")
+                    except Exception as exc:
+                        logger.exception(f"[TPR START] Cleaner failed: {exc}")
 
             tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
             tpr_handler.set_data(df)

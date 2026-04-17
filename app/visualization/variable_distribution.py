@@ -301,7 +301,7 @@ class VariableDistribution(BaseTool):
         """Build and return (fig, plot_data, plot_level) without saving to disk."""
         try:
             # Merge CSV with shapefile
-            join_columns = ['WardName', 'WardCode', 'LGACode', 'ward_name', 'ward_code']
+            join_columns = ['WardCode', 'LGACode', 'WardName', 'ward_code', 'ward_name']
             merged_data = None
             for col in join_columns:
                 if col in csv_data.columns and col in shapefile.columns:
@@ -323,6 +323,10 @@ class VariableDistribution(BaseTool):
             if variable not in merged_data.columns:
                 logger.error(f"Variable {variable} not found in merged data")
                 return None
+
+            # Wards with no value but valid geometry — rendered as grey "no data" trace
+            no_data_mask = merged_data[variable].isna() & merged_data.geometry.notnull() & ~merged_data.geometry.is_empty
+            no_data = merged_data[no_data_mask].copy()
 
             clean_data = merged_data.dropna(subset=[variable])
             valid_mask = clean_data.geometry.notnull() & ~clean_data.geometry.is_empty
@@ -511,6 +515,14 @@ class VariableDistribution(BaseTool):
                 add_trace(highlighted, show_scale=True, opacity=0.85, name_suffix='Selected LGA')
             else:
                 add_trace(plot_data, show_scale=True, opacity=0.75)
+
+            # Grey trace for wards with no data for this variable/year
+            if not no_data.empty and plot_level == 'ward':
+                no_data_plot = no_data.copy()
+                no_data_plot[variable] = 0  # constant z so Choroplethmapbox renders the fill
+                add_trace(no_data_plot, show_scale=False, opacity=0.3,
+                          colorscale_override=[[0, '#cccccc'], [1, '#cccccc']],
+                          name_suffix='No data')
 
             if plot_level == 'ward':
                 add_lga_boundary_overlay(fig, clean_data)

@@ -173,13 +173,7 @@ class ShapefileFetcher:
                     logger.info(f"Found {len(filtered_gdf)} wards from master shapefile for states: {clean_states}")
                     
                     # Normalize ward names for matching
-                    def normalize_ward_name(name):
-                        if pd.isna(name):
-                            return ''
-                        name = str(name).strip()
-                        name = re.sub(r'^[a-z]{2}\s+', '', name, flags=re.IGNORECASE)
-                        name = re.sub(r'\s+Ward$', '', name, flags=re.IGNORECASE)
-                        return name.lower()
+                    from app.utils.ward_matcher import normalize_ward_name
                     
                     # Create lookup for areas
                     area_lookup = {}

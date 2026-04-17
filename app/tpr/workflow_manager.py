@@ -820,8 +820,8 @@ class TPRWorkflowHandler:
                 from app.tpr.utils import (
                     calculate_ward_tpr_timeseries,
                     add_burden_to_timeseries,
-                    normalize_ward_name,
                 )
+                from app.utils.ward_matcher import normalize_ward_name, fuzzy_match_ward
                 from app.tpr.trend_analyzer import compute_trend
 
                 session_folder = os.path.join('instance', 'uploads', self.session_id)
@@ -855,18 +855,34 @@ class TPRWorkflowHandler:
                         raw_data = pd.read_csv(raw_data_path)
                         raw_data['_ward_key'] = raw_data['WardName'].apply(normalize_ward_name)
                         for year in years:
-                            year_rows = ts_df[ts_df['Period'] == year]
+                            year_rows = ts_df[ts_df['Period'] == year].copy()
                             if year_rows.empty:
                                 continue
-                            year_data = year_rows[['WardName', 'Total_Positive', 'Burden']].rename(
-                                columns={'WardName': '_ward_key'}
-                            )
+                            year_rows['_ward_key'] = year_rows['WardName'].apply(normalize_ward_name)
+                            year_data = year_rows[['_ward_key', 'Total_Positive', 'Burden']]
                             year_raw = (
                                 raw_data
                                 .drop(columns=['Burden', 'Total_Positive'], errors='ignore')
                                 .merge(year_data, on='_ward_key', how='left')
                                 .drop(columns=['_ward_key'])
                             )
+
+                            # Fuzzy fallback for wards still unmatched after exact join
+                            still_unmatched = year_raw['Burden'].isna()
+                            if still_unmatched.any():
+                                dhis2_keys = year_rows['_ward_key'].tolist()
+                                for idx in year_raw[still_unmatched].index:
+                                    match, score = fuzzy_match_ward(
+                                        raw_data.loc[idx, '_ward_key'] if '_ward_key' in raw_data.columns
+                                        else normalize_ward_name(year_raw.loc[idx, 'WardName']),
+                                        dhis2_keys
+                                    )
+                                    if match is not None:
+                                        src = year_rows[year_rows['_ward_key'] == match].iloc[0]
+                                        year_raw.loc[idx, ['Total_Positive', 'Burden']] = \
+                                            src[['Total_Positive', 'Burden']].values
+                                        logger.debug(f"[MULTI_YEAR] Fuzzy matched '{year_raw.loc[idx,'WardName']}' → '{src['WardName']}' (score={score})")
+
                             year_raw.to_csv(
                                 os.path.join(session_folder, f'raw_data_{year}.csv'), index=False
                             )

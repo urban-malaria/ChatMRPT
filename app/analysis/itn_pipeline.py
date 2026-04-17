@@ -238,47 +238,9 @@ def load_population_data(state: str) -> Optional[pd.DataFrame]:
     return ward_population
 
 def normalize_ward_name(ward_name: str) -> str:
-    """
-    Normalize ward name for better matching.
-    
-    Args:
-        ward_name: Original ward name
-        
-    Returns:
-        Normalized ward name
-    """
-    if pd.isna(ward_name):
-        return ""
-        
-    # Convert to lowercase
-    normalized = str(ward_name).lower().strip()
-    
-    # Remove content in parentheses
-    normalized = normalized.split('(')[0].strip()
-    
-    # Replace roman numerals with numbers (order matters!)
-    # Using regex to match word boundaries
-    roman_replacements = [
-        (r'\bviii\b', '8'), (r'\bvii\b', '7'), (r'\bvi\b', '6'), 
-        (r'\biv\b', '4'), (r'\biii\b', '3'), (r'\bii\b', '2'), 
-        (r'\bix\b', '9'), (r'\bv\b', '5'), (r'\bi\b', '1')
-    ]
-    for pattern, replacement in roman_replacements:
-        normalized = re.sub(pattern, replacement, normalized)
-    
-    # Remove common suffixes
-    suffixes = [' ward', ' wards']
-    for suffix in suffixes:
-        if normalized.endswith(suffix):
-            normalized = normalized[:-len(suffix)].strip()
-    
-    # Replace common separators with space
-    normalized = normalized.replace('/', ' ').replace('-', ' ').replace('_', ' ')
-    
-    # Remove extra spaces
-    normalized = ' '.join(normalized.split())
-    
-    return normalized
+    """Thin wrapper — canonical implementation lives in app.utils.ward_matcher."""
+    from app.utils.ward_matcher import normalize_ward_name as _normalize
+    return _normalize(ward_name)
 
 def fuzzy_match_ward_names(analysis_wards: List[str], population_wards: List[str], 
                           threshold: int = 70) -> Dict[str, Tuple[str, int]]:

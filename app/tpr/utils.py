@@ -109,39 +109,9 @@ def extract_ward_population(ward_gdf, age_group: str = 'all_ages'):
 
 
 def normalize_ward_name(name: str) -> str:
-    """
-    Normalize ward names for matching between TPR data and shapefiles.
-
-    Handles DHIS2 naming quirks: state prefixes, 'Ward' anywhere in the
-    name, inconsistent separators (hyphens/slashes/spaces), and trailing
-    numbering variations.
-
-    Args:
-        name: Ward name to normalize
-
-    Returns:
-        Normalized ward name (lowercase, unified separators)
-    """
-    if pd.isna(name):
-        return ''
-
-    name = str(name).strip()
-
-    # Remove state prefixes (ad, kw, os, etc.) - two letter codes
-    name = re.sub(r'^[a-z]{2}\s+', '', name, flags=re.IGNORECASE)
-
-    # Remove 'Ward' ANYWHERE in the string (not just suffix)
-    # e.g., "balogun fulani ward 3" → "balogun fulani 3"
-    name = re.sub(r'\bward\b', '', name, flags=re.IGNORECASE)
-
-    # Unify separators: replace hyphens and slashes with spaces
-    # e.g., "budo-egba" and "budo/egba" and "budo egba" all become "budo egba"
-    name = name.replace('-', ' ').replace('/', ' ')
-
-    # Collapse multiple spaces and strip
-    name = ' '.join(name.split())
-
-    return name.strip().lower()
+    """Thin wrapper — canonical implementation lives in app.utils.ward_matcher."""
+    from app.utils.ward_matcher import normalize_ward_name as _normalize
+    return _normalize(name)
 
 
 

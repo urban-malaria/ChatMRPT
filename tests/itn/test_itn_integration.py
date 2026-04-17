@@ -6,7 +6,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from app.planning.itn_tools import PlanITNDistribution
-from app.models.data_handler import DataHandler
+from app.services.data_handler import DataHandler
 import pandas as pd
 
 def test_itn_tool():
