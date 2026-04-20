@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import shutil
-import threading
 import time
 import traceback
 from typing import Dict, Any, Optional, List
@@ -349,12 +348,13 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
             }
 
             
-            # Mark comprehensive analysis as complete for workflow guidance
-            self._mark_analysis_complete(session_id)
-
-            # Start per-year risk pipeline in background (fire-and-forget)
+            # Run per-year analyses in parallel — blocks until all years done
+            # so the completion message is only shown when everything is ready
             pca_passed = not pca_result.get('pca_skipped', True)
             self._run_per_year_risk(session_id, final_composite_vars, pca_passed)
+
+            # Mark comprehensive analysis as complete for workflow guidance
+            self._mark_analysis_complete(session_id)
 
             # Extract key metrics for success message
             wards_analyzed = composite_result.get('data', {}).get('wards_analyzed', 'N/A')
@@ -1512,89 +1512,72 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
         except Exception as e:
             logger.error(f"Failed to copy PCA results for {year_tag}: {e}")
 
-    def _update_per_year_status(self, session_folder: str, year_tag: str,
-                                all_tags: List[str], completed: List[str]) -> None:
-        status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
-        try:
-            data = {
-                'status': 'running',
-                'completed_years': completed,
-                'total_years': all_tags,
-            }
-            with open(status_path, 'w') as f:
-                json.dump(data, f)
-        except Exception as e:
-            logger.warning(f"Could not write per-year status: {e}")
-
     def _run_per_year_risk(self, session_id: str, composite_vars: Optional[List[str]],
                            pca_passed: bool) -> None:
-        """Launch per-year composite (+ optional PCA copy) analysis in a background thread."""
+        """Run per-year composite analysis for all years in parallel, blocking until all done.
+
+        All years are independent (different Burden values, same environmental vars),
+        so ThreadPoolExecutor gives near-linear speedup. 6 years in parallel takes
+        roughly the same time as 1 year sequentially.
+        """
+        import concurrent.futures
+
         session_folder = f"instance/uploads/{session_id}"
         year_tags = self._find_per_year_tags(session_folder)
         if not year_tags:
-            logger.info(f"No per-year raw_data files found for {session_id} — skipping per-year pipeline")
+            logger.info(f"No per-year raw_data files — skipping per-year pipeline")
             return
 
-        # Capture app object before spawning (current_app proxy not available in thread)
         try:
             app = current_app._get_current_object()
         except RuntimeError:
-            logger.error("Cannot capture Flask app for per-year background thread")
+            logger.error("Cannot capture Flask app for per-year parallel workers")
             return
 
-        def _background(app, session_id, session_folder, year_tags, composite_vars, pca_passed):
+        status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+        completed: List[str] = []
+
+        def _process_one_year(year_tag: str) -> str:
+            """Worker: run composite + blend + unified dataset for one year. Returns year_tag on success."""
             with app.app_context():
-                logger.info(f"Per-year pipeline started: {year_tags}")
-                completed: List[str] = []
+                from .engine import AnalysisEngine
+                from app.services.data_handler import DataHandler
+                from app.services.dataset_builder import UnifiedDatasetBuilder
 
-                # Write initial status
-                status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
+                engine = AnalysisEngine(DataHandler(session_folder))
+                engine.run_composite_analysis(session_id, variables=composite_vars, year_tag=year_tag)
+
+                self._blend_burden_into_composite(session_folder, year_tag)
+
+                if pca_passed:
+                    self._copy_aggregate_pca_scores(session_folder, year_tag)
+
+                builder = UnifiedDatasetBuilder(session_id, year_tag=year_tag)
+                builder.build_unified_dataset()
+
+                logger.info(f"Per-year pipeline done for {year_tag}")
+                return year_tag
+
+        max_workers = min(len(year_tags), 4)  # cap at 4 to avoid overwhelming gunicorn workers
+        logger.info(f"Per-year pipeline: {len(year_tags)} years, {max_workers} parallel workers")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_process_one_year, yt): yt for yt in year_tags}
+            for future in concurrent.futures.as_completed(futures):
+                year_tag = futures[future]
                 try:
-                    with open(status_path, 'w') as f:
-                        json.dump({'status': 'running', 'completed_years': [], 'total_years': year_tags}, f)
+                    future.result()
+                    completed.append(year_tag)
                 except Exception as e:
-                    logger.warning(f"Status init failed: {e}")
+                    logger.error(f"Per-year pipeline error for {year_tag}: {e}", exc_info=True)
 
-                for year_tag in year_tags:
-                    try:
-                        from .engine import AnalysisEngine
-                        from app.services.data_handler import DataHandler
+        try:
+            with open(status_path, 'w') as f:
+                json.dump({'status': 'complete', 'completed_years': sorted(completed), 'total_years': year_tags}, f)
+        except Exception as e:
+            logger.warning(f"Status write failed: {e}")
 
-                        engine = AnalysisEngine(DataHandler(session_folder))
-                        engine.run_composite_analysis(session_id, variables=composite_vars, year_tag=year_tag)
-
-                        self._blend_burden_into_composite(session_folder, year_tag)
-
-                        if pca_passed:
-                            self._copy_aggregate_pca_scores(session_folder, year_tag)
-
-                        from app.services.dataset_builder import UnifiedDatasetBuilder
-                        builder = UnifiedDatasetBuilder(session_id, year_tag=year_tag)
-                        builder.build_unified_dataset()
-
-                        completed.append(year_tag)
-                        self._update_per_year_status(session_folder, year_tag, year_tags, completed)
-                        logger.info(f"Per-year pipeline done for {year_tag}")
-
-                    except Exception as e:
-                        logger.error(f"Per-year pipeline error for {year_tag}: {e}", exc_info=True)
-
-                # Mark complete
-                try:
-                    with open(status_path, 'w') as f:
-                        json.dump({'status': 'complete', 'completed_years': completed, 'total_years': year_tags}, f)
-                except Exception as e:
-                    logger.warning(f"Status finalize failed: {e}")
-
-                logger.info(f"Per-year pipeline complete. Completed: {completed}")
-
-        thread = threading.Thread(
-            target=_background,
-            args=(app, session_id, session_folder, year_tags, composite_vars, pca_passed),
-            daemon=True,
-        )
-        thread.start()
-        logger.info(f"Per-year risk pipeline launched in background for {len(year_tags)} years")
+        logger.info(f"Per-year pipeline complete. {len(completed)}/{len(year_tags)} years succeeded.")
 
 
 # REMOVED: GenerateComprehensiveAnalysisSummary and GenerateComprehensiveAnalysisSummaryInput
