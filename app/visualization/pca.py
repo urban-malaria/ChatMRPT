@@ -29,7 +29,8 @@ from app.utils.visualization_controls import inject_lga_hover_highlight
 logger = logging.getLogger(__name__)
 
 def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
-                                     session_id: str = 'default') -> Dict[str, Any]:
+                                     session_id: str = 'default',
+                                     return_figure: bool = False) -> Dict[str, Any]:
     """
     Create PCA vulnerability classification map
     
@@ -177,10 +178,14 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             margin=dict(l=20, r=20, t=60, b=20)
         )
         
+        # Return figure object directly when caller handles its own HTML output
+        if return_figure:
+            return {'status': 'success', 'fig': fig}
+
         # Calculate statistics
         category_counts = data['pca_category'].value_counts().to_dict()
         score_stats = calculate_data_statistics(data['pca_score'])
-        
+
         # Save visualization
         filename = "pca_vulnerability_map"
         save_result = save_agent_visualization(

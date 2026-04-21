@@ -147,7 +147,12 @@ class UnifiedDatasetBuilder:
                     print(f"🗺️ Shapefile loaded via loader: {shp_data.shape[0]} features")
             
             # Dynamically search for composite analysis results
+            # Year-tagged and combined patterns take priority over aggregate fallbacks
+            yt = getattr(self, 'year_tag', '')
             composite_patterns = [
+                f'analysis_vulnerability_rankings_combined{yt}.csv',
+                f'analysis_vulnerability_rankings{yt}.csv',
+                f'vulnerability_rankings{yt}.csv',
                 'analysis_vulnerability_rankings.csv',
                 'analysis_composite_scores.csv',
                 'vulnerability_rankings.csv',

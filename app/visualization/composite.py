@@ -330,7 +330,8 @@ def create_agent_composite_score_maps(unified_dataset: gpd.GeoDataFrame,
 
 def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
                                  session_id: str = 'default',
-                                 method: str = 'composite') -> Dict[str, Any]:
+                                 method: str = 'composite',
+                                 return_figure: bool = False) -> Dict[str, Any]:
     """
     Create vulnerability classification map using composite_rank
     
@@ -572,13 +573,17 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             autosize=True
         )
         
+        # Return figure object directly when caller handles its own HTML output
+        if return_figure:
+            return {'status': 'success', 'fig': fig}
+
         # Generate HTML file with fixed filename to prevent URL instability
         method_suffix = 'composite'
         # Create unique filename with timestamp - ensures multiple visualizations coexist
         # Files persist until session closure (browser closed or session expired)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"vulnerability_map_{method_suffix}_{timestamp}"  # No .html extension here
-        
+
         save_result = save_agent_visualization(
             fig, filename, session_id, 'vulnerability_maps'
         )

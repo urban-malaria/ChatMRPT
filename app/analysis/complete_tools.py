@@ -1430,6 +1430,11 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
         rankings_path = os.path.join(
             session_folder, f'analysis_vulnerability_rankings{year_tag}.csv'
         )
+        # pipeline.py saves without 'analysis_' prefix — try that as fallback
+        if not os.path.exists(rankings_path):
+            fallback = os.path.join(session_folder, f'vulnerability_rankings{year_tag}.csv')
+            if os.path.exists(fallback):
+                rankings_path = fallback
         raw_path = os.path.join(session_folder, f'raw_data{year_tag}.csv')
 
         if not os.path.exists(rankings_path):
