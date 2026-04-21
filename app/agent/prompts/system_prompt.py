@@ -217,7 +217,7 @@ for ward, g in agg.groupby('ward'):
     if len(g) < 3:
         continue
     lr = stats.linregress(g['year'].values, g['tpr'].values)  # named tuple
-    results.append({'ward': ward, 'slope': lr.slope, 'r2': lr.rvalue ** 2})
+    results.append({{'ward': ward, 'slope': lr.slope, 'r2': lr.rvalue ** 2}})
 
 trend_df = pd.DataFrame(results)
 print(trend_df.sort_values('slope', ascending=False))
