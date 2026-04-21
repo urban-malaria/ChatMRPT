@@ -7,6 +7,15 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      keyframes: {
+        shimmer: {
+          '0%': { transform: 'translateX(-150%)' },
+          '100%': { transform: 'translateX(450%)' },
+        },
+      },
+      animation: {
+        shimmer: 'shimmer 1.5s ease-in-out infinite',
+      },
       colors: {
         dark: {
           bg: '#1a1a1a',

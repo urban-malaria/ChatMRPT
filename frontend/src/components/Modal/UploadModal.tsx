@@ -79,6 +79,37 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
   const { sendMessage } = useMessageStreaming();
   const { isUploading, uploadProgress, uploadStatus, executeUpload, resetProgress } = useFileUpload();
 
+  const processingLabel = activeTab === 'analysis' ? 'Analysing your data...' : 'Processing files...';
+  const isRetrying = uploadStatus.includes('retrying');
+
+  const progressBar = isUploading && (
+    <div className="w-full mt-2">
+      {uploadProgress < 100 ? (
+        <>
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            {isRetrying
+              ? <span className="text-amber-600">{uploadStatus}</span>
+              : <span />}
+            {!isRetrying && <span>{uploadProgress}%</span>}
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${Math.max(5, uploadProgress)}%` }}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+            <div className="h-2.5 w-1/3 bg-blue-500 rounded-full animate-shimmer" />
+          </div>
+          <div className="text-xs text-gray-500 mt-1">{processingLabel}</div>
+        </>
+      )}
+    </div>
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -287,20 +318,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                       )}
                     </button>
 
-                    {isUploading && (
-                      <div className="w-full mt-2">
-                        <div className="flex justify-between text-xs text-gray-600 mb-1">
-                          <span>{uploadStatus}</span>
-                          <span>{uploadProgress}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div
-                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
+                    {progressBar}
                     <div id="files-upload-status" className="mt-2"></div>
                   </div>
                 </div>
@@ -478,20 +496,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                         )}
                       </button>
 
-                      {isUploading && (
-                        <div className="w-full mt-2">
-                          <div className="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>{uploadStatus}</span>
-                            <span>{uploadProgress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5">
-                            <div
-                              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
+                      {progressBar}
 
                       <div id="data-analysis-upload-status" className="mt-3"></div>
                     </div>
