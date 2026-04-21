@@ -404,7 +404,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                               const systemMessage = {
                                 id: `msg_${Date.now()}`,
                                 type: 'system' as const,
-                                content: `Data file uploaded: ${file.name}. Starting analysis...`,
+                                content: `Data file uploaded: ${file.name}. Results will appear below.`,
                                 timestamp: new Date(),
                                 sessionId: backendSessionId
                               };
