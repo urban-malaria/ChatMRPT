@@ -619,43 +619,63 @@ class DataAnalysisAgent:
         if workflow_context:
             logger.info(f"[AGENT] Workflow context details: {workflow_context}")
 
-        # Load input data
-        logger.info(f"[AGENT STEP 1] Loading input data via _get_input_data()...")
-        try:
-            input_data_list = self._get_input_data()
-            logger.info(f"[AGENT STEP 1] ✅ Input data loaded: {len(input_data_list)} datasets")
-            if input_data_list:
-                logger.info(f"[AGENT STEP 1] First dataset keys: {list(input_data_list[0].keys())}")
-        except Exception as e:
-            logger.error(f"[AGENT STEP 1] ❌ Failed to load input data: {e}", exc_info=True)
-            raise
-
-        # DEBUG: Add debug info to response
-        debug_info = {
-            "session_folder": f"instance/uploads/{self.session_id}",
-            "session_folder_exists": os.path.exists(f"instance/uploads/{self.session_id}"),
-            "datasets_loaded": len(input_data_list),
-            "cwd": os.getcwd()
-        }
-
-        if input_data_list:
-            debug_info["first_dataset"] = {
-                "name": input_data_list[0].get('variable_name'),
-                "rows": len(input_data_list[0].get('data', [])) if 'data' in input_data_list[0] else 0,
-                "columns": len(input_data_list[0].get('columns', []))
-            }
-
-        if not input_data_list:
+        input_state = self._build_input_state_sync(user_query, workflow_context)
+        if input_state is None:
             return {
                 "success": False,
                 "message": "No data found. Please upload a dataset first.",
                 "session_id": self.session_id
             }
 
-        # Add workflow context to system prompt if provided
+        try:
+            import time
+            logger.info(f"[AGENT] Invoking graph with {len(input_state['messages'])} messages")
+            start_time = time.time()
+            result = self.graph.invoke(input_state, {"recursion_limit": 25})
+            logger.info(f"[AGENT] Graph completed in {time.time() - start_time:.2f} seconds")
+
+            self.chat_history = result.get("messages", [])
+
+            try:
+                mem = get_memory_service()
+                final_msg = self.chat_history[-1] if self.chat_history else None
+                mem.append_message(self.session_id, 'assistant', (final_msg.content if final_msg else 'Analysis complete.'))
+            except Exception:
+                pass
+
+            return self._finalize_result_from_state(result)
+
+        except Exception as e:
+            logger.error(f"[CLEAN AGENT] Error during analysis: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error during analysis: {str(e)}",
+                "session_id": self.session_id
+            }
+
+    def _build_input_state_sync(self, user_query: str, workflow_context: Dict[str, Any] = None):
+        """
+        Build the LangGraph input state. Pure synchronous — no IO beyond data loading.
+        Returns None if no data is available (caller should return an error response).
+        """
+        if workflow_context:
+            logger.info(f"[AGENT] Workflow context details: {workflow_context}")
+
+        logger.info(f"[AGENT STEP 1] Loading input data via _get_input_data()...")
+        try:
+            input_data_list = self._get_input_data()
+            logger.info(f"[AGENT STEP 1] ✅ Input data loaded: {len(input_data_list)} datasets")
+        except Exception as e:
+            logger.error(f"[AGENT STEP 1] ❌ Failed to load input data: {e}", exc_info=True)
+            raise
+
+        if not input_data_list:
+            return None
+
         context_message = None
         tpr_guidance_message = None
         memory_message = None
+
         if workflow_context:
             stage = workflow_context.get('stage', 'unknown')
             options = workflow_context.get('valid_options', [])
@@ -690,12 +710,7 @@ class DataAnalysisAgent:
                     context_parts.append(schema_desc)
 
             context_message = HumanMessage(content='\n'.join(context_parts))
-
-            # Log what we're sending
-            logger.info(f"[AGENT] Workflow context message created:")
-            logger.info(f"   - Stage: {stage}")
-            logger.info(f"   - Data columns: {len(data_columns)}")
-            logger.info(f"   - First 5 columns: {data_columns[:5] if data_columns else 'None'}")
+            logger.info(f"[AGENT] Workflow context: stage={stage}, columns={len(data_columns)}")
 
         if HAS_MEMORY_SERVICE:
             try:
@@ -722,7 +737,6 @@ class DataAnalysisAgent:
             except Exception as exc:
                 logger.warning(f"[AGENT] Unable to prepare memory message: {exc}")
 
-        # Persist the user message and refresh in-memory history
         try:
             mem = get_memory_service()
             _msgs = mem.get_messages(self.session_id)
@@ -732,7 +746,6 @@ class DataAnalysisAgent:
         except Exception:
             pass
 
-        # Create input state (like AgenticDataAnalysis)
         messages = self.chat_history.copy()
         if context_message:
             messages.insert(0, context_message)
@@ -742,7 +755,7 @@ class DataAnalysisAgent:
             messages.insert(0, memory_message)
         messages.append(HumanMessage(content=user_query))
 
-        input_state = {
+        return {
             "messages": messages,
             "session_id": self.session_id,
             "input_data": input_data_list,
@@ -755,59 +768,82 @@ class DataAnalysisAgent:
             "consecutive_error_count": 0,
         }
 
-        try:
-            # Invoke graph - SIMPLIFIED like original
-            logger.info(f"[AGENT] Invoking graph with {len(messages)} messages")
+    def _finalize_result_from_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract the structured response dict from a completed graph state."""
+        messages = state.get("messages", [])
+        final_message = messages[-1] if messages else None
+        visualizations = self._process_visualizations(state.get("output_plots", []))
+        logger.info(f"[AGENT] Analysis complete, {len(visualizations)} visualizations")
 
-            import time
-            start_time = time.time()
+        final_content = final_message.content if final_message else "Analysis complete."
+        final_content = ResponseFormatter.normalize_spacing(final_content)
 
-            # Use original's recursion limit
-            result = self.graph.invoke(input_state, {"recursion_limit": 25})
+        if visualizations:
+            viz_descriptions = [v.get('title', 'Visualization') for v in visualizations]
+            final_content += "\n\n**Visualizations shown:** " + "; ".join(viz_descriptions)
 
-            elapsed = time.time() - start_time
-            logger.info(f"[AGENT] Graph completed in {elapsed:.2f} seconds")
+        return {
+            "success": True,
+            "message": final_content,
+            "visualizations": visualizations,
+            "session_id": self.session_id,
+        }
 
-            # Update chat history
-            self.chat_history = result.get("messages", [])
-
-            # Extract final response
-            final_message = self.chat_history[-1] if self.chat_history else None
-
-            # Process visualizations
-            visualizations = self._process_visualizations(result.get("output_plots", []))
-
-            logger.info(f"[AGENT] Analysis complete, {len(visualizations)} visualizations")
-
-            # Persist assistant message
+    def analyze_stream(self, user_query: str, workflow_context: Dict[str, Any] = None):
+        """
+        Synchronous generator. Yields SSE-compatible dicts while the graph runs.
+        Single-pass: graph.stream(stream_mode="values") — no double-invoke.
+        Emits: thinking / result / error.
+        status: started is emitted by the route before calling this.
+        Narration is best-effort: only emitted when AIMessage.content is non-empty
+        on a tool-calling message.
+        """
+        if self._use_stub_model:
+            import asyncio
+            loop = asyncio.new_event_loop()
             try:
-                mem.append_message(self.session_id, 'assistant', (final_message.content if final_message else 'Analysis complete.'))
+                result = loop.run_until_complete(
+                    self._analyze_with_stub(user_query, workflow_context)
+                )
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+            yield {'type': 'result', 'data': result}
+            return
+
+        input_state = self._build_input_state_sync(user_query, workflow_context)
+        if input_state is None:
+            yield {'type': 'error', 'error': 'No data found. Please upload a dataset first.'}
+            return
+
+        last_state = None
+        last_narration = ''  # dedupe: stream_mode="values" may surface same message across snapshots
+
+        for state_snapshot in self.graph.stream(
+            input_state, {"recursion_limit": 25}, stream_mode="values"
+        ):
+            last_state = state_snapshot
+
+            messages = state_snapshot.get("messages", [])
+            if messages:
+                last_msg = messages[-1]
+                content = getattr(last_msg, 'content', '') or ''
+                tool_calls = getattr(last_msg, 'tool_calls', None)
+                if tool_calls and content.strip() and content != last_narration:
+                    last_narration = content
+                    yield {'type': 'thinking', 'content': content.strip()}
+
+        if last_state is not None:
+            self.chat_history = last_state.get("messages", [])
+            try:
+                mem = get_memory_service()
+                final_msg = self.chat_history[-1] if self.chat_history else None
+                mem.append_message(self.session_id, 'assistant', (final_msg.content if final_msg else 'Analysis complete.'))
             except Exception:
                 pass
-
-            final_content = final_message.content if final_message else "Analysis complete."
-            final_content = ResponseFormatter.normalize_spacing(final_content)
-
-            # Append visualization titles to the message so they appear in
-            # conversation history — the LLM can then reference them on follow-ups.
-            if visualizations:
-                viz_descriptions = [v.get('title', 'Visualization') for v in visualizations]
-                final_content += "\n\n**Visualizations shown:** " + "; ".join(viz_descriptions)
-
-            return {
-                "success": True,
-                "message": final_content,
-                "visualizations": visualizations,
-                "session_id": self.session_id
-            }
-
-        except Exception as e:
-            logger.error(f"[CLEAN AGENT] Error during analysis: {e}", exc_info=True)
-            return {
-                "success": False,
-                "message": f"Error during analysis: {str(e)}",
-                "session_id": self.session_id
-            }
+            yield {'type': 'result', 'data': self._finalize_result_from_state(last_state)}
+        else:
+            yield {'type': 'error', 'error': 'No state produced by agent graph'}
 
     async def _analyze_with_stub(self, user_query: str, workflow_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Offline-friendly pathway that returns deterministic responses for tests."""

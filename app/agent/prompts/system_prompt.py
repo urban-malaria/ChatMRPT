@@ -194,6 +194,43 @@ Interpret: p < 0.05 means significant. Identify which groups differ.
 - If no time column exists, tell the user trend analysis requires temporal data.
 - Generate plotly line charts for the top worsening/improving groups.
 
+### Correct linregress Pattern
+Period names from DHIS2 are strings — convert with `pd.to_numeric(..., errors='coerce')` first.
+`linregress` returns a named tuple — extract `.slope` from it into a new DataFrame column.
+NEVER boolean-index the `linregress` return value directly (it is not a DataFrame).
+
+```python
+import pandas as pd
+from scipy import stats
+
+# 1. Aggregate — one value per (group, period)
+agg = df.groupby(['ward', 'periodname'])['tpr'].mean().reset_index()
+
+# 2. Convert period string → numeric
+agg['year'] = pd.to_numeric(agg['periodname'], errors='coerce')
+agg = agg.dropna(subset=['year'])
+
+# 3. Trend per group
+results = []
+for ward, g in agg.groupby('ward'):
+    g = g.sort_values('year')
+    if len(g) < 3:
+        continue
+    lr = stats.linregress(g['year'].values, g['tpr'].values)  # named tuple
+    results.append({'ward': ward, 'slope': lr.slope, 'r2': lr.rvalue ** 2})
+
+trend_df = pd.DataFrame(results)
+print(trend_df.sort_values('slope', ascending=False))
+```
+
+## Narration Before Tool Calls
+Before calling analyze_data, include a short natural-language preamble in your assistant
+message content alongside the tool call. This text is shown to the user as a progress
+indicator while the code runs. One sentence is enough. Examples:
+- "Aggregating TPR by ward and year, then computing linear trend slopes with scipy."
+- "Calculating descriptive statistics across all numeric columns."
+- "Building a choropleth map of vulnerability scores by LGA."
+
 ## Final Reminders
 - Always use print() for every result — code without print() produces no visible output.
 - Always use tools to answer data questions — never guess from memory.

@@ -66,15 +66,13 @@ const useMessageStreaming = () => {
       // Use different handling for data analysis vs streaming
       if (dataAnalysisMode) {
         console.log('═══════════════════════════════════════════════════════════');
-        console.log('📊 DATA ANALYSIS V3 REQUEST');
+        console.log('📊 DATA ANALYSIS V3 SSE REQUEST');
         console.log('  Message:', message.substring(0, 80));
         console.log('  Session ID:', session.sessionId);
-        console.log('  Endpoint:', endpoint);
         console.log('  Timestamp:', new Date().toISOString());
         console.log('═══════════════════════════════════════════════════════════');
 
-        // Data analysis endpoint - JSON response
-        const response = await fetch(endpoint, {
+        const streamResponse = await fetch('/api/v1/data-analysis/chat/stream', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -87,35 +85,90 @@ const useMessageStreaming = () => {
           signal,
         });
 
-        if (!response.ok) {
-          console.error('❌ DATA ANALYSIS V3 ERROR:', response.status, response.statusText);
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!streamResponse.ok) {
+          console.error('❌ DATA ANALYSIS STREAM ERROR:', streamResponse.status, streamResponse.statusText);
+          throw new Error(`HTTP error! status: ${streamResponse.status}`);
         }
 
-        const responseData = await response.json();
-        console.log('───────────────────────────────────────────────────────────');
-        console.log('✅ DATA ANALYSIS V3 RESPONSE');
-        console.log('  Success:', responseData.success);
-        console.log('  Visualizations:', responseData.visualizations?.length || 0);
-        console.log('  Has Message:', !!responseData.message);
-        console.log('  Message Preview:', responseData.message?.substring(0, 120));
-        console.log('───────────────────────────────────────────────────────────');
+        const reader = streamResponse.body?.getReader();
+        if (!reader) throw new Error('No response body from data analysis stream');
 
-        // ONE-BRAIN: No mode exit — always stay in V3 agent mode after upload
-        if (responseData.success && responseData.message) {
-          // Add the response as an assistant message
-          const assistantMessage: RegularMessage = {
-            id: `msg_${Date.now() + 1}`,
-            type: 'regular',
-            sender: 'assistant',
-            content: responseData.message,
-            timestamp: new Date(),
-            sessionId: session.sessionId,
-            visualizations: responseData.visualizations,
-          };
-          addMessage(assistantMessage);
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let assistantMessageId: string | null = null;
+        let outerDone = false;
+
+        while (!outerDone) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Split on blank lines (SSE event boundary)
+          const rawEvents = buffer.split('\n\n');
+          buffer = rawEvents.pop() ?? '';
+
+          for (const rawEvent of rawEvents) {
+            // Collect data: lines (join with '' — all payloads are single-line JSON)
+            const dataLines = rawEvent
+              .split('\n')
+              .filter((l: string) => l.startsWith('data: '))
+              .map((l: string) => l.slice(6));
+
+            if (!dataLines.length) continue; // SSE comment (ping) — ignore
+            const raw = dataLines.join('');
+            if (raw === '[DONE]') { outerDone = true; break; }
+
+            let evt: any;
+            try { evt = JSON.parse(raw); } catch { continue; }
+
+            if (evt.type === 'status' && evt.status === 'started') {
+              assistantMessageId = `msg_${Date.now() + 1}`;
+              const placeholder: RegularMessage = {
+                id: assistantMessageId,
+                type: 'regular',
+                sender: 'assistant',
+                content: '',
+                isStreaming: true,
+                timestamp: new Date(),
+                sessionId: session.sessionId,
+              };
+              addMessage(placeholder);
+            }
+
+            if (evt.type === 'thinking' && assistantMessageId) {
+              updateStreamingContent(assistantMessageId, evt.content);
+            }
+
+            if (evt.type === 'result' && assistantMessageId) {
+              const result = evt.data;
+              console.log('✅ DATA ANALYSIS STREAM RESULT — visualizations:', result.visualizations?.length || 0);
+              const finalMessage: RegularMessage = {
+                id: assistantMessageId,
+                type: 'regular',
+                sender: 'assistant',
+                content: result.message || '',
+                isStreaming: false,
+                timestamp: new Date(),
+                sessionId: session.sessionId,
+                visualizations: result.visualizations || [],
+              };
+              useChatStore.getState().updateMessage(assistantMessageId, finalMessage);
+            }
+
+            if (evt.type === 'error') {
+              console.error('❌ DATA ANALYSIS STREAM ERROR EVENT:', evt.error);
+              if (assistantMessageId) {
+                useChatStore.getState().updateMessage(assistantMessageId, {
+                  type: 'regular',
+                  content: `Sorry, an error occurred: ${evt.error}`,
+                  isStreaming: false,
+                } as Partial<RegularMessage>);
+              }
+            }
+          }
         }
-        
+
         setLoading(false);
         return;
       }

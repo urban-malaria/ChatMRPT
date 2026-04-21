@@ -1170,3 +1170,259 @@ def data_analysis_chat():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+
+@data_analysis_v3_bp.route('/api/v1/data-analysis/chat/stream', methods=['POST'])
+@require_auth
+def data_analysis_chat_stream():
+    """
+    SSE streaming endpoint for data analysis chat.
+    Emits status → thinking (best-effort narration) → result → [DONE].
+    TPR active sessions run synchronously and are wrapped as a single SSE result event.
+    The existing /api/v1/data-analysis/chat endpoint is kept as fallback.
+    """
+    import json as _json
+    from flask import Response, stream_with_context
+
+    data = request.get_json() or {}
+    message = data.get('message', '')
+    session_id = data.get('session_id') or session.get('session_id')
+
+    if not session_id:
+        def _no_session():
+            yield f"data: {_json.dumps({'type': 'error', 'error': 'No session ID provided'})}\n\n"
+            yield "data: [DONE]\n\n"
+        return Response(stream_with_context(_no_session()), mimetype='text/event-stream')
+
+    # Session alignment — identical to /chat
+    existing_session_id = session.get('session_id')
+    if session_id and existing_session_id and existing_session_id != session_id:
+        session['session_id'] = session_id
+        session['base_session_id'] = session.get('base_session_id') or session_id
+        session.modified = True
+    elif session_id and not existing_session_id:
+        session['session_id'] = session_id
+        session['base_session_id'] = session.get('base_session_id') or session_id
+        session.modified = True
+
+    # Log user message
+    interaction_core.log_message(
+        session_id=session_id,
+        sender='user',
+        content=message,
+        intent=None,
+        entities={
+            'message_length': len(message),
+            'timestamp': time.time(),
+            'endpoint': '/api/v1/data-analysis/chat/stream',
+            'workflow': 'data_analysis_v3'
+        }
+    )
+    _mem_sid = session.get('base_session_id') or session_id
+    try:
+        from app.services.session_memory import SessionMemory, MessageType
+        SessionMemory(_mem_sid).add_message(MessageType.USER, message)
+    except Exception:
+        pass
+
+    # Determine routing before entering generator — reads session state synchronously
+    from app.agent.state_manager import DataAnalysisStateManager, ConversationStage
+    state_manager = DataAnalysisStateManager(session_id)
+    current_state = state_manager.get_state() or {}
+    is_tpr_active = state_manager.is_tpr_workflow_active()
+
+    # Capture all values needed inside the generator now (no session proxy inside generator)
+    app = current_app._get_current_object()
+    captured_session_id = session_id
+    captured_mem_sid = _mem_sid
+    captured_current_state = current_state
+    workflow_context = _build_general_workflow_context(session_id)
+
+    if is_tpr_active:
+        # TPR path: run the full TPR routing synchronously (same logic as /chat lines 786-986),
+        # then wrap the result in SSE events. TPR responses are fast; streaming adds no value.
+        from app.tpr.workflow_manager import TPRWorkflowHandler
+        from app.tpr.data_analyzer import TPRDataAnalyzer
+        from app.agent.encoding_handler import EncodingHandler
+        from app.tpr.language import TPRLanguageInterface
+        import glob as _glob
+
+        tpr_language = TPRLanguageInterface(session_id)
+        try:
+            tpr_language.update_from_metadata(current_state)
+        except Exception:
+            pass
+
+        tpr_analyzer = TPRDataAnalyzer()
+        saved_state = state_manager.load_state() or {}
+        saved_schema = saved_state.get('column_schema')
+        if saved_schema:
+            tpr_analyzer._schema = saved_schema
+
+        tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
+
+        df = None
+        try:
+            data_dir = os.path.join('instance', 'uploads', session_id)
+            uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
+            if os.path.exists(uploaded_csv):
+                df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
+            else:
+                data_files = (
+                    _glob.glob(os.path.join(data_dir, '*.csv')) +
+                    _glob.glob(os.path.join(data_dir, '*.xlsx')) +
+                    _glob.glob(os.path.join(data_dir, '*.xls'))
+                )
+                if data_files:
+                    from app.utils.dhis2_cleaner import (
+                        _select_raw_upload_file, clean_dhis2_export,
+                        get_cleaner_mode, apply_rename_map_to_schema,
+                    )
+                    try:
+                        latest = _select_raw_upload_file(data_files)
+                    except FileNotFoundError:
+                        latest = None
+                    if latest:
+                        if latest.endswith(('.xlsx', '.xls')):
+                            header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
+                            df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
+                        else:
+                            df = EncodingHandler.read_csv_with_encoding(latest)
+                        _cleaner_mode = get_cleaner_mode()
+                        if _cleaner_mode != 'off':
+                            try:
+                                df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
+                                if _cr.column_rename_map:
+                                    saved_schema = apply_rename_map_to_schema(
+                                        saved_schema or {}, _cr.column_rename_map
+                                    )
+                                    state_manager.update_state({'column_schema': saved_schema})
+                            except Exception:
+                                pass
+            if df is not None:
+                tpr_handler.set_data(df)
+        except Exception as load_err:
+            logger.error(f"[STREAM-TPR] Failed to load dataset: {load_err}")
+
+        tpr_handler.load_state_from_manager()
+        current_stage = state_manager.get_workflow_stage()
+
+        # Route TPR message — same logic as /chat (execute_confirmation / execute_command / agent)
+        lower_message = (message or '').lower().strip()
+        valid_options = []
+        if current_stage == ConversationStage.TPR_FACILITY_LEVEL:
+            valid_options = ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
+        elif current_stage == ConversationStage.TPR_AGE_GROUP:
+            valid_options = ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']
+        else:
+            valid_options = ['yes', 'continue', 'start', 'back', 'exit']
+
+        tpr_response = None
+        if current_state.get('tpr_awaiting_confirmation'):
+            confirmation_keywords = ['yes', 'y', 'continue', 'proceed', 'start', 'begin', 'ok', 'okay', 'sure', 'ready']
+            if lower_message in confirmation_keywords or any(kw in lower_message.split() for kw in confirmation_keywords):
+                tpr_response = tpr_handler.execute_confirmation()
+
+        if tpr_response is None:
+            intent_result = tpr_language.classify_intent(
+                message=message,
+                stage=current_stage.name if current_stage else 'unknown',
+                valid_options=valid_options
+            )
+            if intent_result['intent'] == 'selection' and intent_result['confidence'] >= 0.7:
+                command = tpr_language.extract_command(
+                    message=message,
+                    stage=current_stage.name if current_stage else 'unknown',
+                    valid_options=valid_options,
+                    context={'session_id': session_id, 'stage': current_stage}
+                )
+                if command:
+                    tpr_response = tpr_handler.execute_command(command, current_stage)
+                else:
+                    tpr_response = {
+                        "success": True,
+                        "message": f"I understood you're making a selection, but couldn't determine which option. Please choose from: {', '.join(valid_options)}",
+                        "session_id": session_id,
+                    }
+            else:
+                # Question → agent
+                from app.agent.agent import DataAnalysisAgent
+                import asyncio as _asyncio
+                _agent = DataAnalysisAgent(session_id)
+                _loop = _asyncio.new_event_loop()
+                try:
+                    tpr_response = _loop.run_until_complete(
+                        _agent.analyze(message, workflow_context={
+                            'workflow': 'tpr',
+                            'stage': current_stage.name if current_stage else None,
+                            'valid_options': valid_options,
+                            'data_loaded': df is not None,
+                            'session_id': session_id
+                        })
+                    )
+                finally:
+                    _asyncio.set_event_loop(None)
+                    _loop.close()
+
+        tpr_captured = tpr_response or {'success': False, 'message': 'TPR routing failed', 'session_id': session_id}
+
+        def _tpr_generate():
+            with app.app_context():
+                yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
+                yield f"data: {_json.dumps({'type': 'result', 'data': tpr_captured})}\n\n"
+                # Log assistant message
+                assistant_text = tpr_captured.get('message', '')
+                try:
+                    from app.services.session_memory import SessionMemory, MessageType
+                    SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
+                except Exception:
+                    pass
+                interaction_core.log_message(
+                    session_id=captured_session_id, sender='assistant',
+                    content=assistant_text, intent=None,
+                    entities={'endpoint': '/api/v1/data-analysis/chat/stream', 'workflow': 'tpr'}
+                )
+                yield "data: [DONE]\n\n"
+
+        resp = Response(stream_with_context(_tpr_generate()), mimetype='text/event-stream')
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers['Connection'] = 'keep-alive'
+        resp.headers['X-Accel-Buffering'] = 'no'
+        return resp
+
+    # Agent path — stream analyze_stream() events
+    def generate():
+        with app.app_context():
+            # Emit status immediately — before agent init — so bubble appears within ~1s
+            yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
+
+            try:
+                from app.agent.agent import DataAnalysisAgent
+                agent = DataAnalysisAgent(captured_session_id)
+
+                for event in agent.analyze_stream(message, workflow_context=workflow_context):
+                    yield f"data: {_json.dumps(event)}\n\n"
+
+                    if event['type'] == 'result':
+                        assistant_text = event.get('data', {}).get('message', '')
+                        try:
+                            from app.services.session_memory import SessionMemory, MessageType
+                            SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
+                        except Exception:
+                            pass
+                        interaction_core.log_message(
+                            session_id=captured_session_id, sender='assistant',
+                            content=assistant_text, intent=None,
+                            entities={'endpoint': '/api/v1/data-analysis/chat/stream', 'workflow': 'data_analysis_v3'}
+                        )
+            except Exception as e:
+                logger.exception(f"[STREAM] Agent error for session {captured_session_id}: {e}")
+                yield f"data: {_json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+    resp = Response(stream_with_context(generate()), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Connection'] = 'keep-alive'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp

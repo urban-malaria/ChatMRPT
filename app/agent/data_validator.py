@@ -22,14 +22,11 @@ class DataValidator:
         r'(?:Item|Entity|Entry|Object|Thing) \d+',            # Item 1, Entity 2, etc.
         r'Example \w+',                                       # Example X, etc.
         r'Sample \w+',                                        # Sample Y, etc.
-        r'Test \w+',                                          # Test Z, etc.
         r'Demo \w+',                                          # Demo ABC, etc.
         r'Placeholder \w+',                                   # Placeholder XYZ, etc.
         # Domain-agnostic patterns for single letters/numbers
         r'\b[A-Z]\b(?:\s|$|,)',                              # Just "A", "B", "C" alone
         r'(?:^|\s)#\d+(?:\s|$)',                             # #1, #2, #3, etc.
-        r'[Ww]ard\s+[A-Z](?:\b|$)',                           # Ward A
-        r'[Ww]ard\s+\d+(?:\b|$)',                            # Ward 1
         r'[Ff]acility\s+[A-Z](?:\b|$)',                       # Facility B
         r'[Ff]acility\s+\d+(?:\b|$)',                        # Facility 2
         r'[Aa]rea\s+[A-Z](?:\b|$)',                           # Area C
