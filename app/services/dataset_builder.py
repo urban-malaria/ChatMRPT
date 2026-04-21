@@ -819,6 +819,12 @@ class UnifiedDatasetBuilder:
                     if col in comp_df_mapped.columns and col not in merge_cols:
                         merge_cols.append(col)
                         analysis_cols.append(col)
+
+                # Pass combined_* columns (burden-blended rankings) through to GeoParquet
+                for col in comp_df_mapped.columns:
+                    if col.startswith('combined_') and col not in merge_cols:
+                        merge_cols.append(col)
+                        analysis_cols.append(col)
                 
                 # 🔍 DEBUG: Check for duplicates before merge
                 print(f"🔍 COMPOSITE MERGE DEBUG: Before merge - GDF: {len(gdf)} rows, Analysis: {len(comp_df_mapped)} rows")

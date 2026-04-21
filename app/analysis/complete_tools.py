@@ -1435,6 +1435,12 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
             fallback = os.path.join(session_folder, f'vulnerability_rankings{year_tag}.csv')
             if os.path.exists(fallback):
                 rankings_path = fallback
+        # Environmental vars are year-invariant — aggregate composite rankings are correct for all years
+        if not os.path.exists(rankings_path):
+            agg_fallback = os.path.join(session_folder, 'analysis_vulnerability_rankings.csv')
+            if os.path.exists(agg_fallback):
+                rankings_path = agg_fallback
+                logger.info(f"Using aggregate rankings for {year_tag} burden blend (env vars are year-invariant)")
         raw_path = os.path.join(session_folder, f'raw_data{year_tag}.csv')
 
         if not os.path.exists(rankings_path):
@@ -1466,6 +1472,12 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
                 on=ward_col, how='left'
             )
 
+            # Fill NaN burden for wards absent from this year's raw data with median
+            unmatched = merged[merged[burden_col].isna()][ward_col].tolist()
+            if unmatched:
+                logger.warning(f"{len(unmatched)} wards have no burden for {year_tag}: {unmatched[:5]}...")
+                merged[burden_col] = merged[burden_col].fillna(merged[burden_col].median())
+
             # For imputed wards, substitute median of non-imputed wards
             imputed_col = '_imputed' if '_imputed' in merged.columns else None
             burden = merged[burden_col].copy()
@@ -1477,7 +1489,7 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
             burden_rank = burden.rank(ascending=False, method='average')
 
             composite_rank_col = None
-            for col in ('composite_rank', 'rank', 'composite_score_rank'):
+            for col in ('composite_rank', 'overall_rank', 'rank', 'composite_score_rank'):
                 if col in merged.columns:
                     composite_rank_col = col
                     break
