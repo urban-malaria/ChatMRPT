@@ -16,6 +16,96 @@ const axiosInstance: AxiosInstance = axios.create({
   withCredentials: true, // For session cookies
 });
 
+// Retry wrapper with exponential backoff — only retries network errors and 5xx, never 4xx
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  onRetry?: (attempt: number) => void,
+  maxRetries = 3
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isNetworkError = !err.response;
+      const is5xx = err.response?.status >= 500;
+      const hasRetriesLeft = attempt < maxRetries;
+
+      if ((isNetworkError || is5xx) && hasRetriesLeft) {
+        const delay = 1000 * Math.pow(2, attempt);
+        onRetry?.(attempt + 1);
+        await new Promise((res) => setTimeout(res, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+const CHUNK_SIZE = 1024 * 1024; // 1 MB
+export const CHUNK_THRESHOLD = 5 * 1024 * 1024; // 5 MB
+
+// Module-level so it can reference axiosInstance without a self-reference inside the api object
+export async function uploadInChunks(
+  csvFile: File,
+  shapeFile: File,
+  onProgress?: (percent: number) => void,
+  onRetry?: (attempt: number) => void
+) {
+  const uploadId = crypto.randomUUID();
+  const totalBytes = csvFile.size + shapeFile.size;
+  let sentBytes = 0;
+
+  async function sendChunks(file: File, fileType: 'csv' | 'shapefile') {
+    const total = Math.ceil(file.size / CHUNK_SIZE);
+    for (let i = 0; i < total; i++) {
+      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      let attempt = 0;
+      while (true) {
+        try {
+          const fd = new FormData();
+          fd.append('upload_id', uploadId);
+          fd.append('file_type', fileType);
+          fd.append('chunk_index', String(i));
+          fd.append('total_chunks', String(total));
+          fd.append('chunk', chunk);
+          await axiosInstance.post('/upload/chunk', fd, {
+            timeout: 60000,
+            headers: { 'Content-Type': undefined },
+          });
+          sentBytes += chunk.size;
+          onProgress?.(Math.round((sentBytes / totalBytes) * 95));
+          break;
+        } catch (err: any) {
+          const isRetryable = !err.response || err.response?.status >= 500;
+          if (isRetryable && attempt < 3) {
+            attempt++;
+            onRetry?.(attempt);
+            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+    return Math.ceil(file.size / CHUNK_SIZE);
+  }
+
+  const csvTotalChunks = await sendChunks(csvFile, 'csv');
+  const shpTotalChunks = await sendChunks(shapeFile, 'shapefile');
+
+  onProgress?.(97);
+  const response = await axiosInstance.post('/upload/finalize', {
+    upload_id: uploadId,
+    csv_filename: csvFile.name,
+    shapefile_filename: shapeFile.name,
+    csv_total_chunks: csvTotalChunks,
+    shp_total_chunks: shpTotalChunks,
+  }, { timeout: 60000 });
+  onProgress?.(100);
+  return response;
+}
+
 // Request interceptor for adding session ID
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -120,11 +210,24 @@ export const api = {
   
   // Data analysis endpoints
   analysis: {
-    uploadFiles: (formData: FormData) =>
-      axiosInstance.post('/api/data-analysis/upload', formData, {
-        timeout: 120000, // 2 minutes for slow connections
-        headers: { 'Content-Type': undefined }, // Let browser set multipart boundary
-      }),
+    uploadFiles: (
+      formData: FormData,
+      onProgress?: (percent: number) => void,
+      onRetry?: (attempt: number) => void
+    ) =>
+      withRetry(
+        () =>
+          axiosInstance.post('/api/data-analysis/upload', formData, {
+            timeout: 120000,
+            headers: { 'Content-Type': undefined },
+            onUploadProgress: (event) => {
+              if (onProgress && event.total) {
+                onProgress(Math.round((event.loaded * 100) / event.total));
+              }
+            },
+          }),
+        onRetry
+      ),
     
     runAnalysis: (params: AnalysisParams) =>
       axiosInstance.post('/run_analysis', params),
@@ -156,11 +259,24 @@ export const api = {
   
   // Upload endpoints
   upload: {
-    uploadBothFiles: (formData: FormData) =>
-      axiosInstance.post('/upload_both_files', formData, {
-        timeout: 120000, // 2 minutes for slow connections
-        headers: { 'Content-Type': undefined }, // Let browser set multipart boundary
-      }),
+    uploadBothFiles: (
+      formData: FormData,
+      onProgress?: (percent: number) => void,
+      onRetry?: (attempt: number) => void
+    ) =>
+      withRetry(
+        () =>
+          axiosInstance.post('/upload_both_files', formData, {
+            timeout: 120000,
+            headers: { 'Content-Type': undefined },
+            onUploadProgress: (event) => {
+              if (onProgress && event.total) {
+                onProgress(Math.round((event.loaded * 100) / event.total));
+              }
+            },
+          }),
+        onRetry
+      ),
     
     loadSampleData: (dataType: string, sessionId: string) =>
       axiosInstance.post('/load_sample_data', { data_type: dataType, session_id: sessionId }),

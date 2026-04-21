@@ -6,6 +6,7 @@ import re
 from logging.handlers import RotatingFileHandler
 from flask import Flask, session as flask_session, request, g
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_compress import Compress
 from flask_session import Session
 from flask_login import LoginManager
 from dotenv import load_dotenv
@@ -84,6 +85,9 @@ def create_app(config_name=None):
     # This helps generate external URLs and cookies that match the public domain
     # and prevents OAuth state mismatches due to domain/protocol differences.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+    # Gzip compress all JSON/HTML responses — reduces payload 60-80% on slow connections
+    Compress(app)
 
     # --- Load Configuration ---
     from .config import get_config

@@ -9,6 +9,7 @@ clear error responses to avoid opaque 500s during upload.
 from __future__ import annotations
 
 import os
+import shutil
 import time
 import logging
 from typing import Dict, Optional, Tuple
@@ -670,3 +671,159 @@ def download_processed_shapefile():
     except Exception as e:
         logger.error(f"Error downloading shapefile: {e}")
         return jsonify({"status": "error", "message": f"Failed to download shapefile: {e}"}), 500
+
+
+# ---------------------------------------------------------------------------
+# Chunked / resumable upload endpoints
+# ---------------------------------------------------------------------------
+
+@upload_bp.route("/upload/chunk", methods=["POST"])
+@require_auth
+def upload_chunk():
+    """Receive a single chunk of a file being uploaded in pieces.
+
+    Expected form fields:
+        upload_id     — UUID identifying this upload session (client-generated)
+        file_type     — 'csv' or 'shapefile'
+        chunk_index   — 0-based index of this chunk
+        total_chunks  — total number of chunks for this file
+        chunk         — the binary chunk data (file part)
+    """
+    try:
+        upload_id = request.form.get("upload_id", "").strip()
+        file_type = request.form.get("file_type", "").strip()
+        chunk_index = request.form.get("chunk_index", type=int)
+        total_chunks = request.form.get("total_chunks", type=int)
+
+        if not upload_id or file_type not in ("csv", "shapefile") or chunk_index is None or not total_chunks:
+            return jsonify({"status": "error", "message": "Missing required chunk parameters"}), 400
+
+        chunk_file = request.files.get("chunk")
+        if not chunk_file:
+            return jsonify({"status": "error", "message": "No chunk data received"}), 400
+
+        # Store chunk at: UPLOAD_FOLDER/chunks/{upload_id}/{file_type}/chunk_{index}
+        chunks_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "chunks", upload_id, file_type)
+        os.makedirs(chunks_dir, exist_ok=True)
+        chunk_path = os.path.join(chunks_dir, f"chunk_{chunk_index:05d}")
+        chunk_file.save(chunk_path)
+
+        logger.info(f"Chunk received: upload_id={upload_id} file_type={file_type} index={chunk_index}/{total_chunks - 1}")
+        return jsonify({"status": "ok", "chunk_index": chunk_index, "total_chunks": total_chunks})
+
+    except Exception as e:
+        logger.error(f"Error receiving chunk: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@upload_bp.route("/upload/finalize", methods=["POST"])
+@require_auth
+@validate_session
+def upload_finalize():
+    """Assemble uploaded chunks into final files and run the standard processing pipeline.
+
+    Expected JSON body:
+        upload_id          — UUID used in /upload/chunk calls
+        csv_filename       — original filename of the CSV/Excel file
+        shapefile_filename — original filename of the shapefile zip
+        csv_total_chunks   — number of chunks for the CSV file
+        shp_total_chunks   — number of chunks for the shapefile
+    """
+    try:
+        import uuid
+        data = request.get_json(force=True) or {}
+        upload_id = data.get("upload_id", "").strip()
+        csv_filename = data.get("csv_filename", "data.csv").strip()
+        shapefile_filename = data.get("shapefile_filename", "shapefile.zip").strip()
+        csv_total_chunks = data.get("csv_total_chunks", 0)
+        shp_total_chunks = data.get("shp_total_chunks", 0)
+
+        if not upload_id:
+            return jsonify({"status": "error", "message": "upload_id is required"}), 400
+
+        chunks_base = os.path.join(current_app.config["UPLOAD_FOLDER"], "chunks", upload_id)
+
+        def _assemble(file_type: str, total: int, dest_path: str):
+            chunks_dir = os.path.join(chunks_base, file_type)
+            with open(dest_path, "wb") as out:
+                for i in range(total):
+                    chunk_path = os.path.join(chunks_dir, f"chunk_{i:05d}")
+                    if not os.path.exists(chunk_path):
+                        raise FileNotFoundError(f"Missing chunk {i} for {file_type}")
+                    with open(chunk_path, "rb") as c:
+                        out.write(c.read())
+
+        # Create a proper session for this upload
+        session_id = str(uuid.uuid4())
+        session["session_id"] = session_id
+        session["base_session_id"] = session_id
+        session_folder = _ensure_session_folder(session_id)
+        clear_analysis_results(session_folder)
+
+        # Assemble CSV
+        ext = csv_filename.rsplit(".", 1)[-1].lower() if "." in csv_filename else "csv"
+        raw_csv_name = "raw_data.xlsx" if ext in ("xlsx", "xls") else "raw_data.csv"
+        csv_dest = os.path.join(session_folder, raw_csv_name)
+        _assemble("csv", csv_total_chunks, csv_dest)
+        logger.info(f"CSV assembled: {csv_dest}")
+
+        # Assemble shapefile
+        shp_dest = os.path.join(session_folder, "raw_shapefile.zip")
+        _assemble("shapefile", shp_total_chunks, shp_dest)
+        logger.info(f"Shapefile assembled: {shp_dest}")
+
+        # Clean up temp chunks
+        try:
+            shutil.rmtree(chunks_base)
+        except Exception as e:
+            logger.warning(f"Could not clean up chunks: {e}")
+
+        # Generate data summary (same as standard upload path)
+        summary = generate_dynamic_data_summary(session_id, session_folder, "csv_shapefile")
+
+        # Set session flags
+        session["upload_type"] = "csv_shapefile"
+        session["raw_data_stored"] = True
+        session["should_ask_analysis_permission"] = False
+        session["csv_loaded"] = True
+        session["shapefile_loaded"] = True
+        session["data_loaded"] = True
+        session.permanent = True
+        session.modified = True
+
+        try:
+            from app.conversation.session_state import SessionStateManager
+            SessionStateManager().update_state(session_id, {
+                "should_ask_analysis_permission": False,
+                "data_loaded": True,
+            })
+        except Exception as e:
+            logger.debug(f"SessionStateManager update failed: {e}")
+
+        try:
+            from app.services.instance_sync import sync_session_after_upload
+            sync_session_after_upload(session_id)
+        except Exception as e:
+            logger.debug(f"Instance sync not performed: {e}")
+
+        resp = jsonify({
+            "status": "success",
+            "upload_type": "csv_shapefile",
+            "session_id": session_id,
+            "data_summary": summary,
+            "message": "Chunked upload assembled and processed successfully.",
+            "next_step": "Data summary will be presented for your review and permission.",
+        })
+        try:
+            resp.set_cookie("ChatMRPT-Session", value=session_id, max_age=3600,
+                            httponly=True, samesite="Lax", path="/")
+        except Exception:
+            pass
+        return resp
+
+    except FileNotFoundError as e:
+        logger.error(f"Chunk assembly failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error finalizing chunked upload: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
