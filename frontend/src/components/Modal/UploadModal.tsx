@@ -83,20 +83,19 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
   const isRetrying = uploadStatus.includes('retrying');
 
   const progressBar = isUploading && (
-    <div className="w-full mt-2">
+    <div className="w-full mt-3">
       {uploadProgress < 100 ? (
         <>
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            {isRetrying
-              ? <span className="text-amber-600">{uploadStatus}</span>
-              : <span />}
-            {!isRetrying && <span>{uploadProgress}%</span>}
-          </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <div
               className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
               style={{ width: `${Math.max(5, uploadProgress)}%` }}
             />
+          </div>
+          <div className="text-xs text-left mt-1">
+            {isRetrying
+              ? <span className="text-amber-600">{uploadStatus}</span>
+              : <span className="text-gray-500">Uploading... {uploadProgress}%</span>}
           </div>
         </>
       ) : (
@@ -104,7 +103,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
           <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
             <div className="h-2.5 w-1/3 bg-blue-500 rounded-full animate-shimmer" />
           </div>
-          <div className="text-xs text-gray-500 mt-1">{processingLabel}</div>
+          <div className="text-xs text-gray-500 text-left mt-1">{processingLabel}</div>
         </>
       )}
     </div>
@@ -300,22 +299,12 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                       disabled={isUploading}
                       className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                     >
-                      {isUploading ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          {uploadStatus || 'Uploading...'}
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          Upload Files
-                        </>
-                      )}
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Upload Files
+                      </>
                     </button>
 
                     {progressBar}
@@ -478,22 +467,12 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                         disabled={isUploading}
                         className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {isUploading ? (
-                          <>
-                            <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            {uploadStatus || 'Uploading...'}
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                            Upload for Analysis
-                          </>
-                        )}
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          Upload for Analysis
+                        </>
                       </button>
 
                       {progressBar}
