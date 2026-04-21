@@ -42,70 +42,6 @@ async function withRetry<T>(
   throw new Error('Max retries exceeded');
 }
 
-const CHUNK_SIZE = 1024 * 1024; // 1 MB
-export const CHUNK_THRESHOLD = 5 * 1024 * 1024; // 5 MB
-
-// Module-level so it can reference axiosInstance without a self-reference inside the api object
-export async function uploadInChunks(
-  csvFile: File,
-  shapeFile: File,
-  onProgress?: (percent: number) => void,
-  onRetry?: (attempt: number) => void
-) {
-  const uploadId = crypto.randomUUID();
-  const totalBytes = csvFile.size + shapeFile.size;
-  let sentBytes = 0;
-
-  async function sendChunks(file: File, fileType: 'csv' | 'shapefile') {
-    const total = Math.ceil(file.size / CHUNK_SIZE);
-    for (let i = 0; i < total; i++) {
-      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      let attempt = 0;
-      while (true) {
-        try {
-          const fd = new FormData();
-          fd.append('upload_id', uploadId);
-          fd.append('file_type', fileType);
-          fd.append('chunk_index', String(i));
-          fd.append('total_chunks', String(total));
-          fd.append('chunk', chunk);
-          await axiosInstance.post('/upload/chunk', fd, {
-            timeout: 60000,
-            headers: { 'Content-Type': undefined },
-          });
-          sentBytes += chunk.size;
-          onProgress?.(Math.round((sentBytes / totalBytes) * 95));
-          break;
-        } catch (err: any) {
-          const isRetryable = !err.response || err.response?.status >= 500;
-          if (isRetryable && attempt < 3) {
-            attempt++;
-            onRetry?.(attempt);
-            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
-          } else {
-            throw err;
-          }
-        }
-      }
-    }
-    return Math.ceil(file.size / CHUNK_SIZE);
-  }
-
-  const csvTotalChunks = await sendChunks(csvFile, 'csv');
-  const shpTotalChunks = await sendChunks(shapeFile, 'shapefile');
-
-  onProgress?.(97);
-  const response = await axiosInstance.post('/upload/finalize', {
-    upload_id: uploadId,
-    csv_filename: csvFile.name,
-    shapefile_filename: shapeFile.name,
-    csv_total_chunks: csvTotalChunks,
-    shp_total_chunks: shpTotalChunks,
-  }, { timeout: 60000 });
-  onProgress?.(100);
-  return response;
-}
-
 // Request interceptor for adding session ID
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -278,6 +214,33 @@ export const api = {
         onRetry
       ),
     
+    uploadChunk: (
+      uploadId: string,
+      fileType: 'csv' | 'shapefile',
+      chunkIndex: number,
+      totalChunks: number,
+      chunk: Blob
+    ) => {
+      const fd = new FormData();
+      fd.append('upload_id', uploadId);
+      fd.append('file_type', fileType);
+      fd.append('chunk_index', String(chunkIndex));
+      fd.append('total_chunks', String(totalChunks));
+      fd.append('chunk', chunk);
+      return axiosInstance.post('/upload/chunk', fd, {
+        timeout: 60000,
+        headers: { 'Content-Type': undefined },
+      });
+    },
+
+    finalizeChunkedUpload: (payload: {
+      upload_id: string;
+      csv_filename: string;
+      shapefile_filename: string;
+      csv_total_chunks: number;
+      shp_total_chunks: number;
+    }) => axiosInstance.post('/upload/finalize', payload, { timeout: 60000 }),
+
     loadSampleData: (dataType: string, sessionId: string) =>
       axiosInstance.post('/load_sample_data', { data_type: dataType, session_id: sessionId }),
     

@@ -18,7 +18,7 @@ export function useFileUpload() {
       return await uploadFn(
         (percent) => {
           setUploadProgress(percent);
-          setUploadStatus(percent < 100 ? `Uploading... ${percent}%` : 'Processing...');
+          setUploadStatus(percent < 100 ? 'Uploading...' : 'Processing...');
         },
         (attempt) => {
           setUploadStatus(`Connection issue, retrying... (${attempt}/3)`);

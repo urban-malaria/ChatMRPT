@@ -3,9 +3,64 @@ import { useChatStore } from '@/stores/chatStore';
 import storage from '@/utils/storage';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import useMessageStreaming from '@/hooks/useMessageStreaming';
-import api, { uploadInChunks, CHUNK_THRESHOLD } from '@/services/api';
+import api from '@/services/api';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import toast from 'react-hot-toast';
+
+const CHUNK_THRESHOLD = 5 * 1024 * 1024;
+const CHUNK_SIZE = 1024 * 1024;
+
+async function uploadInChunks(
+  csvFile: File,
+  shapeFile: File,
+  onProgress: (percent: number) => void,
+  onRetry: (attempt: number) => void
+) {
+  // crypto.randomUUID() is safe: production runs on HTTPS, localhost is treated as secure context
+  const uploadId = crypto.randomUUID();
+  const totalBytes = csvFile.size + shapeFile.size;
+  let sentBytes = 0;
+
+  async function sendChunks(file: File, fileType: 'csv' | 'shapefile') {
+    const total = Math.ceil(file.size / CHUNK_SIZE);
+    for (let i = 0; i < total; i++) {
+      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      let attempt = 0;
+      while (true) {
+        try {
+          await api.upload.uploadChunk(uploadId, fileType, i, total, chunk);
+          sentBytes += chunk.size;
+          onProgress(Math.round((sentBytes / totalBytes) * 95));
+          break;
+        } catch (err: any) {
+          const isRetryable = !err.response || err.response?.status >= 500;
+          if (isRetryable && attempt < 3) {
+            attempt++;
+            onRetry(attempt);
+            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+    return Math.ceil(file.size / CHUNK_SIZE);
+  }
+
+  const csvTotalChunks = await sendChunks(csvFile, 'csv');
+  const shpTotalChunks = await sendChunks(shapeFile, 'shapefile');
+
+  onProgress(97);
+  const response = await api.upload.finalizeChunkedUpload({
+    upload_id: uploadId,
+    csv_filename: csvFile.name,
+    shapefile_filename: shapeFile.name,
+    csv_total_chunks: csvTotalChunks,
+    shp_total_chunks: shpTotalChunks,
+  });
+  onProgress(100);
+  return response;
+}
 
 interface UploadModalProps {
   isOpen: boolean;
