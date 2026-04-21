@@ -25,7 +25,7 @@ class DataValidator:
         r'Demo \w+',                                          # Demo ABC, etc.
         r'Placeholder \w+',                                   # Placeholder XYZ, etc.
         # Domain-agnostic patterns for single letters/numbers
-        r'\b[A-Z]\b(?:\s|$|,)',                              # Just "A", "B", "C" alone
+        r'(?:^|\n)\s*[A-Z]\s*(?:[-–]\s*|\n|$)',             # Lone letter on its own line (true hallucination)
         r'(?:^|\s)#\d+(?:\s|$)',                             # #1, #2, #3, etc.
         r'[Ff]acility\s+[A-Z](?:\b|$)',                       # Facility B
         r'[Ff]acility\s+\d+(?:\b|$)',                        # Facility 2
