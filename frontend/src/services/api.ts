@@ -16,6 +16,36 @@ const axiosInstance: AxiosInstance = axios.create({
   withCredentials: true, // For session cookies
 });
 
+// Retry wrapper with exponential backoff — only retries network errors and 5xx, never 4xx or timeouts
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  onRetry?: (attempt: number) => void,
+  maxRetries = 3
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isNetworkError = !err.response;
+      // ECONNABORTED covers both Axios timeout and explicit cancel — neither should be retried,
+      // as the original request may still be in flight on the server
+      const isTimeout = err.code === 'ECONNABORTED';
+      const is5xx = err.response?.status >= 500;
+      const hasRetriesLeft = attempt < maxRetries;
+
+      if (((isNetworkError && !isTimeout) || is5xx) && hasRetriesLeft) {
+        const delay = 1000 * Math.pow(2, attempt);
+        onRetry?.(attempt + 1);
+        await new Promise((res) => setTimeout(res, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+
 // Request interceptor for adding session ID
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -120,11 +150,24 @@ export const api = {
   
   // Data analysis endpoints
   analysis: {
-    uploadFiles: (formData: FormData) =>
-      axiosInstance.post('/api/data-analysis/upload', formData, {
-        timeout: 120000, // 2 minutes for slow connections
-        headers: { 'Content-Type': undefined }, // Let browser set multipart boundary
-      }),
+    uploadFiles: (
+      formData: FormData,
+      onProgress?: (percent: number) => void,
+      onRetry?: (attempt: number) => void
+    ) =>
+      withRetry(
+        () =>
+          axiosInstance.post('/api/data-analysis/upload', formData, {
+            timeout: 300000, // 5 min — covers 6MB at 512Kbps (~94s xfer) + server schema inference (~60s)
+            headers: { 'Content-Type': undefined },
+            onUploadProgress: (event) => {
+              if (onProgress && event.total) {
+                onProgress(Math.round((event.loaded * 100) / event.total));
+              }
+            },
+          }),
+        onRetry
+      ),
     
     runAnalysis: (params: AnalysisParams) =>
       axiosInstance.post('/run_analysis', params),
@@ -156,11 +199,24 @@ export const api = {
   
   // Upload endpoints
   upload: {
-    uploadBothFiles: (formData: FormData) =>
-      axiosInstance.post('/upload_both_files', formData, {
-        timeout: 120000, // 2 minutes for slow connections
-        headers: { 'Content-Type': undefined }, // Let browser set multipart boundary
-      }),
+    uploadBothFiles: (
+      formData: FormData,
+      onProgress?: (percent: number) => void,
+      onRetry?: (attempt: number) => void
+    ) =>
+      withRetry(
+        () =>
+          axiosInstance.post('/upload_both_files', formData, {
+            timeout: 300000, // 5 min — matches analysis upload timeout
+            headers: { 'Content-Type': undefined },
+            onUploadProgress: (event) => {
+              if (onProgress && event.total) {
+                onProgress(Math.round((event.loaded * 100) / event.total));
+              }
+            },
+          }),
+        onRetry
+      ),
     
     loadSampleData: (dataType: string, sessionId: string) =>
       axiosInstance.post('/load_sample_data', { data_type: dataType, session_id: sessionId }),
