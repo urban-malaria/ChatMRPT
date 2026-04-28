@@ -40,6 +40,10 @@ instance/*.sqlite3
 instance/*.log
 instance/flask_session/
 
+# Local scratch files
+# ==========================================
+terminal.txt
+
 # Backups & Archives
 # ==========================================
 _archive/

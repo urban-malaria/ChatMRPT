@@ -4,6 +4,7 @@ Handles file uploads and queries for the Data Analysis tab
 """
 from __future__ import annotations
 
+import glob
 import os
 import logging
 import time
@@ -232,6 +233,324 @@ def _build_general_workflow_context(session_id: str) -> dict:
         pass
 
     return context
+
+
+class TPRStartError(RuntimeError):
+    """Raised by _handle_tpr_start when workflow cannot be started (message is user-facing)."""
+
+
+def _run_agent_sync(agent, message, workflow_context=None):
+    """Run agent.analyze() synchronously in a dedicated event loop."""
+    import asyncio as _asyncio
+    loop = _asyncio.new_event_loop()
+    _asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(agent.analyze(message, workflow_context=workflow_context))
+    finally:
+        _asyncio.set_event_loop(None)
+        loop.close()
+
+
+def _handle_tpr_active(session_id, message, state_manager, current_state, tpr_language):
+    """
+    Handle a message when the TPR workflow is already in progress.
+    Returns a result dict. Shared by /chat and /stream.
+    """
+    from app.tpr.workflow_manager import TPRWorkflowHandler
+    from app.tpr.data_analyzer import TPRDataAnalyzer
+    from app.agent.encoding_handler import EncodingHandler
+    from app.agent.state_manager import ConversationStage
+
+    tpr_analyzer = TPRDataAnalyzer()
+    saved_state = state_manager.load_state() or {}
+    saved_schema = saved_state.get('column_schema')
+    if saved_schema:
+        tpr_analyzer._schema = saved_schema
+        logger.info(
+            "[TPR-ACTIVE] Restored column_schema (%d mapped fields)",
+            len([v for v in saved_schema.values() if v]),
+        )
+    else:
+        logger.warning("[TPR-ACTIVE] No column_schema in state_manager")
+
+    tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
+
+    df = None
+    try:
+        data_dir = os.path.join('instance', 'uploads', session_id)
+        uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
+        if os.path.exists(uploaded_csv):
+            df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
+            logger.info("[TPR-ACTIVE] Loaded uploaded_data.csv (%d rows)", df.shape[0])
+        else:
+            data_files = (
+                glob.glob(os.path.join(data_dir, '*.csv')) +
+                glob.glob(os.path.join(data_dir, '*.xlsx')) +
+                glob.glob(os.path.join(data_dir, '*.xls'))
+            )
+            if data_files:
+                from app.utils.dhis2_cleaner import (
+                    _select_raw_upload_file, clean_dhis2_export,
+                    get_cleaner_mode, apply_rename_map_to_schema,
+                )
+                try:
+                    latest = _select_raw_upload_file(data_files)
+                except FileNotFoundError:
+                    latest = None
+                if latest:
+                    if latest.lower().endswith(('.xlsx', '.xls')):
+                        header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
+                        df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
+                    else:
+                        df = EncodingHandler.read_csv_with_encoding(latest)
+                    _cleaner_mode = get_cleaner_mode()
+                    if _cleaner_mode != 'off':
+                        try:
+                            df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
+                            if _cr.column_rename_map:
+                                saved_schema = apply_rename_map_to_schema(
+                                    saved_schema or {}, _cr.column_rename_map
+                                )
+                                state_manager.update_state({'column_schema': saved_schema})
+                                tpr_analyzer._schema = saved_schema
+                        except Exception as _cexc:
+                            logger.exception("[TPR-ACTIVE] Cleaner failed: %s", _cexc)
+        if df is not None:
+            tpr_handler.set_data(df)
+    except Exception as load_err:
+        logger.error("[TPR-ACTIVE] Failed to load dataset: %s", load_err)
+
+    tpr_handler.load_state_from_manager()
+    current_stage = state_manager.get_workflow_stage()
+
+    # Build valid_options — TPR_STATE_SELECTION reads actual state names from data
+    valid_options = []
+    if current_stage == ConversationStage.TPR_STATE_SELECTION:
+        if df is not None:
+            try:
+                state_analysis = tpr_analyzer.analyze_states(df)
+                valid_options = list(state_analysis.get('states', {}).keys())
+            except Exception:
+                pass
+        valid_options.extend(['yes', 'continue', 'back', 'exit', 'status'])
+    elif current_stage == ConversationStage.TPR_FACILITY_LEVEL:
+        valid_options = ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
+    elif current_stage == ConversationStage.TPR_AGE_GROUP:
+        valid_options = ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']
+    else:
+        valid_options = ['yes', 'continue', 'start', 'back', 'exit']
+
+    lower_message = (message or '').lower().strip()
+
+    # Priority 1: confirmation
+    if current_state.get('tpr_awaiting_confirmation'):
+        confirmation_keywords = [
+            'yes', 'y', 'continue', 'proceed', 'start', 'begin', 'ok', 'okay', 'sure', 'ready'
+        ]
+        if lower_message in confirmation_keywords or any(
+            kw in lower_message.split() for kw in confirmation_keywords
+        ):
+            logger.info("[TPR-ACTIVE] Confirmation detected")
+            return tpr_handler.execute_confirmation()
+
+    # Priority 2: intent classification → selection or question
+    intent_result = tpr_language.classify_intent(
+        message=message,
+        stage=current_stage.name if current_stage else 'unknown',
+        valid_options=valid_options,
+    )
+
+    if intent_result['intent'] == 'selection' and intent_result['confidence'] >= 0.7:
+        logger.info(
+            "[TPR-ACTIVE] Selection intent (confidence=%.2f, rationale=%s)",
+            intent_result['confidence'],
+            intent_result.get('rationale', ''),
+        )
+        command = tpr_language.extract_command(
+            message=message,
+            stage=current_stage.name if current_stage else 'unknown',
+            valid_options=valid_options,
+            context={'session_id': session_id, 'stage': current_stage},
+        )
+        if command:
+            logger.info("[TPR-ACTIVE] Extracted command: '%s'", command)
+            return tpr_handler.execute_command(command, current_stage)
+        return {
+            'success': True,
+            'message': (
+                f"I understood you're making a selection, but couldn't determine which option. "
+                f"Please choose from: {', '.join(valid_options)}"
+            ),
+            'session_id': session_id,
+            'workflow': 'tpr',
+            'stage': current_stage.name if current_stage else None,
+        }
+
+    # Question → agent
+    logger.info("[TPR-ACTIVE] Question detected, routing to agent")
+    from app.agent.agent import DataAnalysisAgent
+    agent = DataAnalysisAgent(session_id)
+    workflow_context = {
+        'workflow': 'tpr',
+        'stage': current_stage.name if current_stage else None,
+        'valid_options': valid_options,
+        'selections': state_manager.get_tpr_selections() or {},
+        'data_loaded': df is not None,
+        'session_id': session_id,
+    }
+    return _run_agent_sync(agent, message, workflow_context=workflow_context)
+
+
+def _handle_tpr_start(session_id, message, state_manager, current_state):
+    """
+    Load data and start the TPR workflow from scratch.
+    Returns a result dict. Raises TPRStartError with a user-facing message on failure.
+    Shared by /chat and /stream.
+    """
+    from app.tpr.workflow_manager import TPRWorkflowHandler
+    from app.tpr.data_analyzer import TPRDataAnalyzer
+    from app.tpr.language import TPRLanguageInterface as _TPRLang
+    from app.agent.encoding_handler import EncodingHandler
+    from app.agent.state_manager import ConversationStage
+    from app.utils.dhis2_cleaner import (
+        _select_raw_upload_file, clean_dhis2_export,
+        get_cleaner_mode, apply_rename_map_to_schema,
+    )
+
+    logger.info("[TPR-START] Starting workflow for session %s", session_id)
+
+    data_dir = os.path.join('instance', 'uploads', session_id)
+    data_files = (
+        glob.glob(os.path.join(data_dir, '*.csv')) +
+        glob.glob(os.path.join(data_dir, '*.xlsx')) +
+        glob.glob(os.path.join(data_dir, '*.xls'))
+    )
+    if not data_files:
+        raise TPRStartError(
+            'No data found. Please upload your dataset before starting the TPR workflow.'
+        )
+
+    tpr_analyzer = TPRDataAnalyzer()
+    tpr_language = _TPRLang(session_id)
+    try:
+        tpr_language.update_from_metadata(current_state)
+    except Exception:
+        pass
+
+    uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
+    _saved_schema = (
+        current_state.get('column_schema')
+        or (state_manager.load_state() or {}).get('column_schema')
+        or {}
+    )
+    _tpr_cols = ('tested_pos', 'u5_pos', 'o5_pos', 'pw_pos', 'total_tested')
+    _schema_complete = (
+        _saved_schema.get('header_row') is not None
+        and any(_saved_schema.get(c) for c in _tpr_cols)
+    )
+
+    df = None
+
+    if os.path.exists(uploaded_csv):
+        df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
+        if _schema_complete:
+            tpr_analyzer._schema = _saved_schema
+            logger.info("[TPR-START] Using cleaned uploaded_data.csv + saved schema (%d rows)", df.shape[0])
+        else:
+            try:
+                df, schema = tpr_analyzer.infer_schema_from_file(uploaded_csv)
+                state_manager.update_state({'column_schema': schema})
+                logger.info("[TPR-START] Re-inferred schema from uploaded_data.csv")
+            except RuntimeError as exc:
+                raise TPRStartError(f'Could not parse your data file: {exc}') from exc
+    else:
+        try:
+            latest = _select_raw_upload_file(data_files)
+        except FileNotFoundError:
+            raise TPRStartError('No data file found. Please re-upload your dataset.')
+
+        if _schema_complete:
+            tpr_analyzer._schema = _saved_schema
+            header_row = int(_saved_schema.get('header_row', 0))
+            try:
+                if latest.lower().endswith(('.xlsx', '.xls')):
+                    df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
+                else:
+                    df = EncodingHandler.read_csv_with_encoding(latest)
+            except Exception as exc:
+                logger.warning("[TPR-START] Re-read with saved schema failed (%s), re-inferring", exc)
+                _schema_complete = False
+
+        if not _schema_complete:
+            try:
+                df, schema = tpr_analyzer.infer_schema_from_file(latest)
+                state_manager.update_state({'column_schema': schema})
+            except RuntimeError as exc:
+                raise TPRStartError(f'Could not parse your data file: {exc}') from exc
+
+        _cleaner_mode = get_cleaner_mode()
+        if _cleaner_mode != 'off' and df is not None:
+            try:
+                df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
+                if _cr.column_rename_map:
+                    schema = apply_rename_map_to_schema(tpr_analyzer._schema or {}, _cr.column_rename_map)
+                    tpr_analyzer._schema = schema
+                    state_manager.update_state({'column_schema': schema})
+                logger.info("[TPR-START] Applied cleaner to raw re-read (mode=%s)", _cleaner_mode)
+            except Exception as exc:
+                logger.exception("[TPR-START] Cleaner failed: %s", exc)
+
+    if df is None:
+        raise TPRStartError('Could not load data file. Please re-upload your dataset.')
+
+    tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
+    tpr_handler.set_data(df)
+    try:
+        tpr_language.update_from_dataframe(df)
+    except Exception:
+        pass
+
+    state_manager.mark_tpr_workflow_active()
+    state_manager.update_workflow_stage(ConversationStage.TPR_STATE_SELECTION)
+    logger.info("[TPR-START] Workflow marked active, starting")
+
+    return tpr_handler.start_workflow()
+
+
+def _wrap_tpr_as_sse(result, session_id, mem_sid, app_obj, interaction_core_obj):
+    """Wrap a TPR result dict as a Server-Sent Events Response."""
+    import json as _json
+    from flask import Response, stream_with_context
+
+    def _generate():
+        with app_obj.app_context():
+            yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
+            yield f"data: {_json.dumps({'type': 'result', 'data': result})}\n\n"
+            assistant_text = result.get('message', '') if isinstance(result, dict) else str(result)
+            try:
+                from app.services.session_memory import SessionMemory, MessageType
+                SessionMemory(mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
+            except Exception:
+                pass
+            try:
+                interaction_core_obj.log_message(
+                    session_id=session_id, sender='assistant',
+                    content=assistant_text, intent=None,
+                    entities={
+                        'endpoint': '/api/v1/data-analysis/chat/stream',
+                        'workflow': result.get('workflow', 'tpr') if isinstance(result, dict) else 'tpr',
+                        'success': result.get('success', True) if isinstance(result, dict) else False,
+                    }
+                )
+            except Exception:
+                pass
+            yield "data: [DONE]\n\n"
+
+    resp = Response(stream_with_context(_generate()), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Connection'] = 'keep-alive'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp
 
 
 @data_analysis_v3_bp.route('/api/data-analysis/upload', methods=['POST'])
@@ -682,21 +1001,13 @@ def serve_static_visualization(filename):
 def data_analysis_chat():
     """
     Handle chat messages for Data Analysis V3.
-    This endpoint mediates between the structured TPR workflow and the open data-analysis agent.
+    Routes to: TPR active workflow → TPR start → general agent.
     """
     try:
-        import asyncio
-        import glob
-        import os
-
         data = request.get_json() or {}
         message = data.get('message', '')
         session_id = data.get('session_id') or session.get('session_id')
 
-        # Ensure the server-side session matches the client-provided identifier.
-        # In multi-instance deployments the Flask session cookie may map to a
-        # different worker than the one that generated the upload, so we treat
-        # the client's session_id as the source of truth to keep state files in sync.
         existing_session_id = session.get('session_id')
         if session_id and existing_session_id and existing_session_id != session_id:
             logger.info(
@@ -718,35 +1029,27 @@ def data_analysis_chat():
                 'error': 'No session ID provided'
             }), 400
 
-        logger.info(f"[DEBUG] Data Analysis V3 chat request for session {session_id}")
-        logger.info(f"[DEBUG] Message received: {message}")
+        logger.info("[CHAT] Session %s: %s", session_id, message[:80])
 
-        # 🎯 LOG INCOMING USER MESSAGE - CRITICAL FOR COMPLETE INTERACTION CAPTURE
         request_start_time = time.time()
         interaction_core.log_message(
-            session_id=session_id,
-            sender='user',
-            content=message,
-            intent=None,  # Will be determined during processing
+            session_id=session_id, sender='user', content=message, intent=None,
             entities={
                 'message_length': len(message),
                 'timestamp': request_start_time,
                 'endpoint': '/api/v1/data-analysis/chat',
-                'workflow': 'data_analysis_v3'
+                'workflow': 'data_analysis_v3',
             }
         )
-        logger.info(f"✅ Logged user message for session {session_id}")
 
-        # Persist user message to SessionMemory for conversation resume
-        # Use base_session_id so messages stay with the original conversation
-        _mem_sid = session.get('base_session_id') or session_id
+        mem_sid = session.get('base_session_id') or session_id
         try:
             from app.services.session_memory import SessionMemory, MessageType
-            SessionMemory(_mem_sid).add_message(MessageType.USER, message)
+            SessionMemory(mem_sid).add_message(MessageType.USER, message)
         except Exception:
             pass
 
-        from app.agent.state_manager import DataAnalysisStateManager, ConversationStage
+        from app.agent.state_manager import DataAnalysisStateManager
         state_manager = DataAnalysisStateManager(session_id)
         current_state = state_manager.get_state() or {}
 
@@ -756,361 +1059,42 @@ def data_analysis_chat():
         except Exception:
             pass
 
-        # ONE-BRAIN: workflow_transitioned no longer causes early return.
-        # After TPR completes, the agent handles all subsequent messages.
         if current_state.get('workflow_transitioned'):
-            logger.info(f"Workflow transitioned for session {session_id} — staying in V3 agent mode")
-
-        from app.tpr.workflow_manager import TPRWorkflowHandler
-        from app.tpr.data_analyzer import TPRDataAnalyzer
-        from app.agent.agent import DataAnalysisAgent
-        from app.agent.encoding_handler import EncodingHandler
-
-        agent = DataAnalysisAgent(session_id)
-
-        async def run_agent(query: str, workflow_context=None):
-            return await agent.analyze(query, workflow_context=workflow_context)
-
-        def run_agent_sync(query: str, workflow_context=None):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(run_agent(query, workflow_context))
-            finally:
-                loop.close()
+            logger.info("Workflow transitioned for session %s — staying in V3 agent mode", session_id)
 
         lower_message = (message or '').lower().strip()
-
         is_tpr_active = state_manager.is_tpr_workflow_active()
 
         if is_tpr_active:
-            logger.info(f"[2-ROUTE] TPR workflow active for session {session_id}")
-            tpr_analyzer = TPRDataAnalyzer()
-
-            # Restore schema inferred at workflow start so analyze_* methods work correctly
-            saved_state = state_manager.load_state() or {}
-            saved_schema = saved_state.get('column_schema')
-            if saved_schema:
-                tpr_analyzer._schema = saved_schema
-                logger.info(f"[2-ROUTE] Restored column_schema from state_manager ({len([v for v in saved_schema.values() if v])} mapped fields)")
-            else:
-                logger.warning("[2-ROUTE] No column_schema in state_manager — schema-based analysis will fail")
-
-            tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-
-            # Load data using header_row from saved schema so columns match what was inferred.
-            # v4: Prefer cleaned uploaded_data.csv (canonical post-cleaner output);
-            # fall back to re-reading the raw user upload and applying the cleaner inline.
-            df = None
-            try:
-                data_dir = os.path.join('instance', 'uploads', session_id)
-                uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
-                if os.path.exists(uploaded_csv):
-                    df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
-                    logger.info(f"[2-ROUTE] Loaded cleaned uploaded_data.csv ({df.shape[0]} rows, {df.shape[1]} cols)")
-                else:
-                    data_files = glob.glob(os.path.join(data_dir, '*.csv')) + \
-                                glob.glob(os.path.join(data_dir, '*.xlsx')) + \
-                                glob.glob(os.path.join(data_dir, '*.xls'))
-                    if data_files:
-                        # Use shared helper to exclude intermediate files
-                        from app.utils.dhis2_cleaner import (
-                            _select_raw_upload_file,
-                            clean_dhis2_export,
-                            get_cleaner_mode,
-                            apply_rename_map_to_schema,
-                        )
-                        try:
-                            latest = _select_raw_upload_file(data_files)
-                        except FileNotFoundError:
-                            logger.warning("[2-ROUTE] No raw file candidates found")
-                            latest = None
-
-                        if latest:
-                            if latest.endswith(('.xlsx', '.xls')):
-                                header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
-                                df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
-                            else:
-                                df = EncodingHandler.read_csv_with_encoding(latest)
-
-                            # Apply cleaner to raw re-read + update + persist schema
-                            _cleaner_mode = get_cleaner_mode()
-                            if _cleaner_mode != 'off':
-                                try:
-                                    df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
-                                    if _cr.column_rename_map:
-                                        saved_schema = apply_rename_map_to_schema(
-                                            saved_schema or {}, _cr.column_rename_map
-                                        )
-                                        state_manager.update_state({'column_schema': saved_schema})
-                                    logger.info(f"[2-ROUTE] Applied cleaner on raw re-read (mode={_cleaner_mode})")
-                                except Exception as _cexc:
-                                    logger.exception(f"[2-ROUTE] Cleaner failed: {_cexc}")
-                if df is not None:
-                    tpr_handler.set_data(df)
-            except Exception as load_err:
-                logger.error(f"[2-ROUTE] Failed to load dataset for TPR workflow: {load_err}")
-
-            tpr_handler.load_state_from_manager()
-            current_stage = state_manager.get_workflow_stage()
-
-            # ============================================================
-            # PRIORITY 1: CHECK FOR CONFIRMATION
-            # ============================================================
-            # This handles natural language like "sure thing", "yES Let's go", etc.
-            if current_state.get('tpr_awaiting_confirmation'):
-                logger.info(f"[CONFIRMATION] TPR workflow awaiting confirmation")
-                confirmation_keywords = ['yes', 'y', 'continue', 'proceed', 'start', 'begin', 'ok', 'okay', 'sure', 'ready']
-                message_clean = message.lower().strip()
-
-                # Check if message contains any confirmation keyword
-                if message_clean in confirmation_keywords or any(kw in message_clean.split() for kw in confirmation_keywords):
-                    logger.info(f"[CONFIRMATION] Detected confirmation keyword in: '{message}'")
-                    response = tpr_handler.execute_confirmation()
-                    return _save_and_respond(response, session_id)
-
-                logger.info(f"[CONFIRMATION] No confirmation keyword detected, proceeding with 2-route logic")
-
-            # ============================================================
-            # PRIORITY 3: INTENT-FIRST CLASSIFICATION (New Architecture)
-            # ============================================================
-            # Single-pass intent classification determines routing
-            # Intent "selection" → extract command → execute
-            # Intent "question" → route to agent
-
-            # Determine valid options for current stage
-            valid_options = []
-            if current_stage == ConversationStage.TPR_STATE_SELECTION:
-                # Get available states from data
-                if df is not None:
-                    try:
-                        state_analysis = tpr_analyzer.analyze_states(df)
-                        valid_options = list(state_analysis.get('states', {}).keys())
-                    except:
-                        pass
-                valid_options.extend(['yes', 'continue', 'back', 'exit', 'status'])
-            elif current_stage == ConversationStage.TPR_FACILITY_LEVEL:
-                valid_options = ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
-            elif current_stage == ConversationStage.TPR_AGE_GROUP:
-                valid_options = ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']
-            else:
-                valid_options = ['yes', 'continue', 'start', 'back', 'exit']
-
-            # STEP 1: Classify intent first
-            intent_result = tpr_language.classify_intent(
-                message=message,
-                stage=current_stage.name if current_stage else 'unknown',
-                valid_options=valid_options
-            )
-
-            # STEP 2: Route based on intent
-            if intent_result['intent'] == 'selection' and intent_result['confidence'] >= 0.7:
-                # User is making a selection → Extract and execute
-                logger.info(f"[INTENT] Selection detected (confidence={intent_result['confidence']:.2f})")
-                logger.info(f"   Rationale: {intent_result.get('rationale', 'N/A')}")
-
-                command = tpr_language.extract_command(
-                    message=message,
-                    stage=current_stage.name if current_stage else 'unknown',
-                    valid_options=valid_options,
-                    context={'session_id': session_id, 'stage': current_stage}
-                )
-
-                if command:
-                    # Command extracted successfully → execute
-                    logger.info(f"[INTENT→COMMAND] Extracted: '{message}' → '{command}'")
-                    response = tpr_handler.execute_command(command, current_stage)
-                else:
-                    # Intent says selection but can't extract → ask for clarification
-                    logger.warning(f"[INTENT→COMMAND] Intent is 'selection' but extraction failed")
-                    response = {
-                        "success": True,
-                        "message": f"I understood you're making a selection, but couldn't determine which option. Please choose from: {', '.join(valid_options)}",
-                        "session_id": session_id,
-                        "workflow": "tpr",
-                        "stage": current_stage.name if current_stage else None
-                    }
-            else:
-                # User is asking a question → Route to agent
-                logger.info(f"[INTENT] Question detected (confidence={intent_result.get('confidence', 0):.2f})")
-                logger.info(f"   Rationale: {intent_result.get('rationale', 'N/A')}")
-                logger.info(f"   Routing to agent with workflow context")
-
-                # Build workflow context for agent
-                workflow_context = {
-                    'workflow': 'tpr',
-                    'stage': current_stage.name if current_stage else None,
-                    'valid_options': valid_options,
-                    'selections': state_manager.get_tpr_selections() or {},
-                    'data_loaded': df is not None,
-                    'session_id': session_id
-                }
-
-                response = run_agent_sync(message, workflow_context=workflow_context)
-
-            # 🎯 LOG ASSISTANT RESPONSE - CRITICAL FOR COMPLETE INTERACTION CAPTURE
+            logger.info("[CHAT] TPR active for session %s", session_id)
+            response = _handle_tpr_active(session_id, message, state_manager, current_state, tpr_language)
             response_time = time.time() - request_start_time
             assistant_message = response.get('message', '') if isinstance(response, dict) else str(response)
             interaction_core.log_message(
-                session_id=session_id,
-                sender='assistant',
-                content=assistant_message,
+                session_id=session_id, sender='assistant', content=assistant_message,
                 intent=response.get('workflow') if isinstance(response, dict) else None,
                 entities={
                     'response_length': len(assistant_message),
                     'response_time_seconds': response_time,
                     'endpoint': '/api/v1/data-analysis/chat',
-                    'workflow': 'tpr' if isinstance(response, dict) and response.get('workflow') == 'tpr' else 'data_analysis_v3',
+                    'workflow': 'tpr',
                     'stage': response.get('stage') if isinstance(response, dict) else None,
                     'visualizations_count': len(response.get('visualizations') or []) if isinstance(response, dict) else 0,
-                    'status': response.get('success', True) if isinstance(response, dict) else True
+                    'status': response.get('success', True) if isinstance(response, dict) else True,
                 }
             )
-            logger.info(f"✅ Logged assistant response for session {session_id} (response_time={response_time:.2f}s)")
+            return _save_and_respond(response, session_id)
 
-            # Persist to SessionMemory so conversation resume includes all messages + visualizations
-            try:
-                from app.services.session_memory import SessionMemory, MessageType
-                _mem = SessionMemory(session.get('base_session_id') or session_id)
-                _viz = (response.get('visualizations') or []) if isinstance(response, dict) else []
-                _meta = {'visualizations': _viz} if _viz else {}
-                _mem.add_message(MessageType.ASSISTANT, assistant_message, metadata=_meta)
-            except Exception as _mem_err:
-                logger.debug("SessionMemory save (v3 assistant) failed: %s", _mem_err)
-
-            # CRITICAL FIX: Check if TPR workflow completed and add exit flag
-            if isinstance(response, dict):
-                stage = (response.get('stage') or '').upper()
-                workflow = (response.get('workflow') or '').lower()
-
-            return jsonify(response)
-
-        # TPR workflow start triggers — explicit commands only (from user guide)
-        # Removed 'test positivity' and 'test positivity rate' — these are topics, not commands
         start_triggers = ['start tpr', 'start the tpr', 'tpr workflow', 'run tpr']
-        if any(trigger in lower_message for trigger in start_triggers):
-            logger.info(f"[BRIDGE] Detected TPR start request: '{message}'")
-            data_dir = os.path.join('instance', 'uploads', session_id)
-            data_files = glob.glob(os.path.join(data_dir, '*.csv')) + \
-                        glob.glob(os.path.join(data_dir, '*.xlsx')) + \
-                        glob.glob(os.path.join(data_dir, '*.xls'))
-            if not data_files:
-                return _save_and_respond({
-                    'success': False,
-                    'message': 'No data found. Please upload your dataset before starting the TPR workflow.',
-                    'session_id': session_id
-                }, session_id)
-
-            tpr_analyzer = TPRDataAnalyzer()
-
-            # v4: Prefer cleaned uploaded_data.csv over the raw XLS.
-            # The cleaner ran at upload, so uploaded_data.csv has merged
-            # duplicates and fixed mojibake. The saved schema in state_manager
-            # already reflects those changes.
-            from app.utils.dhis2_cleaner import (
-                _select_raw_upload_file,
-                clean_dhis2_export,
-                get_cleaner_mode,
-                apply_rename_map_to_schema,
-            )
-
-            data_dir = os.path.join('instance', 'uploads', session_id)
-            uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
-
-            _saved_state = state_manager.load_state() or {}
-            _saved_schema = _saved_state.get('column_schema') or {}
-            _tpr_cols = ('tested_pos', 'u5_pos', 'o5_pos', 'pw_pos', 'total_tested')
-            _schema_complete = (
-                _saved_schema.get('header_row') is not None
-                and any(_saved_schema.get(c) for c in _tpr_cols)
-            )
-
-            if os.path.exists(uploaded_csv):
-                # Canonical path: cleaned CSV + saved schema
-                from app.agent.encoding_handler import EncodingHandler as _EH
-                df = _EH.read_csv_with_encoding(uploaded_csv)
-                if _schema_complete:
-                    schema = _saved_schema
-                    tpr_analyzer._schema = schema
-                    logger.info(f"[TPR START] Using cleaned uploaded_data.csv + saved schema ({df.shape[0]} rows)")
-                else:
-                    # Schema missing/incomplete — re-infer from cleaned CSV
-                    # (cleaner already ran, no rename_map needed)
-                    try:
-                        df, schema = tpr_analyzer.infer_schema_from_file(uploaded_csv)
-                        state_manager.update_state({'column_schema': schema})
-                        logger.info(f"[TPR START] Re-inferred schema from cleaned uploaded_data.csv")
-                    except RuntimeError as exc:
-                        logger.error(f"Schema inference failed for {uploaded_csv}: {exc}")
-                        return _save_and_respond({
-                            'success': False,
-                            'message': f'Could not parse your data file: {exc}',
-                            'session_id': session_id,
-                        }, session_id)
-            else:
-                # Fallback: re-read original raw user upload (legacy sessions)
-                try:
-                    latest = _select_raw_upload_file(data_files)
-                except FileNotFoundError:
-                    logger.error("[TPR START] No raw file candidates found (all intermediates)")
-                    return _save_and_respond({
-                        'success': False,
-                        'message': 'No data file found. Please re-upload your dataset.',
-                        'session_id': session_id
-                    }, session_id)
-
-                if _schema_complete:
-                    logger.info(f"[TPR START] Reusing schema from upload (header_row={_saved_schema.get('header_row')})")
-                    schema = _saved_schema
-                    tpr_analyzer._schema = schema
-                    header_row = int(schema.get('header_row', 0))
-                    try:
-                        from app.agent.encoding_handler import EncodingHandler as _EH
-                        if latest.lower().endswith(('.xlsx', '.xls')):
-                            df = _EH.read_excel_with_encoding(latest, header=header_row)
-                        else:
-                            df = _EH.read_csv_with_encoding(latest)
-                    except Exception as exc:
-                        logger.warning(f"[TPR START] Re-read failed ({exc}), falling back to full inference")
-                        _schema_complete = False
-
-                if not _schema_complete:
-                    try:
-                        df, schema = tpr_analyzer.infer_schema_from_file(latest)
-                    except RuntimeError as exc:
-                        logger.error(f"Schema inference failed for {latest}: {exc}")
-                        return _save_and_respond({
-                            'success': False,
-                            'message': f'Could not parse your data file: {exc}',
-                            'session_id': session_id,
-                        }, session_id)
-                    state_manager.update_state({'column_schema': schema})
-
-                # Apply cleaner to raw re-read + update + persist schema
-                _cleaner_mode = get_cleaner_mode()
-                if _cleaner_mode != 'off':
-                    try:
-                        df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
-                        if _cr.column_rename_map:
-                            schema = apply_rename_map_to_schema(schema, _cr.column_rename_map)
-                            tpr_analyzer._schema = schema
-                            state_manager.update_state({'column_schema': schema})
-                        logger.info(f"[TPR START] Applied cleaner to raw re-read (mode={_cleaner_mode})")
-                    except Exception as exc:
-                        logger.exception(f"[TPR START] Cleaner failed: {exc}")
-
-            tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-            tpr_handler.set_data(df)
+        if any(t in lower_message for t in start_triggers):
             try:
-                tpr_language.update_from_dataframe(df)
-            except Exception:
-                pass
+                response = _handle_tpr_start(session_id, message, state_manager, current_state)
+            except TPRStartError as e:
+                response = {'success': False, 'message': str(e), 'session_id': session_id}
+            return _save_and_respond(response, session_id)
 
-            state_manager.mark_tpr_workflow_active()
-            state_manager.update_workflow_stage(ConversationStage.TPR_STATE_SELECTION)
-
-            return _save_and_respond(tpr_handler.start_workflow(), session_id)
-
+        from app.agent.agent import DataAnalysisAgent
+        agent = DataAnalysisAgent(session_id)
         workflow_context = _build_general_workflow_context(session_id)
         logger.info(
             "[AGENT CONTEXT] Session %s → stage=%s columns=%d",
@@ -1118,17 +1102,12 @@ def data_analysis_chat():
             workflow_context.get('stage'),
             len(workflow_context.get('data_columns') or [])
         )
+        result = _run_agent_sync(agent, message, workflow_context=workflow_context)
 
-        result = run_agent_sync(message, workflow_context=workflow_context)
-
-
-        # 🎯 LOG ASSISTANT RESPONSE (agent path) - CRITICAL FOR COMPLETE INTERACTION CAPTURE
         response_time = time.time() - request_start_time
         assistant_message = result.get('message', '') if isinstance(result, dict) else str(result)
         interaction_core.log_message(
-            session_id=session_id,
-            sender='assistant',
-            content=assistant_message,
+            session_id=session_id, sender='assistant', content=assistant_message,
             intent='agent_query',
             entities={
                 'response_length': len(assistant_message),
@@ -1136,39 +1115,33 @@ def data_analysis_chat():
                 'endpoint': '/api/v1/data-analysis/chat',
                 'workflow': 'data_analysis_v3_agent',
                 'visualizations_count': len(result.get('visualizations') or []) if isinstance(result, dict) else 0,
-                'status': result.get('success', True) if isinstance(result, dict) else True
+                'status': result.get('success', True) if isinstance(result, dict) else True,
             }
         )
-        logger.info(f"✅ Logged agent response for session {session_id} (response_time={response_time:.2f}s)")
-
+        logger.info("✅ Agent response logged for session %s (%.2fs)", session_id, response_time)
         return _save_and_respond(result, session_id)
 
     except Exception as e:
-        logger.error(f"Error in data analysis chat: {str(e)}", exc_info=True)
+        logger.error("Error in data analysis chat: %s", str(e), exc_info=True)
         import traceback
-
-        # 🎯 LOG ERROR - CRITICAL FOR DEBUGGING
         error_message = f"Error: {str(e)}"
         try:
             interaction_core.log_message(
                 session_id=session_id if 'session_id' in locals() else 'unknown',
-                sender='assistant',
-                content=error_message,
-                intent='error',
+                sender='assistant', content=error_message, intent='error',
                 entities={
                     'error_type': type(e).__name__,
                     'endpoint': '/api/v1/data-analysis/chat',
                     'workflow': 'error',
-                    'traceback': traceback.format_exc()
+                    'traceback': traceback.format_exc(),
                 }
             )
         except Exception as log_err:
-            logger.error(f"Failed to log error message: {log_err}")
-
+            logger.error("Failed to log error: %s", log_err)
         return jsonify({
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
         }), 500
 
 
@@ -1177,9 +1150,8 @@ def data_analysis_chat():
 def data_analysis_chat_stream():
     """
     SSE streaming endpoint for data analysis chat.
-    Emits status → thinking (best-effort narration) → result → [DONE].
-    TPR active sessions run synchronously and are wrapped as a single SSE result event.
-    The existing /api/v1/data-analysis/chat endpoint is kept as fallback.
+    TPR paths run synchronously and are SSE-wrapped via _wrap_tpr_as_sse().
+    General queries stream token-by-token via agent.analyze_stream().
     """
     import json as _json
     from flask import Response, stream_with_context
@@ -1194,7 +1166,6 @@ def data_analysis_chat_stream():
             yield "data: [DONE]\n\n"
         return Response(stream_with_context(_no_session()), mimetype='text/event-stream')
 
-    # Session alignment — identical to /chat
     existing_session_id = session.get('session_id')
     if session_id and existing_session_id and existing_session_id != session_id:
         session['session_id'] = session_id
@@ -1205,220 +1176,108 @@ def data_analysis_chat_stream():
         session['base_session_id'] = session.get('base_session_id') or session_id
         session.modified = True
 
-    # Log user message
     interaction_core.log_message(
-        session_id=session_id,
-        sender='user',
-        content=message,
-        intent=None,
+        session_id=session_id, sender='user', content=message, intent=None,
         entities={
             'message_length': len(message),
             'timestamp': time.time(),
             'endpoint': '/api/v1/data-analysis/chat/stream',
-            'workflow': 'data_analysis_v3'
+            'workflow': 'data_analysis_v3',
         }
     )
-    _mem_sid = session.get('base_session_id') or session_id
+
+    mem_sid = session.get('base_session_id') or session_id
     try:
         from app.services.session_memory import SessionMemory, MessageType
-        SessionMemory(_mem_sid).add_message(MessageType.USER, message)
+        SessionMemory(mem_sid).add_message(MessageType.USER, message)
     except Exception:
         pass
 
-    # Determine routing before entering generator — reads session state synchronously
-    from app.agent.state_manager import DataAnalysisStateManager, ConversationStage
+    from app.agent.state_manager import DataAnalysisStateManager
     state_manager = DataAnalysisStateManager(session_id)
     current_state = state_manager.get_state() or {}
+    lower_message = (message or '').lower().strip()
     is_tpr_active = state_manager.is_tpr_workflow_active()
+    app_obj = current_app._get_current_object()
 
-    # Capture all values needed inside the generator now (no session proxy inside generator)
-    app = current_app._get_current_object()
-    captured_session_id = session_id
-    captured_mem_sid = _mem_sid
-    captured_current_state = current_state
-    workflow_context = _build_general_workflow_context(session_id)
+    if current_state.get('workflow_transitioned'):
+        logger.info("Workflow transitioned for session %s — staying in V3 agent mode", session_id)
 
     if is_tpr_active:
-        # TPR path: run the full TPR routing synchronously (same logic as /chat lines 786-986),
-        # then wrap the result in SSE events. TPR responses are fast; streaming adds no value.
-        from app.tpr.workflow_manager import TPRWorkflowHandler
-        from app.tpr.data_analyzer import TPRDataAnalyzer
-        from app.agent.encoding_handler import EncodingHandler
-        from app.tpr.language import TPRLanguageInterface
-        import glob as _glob
-
         tpr_language = TPRLanguageInterface(session_id)
         try:
             tpr_language.update_from_metadata(current_state)
         except Exception:
             pass
-
-        tpr_analyzer = TPRDataAnalyzer()
-        saved_state = state_manager.load_state() or {}
-        saved_schema = saved_state.get('column_schema')
-        if saved_schema:
-            tpr_analyzer._schema = saved_schema
-
-        tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-
-        df = None
         try:
-            data_dir = os.path.join('instance', 'uploads', session_id)
-            uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
-            if os.path.exists(uploaded_csv):
-                df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
-            else:
-                data_files = (
-                    _glob.glob(os.path.join(data_dir, '*.csv')) +
-                    _glob.glob(os.path.join(data_dir, '*.xlsx')) +
-                    _glob.glob(os.path.join(data_dir, '*.xls'))
-                )
-                if data_files:
-                    from app.utils.dhis2_cleaner import (
-                        _select_raw_upload_file, clean_dhis2_export,
-                        get_cleaner_mode, apply_rename_map_to_schema,
-                    )
-                    try:
-                        latest = _select_raw_upload_file(data_files)
-                    except FileNotFoundError:
-                        latest = None
-                    if latest:
-                        if latest.endswith(('.xlsx', '.xls')):
-                            header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
-                            df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
-                        else:
-                            df = EncodingHandler.read_csv_with_encoding(latest)
-                        _cleaner_mode = get_cleaner_mode()
-                        if _cleaner_mode != 'off':
-                            try:
-                                df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
-                                if _cr.column_rename_map:
-                                    saved_schema = apply_rename_map_to_schema(
-                                        saved_schema or {}, _cr.column_rename_map
-                                    )
-                                    state_manager.update_state({'column_schema': saved_schema})
-                            except Exception:
-                                pass
-            if df is not None:
-                tpr_handler.set_data(df)
-        except Exception as load_err:
-            logger.error(f"[STREAM-TPR] Failed to load dataset: {load_err}")
+            result = _handle_tpr_active(session_id, message, state_manager, current_state, tpr_language)
+        except Exception as e:
+            logger.exception("[STREAM-TPR-ACTIVE] Error for session %s: %s", session_id, e)
+            result = {'success': False, 'message': str(e), 'session_id': session_id}
+        return _wrap_tpr_as_sse(result, session_id, mem_sid, app_obj, interaction_core)
 
-        tpr_handler.load_state_from_manager()
-        current_stage = state_manager.get_workflow_stage()
+    start_triggers = ['start tpr', 'start the tpr', 'tpr workflow', 'run tpr']
+    if any(t in lower_message for t in start_triggers):
+        try:
+            result = _handle_tpr_start(session_id, message, state_manager, current_state)
+        except TPRStartError as e:
+            result = {'success': False, 'message': str(e), 'session_id': session_id}
+        except Exception as e:
+            logger.exception("[STREAM-TPR-START] Unexpected error for session %s: %s", session_id, e)
+            result = {'success': False, 'message': 'Failed to start TPR workflow.', 'session_id': session_id}
+        return _wrap_tpr_as_sse(result, session_id, mem_sid, app_obj, interaction_core)
 
-        # Route TPR message — same logic as /chat (execute_confirmation / execute_command / agent)
-        lower_message = (message or '').lower().strip()
-        valid_options = []
-        if current_stage == ConversationStage.TPR_FACILITY_LEVEL:
-            valid_options = ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
-        elif current_stage == ConversationStage.TPR_AGE_GROUP:
-            valid_options = ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']
-        else:
-            valid_options = ['yes', 'continue', 'start', 'back', 'exit']
+    # Agent streaming path — analyze_stream() is inherently different from sync analyze()
+    workflow_context = _build_general_workflow_context(session_id)
+    captured_session_id = session_id
+    captured_mem_sid = mem_sid
 
-        tpr_response = None
-        if current_state.get('tpr_awaiting_confirmation'):
-            confirmation_keywords = ['yes', 'y', 'continue', 'proceed', 'start', 'begin', 'ok', 'okay', 'sure', 'ready']
-            if lower_message in confirmation_keywords or any(kw in lower_message.split() for kw in confirmation_keywords):
-                tpr_response = tpr_handler.execute_confirmation()
-
-        if tpr_response is None:
-            intent_result = tpr_language.classify_intent(
-                message=message,
-                stage=current_stage.name if current_stage else 'unknown',
-                valid_options=valid_options
-            )
-            if intent_result['intent'] == 'selection' and intent_result['confidence'] >= 0.7:
-                command = tpr_language.extract_command(
-                    message=message,
-                    stage=current_stage.name if current_stage else 'unknown',
-                    valid_options=valid_options,
-                    context={'session_id': session_id, 'stage': current_stage}
-                )
-                if command:
-                    tpr_response = tpr_handler.execute_command(command, current_stage)
-                else:
-                    tpr_response = {
-                        "success": True,
-                        "message": f"I understood you're making a selection, but couldn't determine which option. Please choose from: {', '.join(valid_options)}",
-                        "session_id": session_id,
-                    }
-            else:
-                # Question → agent
-                from app.agent.agent import DataAnalysisAgent
-                import asyncio as _asyncio
-                _agent = DataAnalysisAgent(session_id)
-                _loop = _asyncio.new_event_loop()
-                try:
-                    tpr_response = _loop.run_until_complete(
-                        _agent.analyze(message, workflow_context={
-                            'workflow': 'tpr',
-                            'stage': current_stage.name if current_stage else None,
-                            'valid_options': valid_options,
-                            'data_loaded': df is not None,
-                            'session_id': session_id
-                        })
-                    )
-                finally:
-                    _asyncio.set_event_loop(None)
-                    _loop.close()
-
-        tpr_captured = tpr_response or {'success': False, 'message': 'TPR routing failed', 'session_id': session_id}
-
-        def _tpr_generate():
-            with app.app_context():
-                yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
-                yield f"data: {_json.dumps({'type': 'result', 'data': tpr_captured})}\n\n"
-                # Log assistant message
-                assistant_text = tpr_captured.get('message', '')
-                try:
-                    from app.services.session_memory import SessionMemory, MessageType
-                    SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
-                except Exception:
-                    pass
-                interaction_core.log_message(
-                    session_id=captured_session_id, sender='assistant',
-                    content=assistant_text, intent=None,
-                    entities={'endpoint': '/api/v1/data-analysis/chat/stream', 'workflow': 'tpr'}
-                )
-                yield "data: [DONE]\n\n"
-
-        resp = Response(stream_with_context(_tpr_generate()), mimetype='text/event-stream')
-        resp.headers['Cache-Control'] = 'no-cache'
-        resp.headers['Connection'] = 'keep-alive'
-        resp.headers['X-Accel-Buffering'] = 'no'
-        return resp
-
-    # Agent path — stream analyze_stream() events
     def generate():
-        with app.app_context():
-            # Emit status immediately — before agent init — so bubble appears within ~1s
+        with app_obj.app_context():
             yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
-
             try:
                 from app.agent.agent import DataAnalysisAgent
+                from app.services.session_memory import SessionMemory, MessageType
                 agent = DataAnalysisAgent(captured_session_id)
-
+                request_start = time.time()
                 for event in agent.analyze_stream(message, workflow_context=workflow_context):
                     yield f"data: {_json.dumps(event)}\n\n"
-
-                    if event['type'] == 'result':
+                    if event.get('type') == 'result':
+                        response_time = time.time() - request_start
                         assistant_text = event.get('data', {}).get('message', '')
                         try:
-                            from app.services.session_memory import SessionMemory, MessageType
                             SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
                         except Exception:
                             pass
-                        interaction_core.log_message(
-                            session_id=captured_session_id, sender='assistant',
-                            content=assistant_text, intent=None,
-                            entities={'endpoint': '/api/v1/data-analysis/chat/stream', 'workflow': 'data_analysis_v3'}
-                        )
+                        try:
+                            interaction_core.log_message(
+                                session_id=captured_session_id, sender='assistant',
+                                content=assistant_text, intent='agent_query',
+                                entities={
+                                    'response_time_seconds': response_time,
+                                    'endpoint': '/api/v1/data-analysis/chat/stream',
+                                    'workflow': 'data_analysis_v3_agent',
+                                    'visualizations_count': len(
+                                        event.get('data', {}).get('visualizations') or []
+                                    ),
+                                }
+                            )
+                        except Exception:
+                            pass
             except Exception as e:
-                logger.exception(f"[STREAM] Agent error for session {captured_session_id}: {e}")
+                logger.exception("[STREAM] Agent error for session %s: %s", captured_session_id, e)
+                try:
+                    interaction_core.log_message(
+                        session_id=captured_session_id, sender='assistant',
+                        content=f'Error: {e}', intent='error',
+                        entities={
+                            'error_type': type(e).__name__,
+                            'endpoint': '/api/v1/data-analysis/chat/stream',
+                        }
+                    )
+                except Exception:
+                    pass
                 yield f"data: {_json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-
             yield "data: [DONE]\n\n"
 
     resp = Response(stream_with_context(generate()), mimetype='text/event-stream')
