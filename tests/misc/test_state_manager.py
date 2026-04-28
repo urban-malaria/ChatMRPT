@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime
 import shutil
 
-from app.data_analysis_v3.core.state_manager import (
+from app.agent.state_manager import (
     DataAnalysisStateManager,
     ConversationStage,
     check_tpr_workflow_active
@@ -32,7 +32,7 @@ def state_manager(temp_session_dir, monkeypatch):
     session_id = "test_session_123"
     # Monkeypatch the state directory to use temp dir
     monkeypatch.setattr(
-        'app.data_analysis_v3.core.state_manager.Path',
+        'app.agent.state_manager.Path',
         lambda x: Path(temp_session_dir) / session_id if 'instance/uploads' in x else Path(x)
     )
     manager = DataAnalysisStateManager(session_id)
@@ -274,7 +274,7 @@ class TestCrossWorkerCompatibility:
             json.dump(state, f)
         
         # Mock the path construction
-        import app.data_analysis_v3.core.state_manager as sm
+        import app.agent.state_manager as sm
         original_path = sm.Path
         
         def mock_path(x):
@@ -308,7 +308,7 @@ class TestCrossWorkerCompatibility:
             json.dump(state, f)
         
         # Mock the path construction
-        import app.data_analysis_v3.core.state_manager as sm
+        import app.agent.state_manager as sm
         original_path = sm.Path
         
         def mock_path(x):

@@ -32,14 +32,16 @@ class PCAAnalysisPipeline:
     Complete PCA analysis pipeline independent of composite scoring.
     """
     
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, year_tag: str = ''):
         """
         Initialize PCA pipeline for a session.
-        
+
         Args:
             session_id: Session identifier
+            year_tag: Suffix for output files (e.g. '_2024'). '' means aggregate.
         """
         self.session_id = session_id
+        self.year_tag = year_tag
         self.raw_data = None
         self.cleaned_data = None
         self.standardized_data = None
@@ -671,21 +673,21 @@ class PCAAnalysisPipeline:
                 session_folder = getattr(data_handler, 'session_folder', None)
                 if session_folder and os.path.exists(session_folder):
                     # Save PCA vulnerability rankings
-                    pca_rankings_file = os.path.join(session_folder, 'analysis_vulnerability_rankings_pca.csv')
+                    pca_rankings_file = os.path.join(session_folder, f'analysis_vulnerability_rankings_pca{self.year_tag}.csv')
                     vulnerability_rankings_pca.to_csv(pca_rankings_file, index=False)
                     logger.info(f"💾 PCA SAVE: Saved PCA rankings to {pca_rankings_file}")
-                    
+
                     # Save PCA scores
-                    pca_scores_file = os.path.join(session_folder, 'analysis_pca_scores.csv')
+                    pca_scores_file = os.path.join(session_folder, f'analysis_pca_scores{self.year_tag}.csv')
                     self.pca_scores.to_csv(pca_scores_file, index=False)
-                    
+
                     # Save PCA variable importance
-                    pca_variables_file = os.path.join(session_folder, 'pca_variable_importance.json')
+                    pca_variables_file = os.path.join(session_folder, f'pca_variable_importance{self.year_tag}.json')
                     with open(pca_variables_file, 'w') as f:
                         json.dump(self.variable_importance, f, indent=2)
-                    
+
                     # Save PCA explained variance
-                    pca_variance_file = os.path.join(session_folder, 'pca_explained_variance.json')
+                    pca_variance_file = os.path.join(session_folder, f'pca_explained_variance{self.year_tag}.json')
                     with open(pca_variance_file, 'w') as f:
                         json.dump(self.explained_variance, f, indent=2)
                     
@@ -746,8 +748,9 @@ class PCAAnalysisPipeline:
             return {'analysis_type': 'pca', 'error': str(e)}
 
 
-def run_independent_pca_analysis(data_handler, selected_variables: Optional[List[str]] = None, 
-                                session_id: Optional[str] = None, llm_manager=None) -> Dict[str, Any]:
+def run_independent_pca_analysis(data_handler, selected_variables: Optional[List[str]] = None,
+                                session_id: Optional[str] = None, llm_manager=None,
+                                year_tag: str = '') -> Dict[str, Any]:
     """
     Run complete independent PCA analysis pipeline.
     
@@ -767,7 +770,7 @@ def run_independent_pca_analysis(data_handler, selected_variables: Optional[List
             session_id = "pca_analysis"
         
         # Create PCA pipeline
-        pca_pipeline = PCAAnalysisPipeline(session_id)
+        pca_pipeline = PCAAnalysisPipeline(session_id, year_tag=year_tag)
         
         # Run complete analysis
         result = pca_pipeline.run_complete_pca_analysis(data_handler, selected_variables, llm_manager)

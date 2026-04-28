@@ -4,7 +4,63 @@ import storage from '@/utils/storage';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import useMessageStreaming from '@/hooks/useMessageStreaming';
 import api from '@/services/api';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import toast from 'react-hot-toast';
+
+const CHUNK_THRESHOLD = 5 * 1024 * 1024;
+const CHUNK_SIZE = 1024 * 1024;
+
+async function uploadInChunks(
+  csvFile: File,
+  shapeFile: File,
+  onProgress: (percent: number) => void,
+  onRetry: (attempt: number) => void
+) {
+  // crypto.randomUUID() is safe: production runs on HTTPS, localhost is treated as secure context
+  const uploadId = crypto.randomUUID();
+  const totalBytes = csvFile.size + shapeFile.size;
+  let sentBytes = 0;
+
+  async function sendChunks(file: File, fileType: 'csv' | 'shapefile') {
+    const total = Math.ceil(file.size / CHUNK_SIZE);
+    for (let i = 0; i < total; i++) {
+      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      let attempt = 0;
+      while (true) {
+        try {
+          await api.upload.uploadChunk(uploadId, fileType, i, total, chunk);
+          sentBytes += chunk.size;
+          onProgress(Math.round((sentBytes / totalBytes) * 95));
+          break;
+        } catch (err: any) {
+          const isRetryable = !err.response || err.response?.status >= 500;
+          if (isRetryable && attempt < 3) {
+            attempt++;
+            onRetry(attempt);
+            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+    return Math.ceil(file.size / CHUNK_SIZE);
+  }
+
+  const csvTotalChunks = await sendChunks(csvFile, 'csv');
+  const shpTotalChunks = await sendChunks(shapeFile, 'shapefile');
+
+  onProgress(97);
+  const response = await api.upload.finalizeChunkedUpload({
+    upload_id: uploadId,
+    csv_filename: csvFile.name,
+    shapefile_filename: shapeFile.name,
+    csv_total_chunks: csvTotalChunks,
+    shp_total_chunks: shpTotalChunks,
+  });
+  onProgress(100);
+  return response;
+}
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -13,26 +69,56 @@ interface UploadModalProps {
 
 const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<'standard' | 'analysis'>('standard');
-  const [isUploading, setIsUploading] = useState(false);
-  const [selectedOption, setSelectedOption] = useState('');
   const [analysisType, setAnalysisType] = useState('');
+  const [selectedOption, setSelectedOption] = useState('');
   const session = useChatStore((state) => state.session);
   const setUploadedFiles = useChatStore((state) => state.setUploadedFiles);
   const addMessage = useChatStore((state) => state.addMessage);
   const updateSession = useChatStore((state) => state.updateSession);
   const { setCsvFile, setShapeFile, setDataAnalysisMode } = useAnalysisStore();
   const { sendMessage } = useMessageStreaming();
-  
+  const { isUploading, uploadProgress, uploadStatus, executeUpload, resetProgress } = useFileUpload();
+
+  const processingLabel = activeTab === 'analysis' ? 'Analysing your data...' : 'Processing files...';
+  const isRetrying = uploadStatus.includes('retrying');
+
+  const progressBar = isUploading && (
+    <div className="w-full mt-3">
+      {uploadProgress < 100 ? (
+        <>
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${Math.max(5, uploadProgress)}%` }}
+            />
+          </div>
+          <div className="text-xs text-left mt-1">
+            {isRetrying
+              ? <span className="text-amber-600">{uploadStatus}</span>
+              : <span className="text-gray-500">Uploading... {uploadProgress}%</span>}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+            <div className="h-2.5 w-1/3 bg-blue-500 rounded-full animate-shimmer" />
+          </div>
+          <div className="text-xs text-gray-500 text-left mt-1">{processingLabel}</div>
+        </>
+      )}
+    </div>
+  );
+
   if (!isOpen) return null;
-  
+
   return (
     <>
       {/* Background overlay */}
-      <div 
-        className="fixed inset-0 bg-gray-500 bg-opacity-75 z-[9998]" 
+      <div
+        className="fixed inset-0 bg-gray-500 bg-opacity-75 z-[9998]"
         onClick={onClose}
       />
-      
+
       {/* Modal container */}
       <div className="fixed inset-0 z-[9999] overflow-y-auto">
         <div className="flex min-h-full items-center justify-center p-4">
@@ -51,13 +137,14 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                 </svg>
               </button>
             </div>
-            
+
             {/* Tabs */}
             <div className="border-b border-gray-200 dark:border-dark-border mb-4">
               <nav className="-mb-px flex space-x-8">
                 <button
                   onClick={() => setActiveTab('standard')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  disabled={isUploading}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                     activeTab === 'standard'
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
@@ -67,7 +154,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                 </button>
                 <button
                   onClick={() => setActiveTab('analysis')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  disabled={isUploading}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                     activeTab === 'analysis'
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
@@ -77,7 +165,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                 </button>
               </nav>
             </div>
-            
+
             {/* Tab Content */}
             <div className="mt-4">
               {/* Standard Upload Tab */}
@@ -134,7 +222,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Upload Button */}
                   <div className="mt-4 text-center">
                     <button
@@ -143,36 +231,41 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                         const shapeInput = document.getElementById('shapefile-upload') as HTMLInputElement;
                         const csvFile = csvInput?.files?.[0];
                         const shapeFile = shapeInput?.files?.[0];
-                        
+
                         if (!csvFile || !shapeFile) {
                           toast.error('Please select both CSV/Excel and Shapefile');
                           return;
                         }
-                        
-                        setIsUploading(true);
+
                         const formData = new FormData();
                         formData.append('csv_file', csvFile);
                         formData.append('shapefile', shapeFile);
                         // DON'T send session_id - backend will generate a fresh one
                         // formData.append('session_id', session.sessionId); // REMOVED to fix concurrent user data bleed
-                        
+
                         try {
-                          console.log('Starting upload with formData:', formData);
-                          const response = await api.upload.uploadBothFiles(formData);
+                          const useChunked = (csvFile.size + shapeFile.size) > CHUNK_THRESHOLD;
+                          console.log(`Starting ${useChunked ? 'chunked' : 'standard'} upload`);
+
+                          const response = await executeUpload((onProgress, onRetry) =>
+                            useChunked
+                              ? uploadInChunks(csvFile, shapeFile, onProgress, onRetry)
+                              : api.upload.uploadBothFiles(formData, onProgress, onRetry)
+                          );
                           console.log('Upload response:', response);
-                          
+
                           if (response.data.status === 'success') {
                             toast.success('Files uploaded successfully!');
-                            
+
                             // Use the backend's session ID from the response if provided
                             const backendSessionId = response.data.session_id || session.sessionId;
                             if (response.data.session_id) {
                               console.log('Using backend session ID for standard upload:', backendSessionId);
                               updateSession({ sessionId: backendSessionId, preserveMessages: true });
                             }
-                            
+
                             setUploadedFiles(csvFile.name, shapeFile.name);
-                            
+
                             // Add system message
                             const systemMessage = {
                               id: `msg_${Date.now()}`,
@@ -182,10 +275,10 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                               sessionId: backendSessionId
                             };
                             addMessage(systemMessage);
-                            
-                            // Close modal
+
                             onClose();
-                            
+                            resetProgress();
+
                             // Send the special trigger message silently (not shown to user)
                             setTimeout(() => {
                               sendMessage('__DATA_UPLOADED__', { silent: true });
@@ -193,41 +286,33 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                           } else {
                             console.error('Upload response not successful:', response.data);
                             toast.error(response.data.message || 'Upload did not return success status');
+                            resetProgress();
                           }
                         } catch (error) {
                           console.error('Upload error:', error);
                           const err: any = error as any;
                           const message = err?.response?.data?.message || err?.message || 'Failed to upload files';
                           toast.error(message);
-                        } finally {
-                          setIsUploading(false);
+                          resetProgress();
                         }
                       }}
                       disabled={isUploading}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                     >
-                      {isUploading ? (
-                        <>
-                          <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          Upload Files
-                        </>
-                      )}
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Upload Files
+                      </>
                     </button>
+
+                    {progressBar}
                     <div id="files-upload-status" className="mt-2"></div>
                   </div>
                 </div>
               )}
-              
+
               {/* Data Analysis Tab */}
               {activeTab === 'analysis' && (
                 <div>
@@ -263,147 +348,141 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                           }}
                         />
                       </div>
-                      
+
                       <button
                         onClick={async () => {
                           const fileInput = document.getElementById('data-analysis-file') as HTMLInputElement;
                           const file = fileInput?.files?.[0];
-                          
-                          if (file) {
-                            setIsUploading(true);
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            // DON'T send session_id - backend will generate a fresh one
-                            // formData.append('session_id', session?.sessionId || ''); // REMOVED to fix concurrent user data bleed
-                            
-                            try {
-                              console.log('Starting data analysis upload with formData:', formData);
-                              const response = await api.analysis.uploadFiles(formData);
-                              console.log('Data analysis upload response:', response);
-                              console.log('Response data:', response.data);
-                              console.log('Response data status:', response.data?.status);
-                              
-                              if (response.data.status === 'success') {
-                                toast.success('File uploaded successfully for analysis!');
-                                
-                                // Use the backend's session ID from the response
-                                const backendSessionId = response.data.session_id;
-                                console.log('Using backend session ID:', backendSessionId);
-                                
-                                // Store file info for the chat to know we're in data analysis mode
-                                setUploadedFiles(file.name, undefined);
-                                
-                                // Update session with backend's ID
-                                updateSession({ sessionId: backendSessionId, preserveMessages: true });
-                                
-                                // Activate data analysis mode with backend session
-                                await api.analysis.activateMode(backendSessionId);
-                                
-                                // Add system message for user feedback
-                                const systemMessage = {
-                                  id: `msg_${Date.now()}`,
-                                  type: 'system' as const,
-                                  content: `Data file uploaded: ${file.name}. Starting analysis...`,
-                                  timestamp: new Date(),
-                                  sessionId: backendSessionId
-                                };
-                                addMessage(systemMessage);
-                                
-                                // Close modal first
-                                onClose();
-                                
-                                // Automatically trigger Data Analysis V3 agent after a short delay
-                                setTimeout(async () => {
-                                  console.log('Triggering data analysis chat API with session:', backendSessionId);
-                                  try {
-                                    const chatResponse = await fetch('/api/v1/data-analysis/chat', {
-                                      method: 'POST',
-                                      headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-Conversation-ID': storage.ensureConversationId(),
-                                      },
-                                      body: JSON.stringify({
-                                        message: 'analyze uploaded data',
-                                        session_id: backendSessionId
-                                      })
-                                    });
 
-                                    console.log('Data analysis chat response:', chatResponse.status);
-
-                                    if (!chatResponse.ok) {
-                                      console.error('Failed to trigger data analysis:', chatResponse.status);
-                                      const errorText = await chatResponse.text();
-                                      console.error('Error response:', errorText);
-                                    } else {
-                                      const responseData = await chatResponse.json();
-                                      console.log('Data analysis triggered successfully:', responseData);
-
-                                      // Add the analysis results to the chat
-                                      if (responseData.success && responseData.message) {
-                                        const analysisMessage = {
-                                          id: `msg_${Date.now() + 2}`,
-                                          type: 'regular' as const,
-                                          sender: 'assistant' as const,
-                                          content: responseData.message,
-                                          timestamp: new Date(),
-                                          sessionId: backendSessionId,
-                                          visualizations: responseData.visualizations
-                                        };
-                                        addMessage(analysisMessage);
-
-                                        // Set data analysis mode so subsequent messages go to the right endpoint
-                                        setDataAnalysisMode(true);
-                                        console.log('Data analysis mode activated');
-                                      }
-                                    }
-                                  } catch (error) {
-                                    console.error('Error triggering data analysis:', error);
-                                  }
-                                }, 500);
-                                
-
-                              } else {
-                                console.error("Data analysis upload not successful. Status:", response.data?.status);
-                                console.error("Full response data:", response.data);
-                                toast.error(response.data.message || "Upload failed");
-                              }
-                            } catch (error: any) {
-                              console.error('Upload error:', error);
-                              toast.error(error.response?.data?.message || 'Failed to upload file');
-                            } finally {
-                              setIsUploading(false);
-                            }
-                          } else {
+                          if (!file) {
                             toast.error('Please select a file first');
+                            return;
+                          }
+
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          // DON'T send session_id - backend will generate a fresh one
+                          // formData.append('session_id', session?.sessionId || ''); // REMOVED to fix concurrent user data bleed
+
+                          try {
+                            console.log('Starting data analysis upload with formData:', formData);
+                            const response = await executeUpload((onProgress, onRetry) =>
+                              api.analysis.uploadFiles(formData, onProgress, onRetry)
+                            );
+                            console.log('Data analysis upload response:', response);
+                            console.log('Response data:', response.data);
+                            console.log('Response data status:', response.data?.status);
+
+                            if (response.data.status === 'success') {
+                              toast.success('File uploaded successfully for analysis!');
+
+                              // Use the backend's session ID from the response
+                              const backendSessionId = response.data.session_id;
+                              console.log('Using backend session ID:', backendSessionId);
+
+                              // Store file info for the chat to know we're in data analysis mode
+                              setUploadedFiles(file.name, undefined);
+
+                              // Update session with backend's ID
+                              updateSession({ sessionId: backendSessionId, preserveMessages: true });
+
+                              // Activate data analysis mode with backend session
+                              await api.analysis.activateMode(backendSessionId);
+
+                              // Add system message for user feedback
+                              const systemMessage = {
+                                id: `msg_${Date.now()}`,
+                                type: 'system' as const,
+                                content: `Data file uploaded: ${file.name}. Results will appear below.`,
+                                timestamp: new Date(),
+                                sessionId: backendSessionId
+                              };
+                              addMessage(systemMessage);
+
+                              onClose();
+                              resetProgress();
+
+                              // Automatically trigger Data Analysis V3 agent after a short delay
+                              setTimeout(async () => {
+                                console.log('Triggering data analysis chat API with session:', backendSessionId);
+                                try {
+                                  const chatResponse = await fetch('/api/v1/data-analysis/chat', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'X-Conversation-ID': storage.ensureConversationId(),
+                                    },
+                                    body: JSON.stringify({
+                                      message: 'analyze uploaded data',
+                                      session_id: backendSessionId
+                                    })
+                                  });
+
+                                  console.log('Data analysis chat response:', chatResponse.status);
+
+                                  if (!chatResponse.ok) {
+                                    console.error('Failed to trigger data analysis:', chatResponse.status);
+                                    const errorText = await chatResponse.text();
+                                    console.error('Error response:', errorText);
+                                  } else {
+                                    const responseData = await chatResponse.json();
+                                    console.log('Data analysis triggered successfully:', responseData);
+
+                                    // Add the analysis results to the chat
+                                    if (responseData.success && responseData.message) {
+                                      const analysisMessage = {
+                                        id: `msg_${Date.now() + 2}`,
+                                        type: 'regular' as const,
+                                        sender: 'assistant' as const,
+                                        content: responseData.message,
+                                        timestamp: new Date(),
+                                        sessionId: backendSessionId,
+                                        visualizations: responseData.visualizations
+                                      };
+                                      addMessage(analysisMessage);
+
+                                      // Set data analysis mode so subsequent messages go to the right endpoint
+                                      setDataAnalysisMode(true);
+                                      console.log('Data analysis mode activated');
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error('Error triggering data analysis:', error);
+                                }
+                              }, 500);
+
+
+                            } else {
+                              console.error("Data analysis upload not successful. Status:", response.data?.status);
+                              console.error("Full response data:", response.data);
+                              toast.error(response.data.message || "Upload failed");
+                              resetProgress();
+                            }
+                          } catch (error: any) {
+                            console.error('Upload error:', error);
+                            toast.error(error.response?.data?.message || 'Failed to upload file');
+                            resetProgress();
                           }
                         }}
                         disabled={isUploading}
                         className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {isUploading ? (
-                          <>
-                            <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                            Upload for Analysis
-                          </>
-                        )}
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          Upload for Analysis
+                        </>
                       </button>
-                      
+
+                      {progressBar}
+
                       <div id="data-analysis-upload-status" className="mt-3"></div>
                     </div>
                   </div>
                 </div>
               )}
-              
+
             </div>
           </div>
         </div>

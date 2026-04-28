@@ -45,7 +45,6 @@ async function withRetry<T>(
   throw new Error('Max retries exceeded');
 }
 
-
 // Request interceptor for adding session ID
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -218,6 +217,33 @@ export const api = {
         onRetry
       ),
     
+    uploadChunk: (
+      uploadId: string,
+      fileType: 'csv' | 'shapefile',
+      chunkIndex: number,
+      totalChunks: number,
+      chunk: Blob
+    ) => {
+      const fd = new FormData();
+      fd.append('upload_id', uploadId);
+      fd.append('file_type', fileType);
+      fd.append('chunk_index', String(chunkIndex));
+      fd.append('total_chunks', String(totalChunks));
+      fd.append('chunk', chunk);
+      return axiosInstance.post('/upload/chunk', fd, {
+        timeout: 60000,
+        headers: { 'Content-Type': undefined },
+      });
+    },
+
+    finalizeChunkedUpload: (payload: {
+      upload_id: string;
+      csv_filename: string;
+      shapefile_filename: string;
+      csv_total_chunks: number;
+      shp_total_chunks: number;
+    }) => axiosInstance.post('/upload/finalize', payload, { timeout: 60000 }),
+
     loadSampleData: (dataType: string, sessionId: string) =>
       axiosInstance.post('/load_sample_data', { data_type: dataType, session_id: sessionId }),
     

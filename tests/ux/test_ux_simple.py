@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.data_analysis_v3.core.tpr_intent_classifier import TPRIntent, TPRIntentClassifier
+from app.tpr.intent import TPRIntent, TPRIntentClassifier
 
 
 def test_intent_classifier_basics():
@@ -65,10 +65,10 @@ def test_selection_extraction():
 def test_imports():
     """Test all key imports work."""
     try:
-        from app.data_analysis_v3.core.tpr_intent_classifier import TPRIntentClassifier
+        from app.tpr.intent import TPRIntentClassifier
         from app.data_analysis_v3.core.tpr_workflow_handler import TPRWorkflowHandler
-        from app.data_analysis_v3.core.agent import DataAnalysisAgent
-        from app.core.prompt_builder import PromptBuilder
+        from app.agent.agent import DataAnalysisAgent
+        from app.agent.prompt_builder import PromptBuilder
         print("✅ All imports successful!")
         return True
     except ImportError as e:
@@ -99,7 +99,7 @@ def test_welcome_message_config():
 
 def test_prompt_builder_ui_awareness():
     """Test that prompt builder has correct UI awareness."""
-    from app.core.prompt_builder import PromptBuilder
+    from app.agent.prompt_builder import PromptBuilder
 
     builder = PromptBuilder()
     prompt = builder.build({'session_id': 'test'})

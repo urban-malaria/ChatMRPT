@@ -13,8 +13,8 @@ import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-from app.services.unified_data_state import get_data_state
-from app.core.redis_state_manager import get_redis_state_manager
+from app.services.data_state import get_data_state
+from app.services.redis_state import get_redis_state_manager
 
 
 class MemoryService:

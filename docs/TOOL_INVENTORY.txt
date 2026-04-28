@@ -1,0 +1,120 @@
+================================================================================
+                    ChatMRPT TOOL INVENTORY - TICK WHAT WE KEEP
+================================================================================
+
+Instructions: Mark [x] for tools we ABSOLUTELY need, leave [ ] for delete
+
+================================================================================
+SECTION A: RequestInterpreter Registered Tools (16 tools)
+================================================================================
+
+[x ] run_malaria_risk_analysis      - Run composite + PCA risk analysis
+[ x] create_vulnerability_map       - Choropleth map of risk scores
+[ x] create_pca_map                 - PCA-specific choropleth map
+[ x] create_variable_distribution   - Map/plot of a single variable
+[ x] create_urban_extent_map        - Urban boundary visualization
+[ x] create_decision_tree           - Decision tree visualization
+[ x] create_composite_score_maps    - Side-by-side composite maps
+[ x] create_settlement_map          - Settlement pattern map
+[ x] show_settlement_statistics     - Settlement stats summary
+[ ] execute_sql_query              - SQL query on dataset
+[ x] explain_analysis_methodology   - Explain composite/PCA methods
+[ x] run_itn_planning               - Plan bed net distribution
+[ x] analyze_data_with_python       - LLM-generated Python code (creates charts)
+[ ] list_dataset_columns           - List columns (paginated)
+[ ] query_tpr_data                 - Query pre-computed TPR combinations
+[ x] switch_tpr_combination         - Switch facility/age group combo
+
+================================================================================
+SECTION B: ToolRegistry Auto-Discovered Tools (41 tools)
+================================================================================
+
+VISUALIZATION - CHARTS:
+[ ] createbarchart                 - Bar chart
+[ ] creategroupedbarchart          - Grouped bar chart
+[ ] createstackedbarchart          - Stacked bar chart
+[ ] createhistogram                - Histogram
+[ ] createboxplot                  - Box plot
+[ ] createboxplotgrid              - Grid of box plots
+[ ] createviolinplot               - Violin plot
+[ ] createscatterplot              - Scatter plot
+[ ] createdensityplot              - Density plot
+[ ] createpiechart                 - Pie chart
+[ ] createdonutchart               - Donut chart
+[ ] createlollipopchart            - Lollipop chart
+[ ] createcorrelationheatmap       - Correlation heatmap
+[ ] createpairplot                 - Pair plot matrix
+[ ] createregressionplot           - Regression plot
+[ ] createresidualplot             - Residual plot
+[ ] createqqplot                   - Q-Q plot
+[ ] createcoordinateplot           - Coordinate plot
+
+VISUALIZATION - MAPS:
+[ x] createvulnerabilitymap         - Vulnerability map (duplicate?) could be, if it is to be deleted we need to ensure it is not used, else we leave it alone
+[x ] createpcamap                   - PCA map (duplicate?) same with this
+[x ] createcompositevulnerabilitymap - Composite vulnerability map
+[ x] create_vulnerability_map_comparison - Side-by-side comparison
+[ x] createcompositescoremaps       - Composite score maps
+[ x] createdecisiontree             - Decision tree viz
+[ x] createurbanextentmap           - Urban extent map
+[ ] createbubblemap                - Bubble map
+[ ] createinterventionmap          - Intervention targeting map
+[ ] createinterventiontargetingmap - Intervention targeting map (duplicate?)
+
+SETTLEMENT TOOLS:
+[ x] create_settlement_map          - Settlement map
+[ x] create_settlement_validation_map - Settlement validation map
+[ ] create_ward_specific_settlement_map - Ward-specific settlement
+[ x] create_building_classification_map - Building classification
+[ ] createsettlementanalysismap    - Settlement analysis map
+[ ] show_settlement_statistics     - Settlement stats
+[ ] get_building_statistics        - Building stats
+[ ] integrate_settlement_data_with_analysis - Integrate settlement data
+
+ANALYSIS TOOLS:
+[ x] runmalariariskanalysis         - Run risk analysis (duplicate?)
+[ x] generatecomprehensiveanalysissummary - Generate summary
+[ x] plan_itn_distribution          - ITN planning (duplicate?)
+[ x] explainanalysismethodology     - Explain methodology (duplicate?)
+
+================================================================================
+SECTION C: What Users Actually Ask Post-TPR
+================================================================================
+
+Common queries after TPR workflow completes:
+
+1. "What are the top 10 highest risk wards?"        → Needs: DATA QUERY
+2. "Show me the vulnerability map"                  → Needs: create_vulnerability_map
+3. "What variables are in my data?"                 → Needs: DATA QUERY
+4. "Plan ITN distribution for 50,000 nets"          → Needs: run_itn_planning
+5. "How was the composite score calculated?"        → Needs: explain_methodology
+6. "Create a map of TPR values"                     → Needs: create_variable_distribution
+7. "Show me a bar chart of top wards"               → Needs: CHART TOOL (explicit)
+8. "What's the average composite score?"            → Needs: DATA QUERY
+
+================================================================================
+SECTION D: Your Decisions
+================================================================================
+
+KEEP these specialized tools:
+(List the tools you ticked above)
+
+1. ___________________________
+2. ___________________________
+3. ___________________________
+4. ___________________________
+5. ___________________________
+6. ___________________________
+7. ___________________________
+8. ___________________________
+
+FOR DATA QUERIES, we need ONE tool that:
+[ ] Returns data only (no auto-visualization)
+[ ] Handles: top N, statistics, column info, filtering
+[ ] Uses SQL syntax on the unified dataset
+
+FOR CHARTS, we need:
+[ ] One generic chart tool called ONLY when user explicitly asks
+[ ] OR no chart tool (users can ask for maps instead)
+
+================================================================================

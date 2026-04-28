@@ -1,198 +1,226 @@
-# ChatMRPT Codebase Cleanup Plan
+# Codebase Cleanup Plan (Updated April 3, 2026)
 
-**Date:** 2026-03-12
-**Status:** Reviewed x2 — corrections applied, ready to execute
-**Goal:** Remove dead code, eliminate duplicates, and establish a single clear path through the codebase — without breaking anything.
+## Current State
+- 209 active backend Python files, 83,689 lines of code
+- 45 frontend TypeScript files
+- 56 archived dead files in _archived/ folders
+- 6+ duplicate implementations of the same functionality
+- 10 monolithic files over 1000 lines each
+- 7 empty directories
+- TPR scattered across 9 files in 3 directories
+- State management in 5 different places
+- Response formatting in 3 different places
+- Visualization code scattered across 7+ files in 3 directories
+
+## Target
+A clean, understandable codebase where:
+- Every file has one clear purpose
+- No duplicates
+- No empty directories
+- No file over 800 lines
+- Related code lives together
+- A new developer can follow the flow
 
 ---
 
-## Guiding Principle
+## Phase 1: Quick wins (zero risk)
 
-Nothing is deleted. All archived files move to `_archive/` at the repo root (gitignored), preserving the original folder structure so anything can be recovered. Use `git mv` to move files so history is preserved.
-
----
-
-## Phase 1 — Safe Archival (Confirmed Dead Files)
-
-**Risk:** Zero — these files are not imported from outside their own package.
-**Effort:** ~1 hour
-**Approach:** Move only. Do not modify any other file.
-
-### Files to archive
-
-| Source | Destination in `_archive/` | Why |
-|---|---|---|
-| `app/data_analysis_module/` (entire dir) | `_archive/app/data_analysis_module/` | Superseded by data_analysis_v3; ~1,060 lines. Note: referenced by `tests/test_data_analysis_module.py` — adjust that test script after archiving. |
-| `app/web/routes/analysis_routes_session_fix.py` | `_archive/app/web/routes/analysis_routes_session_fix.py` | 87-line pasted snippet, never wired up, not imported anywhere |
-| `app/core/visualization_maps_tools.py` | `_archive/app/core/visualization_maps_tools.py` | Confirmed not imported anywhere — all runtime code uses `app/tools/visualization_maps_tools.py` |
-| All `*.backup*` files under `app/` | `_archive/` (mirror original paths) | Editor artifacts across 9+ directories. Use: `find app/ -name "*.backup*"` |
-
-> **⚠️ NOT in Phase 1 — runtime/tpr/ package:**
-> `workflow.py` exports `reset_tpr_handler_cache` (live import in `chat_stream_service.py:14`).
-> `detector.py` imports `is_tpr_data`/`validate_tpr_data` from `utils.py` — so `utils.py` is still referenced within the package.
-> The entire `app/runtime/tpr/` package must be handled together in Phase 2, not piecemeal here.
-
-### `.gitignore` entry to add
+### 1.1 Delete empty directories
 ```
-_archive/
-```
-Note: `.gitignore` already ignores `*_archive_*` and various `*.backup*` patterns but NOT a top-level `_archive/` — add it explicitly.
-
-### Verification
-```bash
-grep -rn "from app.data_analysis_module\|import data_analysis_module" app/ --include="*.py"
-grep -rn "analysis_routes_session_fix" app/ --include="*.py"
-grep -rn "from app.core.visualization_maps_tools\|import visualization_maps_tools" app/ --include="*.py"
-# All should return zero results
+app/agents/                      (empty)
+app/runtime/tpr/                 (empty)
+app/data_analysis_v3/utils/      (empty)
+app/data_analysis_v3/interface/  (empty)
+app/services/tools/              (only _archived)
+app/reports/                     (just a 20-line __init__.py)
+app/models/                      (just 1 file — move data_handler.py elsewhere)
 ```
 
----
+### 1.2 Remove empty template/static folders
+```
+app/templates/                   (empty — React replaced Jinja)
+app/templates/survey/            (empty)
+app/templates/prepost/           (empty)
+app/templates_archived_*/        (entire archive folder)
+```
 
-## Phase 2 — Unify TPR Duplicates + Kwara Column Detection Fixes
-
-**Risk:** Medium — touches active code paths. Requires tests before and after.
-**Effort:** ~4 hours
-**Prerequisite:** Phase 1 complete.
-
-### Problem
-Two `TPRDataAnalyzer` classes and two `calculate_ward_tpr()` implementations, all live:
-
-**TPRDataAnalyzer:**
-| File | Active code paths that use it |
-|---|---|
-| `app/data_analysis_v3/tpr/data_analyzer.py` | `data_analysis_v3_routes.py:567` → `workflow_manager.py` (React "Data Analysis" tab) |
-| `app/data_analysis_v3/core/tpr_data_analyzer.py` | `chat_stream_service.py:113`, `tpr_workflow_langgraph_tool.py:20`, `runtime/tpr/workflow.py`, `tests/tpr/test_tpr_data_analyzer.py:10` |
-
-**app/runtime/tpr/ package:**
-| File | Status |
-|---|---|
-| `workflow.py` | Live — exports `reset_tpr_handler_cache` to `chat_stream_service.py:14` |
-| `utils.py` | Referenced only within the package via `__init__.py` `__all__` and `detector.py:15` |
-| `detector.py` | Imports `is_tpr_data`/`validate_tpr_data` from `utils.py` |
-
-### Plan
-
-**Step 1 — Relocate `reset_tpr_handler_cache`**
-- Move the function from `runtime/tpr/workflow.py` into `app/data_analysis_v3/tpr/workflow_manager.py`
-- Update the single import in `chat_stream_service.py:14`
-- Archive `runtime/tpr/workflow.py`, `utils.py`, `detector.py`, `__init__.py`
-
-**Step 2 — Choose canonical `TPRDataAnalyzer`**
-- Canonical version: `app/data_analysis_v3/tpr/data_analyzer.py`
-- Before archiving `core/tpr_data_analyzer.py`, update all import sites:
-  - `chat_stream_service.py:113`
-  - `tpr_workflow_langgraph_tool.py:20`
-  - `tests/tpr/test_tpr_data_analyzer.py:10`
-- ⚠️ Verify constructor signature: `chat_stream_service.py:116` calls `TPRDataAnalyzer(session_id)` with an argument — confirm `tpr/data_analyzer.py` accepts an optional `session_id` before switching
-- Archive `app/data_analysis_v3/core/tpr_data_analyzer.py`
-
-**Step 3 — Apply column detection fixes**
-Apply Kwara bug fixes to **both**:
-- `app/data_analysis_v3/tpr/data_analyzer.py` (drives the workflow UI)
-- `app/core/tpr_utils.py` (the shared toolchain implementation — the more important one)
-
-Fixes to apply to both:
-- **Bug 1 (Critical):** Skip `orgunitlevel*` columns when detecting facility level
-- **Bug 2 (Moderate):** Add `organisationunit` to facility name detection patterns
-- **Bug 3 (Minor):** Add `orgunitlevel2` as explicit state column candidate
-- **Bug 4 (Safeguard):** Validate detected facility level column values resemble facility types
-
-### Verification
-- Run `tests/tpr/test_tpr_data_analyzer.py` after updating imports
-- Run TPR workflow end-to-end with Kwara data file
-- Confirm streaming chat TPR path still works
+**Test after:** `python run.py` starts without errors
 
 ---
 
-## Phase 3 — Tool System Consolidation
+## Phase 2: Resolve duplicates (low risk, high impact)
 
-**Risk:** Medium — touches many files, but each change is a simple import swap.
-**Effort:** ~half day
-**Prerequisite:** Phase 2 complete.
+Do ONE duplicate at a time. Test after each.
 
-### Known duplicate pairs (with confirmed ownership)
+### 2.1 LLMAdapter duplicate
+- `app/core/llm_adapter.py` (718 lines)
+- `app/services/llm_adapter.py` (306 lines)
+- **Investigate:** Which is imported by active code? Keep that one.
 
-| Duplicate | Keep | Archive | Evidence |
-|---|---|---|---|
-| Visualization maps | `app/tools/visualization_maps_tools.py` | `app/core/visualization_maps_tools.py` | Already archived in Phase 1 — core version has no importers |
-| Export tools | `app/tools/export_tools.py` | `app/core/export_tools.py` | `tiered_tool_loader.py:143` and `tool_registry.py:487` use `app.tools` version; `app/core` version used only by `reports/modern_generator.py:89` — update that one import |
-| TPR query | `app/data_analysis_v3/tools/tpr_analysis_tool.py` | TBD | Trace imports before deciding |
+### 2.2 UnifiedDataState duplicate
+- `app/core/unified_data_state.py` (313 lines)
+- `app/services/unified_data_state.py` (294 lines)
+- **Investigate:** Which is imported? Are they different?
 
-### Additional cleanup in this phase
-The tool registry (`app/core/tool_registry.py`) still references modules that no longer exist (e.g., `app.tools.risk_analysis_tools`). Prune these broken references or the tool discovery will silently fail.
+### 2.3 ServiceContainer duplicate
+- `app/config/container.py` (590 lines)
+- `app/services/container.py` (696 lines)
+- **Investigate:** Which does `app/__init__.py` actually use?
 
-### Plan
-1. For each pair above: grep importers, confirm, swap the one import that needs updating, archive the unused copy
-2. Prune broken module references from `tool_registry.py`
-3. Document canonical tool locations in `docs/TOOL_REGISTRY.md`
+### 2.4 python_tool.py duplicate
+- `app/data_analysis_v3/core/python_tool.py` (291 lines)
+- `app/data_analysis_v3/tools/python_tool.py` (338 lines)
+- **Investigate:** Which does agent.py import?
 
-### Verification
-Run full test suite. Manually trigger each tool type through the chat interface.
+### 2.5 system_prompt.py duplicate
+- `app/data_analysis_v3/core/system_prompt.py` (167 lines)
+- `app/data_analysis_v3/prompts/system_prompt.py` (171 lines)
+- **Investigate:** Which does agent.py import? Are contents different?
 
----
+### 2.6 Response formatter triplication
+- `app/services/response_formatter.py` (546 lines)
+- `app/data_analysis_v3/core/formatters.py` (409 lines)
+- `app/data_analysis_v3/formatters/response_formatter.py` (243 lines)
+- **Investigate:** Who imports which? Can we keep just one?
 
-## Phase 4 — Blueprint & Route Cleanup
+### 2.7 Earth Engine client duplicate
+- `app/services/earth_engine_client.py` (354 lines)
+- `app/services/robust_earth_engine_client.py` (540 lines)
+- **Investigate:** Which is imported? (likely robust_ is newer)
 
-**Risk:** Low-Medium
-**Effort:** ~2 hours
-**Prerequisite:** Phase 3 complete.
+### 2.8 executor.py duplicate
+- `app/data_analysis_v3/core/executor.py` (687 lines)
+- `app/data_analysis_v3/core/executor_simple.py` (617 lines)
+- **Investigate:** Which does python_tool.py use?
 
-### Problems
+### 2.9 agent.py vs agent_fixed.py
+- `app/data_analysis_v3/core/agent.py` (1,117 lines)
+- `app/data_analysis_v3/core/agent_fixed.py` (300 lines)
+- **Investigate:** Is agent_fixed.py a legacy version?
 
-**Two `debug_bp` blueprints — both registered in `app/web/routes/__init__.py`:**
-- `app/web/routes/debug_routes.py` — canonical, keep
-- `app/web/routes/debug_session.py` — both defined AND registered; Flask will raise a name conflict if both load. Archive `debug_session.py` AND remove its registration line from `__init__.py`.
-
-**Three copies of `data_analysis_v3_routes.py`:**
-- `app/web/routes/data_analysis_v3_routes.py` — canonical, wired into Flask, keep
-- `app/data_analysis_v3/core/data_analysis_v3_routes.py` — ⚠️ verify whether this is truly a duplicate or serves a different purpose before archiving
-- `app/data_analysis_v3_routes.py` (root-level) — not imported; archive
-
-### Plan
-1. Archive `app/web/routes/debug_session.py` + remove its registration from `__init__.py`
-2. Verify `app/data_analysis_v3/core/data_analysis_v3_routes.py` imports and purpose, then archive if unused
-3. Archive root-level `app/data_analysis_v3_routes.py`
-
----
-
-## Phase 5 — Decommission Old Analysis Systems
-
-**Risk:** High — touches the oldest code. Do last.
-**Effort:** ~1–2 days
-**Prerequisite:** Phases 1–4 complete and stable.
-
-### `app/analysis/` — heavily imported, cannot archive as a unit
-Confirmed live importers include:
-- `app/core/request_interpreter.py`
-- `app/runtime/standard/workflow.py`
-- `app/web/routes/analysis/analysis_exec.py` (registered blueprint)
-- `app/web/routes/itn_routes.py` — imports `itn_pipeline.py`
-- `app/data/*`
-
-**Plan:** Audit each submodule individually. Archive only confirmed-unused files. `itn_pipeline.py` and `engine.py` stay until their callers are migrated or the standard risk workflow is decommissioned — that is out of scope for this cleanup.
-
-### Config variants
-- `app/config/production_optimized.py` — verify if used; archive if not
-- `app/config/production_transition.py` — likely dead; archive
+**Test after each:** Full workflow (upload → TPR → map → risk → vulnerability)
 
 ---
 
-## What This Does NOT Change
+## Phase 3: Consolidate scattered code (medium risk)
 
-- No logic changes in Phases 1, 3, 4, 5 — only file moves and import updates
-- `tpr_workflow_handler.py` (1,956 lines) is NOT decomposed — future refactor, out of scope
-- `app/analysis/` core modules (`itn_pipeline.py`, `engine.py`) stay until callers are migrated
-- No renaming of functions or classes beyond what is required for deduplication
+### 3.1 Consolidate TPR code
+Currently 9 files across 3 directories:
+- `app/core/tpr_precompute.py` (418)
+- `app/core/tpr_precompute_service.py` (240)
+- `app/core/tpr_utils.py` (598)
+- `app/core/tpr_ward_cache.py` (102)
+- `app/data_analysis_v3/tpr/workflow_manager.py` (1,152)
+- `app/data_analysis_v3/tpr/data_analyzer.py` (557)
+- `app/data_analysis_v3/core/tpr_workflow_handler.py` (1,972)
+- `app/data_analysis_v3/core/tpr_language_interface.py` (560)
+- `app/data_analysis_v3/core/tpr_intent_classifier.py` (241)
+
+**Target:** All TPR code in `app/data_analysis_v3/tpr/`
+
+### 3.2 Consolidate state management
+Currently 5 places:
+- `app/core/unified_data_state.py`
+- `app/core/session_state.py`
+- `app/services/session_memory.py`
+- `app/services/unified_data_state.py`
+- `app/data_analysis_v3/core/state_manager.py`
+
+**Investigate:** Which are actually different vs doing the same thing?
+
+### 3.3 Consolidate visualization code
+Currently 7+ files across 3 directories:
+- `app/tools/visualization_maps_tools.py` (1,101)
+- `app/tools/visualization_charts_tools.py` (2,643)
+- `app/services/visualization/chart_service.py` (780)
+- `app/services/agents/visualizations/composite_visualizations.py` (1,613)
+- `app/services/agents/visualizations/pca_visualizations.py` (223)
+- `app/services/agents/visualizations/core_utils.py` (423)
+- `app/services/agents/visualizations/tpr_visualization_service.py` (218)
+
+**Investigate:** What calls what? What does the agent actually use?
 
 ---
 
-## Estimated Impact
+## Phase 4: Extract misplaced code (medium risk)
 
-| Phase | Files affected | Lines removed | Risk |
-|---|---|---|---|
-| 1 — Dead file archival | ~35 files | ~2,500 lines | Zero |
-| 2 — TPR unification + Kwara fixes | 5 files updated + 5 archived | ~1,035 lines | Medium |
-| 3 — Tool consolidation | ~6 files | ~500 lines | Medium |
-| 4 — Blueprint cleanup | ~3 files + 1 line | ~50 lines | Low-Medium |
-| 5 — Old analysis systems (partial) | ~20 files | ~4,000 lines | High |
-| **Total** | **~69 files** | **~8,085 lines** | |
+### 4.1 Extract DataHandler from data/__init__.py
+- `app/data/__init__.py` has 1,250 lines (DataHandler class)
+- Move to `app/data/handler.py`
+- Keep backward-compatible import in __init__.py
+
+### 4.2 Check query_result.py
+- `app/services/query_result.py` (177 lines) — was used by dead SQL pipeline
+- Verify if still needed
+
+---
+
+## Phase 5: Split monolithic files (lower priority, after phases 1-4)
+
+Files over 1000 lines:
+
+| File | Lines | Action |
+|------|-------|--------|
+| `tools/visualization_charts_tools.py` | 2,643 | Check if agent uses it — may be dead |
+| `data/unified_dataset_builder.py` | 2,166 | Split by builder stage |
+| `data_analysis_v3/core/tpr_workflow_handler.py` | 1,972 | Addressed in Phase 3.1 |
+| `web/routes/analysis_routes.py` | 1,835 | Split by feature |
+| `tools/complete_analysis_tools.py` | 1,805 | Our wrappers call this — keep but simplify |
+| `analysis/itn_pipeline.py` | 1,765 | Split pipeline stages |
+| `services/agents/visualizations/composite_visualizations.py` | 1,613 | Addressed in Phase 3.3 |
+| `tools/export_tools.py` | 1,522 | Check what's actually exported |
+| `data_analysis_v3/tpr/workflow_manager.py` | 1,152 | Addressed in Phase 3.1 |
+| `tools/visualization_maps_tools.py` | 1,101 | Our wrappers call this — keep but review |
+
+---
+
+## Phase 6: Frontend cleanup (separate effort)
+
+- Audit 45 frontend files — are all components used?
+- Remove dead stores, hooks, components
+- Simplify after standard mode removal
+
+---
+
+## Rules
+
+1. **Investigate before acting.** Grep, trace imports, verify.
+2. **One change at a time.** Commit after each.
+3. **Test after each change.** Full workflow.
+4. **Archive, don't delete.** Move to _archived/ for reference.
+5. **Update this plan** as we go — check off completed items.
+
+---
+
+## Progress Tracker
+
+### Phase 1: Quick wins
+- [ ] 1.1 Delete empty directories
+- [ ] 1.2 Remove empty template/static folders
+
+### Phase 2: Resolve duplicates (9 items)
+- [ ] 2.1 LLMAdapter
+- [ ] 2.2 UnifiedDataState
+- [ ] 2.3 ServiceContainer
+- [ ] 2.4 python_tool.py
+- [ ] 2.5 system_prompt.py
+- [ ] 2.6 Response formatters (3 files)
+- [ ] 2.7 Earth Engine client
+- [ ] 2.8 executor.py
+- [ ] 2.9 agent_fixed.py
+
+### Phase 3: Consolidate scattered code
+- [ ] 3.1 TPR code (9 files → 1 directory)
+- [ ] 3.2 State management (5 places → fewer)
+- [ ] 3.3 Visualization code (7+ files → cleaner)
+
+### Phase 4: Extract misplaced code
+- [ ] 4.1 DataHandler from __init__.py
+- [ ] 4.2 query_result.py check
+
+### Phase 5: Split monolithic files
+- [ ] (individual files TBD after Phases 3-4)
+
+### Phase 6: Frontend cleanup
+- [ ] 6.1 Audit
+- [ ] 6.2 Remove dead code

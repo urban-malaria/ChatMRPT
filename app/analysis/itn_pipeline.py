@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import plotly.graph_objects as go
 from pandas.api.types import is_datetime64_any_dtype
 from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
-from app.data.population_data.itn_population_loader import get_population_loader
+from app.planning.population_loader import get_population_loader
 from app.utils.geospatial_levels import (
     apply_lga_highlight,
     collect_lga_options,
@@ -183,8 +183,8 @@ def load_population_data(state: str) -> Optional[pd.DataFrame]:
     # Fall back to legacy per-state files if the unified dataset is unavailable
     logger.info(f"Unified dataset not available for {state}, attempting legacy population files")
 
-    xlsx_path = f'app/data/population_data/pbi_distribution_{state}.xlsx'
-    csv_path = f'app/data/population_data/pbi_distribution_{state}.csv'
+    xlsx_path = f'data/population_data/pbi_distribution_{state}.xlsx'
+    csv_path = f'data/population_data/pbi_distribution_{state}.csv'
 
     pop_data = None
     if os.path.exists(xlsx_path):
@@ -238,47 +238,9 @@ def load_population_data(state: str) -> Optional[pd.DataFrame]:
     return ward_population
 
 def normalize_ward_name(ward_name: str) -> str:
-    """
-    Normalize ward name for better matching.
-    
-    Args:
-        ward_name: Original ward name
-        
-    Returns:
-        Normalized ward name
-    """
-    if pd.isna(ward_name):
-        return ""
-        
-    # Convert to lowercase
-    normalized = str(ward_name).lower().strip()
-    
-    # Remove content in parentheses
-    normalized = normalized.split('(')[0].strip()
-    
-    # Replace roman numerals with numbers (order matters!)
-    # Using regex to match word boundaries
-    roman_replacements = [
-        (r'\bviii\b', '8'), (r'\bvii\b', '7'), (r'\bvi\b', '6'), 
-        (r'\biv\b', '4'), (r'\biii\b', '3'), (r'\bii\b', '2'), 
-        (r'\bix\b', '9'), (r'\bv\b', '5'), (r'\bi\b', '1')
-    ]
-    for pattern, replacement in roman_replacements:
-        normalized = re.sub(pattern, replacement, normalized)
-    
-    # Remove common suffixes
-    suffixes = [' ward', ' wards']
-    for suffix in suffixes:
-        if normalized.endswith(suffix):
-            normalized = normalized[:-len(suffix)].strip()
-    
-    # Replace common separators with space
-    normalized = normalized.replace('/', ' ').replace('-', ' ').replace('_', ' ')
-    
-    # Remove extra spaces
-    normalized = ' '.join(normalized.split())
-    
-    return normalized
+    """Thin wrapper — canonical implementation lives in app.utils.ward_matcher."""
+    from app.utils.ward_matcher import normalize_ward_name as _normalize
+    return _normalize(ward_name)
 
 def fuzzy_match_ward_names(analysis_wards: List[str], population_wards: List[str], 
                           threshold: int = 70) -> Dict[str, Tuple[str, int]]:
@@ -802,7 +764,7 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
         
         # Store ITN parameters in Redis for multi-worker access
         try:
-            from ..core.redis_state_manager import get_redis_state_manager
+            from app.services.redis_state import get_redis_state_manager
             redis_manager = get_redis_state_manager()
             itn_params = {
                 'total_nets': total_nets,

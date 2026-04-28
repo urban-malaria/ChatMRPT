@@ -7,7 +7,7 @@ import os
 # Add the app directory to the path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from app.data.unified_dataset_builder import load_unified_dataset
+from app.services.dataset_builder import load_unified_dataset
 from app.data import DataHandler
 
 def test_direct_load():

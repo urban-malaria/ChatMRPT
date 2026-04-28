@@ -10,7 +10,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from flask import Flask
 
-from ..core.exceptions import ConfigurationError
+from app.utils.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ class ServiceContainer:
     def _create_interaction_logger(self, container: 'ServiceContainer'):
         """Create interaction logger service."""
         try:
-            from ..interaction import InteractionLogger
+            from app.services.interaction_init import InteractionLogger
             
             db_path = self._app.config.get('INTERACTIONS_DB_FILE')
             return InteractionLogger(db_path=db_path)
@@ -155,7 +155,7 @@ class ServiceContainer:
             interaction_logger = container.get('interaction_logger')
             
             # Use the new flexible LLM adapter
-            from ..core.llm_adapter import LLMAdapter
+            from app.services.llm_adapter import LLMAdapter
             
             # Auto-detect backend based on environment
             # FIXED: Check environment directly since Flask config isn't loading properly
@@ -206,7 +206,7 @@ class ServiceContainer:
                         # Check if we're using OpenAI backend
                         if self.adapter.backend == 'openai':
                             # Use proper OpenAI function calling via the actual LLM manager
-                            from ..core.llm_manager import LLMManager
+                            from app.services.llm_manager import LLMManager
                             
                             # Create a real LLM manager for OpenAI
                             real_llm = LLMManager(
@@ -312,7 +312,7 @@ class ServiceContainer:
                 def get_handler(self, session_id):
                     """Get DataHandler for session."""
                     import os
-                    from ..data import DataHandler
+                    from app.services.data_handler import DataHandler
                     
                     session_folder = os.path.join(self.upload_folder, session_id)
                     if os.path.exists(session_folder):
@@ -329,7 +329,7 @@ class ServiceContainer:
     def _create_analysis_service(self, container: 'ServiceContainer'):
         """Create analysis service - composite scoring and PCA."""
         try:
-            from ..analysis.engine import AnalysisEngine
+            from app.analysis.engine import AnalysisEngine
             
             class AnalysisServiceWrapper:
                 """Wrapper for AnalysisEngine to handle data handler retrieval."""
@@ -397,7 +397,7 @@ class ServiceContainer:
     def _create_visualization_service(self, container: 'ServiceContainer'):
         """Create visualization service - 6 core visualizations."""
         try:
-            from ..services.agents.visualizations import (
+            from app.visualization import (
                 create_agent_composite_score_maps,
                 create_agent_vulnerability_map,
                 create_agent_box_plot_ranking,
@@ -537,7 +537,7 @@ class ServiceContainer:
     def _create_report_service(self, container: 'ServiceContainer'):
         """Create report service."""
         try:
-            from ..reports import ModernReportGenerator
+            from app.services.reports.modern_generator import ModernReportGenerator
             
             # Return a wrapper class that creates instances on demand
             class ReportServiceWrapper:
@@ -565,7 +565,7 @@ class ServiceContainer:
         """Create request interpreter - natural language processing."""
         try:
             # Use migration utility to create appropriate interpreter
-            from ..core.interpreter_migration import create_request_interpreter
+            from app.agent.interpreter import RequestInterpreter; create_request_interpreter = lambda *a, **kw: RequestInterpreter(*a, **kw)
             
             llm_manager = container.get('llm_manager')
             data_service = container.get('data_service')

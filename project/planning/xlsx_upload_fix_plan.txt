@@ -1,0 +1,97 @@
+# Fix XLSX File Upload Support
+
+## Problem
+XLSX files upload but don't work because:
+1. All files saved as `raw_data.csv` regardless of original format (an Excel file becomes `raw_data.csv` but still contains Excel binary)
+2. Code uses `pd.read_csv()` which fails on Excel content
+
+## Solution
+Fix both sides:
+1. **Saving**: Preserve correct extension (`raw_data.csv` vs `raw_data.xlsx`)
+2. **Reading**: Create helper to find and read the data file with correct reader
+
+---
+
+## Implementation
+
+### Step 1: Update upload logic to preserve extension
+
+**File: `app/web/routes/upload_routes.py`**
+
+In `store_raw_data_files()` (~line 224):
+- Detect if uploaded file is Excel (.xlsx, .xls) or CSV (.csv, .txt)
+- Save as `raw_data.csv` or `raw_data.xlsx` accordingly
+
+In `store_raw_csv_only()` (~line 429):
+- Same change
+
+### Step 2: Create helper function (and reuse encoding logic)
+
+**File: `app/data_analysis_v3/core/encoding_handler.py`**
+
+Add helpers that encapsulate both discovery *and* proper reading:
+```python
+from pathlib import Path
+
+
+def find_raw_data_file(session_folder: str) -> str | None:
+    """Find the raw data file in a session folder (csv or xlsx)."""
+    for ext in ['csv', 'xlsx', 'xls']:
+        path = Path(session_folder) / f'raw_data.{ext}'
+        if path.exists():
+            return str(path)
+    return None
+
+
+def read_raw_data(session_folder: str, **kwargs) -> pd.DataFrame:
+    """Find and read the raw data file from a session folder."""
+    filepath = find_raw_data_file(session_folder)
+    if not filepath:
+        raise FileNotFoundError(f"No raw data file in {session_folder}")
+
+    ext = Path(filepath).suffix.lower()
+    if ext in ('.xlsx', '.xls'):
+        return pd.read_excel(filepath, **kwargs)
+    else:
+        # Preserve existing encoding fixes for CSVs
+        return EncodingHandler.read_csv_with_encoding(filepath, **kwargs)
+```
+
+### Step 3: Update reading locations
+
+
+Replace hardcoded `raw_data.csv` paths with `find_raw_data_file()` or `read_raw_data()`:
+
+| File | What to change |
+|------|----------------|
+| `app/core/request_interpreter.py` | Use `read_raw_data()` instead of `pd.read_csv(raw_data.csv)` |
+| `app/services/conversational_data_access.py` | Same |
+| `app/session_data_service.py` | Same |
+| `app/tpr_workflow_handler.py` | Same |
+| `app/data_analysis_v3/core/tpr_workflow_handler.py` | Same |
+| `app/web/routes/upload_routes.py` | Use helper in `generate_dynamic_data_summary()` |
+| ITN / TPR pipeline writers | Ensure they either always emit CSV or adopt the helper so consumers stay in sync |
+
+---
+
+## Files to Modify
+
+1. `app/web/routes/upload_routes.py` - Save with correct extension + use helper for reading
+2. `app/data_analysis_v3/core/encoding_handler.py` - Add helper functions
+3. `app/core/request_interpreter.py` - Use helper
+4. `app/services/conversational_data_access.py` - Use helper
+5. `app/session_data_service.py` - Use helper
+6. `app/tpr_workflow_handler.py` - Use helper
+7. `app/data_analysis_v3/core/tpr_workflow_handler.py` - Use helper
+
+---
+
+## Verification
+
+1. Run tests: `python -m pytest tests/`
+2. Start locally: `python run.py`
+3. Upload a CSV file -> confirm it works
+4. Upload an XLSX file -> confirm it works
+5. Ask ChatMRPT to describe the data
+6. Run a simple analysis
+7. Deploy to AWS Instance 1, test, then Instance 2

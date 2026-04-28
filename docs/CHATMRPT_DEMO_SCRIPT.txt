@@ -1,0 +1,281 @@
+================================================================================
+                    CHATMRPT DEMO SCRIPT (15 MINUTES)
+================================================================================
+
+--------------------------------------------------------------------------------
+OPENING: WHY CHATMRPT? (2 minutes)
+--------------------------------------------------------------------------------
+
+[Show title slide or ChatMRPT homepage]
+
+"Every year, malaria programs collect massive amounts of data - from health
+facilities, surveys, and environmental sources. The challenge? Turning that
+data into actionable decisions.
+
+Traditional analysis requires specialized skills - GIS experts, statisticians,
+data scientists. This creates bottlenecks. Program managers wait weeks for
+analysis. By the time insights arrive, the situation on the ground may have
+changed.
+
+ChatMRPT changes this.
+
+It's an AI-powered malaria epidemiologist that lets anyone - program managers,
+M&E officers, district health teams - ask questions in plain English and get
+answers immediately.
+
+It can do two things: answer general questions about malaria, AND analyze your
+program data. Let me show you both."
+
+
+--------------------------------------------------------------------------------
+THE INTERFACE (1 minute)
+--------------------------------------------------------------------------------
+
+[Show the main ChatMRPT interface]
+
+"This is ChatMRPT. Notice it looks like a chat interface - familiar, simple.
+No complex menus or buttons to learn.
+
+You simply type what you want to know, and ChatMRPT responds."
+
+
+--------------------------------------------------------------------------------
+THE ARENA: KNOWLEDGE QUESTIONS (2 minutes)
+--------------------------------------------------------------------------------
+
+ARENA QUESTION 1:
+[Type: "Why are children under 5 most vulnerable to malaria?"]
+
+"Let's start with a question relevant to every malaria program.
+
+[Two responses appear side by side]
+
+This is the Arena - ChatMRPT uses two different AI models competing to give
+you the best answer. Response A and Response B side by side.
+
+Both explain that young children haven't developed immunity yet - they haven't
+had repeated exposures that build partial protection. This is why under-5
+mortality is our key indicator.
+
+[Vote for the better response]
+
+You vote for the better answer. This helps improve the system over time."
+
+
+ARENA QUESTION 2:
+[Type: "How does rainfall affect malaria transmission?"]
+
+"This connects to something we'll see later in our analysis.
+
+[Arena responses appear]
+
+Rainfall creates breeding sites for mosquitoes - but the relationship isn't
+simple. Too little rain means no breeding sites. Too much rain can wash away
+larvae. There's a sweet spot that drives transmission peaks.
+
+This is why ChatMRPT includes rainfall data in risk analysis - it's a key
+predictor of where outbreaks will occur."
+
+
+--------------------------------------------------------------------------------
+TRANSITION TO DATA ANALYSIS (30 seconds)
+--------------------------------------------------------------------------------
+
+"That's ChatMRPT as a knowledge assistant. But the real power comes when you
+bring your own data.
+
+Let me show you how ChatMRPT transforms raw program data into actionable
+insights."
+
+
+--------------------------------------------------------------------------------
+STEP 1: UPLOAD DATA (1 minute)
+--------------------------------------------------------------------------------
+
+[Click upload button, select your test file]
+
+"I'll upload routine health facility data - monthly reports showing tests
+conducted and positive cases. This is data every malaria program has.
+
+[Upload file]
+
+ChatMRPT automatically detects what kind of data this is and what analysis
+is possible."
+
+
+--------------------------------------------------------------------------------
+STEP 2: START TPR WORKFLOW (1.5 minutes)
+--------------------------------------------------------------------------------
+
+[Type: "start the tpr workflow"]
+
+"I'll ask ChatMRPT to calculate malaria burden.
+
+[Select: Primary facilities, Under-5 children]
+
+I'm focusing on primary health facilities and children under 5 - this shows
+true community burden, not referral cases from hospitals.
+
+Why 'burden per 1,000'? Instead of just percentages, ChatMRPT calculates
+cases per 1,000 children in each ward. A small ward with 50% positivity might
+have fewer actual cases than a large ward with 30%. This metric accounts for
+population - so we're comparing apples to apples when allocating resources."
+
+
+--------------------------------------------------------------------------------
+STEP 3: MAP MALARIA BURDEN (1.5 minutes)
+--------------------------------------------------------------------------------
+
+[Type: "map malaria burden distribution"]
+
+"Now let's visualize where the burden is highest.
+
+[Map appears]
+
+This choropleth map instantly shows the geographic pattern. Darker colors
+mean higher burden.
+
+Notice the clusters - malaria isn't randomly distributed. There are geographic
+patterns driven by environment and health system factors.
+
+One sentence, instant map. This would typically take hours in GIS software."
+
+
+--------------------------------------------------------------------------------
+STEP 4: RUN RISK ANALYSIS (1.5 minutes)
+--------------------------------------------------------------------------------
+
+[Type: "run malaria risk analysis"]
+
+"Test positivity tells us where malaria IS today. For planning, we need to
+know where it WILL BE - and why.
+
+ChatMRPT combines your health data with environmental factors - rainfall,
+proximity to water bodies, elevation, urbanization - to create a comprehensive
+risk score.
+
+[Results appear]
+
+Now every ward has a risk score and ranking. The system identifies which
+factors drive risk in each area.
+
+Ward A might be high-risk due to proximity to water bodies. Ward B might be
+high-risk due to low elevation and high rainfall. Different drivers require
+different interventions."
+
+
+--------------------------------------------------------------------------------
+STEP 5: VULNERABILITY MAP (1.5 minutes)
+--------------------------------------------------------------------------------
+
+[Type: "create composite vulnerability map"]
+
+"Let's visualize these risk rankings.
+
+[Map appears with risk categories]
+
+Wards classified as High Risk, Medium Risk, Low Risk. All our analysis
+combined into one actionable view.
+
+Program managers can immediately see: these are the wards that need priority
+attention.
+
+[Type: "What are the top 10 highest risk wards?"]
+
+And if I want specifics - here's the ranked list with scores. Ready for
+your program planning meeting."
+
+
+--------------------------------------------------------------------------------
+STEP 6: ITN PLANNING (1.5 minutes)
+--------------------------------------------------------------------------------
+
+[Type: "I want to plan bed net distribution"]
+
+"Now the real power - turning analysis into action.
+
+I have 2 million insecticide-treated nets to distribute across this state.
+
+[Type: "I have 2 million nets and average household size is 4"]
+
+[Results and map appear]
+
+Instantly, ChatMRPT creates a distribution plan that:
+  - Prioritizes high-risk wards first
+  - Calculates nets needed per ward based on population
+  - Shows which wards get full coverage vs partial allocation
+  - Generates a map showing the distribution strategy
+
+This planning would typically take days of spreadsheet work. ChatMRPT does
+it in seconds - and it's based on the risk analysis we just completed."
+
+
+--------------------------------------------------------------------------------
+CLOSING (1 minute)
+--------------------------------------------------------------------------------
+
+"What you've seen today:
+
+KNOWLEDGE ASSISTANT - Ask any malaria question, get expert-quality answers
+with the Arena's dual-AI verification
+
+DATA ANALYST - From raw data to intervention plan in under 5 minutes:
+  - Calculate disease burden
+  - Map geographic distribution
+  - Identify risk factors
+  - Rank wards by vulnerability
+  - Plan resource allocation
+
+The traditional way: weeks of work across multiple specialists
+The ChatMRPT way: one conversation, immediate results
+
+This is AI amplifying malaria programs - putting an expert analyst in the
+hands of every program manager, available 24/7.
+
+Questions?"
+
+
+================================================================================
+                         QUICK REFERENCE CARD
+================================================================================
+
+STEP                    TYPE THIS
+----                    ---------
+Arena Q1                "Why are children under 5 most vulnerable to malaria?"
+Arena Q2                "How does rainfall affect malaria transmission?"
+Upload                  [Click upload button]
+TPR Workflow            "start the tpr workflow" -> yes -> primary -> u5
+Burden Map              "map malaria burden distribution"
+Risk Analysis           "run malaria risk analysis"
+Vulnerability Map       "create composite vulnerability map"
+Top 10 List             "What are the top 10 highest risk wards?"
+ITN Planning            "I want to plan bed net distribution"
+ITN Parameters          "I have 900 000 nets and average household size is 4"
+
+
+================================================================================
+                         BACKUP ARENA QUESTIONS
+================================================================================
+
+If you want variety or something goes wrong, use these alternatives:
+
+- "What is the difference between malaria prevention and control?"
+- "Why is Nigeria's malaria burden so high?"
+- "What makes bed nets effective against malaria?"
+- "How do you measure malaria transmission intensity?"
+- "What is the role of community health workers in malaria programs?"
+
+
+================================================================================
+                              TIPS
+================================================================================
+
+1. Have your test data file ready and accessible
+2. Speak slowly when maps appear - let the visual impact sink in
+3. If something fails, say "Let me try that differently" and rephrase
+4. Key phrase to repeat: "One sentence, instant results"
+5. For Arena - pick the response quickly, don't deliberate too long
+6. If asked technical questions, redirect: "ChatMRPT handles the complexity
+   so program staff can focus on decisions"
+
+GOOD LUCK!

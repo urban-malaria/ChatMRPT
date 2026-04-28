@@ -31,7 +31,7 @@ class SQLSecurity:
     def escape_identifier(cls, identifier: str) -> str:
         """Escape SQL identifier (table/column name)."""
         # For SQLite, use double quotes
-        return f'"{identifier.replace('"', '""')}"'
+        return '"' + identifier.replace('"', '""') + '"'
 
 
 def generate_secure_token(length: int = 32) -> str:

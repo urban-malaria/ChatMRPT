@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Dict, Optional, Any
 
 # Set up logging
-from app.services.variable_resolution_service import variable_resolver
+from app.services.variable_resolver import variable_resolver
 logger = logging.getLogger(__name__)
 
 

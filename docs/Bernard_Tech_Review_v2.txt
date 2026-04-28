@@ -1,0 +1,58 @@
+Bernard's Technical Review Comments — Google AI Grant Proposal v2
+=================================================================
+Date: March 24, 2026
+For: Prof Ifeoma
+
+
+Q21 (TECH LIST) — "This section needs input from Bernard"
+----------------------------------------------------------
+
+1. "LangChain and FAISS" → Consider changing to "LangGraph and Vertex AI Vector Search" to match Q23 where you already reference LangGraph and Vertex AI Agent Engine. LangGraph is what Google's own Geospatial Reasoning uses (source: Google Research blog). LangChain is the parent project — not wrong, but LangGraph is more precise for agentic workflows. FAISS works but Vertex AI Vector Search is Google's managed equivalent.
+
+2. "PuLP and Google OR-Tools" → Could simplify to just "Google OR-Tools". Both solve LP/MILP optimization problems but listing both is redundant. OR-Tools is Google's own product (Apache 2.0) and more capable (includes constraint programming and vehicle routing on top of LP/MILP).
+
+3. PostGIS — Good addition. Free, open-source spatial database extension for PostgreSQL. Sound choice for handling spatial queries at scale in the grant version.
+
+4. LightGBM alongside XGBoost — Good addition. Both are gradient boosting frameworks, both appropriate for tabular malaria risk modeling on ward-level data.
+
+5. SHAP-based explainability (ethics section) — Confirmed accurate. SHAP works with both XGBoost and LightGBM for model interpretability. Good inclusion.
+
+
+Q17a (PROPOSED SOLUTION)
+------------------------
+
+6. "GPT4-powered conversational copilot" → Should this say "Gemini-powered" now? The rest of the proposal references Google Gemini. This looks like a leftover from v1.
+
+
+IFEOMA'S COMMENT: "add something about road traffic and network data"
+---------------------------------------------------------------------
+
+7. This connects to Google Maps Platform Roads Management Insights — one of the reference links you shared. Relevant for travel time modeling and health facility catchment area analysis (discussed in March 19 meeting). Could add: "Google Maps Platform for travel time estimation and health facility catchment area modeling" to the Q21 tech list.
+
+
+NUMBERING ISSUES
+----------------
+
+8. Metrics (Q19b) say "nine metrics" but only 8 are numbered. Either add a 9th or change to "eight."
+
+9. Negative indicators (Q19c) have duplicate numbering — two items labeled (4), then jumps from (6) to (8). Needs renumbering.
+
+
+PUBLIC PRESENCE
+---------------
+
+10. "(Insert link)" still appears twice. Needs actual URLs before submission.
+
+
+WHAT'S STRONG IN V2 (no changes needed)
+----------------------------------------
+
+- Q22 (alternatives) now mentions MAP, DHIS2, DSN Nigeria's enhanced DHIS2, ArcGIS/QGIS, NetCALC. Much stronger than v1 and technically accurate.
+
+- Q23 (Google ask) is excellent — mentions LangGraph, Vertex AI Agent Engine, Gemini API, PAIR-guided design. Very specific and well-aligned with Google's ecosystem.
+
+- Ethics section mentioning SHAP explainability and Nigeria's Data Protection Act 2023 is strong.
+
+- Dataset section is detailed and credible (47,618 persons, 24,498 households, entomological data).
+
+- Open source commitment (MIT/Apache 2.0, Zenodo, GEE scripts) is exactly what Google wants to see.

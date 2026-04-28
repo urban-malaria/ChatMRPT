@@ -5,7 +5,7 @@ import pandas as pd
 
 
 def test_data_repository_basic(tmp_path):
-    from app.core.data_repository import DataRepository
+    from app.services.data_repository import DataRepository
 
     repo = DataRepository(base_upload_folder=str(tmp_path))
     sid = "sess1"
@@ -33,8 +33,8 @@ def test_data_repository_basic(tmp_path):
 
 
 def test_session_context_service_flags(tmp_path, monkeypatch):
-    from app.core.data_repository import DataRepository
-    from app.core.session_context_service import SessionContextService
+    from app.services.data_repository import DataRepository
+    from app.services.session_context import SessionContextService
 
     # Point uploads to tmp
     monkeypatch.setenv("UPLOAD_FOLDER", str(tmp_path))

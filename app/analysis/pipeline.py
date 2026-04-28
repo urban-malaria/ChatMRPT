@@ -10,21 +10,14 @@ import os
 # Import the individual analysis modules
 from .metadata import AnalysisMetadata
 
-# Import all stage functions from the new pipeline_stages package
+# Import all stage functions from the pipeline_stages package
 from .pipeline_stages import (
-    # Data preparation stages
     run_data_cleaning_stage,
     run_relationship_stage,
     run_normalization_stage,
-    
-    # Scoring stages
     run_composite_scoring_stage,
     run_vulnerability_ranking_stage,
     run_urban_analysis_stage,
-    
-    # Note: PCA stages removed - PCA uses dedicated pca_pipeline.py
-    
-    # Utilities
     apply_composite_scores_fix
 )
 
@@ -32,10 +25,10 @@ from .pipeline_stages import (
 logger = logging.getLogger(__name__)
 
 
-def run_full_analysis_pipeline(data_handler, selected_variables=None, 
-                             na_methods=None, custom_relationships=None, 
+def run_full_analysis_pipeline(data_handler, selected_variables=None,
+                             na_methods=None, custom_relationships=None,
                              metadata=None, session_id=None, interaction_logger=None,
-                             llm_manager=None):
+                             llm_manager=None, year_tag: str = ''):
     """
     Run the complete analysis pipeline with DUAL METHOD APPROACH
     
@@ -207,7 +200,7 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
                             'timestamp': time.time()
                         }
                         
-                        metadata_path = os.path.join(session_folder, 'unified_variable_metadata.json')
+                        metadata_path = os.path.join(session_folder, f'unified_variable_metadata{year_tag}.json')
                         with open(metadata_path, 'w') as f:
                             json.dump(unified_metadata, f, indent=2, default=str)
                         
@@ -367,12 +360,12 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
                     # Save composite scores and formulas
                     if data_handler.composite_scores_mean and isinstance(data_handler.composite_scores_mean, dict):
                         if 'scores' in data_handler.composite_scores_mean:
-                            scores_path = os.path.join(session_folder, 'composite_scores.csv')
+                            scores_path = os.path.join(session_folder, f'composite_scores{year_tag}.csv')
                             data_handler.composite_scores_mean['scores'].to_csv(scores_path, index=False)
                             print(f"PIPELINE DEBUG: Saved composite scores to {scores_path}")
                             
                         if 'formulas' in data_handler.composite_scores_mean:
-                            formulas_path = os.path.join(session_folder, 'model_formulas.csv')
+                            formulas_path = os.path.join(session_folder, f'model_formulas{year_tag}.csv')
                             formulas_df = pd.DataFrame(data_handler.composite_scores_mean['formulas'])
                             if 'variables' in formulas_df.columns:
                                 formulas_df['variables'] = formulas_df['variables'].apply(
@@ -383,7 +376,7 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
                     
                     # Save vulnerability rankings
                     if data_handler.vulnerability_rankings is not None:
-                        rankings_path = os.path.join(session_folder, 'vulnerability_rankings.csv')
+                        rankings_path = os.path.join(session_folder, f'vulnerability_rankings{year_tag}.csv')
                         data_handler.vulnerability_rankings.to_csv(rankings_path, index=False)
                         print(f"PIPELINE DEBUG: Saved vulnerability rankings to {rankings_path}")
                         
@@ -397,9 +390,9 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
         # Create/update unified dataset with region metadata
         try:
             print("PIPELINE DEBUG: Creating unified dataset with region metadata...")
-            from ..data.unified_dataset_builder import build_unified_dataset, load_unified_dataset
+            from app.services.dataset_builder import build_unified_dataset, load_unified_dataset
             
-            unified_result = build_unified_dataset(session_id)
+            unified_result = build_unified_dataset(session_id, year_tag=year_tag)
             if unified_result['status'] == 'success':
                 print(f"PIPELINE DEBUG: ✅ Unified dataset created successfully: {unified_result['message']}")
                 

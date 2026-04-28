@@ -1,0 +1,86 @@
+Meeting Summary: Loyola Team - TPR Trend Analysis for ITN Reprioritization
+Date: March 27, 2026
+======================================================================
+
+ATTENDEES
+- Boateng, Bernard (ChatMRPT developer, meeting lead)
+- Ifeoma Ozodiegwu (Professor, Loyola team)
+- Laurette Mhlanga (Loyola team)
+- Bashir Oyetunji (Kwara State team, field partner)
+- Adamu Muhammed Nma (Kwara State team)
+- Sambo Abdullateef (Kwara State team)
+
+======================================================================
+
+1. DEMO OF NEW FEATURES
+   - Bernard demonstrated ChatMRPT with the Kwara TPR data (2020-2025)
+   - Showed the data upload flow (TPR data only tab)
+   - Demonstrated trend analysis: TPR trends by ward, identifying
+     wards with increasing/decreasing positivity rates
+   - Showed Plotly charts (line charts, trend slopes)
+   - Demonstrated data quality queries (missing data by year)
+
+2. DATA QUALITY DISCUSSION
+   - Ifeoma asked if users can check data quality before trend analysis
+   - Bernard showed the tool can report missing values (~17% missing)
+   - Ifeoma asked which year has the most missingness -> 2020 (13.68%)
+   - Ifeoma asked if missingness could be mapped -> Bernard said that
+     would require additional development
+
+3. QUESTIONS FROM BASHIR (KWARA TEAM)
+   - Asked if the uploaded data was modified -> No, same data as shared,
+     system was improved to accept different formats
+   - Asked if ChatMRPT can identify the top 14 wards to reprioritize
+     for 2025 ITN campaign based on trends -> Yes, it can
+   - Asked about the two upload options (complete data vs TPR only) ->
+     Bernard explained: complete = testing data + environmental variables
+     + shapefile; TPR only = just testing data (shapefiles and
+     environmental variables already in the cloud database)
+
+4. METHODOLOGY QUESTION FROM LAURETTE
+   - Asked about the "difference" calculation in trend slope charts
+   - Wanted to know: is it a gradient through all points, or between
+     two extreme points (2020 vs 2025)?
+   - Bernard said he could ask the tool to explain its methodology
+   - Follow-up needed: document the trend analysis methodology
+     (Kendall's tau + linear regression)
+
+5. UPLOAD FAILURE (MAIN BLOCKER)
+   - Bashir tried uploading the Kwara data -> failed repeatedly
+   - Adamu also tried -> same failure
+   - Ifeoma tried from the US -> worked every time
+   - Root cause identified: slow internet in Nigeria (~230 Kbps upload)
+     vs 30-second axios timeout
+   - Bernard increased timeout during the meeting
+   - Speed test showed Adamu's connection well below US standard
+     (US ~180 Mbps vs Nigeria fraction of that)
+   - Ifeoma: "We need to optimize for low bandwidth environments"
+
+6. FILE NAMING DISCUSSION
+   - Laurette noticed the tilde (~) in Bashir's filename
+   - Discussed whether special characters could cause upload issues
+   - Ifeoma resent the original data via email for Bashir to re-download
+   - Concluded: filename was not the issue, bandwidth was
+
+======================================================================
+
+ACTION ITEMS
+- [ ] Fix upload timeout for low-bandwidth environments (Bernard)
+      -> DONE: increased to 2 minutes, fixed Content-Type header
+- [ ] Optimize system for low internet speed in Nigeria (Bernard)
+- [ ] Document trend analysis methodology (what math is behind the
+      slope calculation) for Laurette's question
+- [ ] Reconvene once upload issues are resolved so Bashir's team
+      can try the tool themselves
+- [ ] Explore: can ChatMRPT map data missingness? (feature request
+      from Ifeoma)
+- [ ] Explore: identify top 14 wards for ITN reprioritization based
+      on trend data (Bashir's request)
+
+======================================================================
+
+KEY TAKEAWAY
+The trend analysis features work well when data is uploaded
+successfully. The main blocker for the Kwara team is upload
+reliability on low-bandwidth Nigerian internet. The team agreed
+to reconvene after the upload issue is fixed.

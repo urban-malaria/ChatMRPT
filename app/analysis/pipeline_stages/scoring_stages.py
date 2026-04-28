@@ -34,7 +34,7 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
                 }
             
             # Import here to avoid circular imports
-            from app.core.utils import get_analysis_variables, select_composite_variables
+            from app.utils.core_utils import get_analysis_variables, select_composite_variables
             from ..variable_selection_coordinator import get_variable_coordinator
             
             # Use the selected_variables that were passed to this stage
@@ -53,7 +53,7 @@ def run_composite_scoring_stage(data_handler, metadata, pipeline_step_id, rerun_
             all_variables = [col.replace('normalization_', '') for col in norm_cols]
             
             # Import variable resolver for intelligent matching
-            from app.services.variable_resolution_service import variable_resolver
+            from app.services.variable_resolver import variable_resolver
             
             # Match coordinator variables to normalized variables using intelligent resolution
             matched_variables = []

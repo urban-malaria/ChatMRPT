@@ -24,7 +24,7 @@ async def test_semantic_routing():
 
     # Import after environment setup
     try:
-        from app.web.routes.analysis_routes import route_with_mistral
+        from app.api.analysis.chat_routing import route_with_mistral
         print("✅ Successfully imported route_with_mistral")
     except ImportError as e:
         print(f"❌ Failed to import: {e}")

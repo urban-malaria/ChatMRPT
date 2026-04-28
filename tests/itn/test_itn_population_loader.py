@@ -17,7 +17,7 @@ class _SessionStub:  # pragma: no cover - simple placeholder
 flask_session_stub.Session = _SessionStub
 sys.modules.setdefault("flask_session", flask_session_stub)
 
-from app.data.population_data.itn_population_loader import get_population_loader
+from app.planning.population_loader import get_population_loader
 
 
 def test_population_loader_lists_all_states():

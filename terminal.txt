@@ -1,0 +1,1777 @@
+System Message
+
+Data file uploaded: Kwara TPR data 2020 - 2025 ~ 2026-03-02 (1).xls. Starting analysis...
+
+Assistant
+Your dataset contains 6,948 rows and 32 columns. Here are some of the key columns you might find useful:
+
+State: orgunitlevel2 – All data points are from Kwara State.
+Local Government Area (LGA): orgunitlevel3 – There are 16 unique LGAs in the dataset.
+Ward: Ward – Contains 186 unique wards.
+Facility Name: organisationunit0me – Includes names of facilities with 1,142 unique entries.
+Facility Level: Facility level – Indicates whether a facility is primary, secondary, or tertiary.
+Reporting Period: period0me – Ranges from 2020 to 2025.
+The dataset also includes variables on malaria testing and positivity rates for different demographics, such as under-5 children, over-5 individuals, and pregnant women, both for RDT and Microscopy methods.
+
+If you want to explore the test positivity rate (TPR) specifically, you can start the TPR workflow at any time by typing start the tpr workflow. Let me know how you'd like to proceed!
+
+You
+start the tpr workflow
+
+Assistant
+Malaria Burden Analysis Workflow
+Great! Let's analyze your malaria testing data to calculate ward-level Malaria Burden per 1,000 population.
+
+What This Workflow Does:
+
+Your uploaded data contains malaria testing records from health facilities. This workflow will:
+
+Calculate Malaria Burden for each ward: (Positive cases ÷ Ward Population) × 1,000
+Use WorldPop population data matched to your selected age group
+Help identify high-burden areas for targeted interventions
+Three Simple Steps:
+
+State Selection - Choose which state to analyze
+Facility Level - Select Primary, Secondary, Tertiary, or All facilities
+Age Group - Choose Under-5, Over-5, Pregnant Women, or All ages
+State: kw Kwara State (auto-detected)
+
+After Burden Calculation:
+
+Once we calculate ward-level malaria burden, the system will:
+
+Extract ward boundary shapefiles from our database for your state
+Add relevant environmental variables (rainfall, vegetation, water indices, etc.) specific to your geopolitical zone
+Create a unified dataset combining burden data with environmental factors
+Output: Ready-to-use dataset for comprehensive risk analysis and ward ranking for resource allocation
+Ready to begin? Just type 'yes' when you're ready, or ask me any questions about the workflow.
+
+You
+yes
+
+Assistant
+State: kw Kwara State (auto-selected)
+
+Now, which health facility level would you like to analyze?
+
+primary (Recommended) - primary
+
+6768 facilities, 1,500,303 tests
+secondary - secondary
+
+168 facilities, 142,973 tests
+tertiary - Tertiary
+
+12 facilities, 5,743 tests
+all - All facility levels combined
+
+6948 facilities
+Need help deciding?
+
+Ask me to 'show facility charts' or 'explain the differences'
+Just type which level you'd like: primary, secondary, tertiary, or all
+
+You
+primary
+
+Assistant
+Perfect! You've selected Primary facilities. These facilities conducted 1,500,303 tests.
+
+Perfect! Primary facilities selected.
+
+Step 2: Choose Age Group
+Select which age group to analyze. Here's what your data contains:
+
+u5 (Recommended) - Under 5 years
+
+45,397 positive cases from 58,859 tests
+o5 - Over 5 years
+
+113,769 positive cases from 1,382,802 tests
+pw - Pregnant Women
+
+38,943 positive cases from 58,642 tests
+all - All age groups combined
+
+1,500,303 total tests
+Need help deciding?
+
+Ask me to 'show age charts' or 'explain the differences'
+Just type which group you'd like: u5, o5, pw, or all
+
+You
+u5
+
+Assistant
+Malaria Burden Analysis Complete
+Using primary facilities and focusing on children under 5 years, I calculated malaria burden as cases per 1,000 under-5 population using WorldPop estimates.
+
+Kwara: 100.2 cases per 1,000 population across 193 wards
+
+🎉 Malaria Burden Analysis Successfully Completed!
+
+What Just Happened: I've calculated ward-level malaria burden per 1,000 population for Kwara and created a unified dataset combining: • Malaria burden data (100.2 cases per 1,000 population across 193 wards) • Geographic boundaries (ward shapefiles) • Environmental variables for North-Central zone: Rainfall, Ndvi, Housing Quality, Elevation, Urban Percentage
+
+Why This Matters: You now have a complete geospatial dataset ready for malaria risk analysis and intervention planning.
+
+Recommended Next Steps:
+
+📍 Step 1: Visualize Malaria Burden Try: "map malaria burden distribution" to see case patterns across wards
+
+🌍 Step 2: Explore Environmental Factors Available variables for your region (North-Central): • "map rainfall distribution" • "map ndvi distribution" • "map housing quality distribution" • Plus 2 more variables!
+
+📊 Step 3: Run Comprehensive Analysis Try: "run malaria risk analysis" to rank wards by malaria risk
+
+🔄 Explore Other Combinations I've pre-computed burden for all facility/age combinations in the background. You can switch at any time:
+
+"switch to secondary facilities, under 5"
+"switch to all facilities, pregnant women"
+"compare all combinations" to see a summary table
+Your analysis files (raw_data.csv, shapefile) will be updated automatically.
+
+Or ask me anything about your data - I'm here to help!
+
+You
+map malaria burden distribution
+
+Assistant
+I've created a spatial distribution map showing how the malaria burden varies across the wards. Here are some key statistics from the distribution:
+
+Average Burden: 83.15
+Range: 0.00 to 763.99
+Standard Deviation: 107.56
+Median: 51.46
+This map helps identify areas with higher malaria cases. If you'd like to explore more variable distributions or run a comprehensive malaria risk analysis, just let me know!
+
+Visualizations shown: Burden Distribution Map 20260407 161054
+
+Visualization
+
+✨
+Explain
+
+
+
+You
+run malaria risk analysis
+
+Assistant
+I've completed a comprehensive malaria risk analysis and ranked all 193 wards by their risk levels. Here's a summary of what was done:
+
+Data Cleaning: Fixed ward name mismatches and filled missing values using neighboring areas.
+Risk Factors Selection: Chose 6 risk factors relevant to North Central's malaria patterns.
+Normalization: Scaled all variables to a 0-1 range for fair comparison.
+Statistical Testing: Conducted tests to evaluate data suitability for pattern analysis.
+Risk Scoring: Used the Composite Score method to calculate risk levels (this method is straightforward and reliable for your data).
+Ward Ranking: Ranked wards from highest to lowest risk for targeted interventions.
+Next Steps
+Plan ITN (bed net) distribution: Allocate nets based on these rankings.
+View highest risk wards: Focus on areas needing urgent attention.
+View lowest risk wards: Identify control areas.
+Create a composite vulnerability map: Visualize risk levels across the region.
+Export results: Download the analysis data.
+If you'd like to proceed with any of these options, or if there's something specific you want to explore further, let me know!
+
+
+terminal log
+
+py_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy >=5years', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-07 16:04:26,972] INFO in data_analyzer: Schema inferred from Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls: {'header_row': 1, 'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT >=5years', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy >=5years', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-07 16:04:27,218] INFO in data_analysis_routes: ✅ Schema inferred at upload: header_row=1, shape=(6948, 32), columns=['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-07 16:04:27,218] INFO in data_analysis_routes: 📊 Extracting metadata for Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls...
+[2026-04-07 16:04:27,845] INFO in metadata_cache: Metadata cache saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:28,727] INFO in metadata_cache: Metadata cache saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:29,128] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:04:29,166] INFO in encoding_handler: Successfully read /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:04:29,994] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:04:30,008] INFO in encoding_handler: Successfully read /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:04:30,133] INFO in metadata_cache: Metadata cache saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,133] INFO in data_analysis_routes: 📊 Profiled uploaded_data.csv for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,133] INFO in data_analysis_routes: 📊 Data Analysis file uploaded: Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,133] INFO in data_analysis_routes: ✓ Data Analysis V3 mode activated for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,247] INFO in workflow_state: 🔄 Transitioning workflow for b143a78a-b042-4897-ad96-04aa0fa725cc: standard → data_analysis_v3
+[2026-04-07 16:04:30,256] INFO in workflow_state: 📊 State transition for b143a78a-b042-4897-ad96-04aa0fa725cc: unknown/initial → data_analysis_v3/uploaded
+[2026-04-07 16:04:30,263] DEBUG in workflow_state: ✅ State updated for b143a78a-b042-4897-ad96-04aa0fa725cc: {'workflow_source': 'data_analysis_v3', 'workflow_stage': 'uploaded', 'previous_workflow': 'standard', 'workflow_transitioned': False, 'analysis_complete': False, 'tpr_completed': False}
+[2026-04-07 16:04:30,264] INFO in data_analysis_routes: Transitioned to Data Analysis V3 workflow for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,273] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,293] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:30,294] INFO in data_analysis_routes: ✅ Cleared DataAnalysisStateManager flags, saved schema (header_row=1) for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:31,409] WARNING in instance_sync: Could not determine current instance IP
+[2026-04-07 16:04:31,409] INFO in data_analysis_routes: 🔄 Initiated sync for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:31,413] WARNING in data_analysis_routes: Could not mirror artefacts to base session 6686557d-598f-4931-9ffa-e66eceded0f5: 'UploadService' object has no attribute 'mirror_artifacts'
+127.0.0.1 - - [07/Apr/2026 16:04:31] "POST /api/data-analysis/upload HTTP/1.1" 200 -
+[2026-04-07 16:04:31,485] DEBUG in development: Request: POST http://127.0.0.1:5013/api/data-analysis/activate-mode
+[2026-04-07 16:04:31,485] INFO in data_analysis_routes: 📊 Data Analysis V3 mode activated for session b143a78a-b042-4897-ad96-04aa0fa725cc
+127.0.0.1 - - [07/Apr/2026 16:04:31] "POST /api/data-analysis/activate-mode HTTP/1.1" 200 -
+[2026-04-07 16:04:32,114] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
+[2026-04-07 16:04:32,115] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:32,115] INFO in data_analysis_routes: [DEBUG] Message received: analyze uploaded data
+[2026-04-07 16:04:32,153] INFO in interaction_core: Logged user message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:32,153] INFO in data_analysis_routes: ✅ Logged user message for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:32,189] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:37,739] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-07 16:04:38,085] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:38,094] INFO in data_analysis_routes: [AGENT CONTEXT] Session b143a78a-b042-4897-ad96-04aa0fa725cc → stage=data_exploring columns=32
+[2026-04-07 16:04:38,098] INFO in agent: ====================================================================================================
+[2026-04-07 16:04:38,098] INFO in agent: [AGENT] 🤖 AGENT.ANALYZE() CALLED
+[2026-04-07 16:04:38,099] INFO in agent: [AGENT] Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:38,099] INFO in agent: [AGENT] Query: 'analyze uploaded data...'
+[2026-04-07 16:04:38,099] INFO in agent: [AGENT] Workflow context present: True
+[2026-04-07 16:04:38,099] INFO in agent: ====================================================================================================
+[2026-04-07 16:04:38,099] INFO in agent: [AGENT] Workflow context details: {'workflow': 'data_analysis_v3', 'stage': 'data_exploring', 'valid_options': [], 'data_loaded': True, 'session_id': 'b143a78a-b042-4897-ad96-04aa0fa725cc', 'data_columns': ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy <5yrs.1', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)', 'Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT <5yrs.1', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)', 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)', 'Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy <5yrs.1', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)', 'Severe Malaria cases seen', 'Persons with Severe Malaria treated with Artesu0te injection', 'PW who received LLIN', 'Children <5 yrs who received LLIN ', 'Test Positivity Rate(TPR) (Microscopy)', 'Test Positivity Rate(TPR) (RDT)'], 'columns_total': 32, 'data_shape': {'rows': 6948, 'cols': 32}, 'data_types': {'float64': 26, 'object': 5, 'int64': 1}, 'dataset_name': 'uploaded_data.csv', 'numeric_samples': ['period0me', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years'], 'categorical_samples': ['orgunitlevel2', 'orgunitlevel3', 'Facility level'], 'column_schema_description': 'Known column meanings (from schema inference):\n  State → column: "orgunitlevel2"\n  LGA (Local Government Area) → column: "orgunitlevel3"\n  Ward → column: "Ward"\n  Facility name → column: "organisationunit0me"\n  Facility level (Primary/Secondary/Tertiary) → column: "Facility level"\n  Reporting period → column: "period0me"\n  Under-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT <5yrs"\n  Under-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT <5yrs"\n  Over-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT >=5years"\n  Over-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT >=5years"\n  Pregnant women RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT Preg Women (PW)"\n  Pregnant women RDT positive (numerator) → column: "Persons tested positive for malaria by RDT Preg Women (PW)"\n  Under-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy <5yrs"\n  Under-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy <5yrs"\n  Over-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy >=5years"\n  Over-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy >=5years"\n  Pregnant women Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy Preg Women (PW)"\n  Pregnant women Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy Preg Women (PW)"'}
+[2026-04-07 16:04:38,100] INFO in agent: [AGENT STEP 1] Loading input data via _get_input_data()...
+[2026-04-07 16:04:38,100] INFO in agent: ====================================================================================================
+[2026-04-07 16:04:38,100] INFO in agent: [_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA
+[2026-04-07 16:04:38,100] INFO in agent: [_GET_INPUT_DATA] Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:38,100] INFO in agent: ====================================================================================================
+[2026-04-07 16:04:38,100] INFO in agent: [_GET_INPUT_DATA STEP 1] Session folder: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:38,101] INFO in agent: [_GET_INPUT_DATA STEP 1] Absolute path: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:38,104] INFO in agent: [_GET_INPUT_DATA STEP 1] Folder exists: True
+[2026-04-07 16:04:38,111] INFO in agent: [_GET_INPUT_DATA STEP 1] Files in folder: ['.agent_state.json', '.data_analysis_mode', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'uploaded_data.csv', 'workflow_state.json']
+[2026-04-07 16:04:38,114] INFO in agent: [_GET_INPUT_DATA STEP 2] Analysis complete flag exists: False
+[2026-04-07 16:04:38,114] INFO in agent: [_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)
+[2026-04-07 16:04:38,114] INFO in agent: [_GET_INPUT_DATA STEP 2] Smart loading - priority order: ['raw_data.csv', 'tpr_results.csv', 'data_analysis.csv', 'uploaded_data.csv']
+[2026-04-07 16:04:38,114] INFO in agent: [_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available   
+[2026-04-07 16:04:38,115] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Checking: raw_data.csv
+[2026-04-07 16:04:38,115] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Full path: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/raw_data.csv
+[2026-04-07 16:04:38,119] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Exists: False
+[2026-04-07 16:04:38,124] INFO in agent: [_GET_INPUT_DATA STEP 2.2] Checking: tpr_results.csv
+[2026-04-07 16:04:38,125] INFO in agent: [_GET_INPUT_DATA STEP 2.2] Full path: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/tpr_results.csv
+[2026-04-07 16:04:38,130] INFO in agent: [_GET_INPUT_DATA STEP 2.2] Exists: False
+[2026-04-07 16:04:38,136] INFO in agent: [_GET_INPUT_DATA STEP 2.3] Checking: data_analysis.csv
+[2026-04-07 16:04:38,136] INFO in agent: [_GET_INPUT_DATA STEP 2.3] Full path: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/data_analysis.csv
+[2026-04-07 16:04:38,139] INFO in agent: [_GET_INPUT_DATA STEP 2.3] Exists: False
+[2026-04-07 16:04:38,144] INFO in agent: [_GET_INPUT_DATA STEP 2.4] Checking: uploaded_data.csv
+[2026-04-07 16:04:38,144] INFO in agent: [_GET_INPUT_DATA STEP 2.4] Full path: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv
+[2026-04-07 16:04:38,146] INFO in agent: [_GET_INPUT_DATA STEP 2.4] Exists: True
+[2026-04-07 16:04:38,150] INFO in agent: [_GET_INPUT_DATA STEP 2.4] ✅ File found: uploaded_data.csv
+[2026-04-07 16:04:38,155] INFO in agent: [_GET_INPUT_DATA STEP 2.4] File size: 1411908 bytes
+[2026-04-07 16:04:38,155] INFO in agent: [_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...
+[2026-04-07 16:04:38,481] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:04:38,517] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 3] ✅ CSV loaded in 0.87s
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame shape: (6948, 32)
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years']
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 4] Creating data object...
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in 'data' key
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 4] ✅ Data object created
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object 'data' type: <class 'pandas.core.frame.DataFrame'>
+[2026-04-07 16:04:39,021] INFO in agent: [_GET_INPUT_DATA STEP 5] ✅ Loaded uploaded_data.csv: 6948 rows, 32 columns    
+[2026-04-07 16:04:39,022] INFO in agent: [_GET_INPUT_DATA STEP 5] 📊 Dataset context: RAW FACILITY DATA (initial upload)
+[2026-04-07 16:04:39,022] INFO in agent: [_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions
+[2026-04-07 16:04:39,022] INFO in agent: ====================================================================================================
+[2026-04-07 16:04:39,022] INFO in agent: [_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS
+[2026-04-07 16:04:39,022] INFO in agent: ====================================================================================================
+[2026-04-07 16:04:39,024] INFO in agent: [_GET_INPUT_DATA FINAL] Total datasets loaded: 1
+[2026-04-07 16:04:39,024] INFO in agent: [AGENT STEP 1] ✅ Input data loaded: 1 datasets
+[2026-04-07 16:04:39,025] INFO in agent: [AGENT STEP 1] First dataset keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-07 16:04:39,027] INFO in agent: [AGENT] Workflow context message created:
+[2026-04-07 16:04:39,027] INFO in agent:    - Stage: data_exploring
+[2026-04-07 16:04:39,027] INFO in agent:    - Data columns: 32
+[2026-04-07 16:04:39,027] INFO in agent:    - First 5 columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-07 16:04:39,062] INFO in agent: [AGENT] Invoking graph with 3 messages
+[2026-04-07 16:04:39,073] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-07 16:04:39,073] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-07 16:04:39,073] INFO in agent: [_AGENT_NODE] Incoming messages count: 3
+[2026-04-07 16:04:39,073] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-07 16:04:39,101] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 6159 characters
+[2026-04-07 16:04:39,102] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-07 16:04:39,102] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...
+[2026-04-07 16:04:39,102] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 4
+[2026-04-07 16:04:39,102] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...
+[2026-04-07 16:04:39,102] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORS
+[2026-04-07 16:04:44,396] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 5.29s
+[2026-04-07 16:04:44,396] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-07 16:04:44,396] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-07 16:04:44,397] INFO in agent: [AGENT] Graph completed in 5.33 seconds
+[2026-04-07 16:04:44,402] INFO in agent: [AGENT] Analysis complete, 0 visualizations
+[2026-04-07 16:04:44,447] INFO in interaction_core: Logged assistant message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:04:44,448] INFO in data_analysis_routes: ✅ Logged agent response for session b143a78a-b042-4897-ad96-04aa0fa725cc (response_time=12.31s)
+127.0.0.1 - - [07/Apr/2026 16:04:44] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-07 16:04:53,415] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:04:53] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:05:23,481] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:05:23] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:05:32,017] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
+[2026-04-07 16:05:32,017] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:32,017] INFO in data_analysis_routes: [DEBUG] Message received: start the tpr workflow
+[2026-04-07 16:05:32,047] INFO in interaction_core: Logged user message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:32,048] INFO in data_analysis_routes: ✅ Logged user message for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:32,086] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:32,109] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-07 16:05:32,211] INFO in data_analysis_routes: [BRIDGE] Detected TPR start request: 'start the tpr workflow'
+[2026-04-07 16:05:43,467] INFO in data_analyzer: LLM schema response: {'header_row': 0, 'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-07 16:05:43,753] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:05:43,790] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:05:44,286] INFO in data_analyzer: Schema inferred from uploaded_data.csv: {'state': 'orgunitlevel2', 'lga': 'orgunitlevel3', 'ward': 'Ward', 'facility_name': 'organisationunit0me', 'facility_level': 'Facility level', 'period': 'period0me', 'u5_rdt_tested': 'Persons presenting with fever & tested by RDT <5yrs', 'u5_rdt_positive': 'Persons tested positive for malaria by RDT <5yrs', 'o5_rdt_tested': 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'o5_rdt_positive': 'Persons tested positive for malaria by RDT >=5years', 'pw_rdt_tested': 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'pw_rdt_positive': 'Persons tested positive for malaria by RDT Preg Women (PW)', 'u5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy <5yrs', 'u5_microscopy_positive': 'Persons tested positive for malaria by Microscopy <5yrs', 'o5_microscopy_tested': 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'o5_microscopy_positive': 'Persons tested positive for malaria by Microscopy >=5years', 'pw_microscopy_tested': 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'pw_microscopy_positive': 'Persons tested positive for malaria by Microscopy Preg Women (PW)'}
+[2026-04-07 16:05:44,306] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:44,333] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:44,359] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:44,359] INFO in workflow_manager: Starting TPR workflow
+[2026-04-07 16:05:44,395] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:44,395] INFO in workflow_manager: TPR workflow marked as ACTIVE, awaiting user confirmation
+[2026-04-07 16:05:44,422] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:44,450] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+127.0.0.1 - - [07/Apr/2026 16:05:44] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-07 16:05:47,463] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
+[2026-04-07 16:05:47,463] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:47,463] INFO in data_analysis_routes: [DEBUG] Message received: yes
+[2026-04-07 16:05:47,491] INFO in interaction_core: Logged user message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:47,491] INFO in data_analysis_routes: ✅ Logged user message for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:47,518] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:47,535] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-07 16:05:47,601] INFO in data_analysis_routes: [2-ROUTE] TPR workflow active for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:47,609] INFO in data_analysis_routes: [2-ROUTE] Restored column_schema from state_manager (18 mapped fields)
+[2026-04-07 16:05:47,996] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:05:48,030] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:05:48,608] INFO in workflow_manager: Loaded state: stage=ConversationStage.TPR_STATE_SELECTION, selections={}
+[2026-04-07 16:05:48,630] INFO in data_analysis_routes: [CONFIRMATION] TPR workflow awaiting confirmation
+[2026-04-07 16:05:48,632] INFO in data_analysis_routes: [CONFIRMATION] Detected confirmation keyword in: 'yes'
+[2026-04-07 16:05:48,632] INFO in workflow_manager: 🔧 Executing workflow confirmation
+[2026-04-07 16:05:48,661] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:48,662] INFO in workflow_manager: 🔧 Auto-selecting single state: kw Kwara State
+[2026-04-07 16:05:48,696] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:48,731] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:05:53,540] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:05:53] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:06:00,736] INFO in workflow_manager: Generated 2 facility visualizations
+[2026-04-07 16:06:00,759] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+127.0.0.1 - - [07/Apr/2026 16:06:00] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-07 16:06:06,978] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
+[2026-04-07 16:06:06,979] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:06,979] INFO in data_analysis_routes: [DEBUG] Message received: primary
+[2026-04-07 16:06:07,013] INFO in interaction_core: Logged user message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:07,013] INFO in data_analysis_routes: ✅ Logged user message for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:07,042] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:07,053] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-07 16:06:07,134] INFO in data_analysis_routes: [2-ROUTE] TPR workflow active for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:07,143] INFO in data_analysis_routes: [2-ROUTE] Restored column_schema from state_manager (18 mapped fields)
+[2026-04-07 16:06:07,556] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:06:07,600] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:06:08,243] INFO in workflow_manager: Loaded state: stage=ConversationStage.TPR_FACILITY_LEVEL, selections={'state': 'kw Kwara State', 'state_timestamp': '2026-04-07T16:05:48.683012', 'state_selected_at': '2026-04-07T16:05:48.683012'}
+[2026-04-07 16:06:08,268] INFO in language: 🎯 Classifying intent for: 'primary' (stage=TPR_FACILITY_LEVEL)
+[2026-04-07 16:06:08,268] INFO in language:    Valid options: ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
+[2026-04-07 16:06:08,269] INFO in language: ⚡ Exact match: 'primary' → 'primary' (stage=TPR_FACILITY_LEVEL)
+[2026-04-07 16:06:08,269] INFO in language: ✅ Extracted selection after keyword checks: 'primary'
+[2026-04-07 16:06:08,269] INFO in data_analysis_routes: [INTENT] Selection detected (confidence=0.95)
+[2026-04-07 16:06:08,269] INFO in data_analysis_routes:    Rationale: Detected selection 'primary'
+[2026-04-07 16:06:08,269] INFO in language: ⚡ Exact match: 'primary' → 'primary' (stage=TPR_FACILITY_LEVEL)
+[2026-04-07 16:06:08,269] INFO in data_analysis_routes: [INTENT→COMMAND] Extracted: 'primary' → 'primary'
+[2026-04-07 16:06:08,269] INFO in workflow_manager: 🔧 Executing command: 'primary' at stage: ConversationStage.TPR_FACILITY_LEVEL
+[2026-04-07 16:06:08,279] INFO in workflow_manager: 🔧 Executing facility selection: primary
+[2026-04-07 16:06:08,310] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:08,344] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:08,606] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:08,642] INFO in interaction_core: Logged assistant message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:08,643] INFO in data_analysis_routes: ✅ Logged assistant response for session b143a78a-b042-4897-ad96-04aa0fa725cc (response_time=1.63s)
+127.0.0.1 - - [07/Apr/2026 16:06:08] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-07 16:06:12,218] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
+[2026-04-07 16:06:12,219] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:12,219] INFO in data_analysis_routes: [DEBUG] Message received: u5
+[2026-04-07 16:06:12,253] INFO in interaction_core: Logged user message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:12,253] INFO in data_analysis_routes: ✅ Logged user message for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:12,282] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:12,293] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-07 16:06:12,368] INFO in data_analysis_routes: [2-ROUTE] TPR workflow active for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:12,381] INFO in data_analysis_routes: [2-ROUTE] Restored column_schema from state_manager (18 mapped fields)
+[2026-04-07 16:06:12,757] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:06:12,788] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:06:13,496] INFO in workflow_manager: Loaded state: stage=ConversationStage.TPR_AGE_GROUP, selections={'state': 'kw Kwara State', 'state_timestamp': '2026-04-07T16:05:48.683012', 'state_selected_at': '2026-04-07T16:05:48.683012', 'facility_level': 'primary', 'facility_level_timestamp': '2026-04-07T16:06:08.291709', 'facility_level_selected_at': '2026-04-07T16:06:08.291709'}
+[2026-04-07 16:06:13,524] INFO in language: 🎯 Classifying intent for: 'u5' (stage=TPR_AGE_GROUP)
+[2026-04-07 16:06:13,524] INFO in language:    Valid options: ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']       
+[2026-04-07 16:06:13,524] INFO in language: ⚡ Exact match: 'u5' → 'u5' (stage=TPR_AGE_GROUP)
+[2026-04-07 16:06:13,524] INFO in language: ✅ Extracted selection after keyword checks: 'u5'
+[2026-04-07 16:06:13,525] INFO in data_analysis_routes: [INTENT] Selection detected (confidence=0.95)
+[2026-04-07 16:06:13,525] INFO in data_analysis_routes:    Rationale: Detected selection 'u5'
+[2026-04-07 16:06:13,525] INFO in language: ⚡ Exact match: 'u5' → 'u5' (stage=TPR_AGE_GROUP)
+[2026-04-07 16:06:13,525] INFO in data_analysis_routes: [INTENT→COMMAND] Extracted: 'u5' → 'u5'
+[2026-04-07 16:06:13,529] INFO in workflow_manager: 🔧 Executing command: 'u5' at stage: ConversationStage.TPR_AGE_GROUP
+[2026-04-07 16:06:13,543] INFO in workflow_manager: 🔧 Executing age selection: u5
+[2026-04-07 16:06:13,577] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:16,866] INFO in workflow_manager: 🎯 Calling TPR tool with options: {'age_group': 'u5', 'facility_level': 'primary', 'test_method': 'both'}
+[2026-04-07 16:06:17,182] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:06:17,217] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:06:17,777] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:17,790] INFO in analysis_tool: Calculating TPR - Age: u5, Method: both, Facilities: primary
+[2026-04-07 16:06:17,795] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:06:17,829] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-07 16:06:17,864] INFO in utils: Schema column detection (age=u5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs']
+[2026-04-07 16:06:24,742] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+[2026-04-07 16:06:24,970] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:06:24,974] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:06:25,012] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+127.0.0.1 - - [07/Apr/2026 16:06:25] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:06:41,809] INFO in utils: Calculated burden for 183 wards using u5 age group
+[2026-04-07 16:06:42,139] INFO in utils: Time-series TPR: 182 ward-period rows generated
+[2026-04-07 16:06:42,150] INFO in analysis_tool: Saved time-series TPR: 182 rows
+[2026-04-07 16:06:42,286] INFO in analysis_tool: 🚀 Starting automatic preparation for risk analysis
+[2026-04-07 16:06:42,286] INFO in analysis_tool: 📂 Attempting to load Nigeria shapefile for risk preparation...
+[2026-04-07 16:06:43,811] INFO in analysis_tool: Loaded Nigeria shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:06:43,812] INFO in analysis_tool: ✅ Successfully loaded shapefile with 9410 wards
+[2026-04-07 16:06:43,812] INFO in analysis_tool: 🔍 Filtering for state: 'Kwara'
+[2026-04-07 16:06:43,813] INFO in analysis_tool: ✅ Found 193 wards in shapefile for Kwara
+[2026-04-07 16:06:43,813] INFO in analysis_tool: 🔄 Matching TPR data with shapefile wards...
+[2026-04-07 16:06:43,814] INFO in analysis_tool: 🔄 Starting ward matching: 183 burden records, 193 shapefile wards     
+[2026-04-07 16:06:43,815] DEBUG in analysis_tool: Sample burden ward names: ['ekan', 'owode gbogun', 'oro 1']
+[2026-04-07 16:06:43,816] DEBUG in analysis_tool: Sample shapefile ward names: ['efue berikodo', 'okeso', 'aboto odoode']
+[2026-04-07 16:06:43,849] INFO in analysis_tool: 📊 Initial ward matching: 119/193 (61.7%) matched
+[2026-04-07 16:06:43,964] INFO in analysis_tool: After fuzzy matching: 168/193 matched
+[2026-04-07 16:06:43,964] INFO in analysis_tool: ✅ Ward matching complete: 168/193 (87.0%)
+[2026-04-07 16:06:43,964] INFO in analysis_tool: 🌍 Extracting zone-specific environmental variables from rasters       
+[2026-04-07 16:06:43,964] INFO in analysis_tool: Extracting variables for Kwara (Zone: North-Central)
+[2026-04-07 16:06:43,964] INFO in analysis_tool: Using zone variables for North-Central: ['nighttime_lights', 'housing_quality', 'soil_wetness', 'distance_to_waterbodies', 'ndmi', 'urban_extent']
+[2026-04-07 16:06:43,964] INFO in analysis_tool: Selected 6 variables for North-Central: ['nighttime_lights', 'housing_quality', 'soil_wetness', 'distance_to_waterbodies', 'ndmi', 'urban_extent']
+[2026-04-07 16:06:43,978] WARNING in analysis_tool: No raster files found for nighttime_lights at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/rasters/night_timel_lights/2024/VIIRS_NTL_2024_Nigeria.tif
+[2026-04-07 16:06:43,985] INFO in analysis_tool: Generated mock data for nighttime_lights: mean=0.24
+[2026-04-07 16:06:43,985] WARNING in analysis_tool: No raster files found for housing_quality at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/rasters/housing/2019_Nature_Africa_Housing_2015_NGA.tiff
+[2026-04-07 16:06:43,986] INFO in analysis_tool: Generated mock data for housing_quality: mean=0.10
+[2026-04-07 16:06:43,986] WARNING in analysis_tool: No raster files found for soil_wetness at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/rasters/surface_soil_wetness/*.tif
+[2026-04-07 16:06:43,987] INFO in analysis_tool: Generated mock data for soil_wetness: mean=0.49
+[2026-04-07 16:06:43,987] WARNING in analysis_tool: No raster files found for distance_to_waterbodies at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/rasters/distance_to_water_bodies/distance_to_water.tif
+[2026-04-07 16:06:43,988] INFO in analysis_tool: Generated mock data for distance_to_waterbodies: mean=5299.01
+[2026-04-07 16:06:43,990] WARNING in analysis_tool: No raster files found for ndmi at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/rasters/NDMI/NDMI_Nigeria_2023.tif
+[2026-04-07 16:06:43,992] INFO in analysis_tool: Generated mock data for ndmi: mean=-0.00
+[2026-04-07 16:06:43,995] WARNING in analysis_tool: No raster files found for urban_extent at /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/rasters/urban_extent/*.tif
+[2026-04-07 16:06:43,996] INFO in analysis_tool: Generated mock urban percentage data: mean=33.88%
+[2026-04-07 16:06:43,996] INFO in analysis_tool: ✅ Environmental data extracted: 7 variables
+[2026-04-07 16:06:44,065] INFO in cache: Ward cache saved: 193 wards, 7 env vars for Kwara
+[2026-04-07 16:06:44,066] INFO in analysis_tool: ✅ Ward cache saved for combination switching
+[2026-04-07 16:06:44,066] INFO in analysis_tool: 📊 Preparing final dataset for risk analysis
+[2026-04-07 16:06:44,070] INFO in analysis_tool: 📋 Final dataset prepared: 193 rows, 16 columns
+[2026-04-07 16:06:44,093] INFO in analysis_tool: ✅ Saved raw_data.csv with 193 wards
+[2026-04-07 16:06:44,093] INFO in analysis_tool: 📦 Creating shapefile package...
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/tpr/analysis_tool.py:821: UserWarning:
+
+Column names longer than 10 characters will be truncated when saved to ESRI Shapefile.
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Field Timestamp create as date field, though DateTime requested.
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'WardName_norm' to 'WardName_n'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'WardName_burden' to 'WardName_b'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'Total_Positive' to 'Total_Posi'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'GeopoliticalZone' to 'Geopolitic'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'NighttimeLights' to 'NighttimeL'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'HousingQuality' to 'HousingQua'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'SoilWetness' to 'SoilWetnes'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'DistanceToWaterbodies' to 'DistanceTo'
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/chatmrpt_venv_new/lib/python3.10/site-packages/pyogrio/raw.py:723: RuntimeWarning:
+
+Normalized/laundered field name: 'urban_percentage' to 'urban_perc'
+
+[2026-04-07 16:06:44,219] INFO in analysis_tool: Created shapefile package: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/raw_shapefile.zip
+[2026-04-07 16:06:44,220] INFO in analysis_tool: ✅ Created raw_shapefile.zip
+[2026-04-07 16:06:44,220] INFO in analysis_tool: 🗺️ Creating TPR distribution map...
+[2026-04-07 16:06:44,220] INFO in analysis_tool: 🗺️ create_tpr_map called for Kwara with 183 TPR results
+[2026-04-07 16:06:44,220] INFO in analysis_tool: 📂 Loading Nigeria shapefile for map creation...
+[2026-04-07 16:06:44,220] INFO in analysis_tool: ✅ Shapefile loaded with 9410 total wards
+[2026-04-07 16:06:44,220] INFO in analysis_tool: 🔍 Original state name: 'Kwara' -> Normalized: 'Kwara'
+[2026-04-07 16:06:44,223] INFO in analysis_tool: ✅ Found exact match for 'Kwara'
+[2026-04-07 16:06:44,223] INFO in analysis_tool: ✅ Found 193 wards for Kwara
+[2026-04-07 16:06:44,223] INFO in analysis_tool: 🔄 Matching burden data with shapefile...
+[2026-04-07 16:06:44,223] INFO in analysis_tool: 🔄 Starting ward matching: 183 burden records, 193 shapefile wards     
+[2026-04-07 16:06:44,225] DEBUG in analysis_tool: Sample burden ward names: ['ekan', 'owode gbogun', 'oro 1']
+[2026-04-07 16:06:44,225] DEBUG in analysis_tool: Sample shapefile ward names: ['efue berikodo', 'okeso', 'aboto odoode']
+[2026-04-07 16:06:44,232] INFO in analysis_tool: 📊 Initial ward matching: 119/193 (61.7%) matched
+[2026-04-07 16:06:44,363] INFO in analysis_tool: After fuzzy matching: 168/193 matched
+[2026-04-07 16:06:44,363] INFO in analysis_tool: 📊 Matching Results:
+[2026-04-07 16:06:44,363] INFO in analysis_tool:   Total wards in shapefile: 193
+[2026-04-07 16:06:44,363] INFO in analysis_tool:   Wards with burden data: 168
+[2026-04-07 16:06:44,363] INFO in analysis_tool:   Wards without burden data: 25
+[2026-04-07 16:06:44,363] INFO in analysis_tool:   Match rate: 87.0%
+[2026-04-07 16:06:44,400] INFO in analysis_tool: 🔍 Z values debug:
+[2026-04-07 16:06:44,400] INFO in analysis_tool:   Total z values: 193
+[2026-04-07 16:06:44,400] INFO in analysis_tool:   Non-missing (not -999): 168
+[2026-04-07 16:06:44,400] INFO in analysis_tool:   Missing (-999): 25
+[2026-04-07 16:06:44,400] INFO in analysis_tool:   Valid burden range: 0.0 to 764.0 per 1,000
+[2026-04-07 16:06:53,682] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:06:53] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/tpr/analysis_tool.py:700: UserWarning:
+
+Geometry is in a geographic CRS. Results from 'centroid' are likely incorrect. Use 'GeoSeries.to_crs()' to re-project geometries to a projected CRS before this operation.
+
+
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/tpr/analysis_tool.py:701: UserWarning:
+
+Geometry is in a geographic CRS. Results from 'centroid' are likely incorrect. Use 'GeoSeries.to_crs()' to re-project geometries to a projected CRS before this operation.
+
+
+[2026-04-07 16:07:23,504] INFO in analysis_tool: 💾 Attempting to save map to: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/tpr_distribution_map.html
+[2026-04-07 16:07:23,736] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:07:23] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:07:31,607] INFO in analysis_tool: ✅ LGA hover highlight injected
+[2026-04-07 16:07:31,614] INFO in analysis_tool: ✅ TPR distribution map saved successfully (5381392 bytes) with debug logging
+[2026-04-07 16:07:31,615] INFO in analysis_tool: ✅ TPR map created successfully
+[2026-04-07 16:07:31,628] INFO in analysis_tool: 💾 Debug stages saved to instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/tpr_analysis_debug.json
+[2026-04-07 16:07:31,630] INFO in workflow_manager: ✅ TPR tool completed
+[2026-04-07 16:07:31,669] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:07:31,696] DEBUG in state_manager: State saved for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:07:31,783] INFO in precompute_service: Started TPR precompute thread for job d965092f-47a5-4639-bf39-17b5c9aaf8c7 (session b143a78a-b042-4897-ad96-04aa0fa725cc)
+[2026-04-07 16:07:31,784] INFO in workflow_manager: Scheduled TPR background pre-computation for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:07:31,818] INFO in interaction_core: Logged assistant message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:07:31,819] INFO in data_analysis_routes: ✅ Logged assistant response for session b143a78a-b042-4897-ad96-04aa0fa725cc (response_time=79.56s)
+127.0.0.1 - - [07/Apr/2026 16:07:32] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-07 16:07:32,144] INFO in encoding_handler: Detected encoding: utf-8 (confidence: 0.94)
+[2026-04-07 16:07:32,192] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/uploaded_data.csv with utf-8 encoding
+[2026-04-07 16:07:32,698] INFO in precompute: Starting TPR pre-computation for session b143a78a-b042-4897-ad96-04aa0fa725cc, state: kw Kwara State
+[2026-04-07 16:07:32,707] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:07:32,715] INFO in precompute: Loaded column schema for pre-computation (18 mapped fields)
+[2026-04-07 16:07:32,789] INFO in precompute: Initialized TPR pre-compute database at instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/tpr_precomputed.db
+[2026-04-07 16:07:32,797] INFO in precompute: Skipping user-selected combination: primary/u5
+[2026-04-07 16:07:32,801] INFO in precompute: Computing TPR for primary/o5
+[2026-04-07 16:07:32,824] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-07 16:07:32,849] INFO in utils: Schema column detection (age=o5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)'], rdt_pos=['Persons tested positive for malaria by RDT >=5years'], micro_tested=['Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)'], micro_pos=['Persons tested positive for malaria by Microscopy >=5years']
+[2026-04-07 16:07:34,654] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:07:34,658] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:07:34,695] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-07 16:07:52,709] INFO in utils: Calculated burden for 183 wards using o5 age group
+[2026-04-07 16:07:52,746] INFO in precompute: Stored 183 wards for primary/o5
+[2026-04-07 16:07:52,750] INFO in precompute: Computing TPR for primary/pw
+[2026-04-07 16:07:52,773] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-07 16:07:52,798] INFO in utils: Schema column detection (age=pw, method=both): rdt_tested=['Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:07:54,370] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+[2026-04-07 16:07:54,379] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:07:54,385] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:07:54,426] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+127.0.0.1 - - [07/Apr/2026 16:07:54] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:08:07,343] INFO in utils: Calculated burden for 183 wards using pw age group
+[2026-04-07 16:08:07,390] INFO in precompute: Stored 183 wards for primary/pw
+[2026-04-07 16:08:07,395] INFO in precompute: Computing TPR for primary/all_ages
+[2026-04-07 16:08:07,428] INFO in utils: Filtered to primary: 6768/6948 records
+[2026-04-07 16:08:07,455] INFO in utils: Schema column detection (age=all_ages, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:08:09,049] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:08:09,057] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:08:09,100] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-07 16:08:14,804] INFO in utils: Calculated burden for 183 wards using all_ages age group
+[2026-04-07 16:08:14,848] INFO in precompute: Stored 183 wards for primary/all_ages
+[2026-04-07 16:08:14,853] INFO in precompute: Computing TPR for secondary/u5
+[2026-04-07 16:08:14,873] INFO in utils: Filtered to secondary: 168/6948 records
+[2026-04-07 16:08:14,875] INFO in utils: Schema column detection (age=u5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs']
+[2026-04-07 16:08:16,232] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:08:16,242] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:08:16,255] INFO in utils: Fuzzy-matched 5 ward names: {'ajasse 1': 'ajase 1', 'ajasse 2': 'ajase 2', 'erin ile north': 'erin north', 'otte balla': 'otte ballah', 'patigi 3': 'pategi 3'}
+[2026-04-07 16:08:23,865] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:08:23] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:08:31,609] INFO in utils: Calculated burden for 26 wards using u5 age group
+[2026-04-07 16:08:31,631] INFO in precompute: Stored 26 wards for secondary/u5
+[2026-04-07 16:08:31,634] INFO in precompute: Computing TPR for secondary/o5
+[2026-04-07 16:08:31,654] INFO in utils: Filtered to secondary: 168/6948 records
+[2026-04-07 16:08:31,656] INFO in utils: Schema column detection (age=o5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)'], rdt_pos=['Persons tested positive for malaria by RDT >=5years'], micro_tested=['Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)'], micro_pos=['Persons tested positive for malaria by Microscopy >=5years']
+[2026-04-07 16:08:33,041] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:08:33,047] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:08:33,061] INFO in utils: Fuzzy-matched 5 ward names: {'ajasse 1': 'ajase 1', 'ajasse 2': 'ajase 2', 'erin ile north': 'erin north', 'otte balla': 'otte ballah', 'patigi 3': 'pategi 3'}
+[2026-04-07 16:08:50,269] INFO in utils: Calculated burden for 26 wards using o5 age group
+[2026-04-07 16:08:50,298] INFO in precompute: Stored 26 wards for secondary/o5
+[2026-04-07 16:08:50,304] INFO in precompute: Computing TPR for secondary/pw
+[2026-04-07 16:08:50,329] INFO in utils: Filtered to secondary: 168/6948 records
+[2026-04-07 16:08:50,330] INFO in utils: Schema column detection (age=pw, method=both): rdt_tested=['Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:08:51,894] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:08:51,902] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:08:51,909] INFO in utils: Fuzzy-matched 5 ward names: {'ajasse 1': 'ajase 1', 'ajasse 2': 'ajase 2', 'erin ile north': 'erin north', 'otte balla': 'otte ballah', 'patigi 3': 'pategi 3'}
+[2026-04-07 16:08:53,925] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:08:53] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:09:04,135] INFO in utils: Calculated burden for 26 wards using pw age group
+[2026-04-07 16:09:04,165] INFO in precompute: Stored 26 wards for secondary/pw
+[2026-04-07 16:09:04,168] INFO in precompute: Computing TPR for secondary/all_ages
+[2026-04-07 16:09:04,193] INFO in utils: Filtered to secondary: 168/6948 records
+[2026-04-07 16:09:04,195] INFO in utils: Schema column detection (age=all_ages, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:09:05,563] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:09:05,573] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:09:05,588] INFO in utils: Fuzzy-matched 5 ward names: {'ajasse 1': 'ajase 1', 'ajasse 2': 'ajase 2', 'erin ile north': 'erin north', 'otte balla': 'otte ballah', 'patigi 3': 'pategi 3'}
+[2026-04-07 16:09:11,090] INFO in utils: Calculated burden for 26 wards using all_ages age group
+[2026-04-07 16:09:11,116] INFO in precompute: Stored 26 wards for secondary/all_ages
+[2026-04-07 16:09:11,120] INFO in precompute: Computing TPR for tertiary/u5
+[2026-04-07 16:09:11,139] INFO in utils: Filtered to tertiary: 12/6948 records
+[2026-04-07 16:09:11,140] INFO in utils: Schema column detection (age=u5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs']
+[2026-04-07 16:09:12,475] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:09:12,484] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:09:12,494] INFO in utils: Fuzzy-matched 2 ward names: {'magaji geri': 'm ngeri', 'maya ile apa': 'maya ileapa'}
+[2026-04-07 16:09:23,994] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:09:24] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:09:27,617] INFO in utils: Calculated burden for 2 wards using u5 age group
+[2026-04-07 16:09:27,638] INFO in precompute: Stored 2 wards for tertiary/u5
+[2026-04-07 16:09:27,642] INFO in precompute: Computing TPR for tertiary/o5
+[2026-04-07 16:09:27,663] INFO in utils: Filtered to tertiary: 12/6948 records
+[2026-04-07 16:09:27,664] INFO in utils: Schema column detection (age=o5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)'], rdt_pos=['Persons tested positive for malaria by RDT >=5years'], micro_tested=['Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)'], micro_pos=['Persons tested positive for malaria by Microscopy >=5years']
+[2026-04-07 16:09:29,002] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:09:29,010] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:09:29,022] INFO in utils: Fuzzy-matched 2 ward names: {'magaji geri': 'm ngeri', 'maya ile apa': 'maya ileapa'}
+[2026-04-07 16:09:46,278] INFO in utils: Calculated burden for 2 wards using o5 age group
+[2026-04-07 16:09:46,299] INFO in precompute: Stored 2 wards for tertiary/o5
+[2026-04-07 16:09:46,304] INFO in precompute: Computing TPR for tertiary/pw
+[2026-04-07 16:09:46,329] INFO in utils: Filtered to tertiary: 12/6948 records
+[2026-04-07 16:09:46,330] INFO in utils: Schema column detection (age=pw, method=both): rdt_tested=['Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:09:47,670] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:09:47,681] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:09:47,690] INFO in utils: Fuzzy-matched 2 ward names: {'magaji geri': 'm ngeri', 'maya ile apa': 'maya ileapa'}
+[2026-04-07 16:09:54,060] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:09:54] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:10:00,653] INFO in utils: Calculated burden for 2 wards using pw age group
+[2026-04-07 16:10:00,674] INFO in precompute: Stored 2 wards for tertiary/pw
+[2026-04-07 16:10:00,680] INFO in precompute: Computing TPR for tertiary/all_ages
+[2026-04-07 16:10:00,713] INFO in utils: Filtered to tertiary: 12/6948 records
+[2026-04-07 16:10:00,715] INFO in utils: Schema column detection (age=all_ages, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:10:02,290] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:10:02,296] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:10:02,305] INFO in utils: Fuzzy-matched 2 ward names: {'magaji geri': 'm ngeri', 'maya ile apa': 'maya ileapa'}
+[2026-04-07 16:10:07,855] INFO in utils: Calculated burden for 2 wards using all_ages age group
+[2026-04-07 16:10:07,879] INFO in precompute: Stored 2 wards for tertiary/all_ages
+[2026-04-07 16:10:07,883] INFO in precompute: Computing TPR for all/u5
+[2026-04-07 16:10:07,923] INFO in utils: Schema column detection (age=u5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs']
+[2026-04-07 16:10:09,285] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:10:09,291] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:10:09,338] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-07 16:10:24,122] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:10:24] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:10:24,415] INFO in utils: Calculated burden for 183 wards using u5 age group
+[2026-04-07 16:10:24,466] INFO in precompute: Stored 183 wards for all/u5
+[2026-04-07 16:10:24,471] INFO in precompute: Computing TPR for all/o5
+[2026-04-07 16:10:24,519] INFO in utils: Schema column detection (age=o5, method=both): rdt_tested=['Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)'], rdt_pos=['Persons tested positive for malaria by RDT >=5years'], micro_tested=['Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)'], micro_pos=['Persons tested positive for malaria by Microscopy >=5years']
+[2026-04-07 16:10:26,179] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:10:26,182] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:10:26,213] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-07 16:10:44,193] INFO in utils: Calculated burden for 183 wards using o5 age group
+[2026-04-07 16:10:44,323] INFO in precompute: Stored 183 wards for all/o5
+[2026-04-07 16:10:44,331] INFO in precompute: Computing TPR for all/pw
+[2026-04-07 16:10:44,395] INFO in utils: Schema column detection (age=pw, method=both): rdt_tested=['Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:10:46,064] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:10:46,068] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:10:46,106] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+[2026-04-07 16:10:49,657] DEBUG in development: Request: POST http://127.0.0.1:5013/api/v1/data-analysis/chat
+[2026-04-07 16:10:49,658] INFO in data_analysis_routes: [DEBUG] Data Analysis V3 chat request for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,658] INFO in data_analysis_routes: [DEBUG] Message received: map malaria burden distribution       
+[2026-04-07 16:10:49,694] INFO in interaction_core: Logged user message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,694] INFO in data_analysis_routes: ✅ Logged user message for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,716] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,730] INFO in agent: Initializing Clean Data Analysis Agent with OpenAI gpt-4o
+[2026-04-07 16:10:49,838] INFO in state_manager: StateManager initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,843] INFO in data_analysis_routes: [AGENT CONTEXT] Session b143a78a-b042-4897-ad96-04aa0fa725cc → stage=data_exploring columns=32
+[2026-04-07 16:10:49,845] INFO in agent: ====================================================================================================
+[2026-04-07 16:10:49,845] INFO in agent: [AGENT] 🤖 AGENT.ANALYZE() CALLED
+[2026-04-07 16:10:49,845] INFO in agent: [AGENT] Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,845] INFO in agent: [AGENT] Query: 'map malaria burden distribution...'
+[2026-04-07 16:10:49,845] INFO in agent: [AGENT] Workflow context present: True
+[2026-04-07 16:10:49,846] INFO in agent: ====================================================================================================
+[2026-04-07 16:10:49,846] INFO in agent: [AGENT] Workflow context details: {'workflow': 'data_analysis_v3', 'stage': 'data_exploring', 'valid_options': [], 'data_loaded': True, 'session_id': 'b143a78a-b042-4897-ad96-04aa0fa725cc', 'data_columns': ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me', 'Facility level', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years', 'Persons presenting with fever & tested by RDT Preg Women (PW)', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy <5yrs.1', 'Persons presenting with fever and tested by Microscopy >=5years', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)', 'Persons tested positive for malaria by RDT  ≥5yrs (excl PW)', 'Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT <5yrs.1', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)', 'Persons tested positive for malaria by Microscopy  ≥5yrs (excl PW)', 'Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy <5yrs.1', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)', 'Severe Malaria cases seen', 'Persons with Severe Malaria treated with Artesu0te injection', 'PW who received LLIN', 'Children <5 yrs who received LLIN ', 'Test Positivity Rate(TPR) (Microscopy)', 'Test Positivity Rate(TPR) (RDT)'], 'columns_total': 32, 'data_shape': {'rows': 6948, 'cols': 32}, 'data_types': {'float64': 26, 'object': 5, 'int64': 1}, 'dataset_name': 'uploaded_data.csv', 'numeric_samples': ['period0me', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT <5yrs.1', 'Persons presenting with fever & tested by RDT >=5years'], 'categorical_samples': ['orgunitlevel2', 'orgunitlevel3', 'Facility level'], 'column_schema_description': 'Known column meanings (from schema inference):\n  State → column: "orgunitlevel2"\n  LGA (Local Government Area) → column: "orgunitlevel3"\n  Ward → column: "Ward"\n  Facility name → column: "organisationunit0me"\n  Facility level (Primary/Secondary/Tertiary) → column: "Facility level"\n  Reporting period → column: "period0me"\n  Under-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT <5yrs"\n  Under-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT <5yrs"\n  Over-5 RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)"\n  Over-5 RDT positive (numerator) → column: "Persons tested positive for malaria by RDT >=5years"\n  Pregnant women RDT tested (denominator) → column: "Persons presenting with fever & tested by RDT Preg Women (PW)"\n  Pregnant women RDT positive (numerator) → column: "Persons tested positive for malaria by RDT Preg Women (PW)"\n  Under-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy <5yrs"\n  Under-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy <5yrs"\n  Over-5 Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)"\n  Over-5 Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy >=5years"\n  Pregnant women Microscopy tested (denominator) → column: "Persons presenting with fever and tested by Microscopy Preg Women (PW)"\n  Pregnant women Microscopy positive (numerator) → column: "Persons tested positive for malaria by Microscopy Preg Women (PW)"'}
+[2026-04-07 16:10:49,847] INFO in agent: [AGENT STEP 1] Loading input data via _get_input_data()...
+[2026-04-07 16:10:49,847] INFO in agent: ====================================================================================================
+[2026-04-07 16:10:49,847] INFO in agent: [_GET_INPUT_DATA] 📂 LOADING MOST COMPREHENSIVE DATA
+[2026-04-07 16:10:49,847] INFO in agent: [_GET_INPUT_DATA] Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,847] INFO in agent: ====================================================================================================
+[2026-04-07 16:10:49,847] INFO in agent: [_GET_INPUT_DATA STEP 1] Session folder: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,847] INFO in agent: [_GET_INPUT_DATA STEP 1] Absolute path: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:49,848] INFO in agent: [_GET_INPUT_DATA STEP 1] Folder exists: True
+[2026-04-07 16:10:49,851] INFO in agent: [_GET_INPUT_DATA STEP 1] Files in folder: ['.agent_state.json', '.data_analysis_mode', '.risk_ready', '.tpr_complete', 'data_analysis.xlsx', 'Kwara_TPR_data_2020_-_2025__2026-03-02_1.xls', 'metadata_cache.json', 'raw_data.csv', 'raw_shapefile.zip', 'tpr_analysis_debug.json', 'tpr_distribution_map.html', 'tpr_precomputed.db', 'tpr_precompute_status.json', 'tpr_results.csv', 'tpr_time_series.csv', 'uploaded_data.csv', 'visualizations', 'ward_cache.pkl', 'workflow_state.json']
+[2026-04-07 16:10:49,851] INFO in agent: [_GET_INPUT_DATA STEP 2] Analysis complete flag exists: False
+[2026-04-07 16:10:49,852] INFO in agent: [_GET_INPUT_DATA STEP 2] Mode: PRE-ANALYSIS (use raw_data.csv, skip unified_dataset)
+[2026-04-07 16:10:49,852] INFO in agent: [_GET_INPUT_DATA STEP 2] Smart loading - priority order: ['raw_data.csv', 'tpr_results.csv', 'data_analysis.csv', 'uploaded_data.csv']
+[2026-04-07 16:10:49,852] INFO in agent: [_GET_INPUT_DATA STEP 2] Strategy: Load MOST comprehensive dataset available   
+[2026-04-07 16:10:49,852] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Checking: raw_data.csv
+[2026-04-07 16:10:49,852] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Full path: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/raw_data.csv
+[2026-04-07 16:10:49,854] INFO in agent: [_GET_INPUT_DATA STEP 2.1] Exists: True
+[2026-04-07 16:10:49,855] INFO in agent: [_GET_INPUT_DATA STEP 2.1] ✅ File found: raw_data.csv
+[2026-04-07 16:10:49,857] INFO in agent: [_GET_INPUT_DATA STEP 2.1] File size: 35867 bytes
+[2026-04-07 16:10:49,857] INFO in agent: [_GET_INPUT_DATA STEP 3] 📊 Loading CSV with EncodingHandler...
+[2026-04-07 16:10:49,880] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
+[2026-04-07 16:10:49,894] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/raw_data.csv with ascii encoding
+[2026-04-07 16:10:49,920] INFO in agent: [_GET_INPUT_DATA STEP 3] ✅ CSV loaded in 0.06s
+[2026-04-07 16:10:49,921] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame shape: (193, 16)
+[2026-04-07 16:10:49,921] INFO in agent: [_GET_INPUT_DATA STEP 3] DataFrame columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
+[2026-04-07 16:10:49,921] INFO in agent: [_GET_INPUT_DATA STEP 4] Creating data object...
+[2026-04-07 16:10:49,921] INFO in agent: [_GET_INPUT_DATA STEP 4] ⚠️  CRITICAL: Storing DataFrame in 'data' key
+[2026-04-07 16:10:49,921] INFO in agent: [_GET_INPUT_DATA STEP 4] ✅ Data object created
+[2026-04-07 16:10:49,922] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-07 16:10:49,922] INFO in agent: [_GET_INPUT_DATA STEP 4] Data object 'data' type: <class 'pandas.core.frame.DataFrame'>
+[2026-04-07 16:10:49,922] INFO in agent: [_GET_INPUT_DATA STEP 5] ✅ Loaded raw_data.csv: 193 rows, 16 columns
+[2026-04-07 16:10:49,922] INFO in agent: [_GET_INPUT_DATA STEP 5] 📊 Dataset context: TPR + ENVIRONMENTAL (prepared for risk analysis)
+[2026-04-07 16:10:49,922] INFO in agent: [_GET_INPUT_DATA STEP 5] 🎯 Agent now has access to this data for ALL questions
+[2026-04-07 16:10:49,923] INFO in agent: ====================================================================================================
+[2026-04-07 16:10:49,923] INFO in agent: [_GET_INPUT_DATA] 📂 DATA LOADING COMPLETE - SUCCESS
+[2026-04-07 16:10:49,923] INFO in agent: ====================================================================================================
+[2026-04-07 16:10:49,935] INFO in encoding_handler: Detected encoding: ascii (confidence: 1.00)
+[2026-04-07 16:10:49,941] INFO in encoding_handler: Successfully read instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/tpr_time_series.csv with ascii encoding
+[2026-04-07 16:10:49,949] INFO in agent: [_GET_INPUT_DATA] Also loaded tpr_time_series.csv: (182, 6)
+[2026-04-07 16:10:49,949] INFO in agent: [_GET_INPUT_DATA FINAL] Total datasets loaded: 2
+[2026-04-07 16:10:49,950] INFO in agent: [AGENT STEP 1] ✅ Input data loaded: 2 datasets
+[2026-04-07 16:10:49,950] INFO in agent: [AGENT STEP 1] First dataset keys: ['variable_name', 'data_description', 'data', 'columns']
+[2026-04-07 16:10:49,952] INFO in agent: [AGENT] Workflow context message created:
+[2026-04-07 16:10:49,952] INFO in agent:    - Stage: data_exploring
+[2026-04-07 16:10:49,952] INFO in agent:    - Data columns: 32
+[2026-04-07 16:10:49,952] INFO in agent:    - First 5 columns: ['orgunitlevel2', 'orgunitlevel3', 'Ward', 'organisationunit0me', 'period0me']
+[2026-04-07 16:10:50,023] INFO in agent: [AGENT] Invoking graph with 6 messages
+[2026-04-07 16:10:50,029] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-07 16:10:50,029] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-07 16:10:50,029] INFO in agent: [_AGENT_NODE] Incoming messages count: 6
+[2026-04-07 16:10:50,029] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-07 16:10:50,047] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
+[2026-04-07 16:10:50,047] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-07 16:10:50,047] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...
+[2026-04-07 16:10:50,047] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 7
+[2026-04-07 16:10:50,047] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...
+[2026-04-07 16:10:50,047] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORS
+[2026-04-07 16:10:53,214] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 3.17s
+[2026-04-07 16:10:53,215] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-07 16:10:53,216] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-07 16:10:53,264] INFO in variable_distribution: ============================================================
+[2026-04-07 16:10:53,265] INFO in variable_distribution: 🔍 DEBUG VARIABLE DISTRIBUTION: Starting for variable 'Burden'
+[2026-04-07 16:10:53,265] INFO in variable_distribution: 🔍 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:53,265] INFO in variable_distribution: 🔍 Checking data files:
+[2026-04-07 16:10:53,266] INFO in variable_distribution: 🔍   raw_data.csv: EXISTS
+[2026-04-07 16:10:53,267] INFO in variable_distribution: 🔍   unified_dataset.csv: NOT FOUND
+[2026-04-07 16:10:53,268] INFO in variable_distribution: 🔍   raw_shapefile.zip: EXISTS
+[2026-04-07 16:10:53,268] INFO in variable_distribution: ============================================================   
+[2026-04-07 16:10:53,268] INFO in variable_distribution: 🗺️ Creating distribution map for variable: Burden
+[2026-04-07 16:10:53,268] INFO in variable_distribution: 🔍 DEBUG _load_data: Starting data load
+[2026-04-07 16:10:53,268] INFO in variable_distribution: 🔍 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:53,277] INFO in variable_distribution: 🔍 DEBUG: CSV loaded successfully
+[2026-04-07 16:10:53,278] INFO in variable_distribution: 🔍   Shape: (193, 16)
+[2026-04-07 16:10:53,278] INFO in variable_distribution: 🔍   Columns (first 10): ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
+[2026-04-07 16:10:53,278] INFO in variable_distribution: 🔍   ALL Columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:10:53,279] INFO in variable_distribution: 🔍   ✅ Variable 'Burden' FOUND in CSV
+[2026-04-07 16:10:53,338] INFO in variable_distribution: Extracted raw shapefile from instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/raw_shapefile.zip
+[2026-04-07 16:10:53,461] INFO in variable_distribution: Loaded shapefile data: 193 features
+[2026-04-07 16:10:53,461] INFO in variable_distribution: 🔍 DEBUG: Shapefile columns: ['StateCode', 'WardCode', 'WardName', 'LGACode', 'Urban', 'Source', 'Timestamp', 'GlobalID', 'AMAPCODE', 'StateName', 'LGAName', 'WardName_n', 'WardName_b', 'LGA', 'Burden', 'Total_Posi', 'Population', 'State', 'Geopolitic', 'NighttimeL', 'HousingQua', 'SoilWetnes', 'DistanceTo', 'Ndmi', 'urban_perc', 'geometry']
+[2026-04-07 16:10:53,462] DEBUG in variable_resolver: Exact match: 'Burden' → 'Burden'
+[2026-04-07 16:10:53,506] INFO in variable_distribution: Successfully merged data on column: WardName
+[2026-04-07 16:10:53,506] INFO in variable_distribution: 🔍 DEBUG: Merged data shape: (193, 41)
+[2026-04-07 16:10:53,506] INFO in variable_distribution: 🔍 DEBUG: Merged data columns: ['StateCode_shp', 'WardCode_shp', 'WardName', 'LGACode_shp', 'Urban', 'Source', 'Timestamp', 'GlobalID', 'AMAPCODE', 'StateName', 'LGAName', 'WardName_n', 'WardName_b', 'LGA_shp', 'Burden_shp', 'Total_Posi', 'Population_shp', 'State_shp', 'Geopolitic', 'NighttimeL', 'HousingQua', 'SoilWetnes', 'DistanceTo', 'Ndmi_shp', 'urban_perc', 'geometry', 'WardCode', 'StateCode', 'LGACode', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:10:53,506] INFO in variable_distribution: 🔍 DEBUG: Looking for variable 'Burden' in merged data...      
+[2026-04-07 16:10:54,207] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:10:54] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:10:58,189] INFO in variable_distribution: 📊 Tracked exploration: Burden (count: 1)
+[2026-04-07 16:10:58,199] INFO in map_tools: Added viz to graph state: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/Burden_distribution_map_20260407_161054.html
+[2026-04-07 16:10:58,203] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-07 16:10:58,204] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-07 16:10:58,204] INFO in agent: [_AGENT_NODE] Incoming messages count: 8
+[2026-04-07 16:10:58,204] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-07 16:10:58,221] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
+[2026-04-07 16:10:58,222] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-07 16:10:58,222] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...
+[2026-04-07 16:10:58,222] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 9
+[2026-04-07 16:10:58,222] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...
+[2026-04-07 16:10:58,222] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORS
+[2026-04-07 16:10:59,321] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 1.10s
+[2026-04-07 16:10:59,322] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-07 16:10:59,322] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-07 16:10:59,323] INFO in agent: [AGENT] Graph completed in 9.30 seconds
+[2026-04-07 16:10:59,499] INFO in agent: Served HTML visualization: /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/Burden_distribution_map_20260407_161054.html → /serve_viz_file/b143a78a-b042-4897-ad96-04aa0fa725cc/visualizations/Burden_distribution_map_20260407_161054.html
+[2026-04-07 16:10:59,500] INFO in agent: [AGENT] Analysis complete, 1 visualizations
+[2026-04-07 16:10:59,554] INFO in interaction_core: Logged assistant message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:10:59,554] INFO in data_analysis_routes: ✅ Logged agent response for session b143a78a-b042-4897-ad96-04aa0fa725cc (response_time=9.86s)
+127.0.0.1 - - [07/Apr/2026 16:10:59] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+[2026-04-07 16:10:59,811] DEBUG in development: Request: GET http://127.0.0.1:5013/serve_viz_file/b143a78a-b042-4897-ad96-04aa0fa725cc/visualizations/Burden_distribution_map_20260407_161054.html
+[2026-04-07 16:11:02,151] INFO in utils: Calculated burden for 183 wards using pw age group
+[2026-04-07 16:11:02,205] INFO in precompute: Stored 183 wards for all/pw
+[2026-04-07 16:11:02,210] INFO in precompute: Computing TPR for all/all_ages
+[2026-04-07 16:11:02,265] INFO in utils: Schema column detection (age=all_ages, method=both): rdt_tested=['Persons presenting with fever & tested by RDT <5yrs', 'Persons presenting with fever & tested by RDT  ≥5yrs (excl PW)', 'Persons presenting with fever & tested by RDT Preg Women (PW)'], rdt_pos=['Persons tested positive for malaria by RDT <5yrs', 'Persons tested positive for malaria by RDT >=5years', 'Persons tested positive for malaria by RDT Preg Women (PW)'], micro_tested=['Persons presenting with fever and tested by Microscopy <5yrs', 'Persons presenting with fever and tested by Microscopy  ≥5yrs (excl PW)', 'Persons presenting with fever and tested by Microscopy Preg Women (PW)'], micro_pos=['Persons tested positive for malaria by Microscopy <5yrs', 'Persons tested positive for malaria by Microscopy >=5years', 'Persons tested positive for malaria by Microscopy Preg Women (PW)']
+[2026-04-07 16:11:03,958] INFO in decorators: serve_viz_file executed in 4.15 seconds
+[2026-04-07 16:11:04,002] INFO in utils: Loaded shapefile from /mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/www/complete_names_wards/wards.shp with 9410 wards
+[2026-04-07 16:11:04,010] INFO in utils: Filtered to 193 wards for Kwara
+[2026-04-07 16:11:04,047] INFO in utils: Fuzzy-matched 64 ward names: {'aboto odo ode': 'aboto odoode', 'ade0': 'adena', 'agbeyangi abadamu': 'agbeyangi gbadamu', 'agbo0 elebue fata': 'agbona fata', 'agunjin': 'agwijin'}
+127.0.0.1 - - [07/Apr/2026 16:11:04] "GET /serve_viz_file/b143a78a-b042-4897-ad96-04aa0fa725cc/visualizations/Burden_distribution_map_20260407_161054.html HTTP/1.1" 200 -
+[2026-04-07 16:11:11,680] INFO in utils: Calculated burden for 183 wards using all_ages age group
+[2026-04-07 16:11:11,741] INFO in precompute: Stored 183 wards for all/all_ages
+[2026-04-07 16:11:11,751] INFO in precompute: TPR pre-computation complete: 15 computed, 1 skipped, 0 errors
+[2026-04-07 16:11:11,770] INFO in precompute_service: TPR precompute completed for b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:11:46,400] INFO in complete_tools: 🔍   ✅ tpr_results.csv exists (12,946 bytes)
+[2026-04-07 16:11:46,400] INFO in complete_tools: ============================================================
+[2026-04-07 16:11:46,400] INFO in complete_tools: Starting complete dual-method analysis for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:11:46,400] INFO in complete_tools: Custom variables - Composite: None, PCA: None
+[2026-04-07 16:11:46,439] INFO in interaction_events: Logged variable_validation event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: True
+[2026-04-07 16:11:46,440] INFO in complete_tools: 🚀 Starting composite analysis...
+[2026-04-07 16:11:46,506] INFO in interaction_events: Logged composite_analysis_start event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: True
+[2026-04-07 16:11:46,712] INFO in data_handler: ⚠️ FALLBACK: Loaded raw data from raw_data.csv (will need cleaning)
+[2026-04-07 16:11:46,932] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:11:46,967] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:11:46,974] WARNING in dataset_builder: Files not found (attempt 1), waiting...
+[2026-04-07 16:11:48,082] WARNING in dataset_builder: Files not found (attempt 2), waiting...
+[2026-04-07 16:11:49,185] ERROR in dataset_builder: ❌ All load attempts failed for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:11:49,185] WARNING in data_handler: load_unified_dataset returned None
+[2026-04-07 16:11:49,185] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:11:49,185] INFO in engine: 📊 Starting standalone composite analysis (settlement integration removed)    
+
+PIPELINE DEBUG: Starting run_full_analysis_pipeline
+PIPELINE DEBUG: session_id=b143a78a-b042-4897-ad96-04aa0fa725cc
+PIPELINE DEBUG: selected_variables=None
+PIPELINE DEBUG: na_methods=None
+PIPELINE DEBUG: custom_relationships=None
+PIPELINE DEBUG: llm_manager=False
+PIPELINE DEBUG: metadata=False
+PIPELINE DEBUG: interaction_logger=False
+[2026-04-07 16:11:49,186] INFO in data_preparation: Step 1: Deferred cleaning (raw data → ward fixes + spatial imputation)
+[2026-04-07 16:11:49,186] INFO in data_preparation: Checking for ward name mismatches...
+[2026-04-07 16:11:49,187] INFO in data_validation: No ward name mismatches found
+[2026-04-07 16:11:49,188] INFO in data_preparation: No ward name mismatches detected
+[2026-04-07 16:11:49,188] INFO in data_preparation: Checking for duplicate ward names...
+[2026-04-07 16:11:49,188] INFO in data_preparation: ✅ No duplicate ward names found
+[2026-04-07 16:11:49,188] INFO in data_preparation: Applying spatial neighbor imputation for missing values...
+[2026-04-07 16:11:49,190] INFO in data_validation: No ward name mismatches found
+[2026-04-07 16:11:49,309] INFO in pipeline: Step 1.5: Applying unified variable selection
+[2026-04-07 16:11:49,310] INFO in variable_selection_coordinator: 🌍 Checking for region-aware variable selection
+[2026-04-07 16:11:49,310] INFO in region_aware_selection: Detected zone 'North_Central' from StateCode: KW
+[2026-04-07 16:11:49,311] INFO in region_aware_selection: 📊 COLUMN ANALYSIS: Total columns in data: 16
+[2026-04-07 16:11:49,311] INFO in region_aware_selection: 🔍 IDENTIFIER COLUMNS: ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code', 'X', 'X.1', 'X.2', 'X.3', 'X.4', 'X.5', 'index', 'Unnamed: 0', 'country_na', 'country_co', 'country_name', 'country_code', 'state_name', 'state_code', 'lga_name', 'lga_code', 'global_id', 'source', 'source_dat', 'properties', 'geometry', 'Shape_Area', 'Shape_Leng']
+[2026-04-07 16:11:49,311] INFO in region_aware_selection: ✅ ANALYSIS VARIABLES: 12 available - ['LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies']...
+[2026-04-07 16:11:49,313] INFO in region_aware_selection: 🔍 Fuzzy matched 'nighttime_lights' to 'NighttimeLights'      
+[2026-04-07 16:11:49,314] INFO in region_aware_selection: 🔍 Fuzzy matched 'housing_quality' to 'HousingQuality'        
+[2026-04-07 16:11:49,314] INFO in region_aware_selection: 🔍 Fuzzy matched 'soil_wetness' to 'SoilWetness'
+[2026-04-07 16:11:49,314] INFO in region_aware_selection: 🔍 Fuzzy matched 'distance_to_waterbodies' to 'DistanceToWaterbodies'
+[2026-04-07 16:11:49,314] INFO in region_aware_selection: 🔍 Fuzzy matched 'ndmi' to 'Ndmi'
+[2026-04-07 16:11:49,314] WARNING in region_aware_selection: Zone North_Central: Missing 1 expected variables: ['u5_tpr_rdt']
+[2026-04-07 16:11:49,316] INFO in region_aware_selection: ✅ Validated 6/6 variables
+[2026-04-07 16:11:49,316] INFO in region_aware_selection: Zone North_Central: Selected 6/7 scientifically-validated variables
+[2026-04-07 16:11:49,316] INFO in variable_selection_coordinator: 🎯 ZONE DETECTED: North_Central - using scientifically-validated variables
+[2026-04-07 16:11:49,317] INFO in variable_selection_coordinator: 🔬 ZONE VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:11:49,317] INFO in variable_selection_coordinator: ✅ UNIFIED SELECTION: 6 variables selected via llm_fallback
+[2026-04-07 16:11:49,317] INFO in variable_selection_coordinator: 📋 VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:11:49,317] INFO in pipeline: ✅ UNIFIED SELECTION: North_Central zone, 6 variables selected via llm_fallback
+[2026-04-07 16:11:49,326] INFO in pipeline: 💾 Saved unified variable metadata to instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_variable_metadata.json
+[2026-04-07 16:11:49,327] INFO in data_preparation: Step 2: Determining variable relationships
+[2026-04-07 16:11:49,327] INFO in data_preparation: 🔧 CUSTOM ANALYSIS: Looking for variables ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage'] in cleaned data
+[2026-04-07 16:11:49,327] INFO in data_preparation: 🔧 Available columns: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:11:49,328] INFO in data_preparation: ✅ Exact match: NighttimeLights
+[2026-04-07 16:11:49,328] INFO in data_preparation: ✅ Exact match: HousingQuality
+[2026-04-07 16:11:49,328] INFO in data_preparation: ✅ Exact match: SoilWetness
+[2026-04-07 16:11:49,329] INFO in data_preparation: ✅ Exact match: DistanceToWaterbodies
+[2026-04-07 16:11:49,329] INFO in data_preparation: ✅ Exact match: Ndmi
+[2026-04-07 16:11:49,329] INFO in data_preparation: ✅ Exact match: urban_percentage
+[2026-04-07 16:11:49,329] INFO in data_preparation: Using 6 selected variables for relationships: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:11:49,330] INFO in data_preparation: Step 3: Normalizing data
+[2026-04-07 16:11:49,330] INFO in data_preparation: Custom analysis: normalizing ALL variables, will select ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage'] for scoring later
+[2026-04-07 16:11:54,334] DEBUG in development: Request: GET http://127.0.0.1:5013/survey/api/status/session_1775595684160_05un0aqp9
+127.0.0.1 - - [07/Apr/2026 16:11:54] "GET /survey/api/status/session_1775595684160_05un0aqp9 HTTP/1.1" 200 -
+[2026-04-07 16:11:57,973] INFO in scoring_stages: Step 4: Calculating composite scores
+[2026-04-07 16:11:57,973] INFO in scoring_stages: ✅ COMPOSITE MATCH: 'NighttimeLights' → 'nighttimelights'
+[2026-04-07 16:11:57,973] INFO in scoring_stages: ✅ COMPOSITE MATCH: 'HousingQuality' → 'housingquality'
+[2026-04-07 16:11:57,973] INFO in scoring_stages: ✅ COMPOSITE MATCH: 'SoilWetness' → 'soilwetness'
+[2026-04-07 16:11:57,974] INFO in scoring_stages: ✅ COMPOSITE MATCH: 'DistanceToWaterbodies' → 'distancetowaterbodies' 
+[2026-04-07 16:11:57,974] INFO in scoring_stages: ✅ COMPOSITE MATCH: 'Ndmi' → 'ndmi'
+[2026-04-07 16:11:57,974] INFO in scoring_stages: ✅ COMPOSITE MATCH: 'urban_percentage' → 'urban_percentage'
+[2026-04-07 16:11:57,974] INFO in scoring_stages: 🔄 COMPOSITE METHOD: Using 6 unified variables: ['nighttimelights', 'housingquality', 'soilwetness', 'distancetowaterbodies', 'ndmi', 'urban_percentage']
+[2026-04-07 16:11:57,976] WARNING in scoring: Too many variables (6), limiting to essential combinations
+[2026-04-07 16:11:57,976] INFO in scoring: Generating 16 composite score models from 5 variables
+[2026-04-07 16:11:58,045] INFO in scoring: Successfully generated 16 composite score models
+PIPELINE DEBUG: Composite scoring completed successfully
+PIPELINE DEBUG: Variables used: ['nighttimelights', 'housingquality', 'soilwetness', 'distancetowaterbodies', 'ndmi', 'urban_percentage']
+PIPELINE DEBUG: Applying composite_scores fix immediately...
+PIPELINE DEBUG: About to apply composite_scores fix...
+PIPELINE DEBUG: composite_scores_mean exists and is not None
+PIPELINE DEBUG: composite_scores_mean type: <class 'dict'>
+PIPELINE DEBUG: Set data_handler.composite_scores = full dict with scores (shape: (193, 17)) and formulas
+PIPELINE DEBUG: composite_scores fix applied successfully!
+PIPELINE DEBUG: Continuing with remaining stages...
+[2026-04-07 16:11:58,046] INFO in scoring_stages: Step 5: Calculating vulnerability rankings
+
+🧮 PIPELINE DEBUG: Starting vulnerability ranking calculation...
+📊 PIPELINE DEBUG: Composite scores available: True
+📈 PIPELINE DEBUG: Composite scores shape: (193, 17)
+🤖 PIPELINE DEBUG: Found 16 model columns: ['model_1', 'model_2', 'model_3', 'model_4', 'model_5', 'model_6', 'model_7', 'model_8', 'model_9', 'model_10', 'model_11', 'model_12', 'model_13', 'model_14', 'model_15', 'model_16']
+
+🔍 VULNERABILITY DEBUG: Starting analyze_vulnerability function
+📊 VULNERABILITY DEBUG: n_categories=3
+🔧 VULNERABILITY DEBUG: composite_scores type: <class 'dict'>
+📈 VULNERABILITY DEBUG: Scores DataFrame shape: (193, 17)
+📋 VULNERABILITY DEBUG: Scores DataFrame columns: ['WardName', 'model_1', 'model_2', 'model_3', 'model_4', 'model_5', 'model_6', 'model_7', 'model_8', 'model_9', 'model_10', 'model_11', 'model_12', 'model_13', 'model_14', 'model_15', 'model_16']
+🤖 VULNERABILITY DEBUG: Found 16 model columns: ['model_1', 'model_2', 'model_3', 'model_4', 'model_5', 'model_6', 'model_7', 'model_8', 'model_9', 'model_10', 'model_11', 'model_12', 'model_13', 'model_14', 'model_15', 'model_16']
+🏘️ VULNERABILITY DEBUG: Result DataFrame initialized with 193 wards
+📊 VULNERABILITY DEBUG: Median scores calculated, range: 0.070 to 0.550
+🏆 VULNERABILITY DEBUG: Ranking completed, top ward: Ibagun (score: 0.550)
+🎯 RISK CATEGORIZATION: Using simplified High/Medium/Low Risk system
+📊 Total wards: 193
+🚨 High Risk: 64 wards
+📋 Medium Risk: 65 wards
+✅ Low Risk: 64 wards
+✅ RISK CATEGORIZATION: Complete!
+🎯 Risk distribution: {'Medium Risk': np.int64(65), 'High Risk': np.int64(64), 'Low Risk': np.int64(64)}
+🎉 VULNERABILITY DEBUG: Analysis complete, returning DataFrame with shape: (193, 4)
+✅ PIPELINE DEBUG: Vulnerability rankings calculated, shape: (193, 4)
+🎯 PIPELINE DEBUG: Category distribution: {'Medium Risk': np.int64(65), 'High Risk': np.int64(64), 'Low Risk': np.int64(64)}
+💾 PIPELINE DEBUG: Stored vulnerability rankings in data_handler
+🏆 PIPELINE DEBUG: Top 5 vulnerable wards: ['Ibagun', 'Essa B', 'Babadudu', 'Afon', 'Share 3']
+[2026-04-07 16:11:58,067] INFO in scoring_stages: Step 6: Processing urban extent
+[2026-04-07 16:11:58,136] INFO in pipeline: Step 7: Validating variable consistency
+[2026-04-07 16:11:58,136] INFO in variable_comparison_validator: 🔍 VALIDATION: Checking variable consistency
+[2026-04-07 16:11:58,136] INFO in variable_comparison_validator:    📊 Composite variables: ['nighttimelights', 'housingquality', 'soilwetness', 'distancetowaterbodies', 'ndmi', 'urban_percentage']
+[2026-04-07 16:11:58,136] INFO in variable_comparison_validator:    🔬 PCA variables: None
+[2026-04-07 16:11:58,136] WARNING in pipeline: ⚠️ CONSISTENCY: No variables found for PCA method
+[2026-04-07 16:11:58,136] INFO in pipeline: Analysis pipeline complete
+PIPELINE DEBUG: About to apply composite_scores fix...
+PIPELINE DEBUG: About to apply composite_scores fix...
+PIPELINE DEBUG: composite_scores_mean exists and is not None
+PIPELINE DEBUG: composite_scores_mean type: <class 'dict'>
+PIPELINE DEBUG: Set data_handler.composite_scores = full dict with scores (shape: (193, 17)) and formulas
+PIPELINE DEBUG: composite_scores fix applied, creating summary...
+PIPELINE DEBUG: Saving analysis results to disk...
+[2026-04-07 16:11:58,264] INFO in data_analysis: Analysis results saved successfully
+PIPELINE DEBUG: Analysis results saved via coordinator
+PIPELINE DEBUG: Creating unified dataset with region metadata...
+🔧 Building comprehensive unified GeoParquet dataset...
+[2026-04-07 16:11:58,360] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:11:58,458] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:11:58,486] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:11:58,520] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:11:58,530] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:11:58,559] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:11:58,588] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:11:58,588] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:11:58,594] WARNING in dataset_builder: Files not found (attempt 1), waiting...
+[2026-04-07 16:11:59,601] WARNING in dataset_builder: Files not found (attempt 2), waiting...
+[2026-04-07 16:12:00,611] ERROR in dataset_builder: ❌ All load attempts failed for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:00,611] WARNING in data_handler: load_unified_dataset returned None
+[2026-04-07 16:12:00,611] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+📊 CSV loaded: 193 rows, 16 columns
+🗺️ Shapefile loaded: 193 features
+📈 Composite results loaded: analysis_vulnerability_rankings.csv
+🎯 Model scores loaded: 16 individual models from composite_scores.csv
+📋 Model formulas loaded: 16 model definitions from model_formulas.csv
+🔬 No PCA results found - attempting dynamic PCA analysis...
+[2026-04-07 16:12:00,837] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:12:00,942] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:12:00,977] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:12:00,996] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:12:01,013] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:12:01,047] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:12:01,077] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:12:01,077] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:01,083] WARNING in dataset_builder: Files not found (attempt 1), waiting...
+[2026-04-07 16:12:02,108] WARNING in dataset_builder: Files not found (attempt 2), waiting...
+[2026-04-07 16:12:03,119] ERROR in dataset_builder: ❌ All load attempts failed for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:03,119] WARNING in data_handler: load_unified_dataset returned None
+[2026-04-07 16:12:03,120] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:03,120] INFO in pca_pipeline: 🔬 PCA PIPELINE: Initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:03,120] INFO in pca_pipeline: 🚀 PCA PIPELINE: Starting complete PCA analysis
+[2026-04-07 16:12:03,120] INFO in pca_pipeline: 📊 PCA DATA: Loaded cleaned data with shape (193, 16)
+[2026-04-07 16:12:03,120] INFO in pca_pipeline: 🔄 PCA PIPELINE: Applying unified variable selection
+[2026-04-07 16:12:03,120] INFO in variable_selection_coordinator: 🌍 Checking for region-aware variable selection       
+[2026-04-07 16:12:03,121] INFO in region_aware_selection: Detected zone 'North_Central' from StateCode: KW
+[2026-04-07 16:12:03,121] INFO in region_aware_selection: 📊 COLUMN ANALYSIS: Total columns in data: 16
+[2026-04-07 16:12:03,121] INFO in region_aware_selection: 🔍 IDENTIFIER COLUMNS: ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code', 'X', 'X.1', 'X.2', 'X.3', 'X.4', 'X.5', 'index', 'Unnamed: 0', 'country_na', 'country_co', 'country_name', 'country_code', 'state_name', 'state_code', 'lga_name', 'lga_code', 'global_id', 'source', 'source_dat', 'properties', 'geometry', 'Shape_Area', 'Shape_Leng']
+[2026-04-07 16:12:03,121] INFO in region_aware_selection: ✅ ANALYSIS VARIABLES: 12 available - ['LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies']...
+[2026-04-07 16:12:03,123] INFO in region_aware_selection: 🔍 Fuzzy matched 'nighttime_lights' to 'NighttimeLights'      
+[2026-04-07 16:12:03,123] INFO in region_aware_selection: 🔍 Fuzzy matched 'housing_quality' to 'HousingQuality'        
+[2026-04-07 16:12:03,123] INFO in region_aware_selection: 🔍 Fuzzy matched 'soil_wetness' to 'SoilWetness'
+[2026-04-07 16:12:03,123] INFO in region_aware_selection: 🔍 Fuzzy matched 'distance_to_waterbodies' to 'DistanceToWaterbodies'
+[2026-04-07 16:12:03,123] INFO in region_aware_selection: 🔍 Fuzzy matched 'ndmi' to 'Ndmi'
+[2026-04-07 16:12:03,123] WARNING in region_aware_selection: Zone North_Central: Missing 1 expected variables: ['u5_tpr_rdt']
+[2026-04-07 16:12:03,125] INFO in region_aware_selection: ✅ Validated 6/6 variables
+[2026-04-07 16:12:03,125] INFO in region_aware_selection: Zone North_Central: Selected 6/7 scientifically-validated variables
+[2026-04-07 16:12:03,125] INFO in variable_selection_coordinator: 🎯 ZONE DETECTED: North_Central - using scientifically-validated variables
+[2026-04-07 16:12:03,125] INFO in variable_selection_coordinator: 🔬 ZONE VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:03,125] INFO in variable_selection_coordinator: ✅ UNIFIED SELECTION: 6 variables selected via llm_fallback
+[2026-04-07 16:12:03,126] INFO in variable_selection_coordinator: 📋 VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:03,126] INFO in pca_pipeline: ✅ PCA UNIFIED SELECTION: North_Central zone, 6 variables selected via llm_fallback
+[2026-04-07 16:12:03,126] INFO in pca_pipeline: 🧹 PCA CLEANING: Starting data cleaning and preparation
+[2026-04-07 16:12:03,126] INFO in pca_pipeline: 🏘️ PCA WARD: Found ward column: WardName
+[2026-04-07 16:12:03,126] INFO in pca_pipeline: 📋 PCA SELECTION: Using 6 user-specified variables
+[2026-04-07 16:12:03,131] INFO in pca_pipeline: ✅ PCA MISSING: No missing values found
+[2026-04-07 16:12:03,132] INFO in pca_pipeline: ✅ PCA CLEANING: Prepared data with 6 variables and 193 wards
+[2026-04-07 16:12:03,132] INFO in pca_pipeline: 📋 PCA VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:03,132] INFO in pca_pipeline: 📊 PCA STANDARDIZATION: Applying Z-score standardization
+[2026-04-07 16:12:03,144] INFO in pca_pipeline: ✅ PCA STANDARDIZATION: Standardized 6 variables
+[2026-04-07 16:12:03,145] INFO in pca_pipeline: 📊 PCA STATS: Mean ≈ 0.000, Std ≈ 1.003
+
+🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬
+STEP 3.5: CHECKING PCA SUITABILITY WITH STATISTICAL TESTS
+🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬
+[2026-04-07 16:12:03,145] INFO in pca_pipeline: 🔍 PCA SUITABILITY: Running statistical tests
+
+📊 PREPARING DATA FOR STATISTICAL TESTS
+   Numeric columns found: 6
+   Columns: NighttimeLights, HousingQuality, SoilWetness, DistanceToWaterbodies, Ndmi...
+   Data dimensions: 193 samples × 6 variables
+
+============================================================
+🔍 PCA STATISTICAL TESTS STARTING
+============================================================
+📊 Data shape: 193 samples × 6 variables
+
+📈 Running Kaiser-Meyer-Olkin (KMO) test...
+   KMO value: 0.5000
+   Threshold: 0.5
+   Result: ❌ FAIL
+
+📊 Running Bartlett's test of sphericity...
+[2026-04-07 16:12:03,340] WARNING in pca_statistical_tests: Correlation matrix is singular or negative definite
+   Test statistic: 0.00
+   P-value: 1.0000e+00
+   Result: ❌ FAIL (p >= 0.05)
+
+------------------------------------------------------------
+📋 OVERALL ASSESSMENT:
+------------------------------------------------------------
+❌ Data is not suitable for PCA. Using composite analysis only.
+   KMO: Unacceptable - not suitable for PCA
+   KMO test failed (0.500 < 0.5)
+   Bartlett's test failed (p=1.000 >= 0.05)
+
+⚠️ DECISION: Skipping PCA, using composite analysis only
+============================================================
+
+[2026-04-07 16:12:03,341] INFO in pca_pipeline: 📊 KMO Test: 0.500 (Unacceptable - not suitable for PCA)
+[2026-04-07 16:12:03,341] INFO in pca_pipeline: 📊 Bartlett's Test: p-value = 1.0000e+00
+[2026-04-07 16:12:03,342] WARNING in pca_pipeline: ⚠️ PCA SUITABILITY: KMO test failed: 0.500 < 0.5 (threshold); Bartlettt's test failed: p-value = 1.0000 (not significant)
+[2026-04-07 16:12:03,342] WARNING in pca_pipeline: ⚠️ PCA SUITABILITY: Data is not suitable for PCA. Using composite anaalysis only.
+
+⚠️ PCA NOT SUITABLE - RETURNING EARLY
+Reason: Data is not suitable for PCA. Using composite analysis only.
+KMO Value: 0.500
+Bartlett's p-value: 1.0000e+00
+
+📌 RECOMMENDATION: Using composite analysis only
+
+⚠️ PCA approach app.analysis.pca.run_pca_analysis not available: No module named 'app.analysis.pca'
+⚠️ PCA approach app.analysis.statistical_analysis.run_pca not available: No module named 'app.analysis.statistical_analyysis'
+🔧 Preserved original column names: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA']...
+✅ No duplicate ward names found in WardName
+✅ No duplicate ward names found in WardName
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using WardCode and WardCode for precise geometry matching
+🎯 Matched geometry for 193/193 wards using WardCode
+✅ Preserved all 193 CSV wards with geometry where possible
+🔗 Preserved CSV wards with geometry: 193 wards (maintaining original 193)
+🏷️ Smart metadata created for 17 columns:
+   identification: 6 columns
+   other: 7 columns
+   demographic: 1 columns
+   environmental: 1 columns
+   infrastructure: 1 columns
+   spatial: 1 columns
+🔑 Using 'WardName' for merge (unique names)
+🔍 WARD COUNT DEBUG: Starting integration with 193 wards
+🔍 Attempting to reconstruct region metadata from analysis files...
+[2026-04-07 16:12:03,469] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:12:03,541] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:12:03,576] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:12:03,593] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:12:03,605] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:12:03,639] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:12:03,671] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:12:03,671] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:03,676] WARNING in dataset_builder: Files not found (attempt 1), waiting...
+[2026-04-07 16:12:04,734] WARNING in dataset_builder: Files not found (attempt 2), waiting...
+[2026-04-07 16:12:05,763] ERROR in dataset_builder: ❌ All load attempts failed for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:05,763] WARNING in data_handler: load_unified_dataset returned None
+[2026-04-07 16:12:05,763] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:05,764] INFO in region_aware_selection: Detected zone 'North_Central' from StateCode: KW
+🔍 Reconstructed region metadata: North_Central zone via StateCode: KW
+🔍 WARD COUNT DEBUG: After region metadata: 193 wards (change: +0)
+⚠️ No ward code column found - skipping duplicate fix
+🔑 Using 'WardName' for merge (unique names)
+🔍 COMPOSITE MERGE DEBUG: Before merge - GDF: 193 rows, Analysis: 193 rows
+🔍 COMPOSITE MERGE DEBUG: Ward key 'WardName' duplicates in GDF: 0
+🔍 COMPOSITE MERGE DEBUG: Comp key 'WardName' duplicates in analysis: 0
+🔍 COMPOSITE MERGE DEBUG: After merge - GDF: 193 rows (change: +0)
+📈 Integrated composite analysis: 5 columns -> composite_score, composite_rank, composite_category, overall_rank, vulnerability_category
+[2026-04-07 16:12:05,858] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:05,866] WARNING in dataset_builder: Files not found (attempt 1), waiting...
+[2026-04-07 16:12:06,973] WARNING in dataset_builder: Files not found (attempt 2), waiting...
+[2026-04-07 16:12:07,986] ERROR in dataset_builder: ❌ All load attempts failed for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:07,987] WARNING in data_handler: load_unified_dataset returned None
+[2026-04-07 16:12:07,987] INFO in data_handler: DataHandler initialized with modular architecture - Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+🔍 WARD COUNT DEBUG: Final integration result: 193 wards (total change: +0)
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using 'WardName' for merge (unique names)
+🔍 Detected 16 model score columns: ['model_1', 'model_2', 'model_3', 'model_4', 'model_5']...
+🎯 Integrated 16 individual model scores
+📊 Added model consensus statistics based on 16 models
+📋 Processing model metadata from 16 model definitions...
+🔍 Available formula columns: ['model', 'variables', 'method']
+📊 Processed 16 model formulas
+📋 ✅ Model metadata integrated:
+   📊 16 total models, 16 processed
+   🔢 Average complexity: 1.00
+   📈 Complexity range: 1.0 - 1.0
+   🔤 5 unique variables used
+   🏆 Top variables: ['nighttimelights', 'housingquality', 'soilwetness']
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/services/dataset_builder.py:1280: UserWarning:
+
+Geometry is in a geographic CRS. Results from 'centroid' are likely incorrect. Use 'GeoSeries.to_crs()' to re-project geometries to a projected CRS before this operation.
+
+
+🌍 Added spatial metrics: area_km2, centroid coordinates, perimeter_km
+🎯 Added intervention_priority classification
+⚡ Optimized dataset structure for tool access
+💾 Saved GeoParquet: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_dataset.geoparquet
+📄 Saved CSV backup: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_dataset.csv
+⚠️ Could not save pickle backup: local variable 'pickle_path' referenced before assignment
+✅ Comprehensive unified dataset created: 193 wards, 55 columns
+📁 Saved as: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_dataset.geoparquet
+PIPELINE DEBUG: ✅ Unified dataset created successfully: Comprehensive unified GeoParquet dataset ready with 193 wards and 55 columns
+[2026-04-07 16:12:10,115] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+PIPELINE DEBUG: ✅ Unified dataset loaded and assigned to data_handler: 193 rows, 54 columns
+[2026-04-07 16:12:10,117] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:10,146] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+[2026-04-07 16:12:10,146] INFO in data_handler: ✅ Successfully loaded unified dataset: 193 rows, 54 columns
+PIPELINE DEBUG: ✅ Force reloaded unified dataset through data handler
+[2026-04-07 16:12:10,284] INFO in interaction_events: Logged composite_analysis_complete event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: True
+[2026-04-07 16:12:10,286] INFO in complete_tools: ✅ Composite analysis completed successfully
+[2026-04-07 16:12:10,286] INFO in complete_tools: 🔬 Starting PCA analysis...
+
+🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣
+🔬 CALLING _run_pca_analysis()
+   Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Variables: None
+🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣
+
+
+🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
+🎯 _run_pca_analysis() CALLED!
+   Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Custom vars: None
+🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦
+
+[2026-04-07 16:12:10,286] CRITICAL in complete_tools: 🎯 PCA ANALYSIS METHOD CALLED - Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:10,317] INFO in interaction_events: Logged pca_analysis_start event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: True
+[2026-04-07 16:12:10,412] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:12:10,489] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:12:10,526] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:12:10,542] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:12:10,553] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:12:10,584] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:12:10,617] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:12:10,617] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:10,640] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+[2026-04-07 16:12:10,641] INFO in data_handler: ✅ Successfully loaded unified dataset: 193 rows, 54 columns
+[2026-04-07 16:12:10,742] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:10,743] INFO in pca_pipeline: 🔬 PCA PIPELINE: Initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:10,743] INFO in pca_pipeline: 🚀 PCA PIPELINE: Starting complete PCA analysis
+[2026-04-07 16:12:10,744] INFO in pca_pipeline: 📊 PCA DATA: Loaded cleaned data with shape (193, 16)
+[2026-04-07 16:12:10,745] INFO in pca_pipeline: 🔄 PCA PIPELINE: Applying unified variable selection
+[2026-04-07 16:12:10,745] INFO in variable_selection_coordinator: 🌍 Checking for region-aware variable selection       
+[2026-04-07 16:12:10,746] INFO in region_aware_selection: Detected zone 'North_Central' from StateCode: KW
+[2026-04-07 16:12:10,746] INFO in region_aware_selection: 📊 COLUMN ANALYSIS: Total columns in data: 16
+[2026-04-07 16:12:10,747] INFO in region_aware_selection: 🔍 IDENTIFIER COLUMNS: ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code', 'X', 'X.1', 'X.2', 'X.3', 'X.4', 'X.5', 'index', 'Unnamed: 0', 'country_na', 'country_co', 'country_name', 'country_code', 'state_name', 'state_code', 'lga_name', 'lga_code', 'global_id', 'source', 'source_dat', 'properties', 'geometry', 'Shape_Area', 'Shape_Leng']
+[2026-04-07 16:12:10,747] INFO in region_aware_selection: ✅ ANALYSIS VARIABLES: 12 available - ['LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies']...
+[2026-04-07 16:12:10,749] INFO in region_aware_selection: 🔍 Fuzzy matched 'nighttime_lights' to 'NighttimeLights'      
+[2026-04-07 16:12:10,749] INFO in region_aware_selection: 🔍 Fuzzy matched 'housing_quality' to 'HousingQuality'        
+[2026-04-07 16:12:10,749] INFO in region_aware_selection: 🔍 Fuzzy matched 'soil_wetness' to 'SoilWetness'
+[2026-04-07 16:12:10,749] INFO in region_aware_selection: 🔍 Fuzzy matched 'distance_to_waterbodies' to 'DistanceToWaterbodies'
+[2026-04-07 16:12:10,750] INFO in region_aware_selection: 🔍 Fuzzy matched 'ndmi' to 'Ndmi'
+[2026-04-07 16:12:10,750] WARNING in region_aware_selection: Zone North_Central: Missing 1 expected variables: ['u5_tpr_rdt']
+[2026-04-07 16:12:10,752] INFO in region_aware_selection: ✅ Validated 6/6 variables
+[2026-04-07 16:12:10,752] INFO in region_aware_selection: Zone North_Central: Selected 6/7 scientifically-validated variables
+[2026-04-07 16:12:10,752] INFO in variable_selection_coordinator: 🎯 ZONE DETECTED: North_Central - using scientifically-validated variables
+[2026-04-07 16:12:10,752] INFO in variable_selection_coordinator: 🔬 ZONE VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:10,752] INFO in variable_selection_coordinator: ✅ UNIFIED SELECTION: 6 variables selected via llm_fallback
+[2026-04-07 16:12:10,752] INFO in variable_selection_coordinator: 📋 VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:10,752] INFO in pca_pipeline: ✅ PCA UNIFIED SELECTION: North_Central zone, 6 variables selected via llm_fallback
+[2026-04-07 16:12:10,753] INFO in pca_pipeline: 🧹 PCA CLEANING: Starting data cleaning and preparation
+[2026-04-07 16:12:10,753] INFO in pca_pipeline: 🏘️ PCA WARD: Found ward column: WardName
+[2026-04-07 16:12:10,753] INFO in pca_pipeline: 📋 PCA SELECTION: Using 6 user-specified variables
+[2026-04-07 16:12:10,755] INFO in pca_pipeline: ✅ PCA MISSING: No missing values found
+[2026-04-07 16:12:10,756] INFO in pca_pipeline: ✅ PCA CLEANING: Prepared data with 6 variables and 193 wards
+[2026-04-07 16:12:10,756] INFO in pca_pipeline: 📋 PCA VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:10,756] INFO in pca_pipeline: 📊 PCA STANDARDIZATION: Applying Z-score standardization
+[2026-04-07 16:12:10,764] INFO in pca_pipeline: ✅ PCA STANDARDIZATION: Standardized 6 variables
+[2026-04-07 16:12:10,767] INFO in pca_pipeline: 📊 PCA STATS: Mean ≈ 0.000, Std ≈ 1.003
+
+🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬
+STEP 3.5: CHECKING PCA SUITABILITY WITH STATISTICAL TESTS
+🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬
+[2026-04-07 16:12:10,767] INFO in pca_pipeline: 🔍 PCA SUITABILITY: Running statistical tests
+
+📊 PREPARING DATA FOR STATISTICAL TESTS
+   Numeric columns found: 6
+   Columns: NighttimeLights, HousingQuality, SoilWetness, DistanceToWaterbodies, Ndmi...
+   Data dimensions: 193 samples × 6 variables
+
+============================================================
+🔍 PCA STATISTICAL TESTS STARTING
+============================================================
+📊 Data shape: 193 samples × 6 variables
+
+📈 Running Kaiser-Meyer-Olkin (KMO) test...
+   KMO value: 0.5000
+   Threshold: 0.5
+   Result: ❌ FAIL
+
+📊 Running Bartlett's test of sphericity...
+[2026-04-07 16:12:10,770] WARNING in pca_statistical_tests: Correlation matrix is singular or negative definite
+   Test statistic: 0.00
+   P-value: 1.0000e+00
+   Result: ❌ FAIL (p >= 0.05)
+
+------------------------------------------------------------
+📋 OVERALL ASSESSMENT:
+------------------------------------------------------------
+❌ Data is not suitable for PCA. Using composite analysis only.
+   KMO: Unacceptable - not suitable for PCA
+   KMO test failed (0.500 < 0.5)
+   Bartlett's test failed (p=1.000 >= 0.05)
+
+⚠️ DECISION: Skipping PCA, using composite analysis only
+============================================================
+
+[2026-04-07 16:12:10,770] INFO in pca_pipeline: 📊 KMO Test: 0.500 (Unacceptable - not suitable for PCA)
+[2026-04-07 16:12:10,771] INFO in pca_pipeline: 📊 Bartlett's Test: p-value = 1.0000e+00
+[2026-04-07 16:12:10,771] WARNING in pca_pipeline: ⚠️ PCA SUITABILITY: KMO test failed: 0.500 < 0.5 (threshold); Bartlettt's test failed: p-value = 1.0000 (not significant)
+[2026-04-07 16:12:10,771] WARNING in pca_pipeline: ⚠️ PCA SUITABILITY: Data is not suitable for PCA. Using composite anaalysis only.
+
+⚠️ PCA NOT SUITABLE - RETURNING EARLY
+Reason: Data is not suitable for PCA. Using composite analysis only.
+KMO Value: 0.500
+Bartlett's p-value: 1.0000e+00
+
+📌 RECOMMENDATION: Using composite analysis only
+
+[2026-04-07 16:12:10,771] INFO in complete_tools: PCA not suitable: Data is not suitable for PCA. Using composite analysis only.
+
+⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
+PCA ANALYSIS NOT SUITABLE - STATISTICAL TESTS FAILED
+⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
+
+Detailed Results:
+  - KMO Value: 0.500
+  - KMO Threshold: 0.5
+  - Bartlett's p-value: 1.0000e+00
+  - Required p-value: < 0.05
+
+Reason: Data is not suitable for PCA. Using composite analysis only.
+Action: Skipping PCA, will use composite analysis only
+⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
+
+[2026-04-07 16:12:10,818] INFO in interaction_events: Logged pca_not_suitable event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: False
+[2026-04-07 16:12:10,819] INFO in complete_tools: ⚠️ PCA skipped: Data is not suitable for PCA. Using composite analysiss only.
+
+============================================================
+📊 PCA ANALYSIS SKIPPED DUE TO STATISTICAL TESTS
+============================================================
+Reason: Data is not suitable for PCA. Using composite analysis only.
+KMO Value: 0.49999999999999994
+Bartlett's p-value: 1.0
+Recommendation: Continuing with composite analysis only
+============================================================
+
+[2026-04-07 16:12:10,819] INFO in complete_tools: 🔄 Both analyses completed sequentially in 24.38 seconds
+[2026-04-07 16:12:10,856] INFO in interaction_events: Logged sequential_analysis_complete event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: False
+[2026-04-07 16:12:10,857] INFO in complete_tools: ℹ️ PCA was skipped due to statistical tests: Data is not suitable for  PCA. Using composite analysis only.
+[2026-04-07 16:12:10,857] INFO in complete_tools: 📊 Creating unified dataset...
+🔧 Building comprehensive unified GeoParquet dataset...
+[2026-04-07 16:12:10,962] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:12:11,064] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:12:11,105] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:12:11,122] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:12:11,140] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:12:11,175] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:12:11,207] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:12:11,207] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:11,240] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+[2026-04-07 16:12:11,240] INFO in data_handler: ✅ Successfully loaded unified dataset: 193 rows, 54 columns
+[2026-04-07 16:12:11,343] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+📊 CSV loaded: 193 rows, 16 columns
+🗺️ Shapefile loaded: 193 features
+📈 Composite results loaded: analysis_vulnerability_rankings.csv
+🎯 Model scores loaded: 16 individual models from composite_scores.csv
+📋 Model formulas loaded: 16 model definitions from model_formulas.csv
+🔬 No PCA results found - attempting dynamic PCA analysis...
+[2026-04-07 16:12:11,584] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:12:11,665] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:12:11,696] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:12:11,717] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:12:11,729] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:12:11,761] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:12:11,808] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:12:11,808] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:11,836] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+[2026-04-07 16:12:11,837] INFO in data_handler: ✅ Successfully loaded unified dataset: 193 rows, 54 columns
+[2026-04-07 16:12:11,938] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:11,938] INFO in pca_pipeline: 🔬 PCA PIPELINE: Initialized for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:11,938] INFO in pca_pipeline: 🚀 PCA PIPELINE: Starting complete PCA analysis
+[2026-04-07 16:12:11,938] INFO in pca_pipeline: 📊 PCA DATA: Loaded cleaned data with shape (193, 16)
+[2026-04-07 16:12:11,939] INFO in pca_pipeline: 🔄 PCA PIPELINE: Applying unified variable selection
+[2026-04-07 16:12:11,939] INFO in variable_selection_coordinator: 🌍 Checking for region-aware variable selection       
+[2026-04-07 16:12:11,939] INFO in region_aware_selection: Detected zone 'North_Central' from StateCode: KW
+[2026-04-07 16:12:11,939] INFO in region_aware_selection: 📊 COLUMN ANALYSIS: Total columns in data: 16
+[2026-04-07 16:12:11,939] INFO in region_aware_selection: 🔍 IDENTIFIER COLUMNS: ['WardName', 'StateCode', 'WardCode', 'LGACode', 'ward_name', 'ward_code', 'X', 'X.1', 'X.2', 'X.3', 'X.4', 'X.5', 'index', 'Unnamed: 0', 'country_na', 'country_co', 'country_name', 'country_code', 'state_name', 'state_code', 'lga_name', 'lga_code', 'global_id', 'source', 'source_dat', 'properties', 'geometry', 'Shape_Area', 'Shape_Leng']
+[2026-04-07 16:12:11,939] INFO in region_aware_selection: ✅ ANALYSIS VARIABLES: 12 available - ['LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies']...
+[2026-04-07 16:12:11,940] INFO in region_aware_selection: 🔍 Fuzzy matched 'nighttime_lights' to 'NighttimeLights'      
+[2026-04-07 16:12:11,941] INFO in region_aware_selection: 🔍 Fuzzy matched 'housing_quality' to 'HousingQuality'        
+[2026-04-07 16:12:11,941] INFO in region_aware_selection: 🔍 Fuzzy matched 'soil_wetness' to 'SoilWetness'
+[2026-04-07 16:12:11,941] INFO in region_aware_selection: 🔍 Fuzzy matched 'distance_to_waterbodies' to 'DistanceToWaterbodies'
+[2026-04-07 16:12:11,941] INFO in region_aware_selection: 🔍 Fuzzy matched 'ndmi' to 'Ndmi'
+[2026-04-07 16:12:11,941] WARNING in region_aware_selection: Zone North_Central: Missing 1 expected variables: ['u5_tpr_rdt']
+[2026-04-07 16:12:11,943] INFO in region_aware_selection: ✅ Validated 6/6 variables
+[2026-04-07 16:12:11,943] INFO in region_aware_selection: Zone North_Central: Selected 6/7 scientifically-validated variables
+[2026-04-07 16:12:11,943] INFO in variable_selection_coordinator: 🎯 ZONE DETECTED: North_Central - using scientifically-validated variables
+[2026-04-07 16:12:11,943] INFO in variable_selection_coordinator: 🔬 ZONE VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:11,943] INFO in variable_selection_coordinator: ✅ UNIFIED SELECTION: 6 variables selected via llm_fallback
+[2026-04-07 16:12:11,943] INFO in variable_selection_coordinator: 📋 VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:11,943] INFO in pca_pipeline: ✅ PCA UNIFIED SELECTION: North_Central zone, 6 variables selected via llm_fallback
+[2026-04-07 16:12:11,943] INFO in pca_pipeline: 🧹 PCA CLEANING: Starting data cleaning and preparation
+[2026-04-07 16:12:11,943] INFO in pca_pipeline: 🏘️ PCA WARD: Found ward column: WardName
+[2026-04-07 16:12:11,944] INFO in pca_pipeline: 📋 PCA SELECTION: Using 6 user-specified variables
+[2026-04-07 16:12:11,946] INFO in pca_pipeline: ✅ PCA MISSING: No missing values found
+[2026-04-07 16:12:11,947] INFO in pca_pipeline: ✅ PCA CLEANING: Prepared data with 6 variables and 193 wards
+[2026-04-07 16:12:11,947] INFO in pca_pipeline: 📋 PCA VARIABLES: ['NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage']
+[2026-04-07 16:12:11,947] INFO in pca_pipeline: 📊 PCA STANDARDIZATION: Applying Z-score standardization
+[2026-04-07 16:12:11,957] INFO in pca_pipeline: ✅ PCA STANDARDIZATION: Standardized 6 variables
+[2026-04-07 16:12:11,959] INFO in pca_pipeline: 📊 PCA STATS: Mean ≈ 0.000, Std ≈ 1.003
+
+🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬
+STEP 3.5: CHECKING PCA SUITABILITY WITH STATISTICAL TESTS
+🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬🔬
+[2026-04-07 16:12:11,959] INFO in pca_pipeline: 🔍 PCA SUITABILITY: Running statistical tests
+
+📊 PREPARING DATA FOR STATISTICAL TESTS
+   Numeric columns found: 6
+   Columns: NighttimeLights, HousingQuality, SoilWetness, DistanceToWaterbodies, Ndmi...
+   Data dimensions: 193 samples × 6 variables
+
+============================================================
+🔍 PCA STATISTICAL TESTS STARTING
+============================================================
+📊 Data shape: 193 samples × 6 variables
+
+📈 Running Kaiser-Meyer-Olkin (KMO) test...
+   KMO value: 0.5000
+   Threshold: 0.5
+   Result: ❌ FAIL
+
+📊 Running Bartlett's test of sphericity...
+[2026-04-07 16:12:11,960] WARNING in pca_statistical_tests: Correlation matrix is singular or negative definite
+   Test statistic: 0.00
+   P-value: 1.0000e+00
+   Result: ❌ FAIL (p >= 0.05)
+
+------------------------------------------------------------
+📋 OVERALL ASSESSMENT:
+------------------------------------------------------------
+❌ Data is not suitable for PCA. Using composite analysis only.
+   KMO: Unacceptable - not suitable for PCA
+   KMO test failed (0.500 < 0.5)
+   Bartlett's test failed (p=1.000 >= 0.05)
+
+⚠️ DECISION: Skipping PCA, using composite analysis only
+============================================================
+
+[2026-04-07 16:12:11,961] INFO in pca_pipeline: 📊 KMO Test: 0.500 (Unacceptable - not suitable for PCA)
+[2026-04-07 16:12:11,961] INFO in pca_pipeline: 📊 Bartlett's Test: p-value = 1.0000e+00
+[2026-04-07 16:12:11,961] WARNING in pca_pipeline: ⚠️ PCA SUITABILITY: KMO test failed: 0.500 < 0.5 (threshold); Bartlettt's test failed: p-value = 1.0000 (not significant)
+[2026-04-07 16:12:11,961] WARNING in pca_pipeline: ⚠️ PCA SUITABILITY: Data is not suitable for PCA. Using composite anaalysis only.
+
+⚠️ PCA NOT SUITABLE - RETURNING EARLY
+Reason: Data is not suitable for PCA. Using composite analysis only.
+KMO Value: 0.500
+Bartlett's p-value: 1.0000e+00
+
+📌 RECOMMENDATION: Using composite analysis only
+
+⚠️ PCA approach app.analysis.pca.run_pca_analysis not available: No module named 'app.analysis.pca'
+⚠️ PCA approach app.analysis.statistical_analysis.run_pca not available: No module named 'app.analysis.statistical_analyysis'
+🔧 Preserved original column names: ['WardCode', 'StateCode', 'LGACode', 'WardName', 'LGA']...
+✅ No duplicate ward names found in WardName
+✅ No duplicate ward names found in WardName
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using WardCode and WardCode for precise geometry matching
+🎯 Matched geometry for 193/193 wards using WardCode
+✅ Preserved all 193 CSV wards with geometry where possible
+🔗 Preserved CSV wards with geometry: 193 wards (maintaining original 193)
+🏷️ Smart metadata created for 17 columns:
+   identification: 6 columns
+   other: 7 columns
+   demographic: 1 columns
+   environmental: 1 columns
+   infrastructure: 1 columns
+   spatial: 1 columns
+🔑 Using 'WardName' for merge (unique names)
+🔍 WARD COUNT DEBUG: Starting integration with 193 wards
+🔍 Attempting to reconstruct region metadata from analysis files...
+[2026-04-07 16:12:12,087] INFO in data_handler: ✅ PRIORITIZED: Loaded cleaned data from analysis_cleaned_data.csv (analysis-ready)
+[2026-04-07 16:12:12,179] INFO in data_handler: Reloaded shapefile data from ward_boundaries.shp (fallback)
+[2026-04-07 16:12:12,204] INFO in data_handler: Reloaded cleaned_data from analysis_cleaned_data.csv
+[2026-04-07 16:12:12,221] INFO in data_handler: Reloaded normalized_data from analysis_normalized_data.csv
+[2026-04-07 16:12:12,245] INFO in data_handler: Reloaded vulnerability_rankings from analysis_vulnerability_rankings.csv
+[2026-04-07 16:12:12,277] INFO in data_handler: Reloaded composite_scores_mean from composite_scores.csv
+[2026-04-07 16:12:12,312] INFO in data_handler: Reloaded composite_scores from analysis_composite_scores.csv
+[2026-04-07 16:12:12,312] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:12,343] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+[2026-04-07 16:12:12,343] INFO in data_handler: ✅ Successfully loaded unified dataset: 193 rows, 54 columns
+[2026-04-07 16:12:12,446] INFO in data_handler: DataHandler initialized with modular architecture - Session: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:12,449] INFO in region_aware_selection: Detected zone 'North_Central' from StateCode: KW
+🔍 Reconstructed region metadata: North_Central zone via StateCode: KW
+🔍 WARD COUNT DEBUG: After region metadata: 193 wards (change: +0)
+⚠️ No ward code column found - skipping duplicate fix
+🔑 Using 'WardName' for merge (unique names)
+🔍 COMPOSITE MERGE DEBUG: Before merge - GDF: 193 rows, Analysis: 193 rows
+🔍 COMPOSITE MERGE DEBUG: Ward key 'WardName' duplicates in GDF: 0
+🔍 COMPOSITE MERGE DEBUG: Comp key 'WardName' duplicates in analysis: 0
+🔍 COMPOSITE MERGE DEBUG: After merge - GDF: 193 rows (change: +0)
+📈 Integrated composite analysis: 5 columns -> composite_score, composite_rank, composite_category, overall_rank, vulnerability_category
+[2026-04-07 16:12:12,523] INFO in data_handler: Attempting to load unified dataset for session b143a78a-b042-4897-ad96-04aa0fa725cc (require_geometry=False)
+[2026-04-07 16:12:12,552] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+[2026-04-07 16:12:12,552] INFO in data_handler: ✅ Successfully loaded unified dataset: 193 rows, 54 columns
+[2026-04-07 16:12:12,655] INFO in data_handler: DataHandler initialized with modular architecture - Session: b143a78a-b042-4897-ad96-04aa0fa725cc
+🔍 WARD COUNT DEBUG: Final integration result: 193 wards (total change: +0)
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using 'WardName' for merge (unique names)
+🔑 Using 'WardName' for merge (unique names)
+🔍 Detected 16 model score columns: ['model_1', 'model_2', 'model_3', 'model_4', 'model_5']...
+🎯 Integrated 16 individual model scores
+📊 Added model consensus statistics based on 16 models
+📋 Processing model metadata from 16 model definitions...
+🔍 Available formula columns: ['model', 'variables', 'method']
+📊 Processed 16 model formulas
+📋 ✅ Model metadata integrated:
+   📊 16 total models, 16 processed
+   🔢 Average complexity: 1.00
+   📈 Complexity range: 1.0 - 1.0
+   🔤 5 unique variables used
+   🏆 Top variables: ['nighttimelights', 'housingquality', 'soilwetness']
+/mnt/c/Users/bbofo/OneDrive/Desktop/ChatMRPT/app/services/dataset_builder.py:1280: UserWarning:
+
+Geometry is in a geographic CRS. Results from 'centroid' are likely incorrect. Use 'GeoSeries.to_crs()' to re-project geometries to a projected CRS before this operation.
+
+
+🌍 Added spatial metrics: area_km2, centroid coordinates, perimeter_km
+🎯 Added intervention_priority classification
+⚡ Optimized dataset structure for tool access
+💾 Saved GeoParquet: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_dataset.geoparquet
+📄 Saved CSV backup: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_dataset.csv
+⚠️ Could not save pickle backup: local variable 'pickle_path' referenced before assignment
+✅ Comprehensive unified dataset created: 193 wards, 55 columns
+📁 Saved as: instance/uploads/b143a78a-b042-4897-ad96-04aa0fa725cc/unified_dataset.geoparquet
+[2026-04-07 16:12:13,044] INFO in complete_tools: ✅ Unified dataset created successfully: Comprehensive unified GeoParquet dataset ready with 193 wards and 55 columns
+[2026-04-07 16:12:13,044] INFO in complete_tools: 📋 Skipping comparison summary - PCA was not suitable
+[2026-04-07 16:12:13,074] DEBUG in workflow_state: ✅ State updated for b143a78a-b042-4897-ad96-04aa0fa725cc: {'analysis_complete': True}
+[2026-04-07 16:12:13,075] INFO in complete_tools: ✅ Updated workflow state - analysis_complete = True for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:13,134] INFO in analysis_state: Analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc, updating state...
+[2026-04-07 16:12:13,146] INFO in data_state: Raw data available for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:13,154] INFO in data_state: Analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc - unified dataset available
+[2026-04-07 16:12:13,163] INFO in data_state: Analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc - analysis result files found
+[2026-04-07 16:12:13,163] INFO in data_state: Analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc        
+[2026-04-07 16:12:14,170] INFO in data_state: Loaded unified dataset from geoparquet: (193, 55)
+[2026-04-07 16:12:14,171] INFO in data_state: Successfully loaded unified dataset after analysis: (193, 55)
+[2026-04-07 16:12:14,171] INFO in analysis_state: Analysis completion hook triggered for b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:14,172] INFO in analysis_state: Data info: {'session_id': 'b143a78a-b042-4897-ad96-04aa0fa725cc', 'data_loaded': True, 'analysis_complete': True, 'stage': 'post_analysis', 'shape': (193, 55), 'columns': ['WardName', 'WardCode', 'StateCode', 'LGACode', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage', 'geometry', 'detected_zone', 'zone_detection_method', 'zone_climate', 'zone_priority_focus', 'zone_states', 'composite_score', 'composite_rank', 'composite_category', 'overall_rank', 'vulnerability_category', 'model_1', 'model_2', 'model_3', 'model_4', 'model_5', 'model_6', 'model_7', 'model_8', 'model_9', 'model_10', 'model_11', 'model_12', 'model_13', 'model_14', 'model_15', 'model_16', 'model_mean_score', 'model_std_score', 'model_agreement', 'model_consensus', 'area_km2', 'centroid_lat', 'centroid_lon', 'perimeter_km', 'intervention_priority', 'data_completeness', 'last_updated', 'dataset_version'], 'dtypes': {'WardName': dtype('O'), 'WardCode': dtype('O'), 'StateCode': dtype('O'), 'LGACode': dtype('int64'), 'LGA': dtype('O'), 'State': dtype('O'), 'GeopoliticalZone': dtype('O'), 'Burden': dtype('float64'), 'Population': dtype('int64'), 'Total_Positive': dtype('int64'), 'NighttimeLights': dtype('float64'), 'HousingQuality': dtype('float64'), 'SoilWetness': dtype('float64'), 'DistanceToWaterbodies': dtype('float64'), 'Ndmi': dtype('float64'), 'urban_percentage': dtype('float64'), 'geometry': <geopandas.array.GeometryDtype object at 0x7feb22f6ceb0>, 'detected_zone': dtype('O'), 'zone_detection_method': dtype('O'), 'zone_climate': dtype('O'), 'zone_priority_focus': CategoricalDtype(categories=['balanced environmental and demographic factors'], ordered=False, categories_dtype=object), 'zone_states': dtype('O'), 'composite_score': dtype('float64'), 'composite_rank': dtype('int64'), 'composite_category': CategoricalDtype(categories=['High Risk', 'Low Risk', 'Medium Risk'], ordered=False, categories_dtype=object), 'overall_rank': dtype('int64'), 'vulnerability_category': CategoricalDtype(categories=['High Risk', 'Low Risk', 'Medium Risk'], ordered=False, categories_dtype=object), 'model_1': dtype('float64'), 'model_2': dtype('float64'), 'model_3': dtype('float64'), 'model_4': dtype('float64'), 'model_5': dtype('float64'), 'model_6': dtype('float64'), 'model_7': dtype('float64'), 'model_8': dtype('float64'), 'model_9': dtype('float64'), 'model_10': dtype('float64'), 'model_11': dtype('float64'), 'model_12': dtype('float64'), 'model_13': dtype('float64'), 'model_14': dtype('float64'), 'model_15': dtype('float64'), 'model_16': dtype('float64'), 'model_mean_score': dtype('float64'), 'model_std_score': dtype('float64'), 'model_agreement': dtype('float64'), 'model_consensus': dtype('bool'), 'area_km2': dtype('float64'), 'centroid_lat': dtype('float64'), 'centroid_lon': dtype('float64'), 'perimeter_km': dtype('float64'), 'intervention_priority': CategoricalDtype(categories=['High', 'Low', 'Medium'], ordered=False, categories_dtype=object), 'data_completeness': dtype('float64'), 'last_updated': dtype('O'), 'dataset_version': dtype('O')}, 'analysis_columns': ['composite_score', 'composite_rank']}
+[2026-04-07 16:12:14,176] INFO in analysis_state: State transition complete. Unified dataset ready: (193, 55)
+[2026-04-07 16:12:14,176] INFO in complete_tools: ✅ Marked comprehensive analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:14,217] INFO in dataset_builder: ✅ Loaded CSV (no geometry needed): (193, 54) - 166.5KB
+🔍 SUMMARY DEBUG: Unified dataset loaded: 193 wards, 54 columns
+🔍 SUMMARY DEBUG: First few columns: ['WardName', 'WardCode', 'StateCode', 'LGACode', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive']
+🔍 SUMMARY DEBUG: ✅ Found 'composite_score' column
+🔍 SUMMARY DEBUG: ❌ Missing 'pca_score' column
+🔍 SUMMARY DEBUG: ✅ Found 'WardName' column
+🔍 SUMMARY DEBUG: ✅ Found 'WardCode' column
+[2026-04-07 16:12:14,217] INFO in complete_tools: 🔍 UNIFIED DATASET DEBUG: Available columns: ['WardName', 'WardCode', 'StateCode', 'LGACode', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage', 'detected_zone', 'zone_detection_method', 'zone_climate', 'zone_priority_focus', 'zone_states', 'composite_score', 'composite_rank', 'composite_category', 'overall_rank', 'vulnerability_category', 'model_1', 'model_2', 'model_3', 'model_4', 'model_5', 'model_6', 'model_7', 'model_8', 'model_9', 'model_10', 'model_11', 'model_12', 'model_13', 'model_14', 'model_15', 'model_16', 'model_mean_score', 'model_std_score', 'model_agreement', 'model_consensus', 'area_km2', 'centroid_lat', 'centroid_lon', 'perimeter_km', 'intervention_priority', 'data_completeness', 'last_updated', 'dataset_version']
+[2026-04-07 16:12:14,218] INFO in complete_tools: 🔍 UNIFIED DATASET DEBUG: Dataset shape: (193, 54)
+[2026-04-07 16:12:14,220] WARNING in variable_resolver: No match found for 'pca_score'. Best candidates: ['composite_score', 'model_mean_score']
+[2026-04-07 16:12:14,222] WARNING in variable_resolver: No match found for 'pc1_risk_score'. Best candidates: ['composite_score', 'model_std_score']
+[2026-04-07 16:12:14,225] WARNING in variable_resolver: No match found for 'pca'. Best candidates: []
+[2026-04-07 16:12:14,227] WARNING in variable_resolver: No match found for 'pc1_score'. Best candidates: ['composite_score']
+[2026-04-07 16:12:14,227] INFO in complete_tools: 🔍 COLUMN DETECTION: Composite=composite_score, PCA=None, Ward=WardName
+[2026-04-07 16:12:14,237] INFO in complete_tools: PCA was skipped due to statistical tests, no PCA rankings to generate 
+[2026-04-07 16:12:14,238] INFO in complete_tools: 🔍 VARIABLE DETECTION: Composite vars: ['nighttimelights', 'housingquality', 'soilwetness', 'distancetowaterbodies', 'ndmi', 'urban_percentage']
+[2026-04-07 16:12:14,238] INFO in complete_tools: 🔍 VARIABLE DETECTION: PCA vars: []
+[2026-04-07 16:12:14,238] INFO in complete_tools: 🔍 VARIABLE DETECTION: Composite data keys: ['variables_used', 'variable_selection_method', 'wards_analyzed', 'results']
+[2026-04-07 16:12:14,238] INFO in complete_tools: 🔍 VARIABLE DETECTION: PCA data keys: ['method', 'reason', 'kmo_value', 'bartlett_p_value', 'recommendation']
+[2026-04-07 16:12:14,280] INFO in interaction_events: Logged tool_execution_complete event for session: b143a78a-b042-4897-ad96-04aa0fa725cc, success: True
+[2026-04-07 16:12:14,280] INFO in analysis_state: Analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc, updating state...
+[2026-04-07 16:12:14,280] INFO in data_state: Analysis complete for session b143a78a-b042-4897-ad96-04aa0fa725cc        
+[2026-04-07 16:12:14,398] INFO in data_state: Loaded unified dataset from geoparquet: (193, 55)
+[2026-04-07 16:12:14,398] INFO in data_state: Successfully loaded unified dataset after analysis: (193, 55)
+[2026-04-07 16:12:14,398] INFO in analysis_state: Analysis completion hook triggered for b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:14,399] INFO in analysis_state: Data info: {'session_id': 'b143a78a-b042-4897-ad96-04aa0fa725cc', 'data_loaded': True, 'analysis_complete': True, 'stage': 'post_analysis', 'shape': (193, 55), 'columns': ['WardName', 'WardCode', 'StateCode', 'LGACode', 'LGA', 'State', 'GeopoliticalZone', 'Burden', 'Population', 'Total_Positive', 'NighttimeLights', 'HousingQuality', 'SoilWetness', 'DistanceToWaterbodies', 'Ndmi', 'urban_percentage', 'geometry', 'detected_zone', 'zone_detection_method', 'zone_climate', 'zone_priority_focus', 'zone_states', 'composite_score', 'composite_rank', 'composite_category', 'overall_rank', 'vulnerability_category', 'model_1', 'model_2', 'model_3', 'model_4', 'model_5', 'model_6', 'model_7', 'model_8', 'model_9', 'model_10', 'model_11', 'model_12', 'model_13', 'model_14', 'model_15', 'model_16', 'model_mean_score', 'model_std_score', 'model_agreement', 'model_consensus', 'area_km2', 'centroid_lat', 'centroid_lon', 'perimeter_km', 'intervention_priority', 'data_completeness', 'last_updated', 'dataset_version'], 'dtypes': {'WardName': dtype('O'), 'WardCode': dtype('O'), 'StateCode': dtype('O'), 'LGACode': dtype('int64'), 'LGA': dtype('O'), 'State': dtype('O'), 'GeopoliticalZone': dtype('O'), 'Burden': dtype('float64'), 'Population': dtype('int64'), 'Total_Positive': dtype('int64'), 'NighttimeLights': dtype('float64'), 'HousingQuality': dtype('float64'), 'SoilWetness': dtype('float64'), 'DistanceToWaterbodies': dtype('float64'), 'Ndmi': dtype('float64'), 'urban_percentage': dtype('float64'), 'geometry': <geopandas.array.GeometryDtype object at 0x7feb22f6ceb0>, 'detected_zone': dtype('O'), 'zone_detection_method': dtype('O'), 'zone_climate': dtype('O'), 'zone_priority_focus': CategoricalDtype(categories=['balanced environmental and demographic factors'], ordered=False, categories_dtype=object), 'zone_states': dtype('O'), 'composite_score': dtype('float64'), 'composite_rank': dtype('int64'), 'composite_category': CategoricalDtype(categories=['High Risk', 'Low Risk', 'Medium Risk'], ordered=False, categories_dtype=object), 'overall_rank': dtype('int64'), 'vulnerability_category': CategoricalDtype(categories=['High Risk', 'Low Risk', 'Medium Risk'], ordered=False, categories_dtype=object), 'model_1': dtype('float64'), 'model_2': dtype('float64'), 'model_3': dtype('float64'), 'model_4': dtype('float64'), 'model_5': dtype('float64'), 'model_6': dtype('float64'), 'model_7': dtype('float64'), 'model_8': dtype('float64'), 'model_9': dtype('float64'), 'model_10': dtype('float64'), 'model_11': dtype('float64'), 'model_12': dtype('float64'), 'model_13': dtype('float64'), 'model_14': dtype('float64'), 'model_15': dtype('float64'), 'model_16': dtype('float64'), 'model_mean_score': dtype('float64'), 'model_std_score': dtype('float64'), 'model_agreement': dtype('float64'), 'model_consensus': dtype('bool'), 'area_km2': dtype('float64'), 'centroid_lat': dtype('float64'), 'centroid_lon': dtype('float64'), 'perimeter_km': dtype('float64'), 'intervention_priority': CategoricalDtype(categories=['High', 'Low', 'Medium'], ordered=False, categories_dtype=object), 'data_completeness': dtype('float64'), 'last_updated': dtype('O'), 'dataset_version': dtype('O')}, 'analysis_columns': ['composite_score', 'composite_rank']}
+[2026-04-07 16:12:14,402] INFO in analysis_state: State transition complete. Unified dataset ready: (193, 55)
+[2026-04-07 16:12:14,402] INFO in complete_tools: State handler notified: {'status': 'success', 'message': 'Analysis complete and data ready for exploration', 'unified_shape': (193, 55), 'available_tools': ['query_data', 'analyze_data', 'create_vulnerability_map', 'create_decision_tree', 'create_urban_extent_map', 'generate_report']}
+[2026-04-07 16:12:14,411] WARNING in redis_state: RedisStateManager unavailable: Error 111 connecting to localhost:6379. Connection refused.
+[2026-04-07 16:12:14,412] WARNING in complete_tools: ⚠️ Redis: Failed to mark analysis complete for b143a78a-b042-4897-aad96-04aa0fa725cc
+[2026-04-07 16:12:14,412] INFO in complete_tools: ✅ Set session['analysis_complete'] = True for ITN planning
+[2026-04-07 16:12:14,429] INFO in complete_tools: ✅ Created .analysis_complete marker file for session b143a78a-b042-4897-ad96-04aa0fa725cc (fallback)
+[2026-04-07 16:12:14,430] INFO in complete_tools: ✅ Updated workflow_stage to 'analysis_complete' for session b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:14,432] INFO in agent: [_AGENT_NODE] 🧠 Agent node called
+[2026-04-07 16:12:14,432] INFO in agent: [_AGENT_NODE] State keys: ['messages', 'input_data', 'intermediate_outputs', 'current_variables', 'output_plots', 'insights', 'session_id', 'errors', 'pending_subtasks']
+[2026-04-07 16:12:14,432] INFO in agent: [_AGENT_NODE] Incoming messages count: 10
+[2026-04-07 16:12:14,432] INFO in agent: [_AGENT_NODE STEP 1] Creating data summary...
+[2026-04-07 16:12:14,446] INFO in agent: [_AGENT_NODE STEP 1] Data summary length: 3714 characters
+[2026-04-07 16:12:14,447] INFO in agent: [_AGENT_NODE STEP 1] ✅ Data context message created
+[2026-04-07 16:12:14,447] INFO in agent: [_AGENT_NODE STEP 2] Prepending data context to messages...
+[2026-04-07 16:12:14,447] INFO in agent: [_AGENT_NODE STEP 2] ✅ Messages for model: 11
+[2026-04-07 16:12:14,447] INFO in agent: [_AGENT_NODE STEP 3] 🤖 Calling self.model.invoke()...
+[2026-04-07 16:12:14,447] INFO in agent: [_AGENT_NODE STEP 3] ⚠️  THIS CALLS THE LLM - WATCH FOR ERRORS
+[2026-04-07 16:12:18,426] INFO in agent: [_AGENT_NODE STEP 3] ✅ Model invoked successfully in 3.98s
+[2026-04-07 16:12:18,427] INFO in agent: [_AGENT_NODE STEP 3] Response type: AIMessage
+[2026-04-07 16:12:18,427] INFO in agent: [_AGENT_NODE STEP 4] Returning node result
+[2026-04-07 16:12:18,427] INFO in agent: [AGENT] Graph completed in 34.28 seconds
+[2026-04-07 16:12:18,436] INFO in agent: [AGENT] Analysis complete, 0 visualizations
+[2026-04-07 16:12:18,510] INFO in interaction_core: Logged assistant message for session: b143a78a-b042-4897-ad96-04aa0fa725cc
+[2026-04-07 16:12:18,510] INFO in data_analysis_routes: ✅ Logged agent response for session b143a78a-b042-4897-ad96-04aa0fa725cc (response_time=34.70s)
+127.0.0.1 - - [07/Apr/2026 16:12:18] "POST /api/v1/data-analysis/chat HTTP/1.1" 200 -
+
+
+
+BROWSER CONSOLE
+ 🔵 SurveyButton: Script loaded, creating instance
+ 🔵 SurveyButton: Constructor called
+ 🔵 SurveyButton: Init called, readyState: loading
+ 🔵 SurveyButton: Waiting for DOMContentLoaded
+ 🔵 SurveyButton: Instance created: true
+ 🟢 PrePostButton: Script loaded, creating instance
+ 🟢 PrePostButton: Constructor called
+ 🟢 PrePostButton: Init called
+ 🟢 PrePostButton: Instance created: true
+ 🔵 SurveyButton: Setup called
+ 🔵 SurveyButton: CreateSurveyButton called
+ 🔵 SurveyButton: Attempt 1/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? false Found Download? false
+ 🟢 PrePostButton: Setup called
+ 🟢 PrePostButton: CreatePrePostButton called
+ 🟢 PrePostButton: Attempt 1/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? false Found Download? false
+ 🔵 APP: Render - isAuthenticated: true isLoading: false user: Object
+ 🔵 APP: Rendering UI - isLoading: false isAuthenticated: true
+ 🔵 APP: Showing main interface (authenticated)
+ InputArea - showUploadModal: false
+ 🔵 APP: useEffect triggered
+ 🔵 APP: Added conversation_id to URL: a5b09a10-fe5c-45f8-a613-8b4985428600
+ 🔐 AUTH: checkAuth() called
+ 🔐 AUTH: Token in sessionStorage: NONE
+ 🔐 AUTH: Checking auth status at /auth/status
+ 🔵 APP: Render - isAuthenticated: true isLoading: true user: Object
+ 🔵 APP: Rendering UI - isLoading: true isAuthenticated: true
+ 🔵 APP: Showing loading spinner
+ 🔵 SurveyButton: Attempt 2/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? false Found Download? false
+ 🟢 PrePostButton: Attempt 2/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? false Found Download? false
+ 🔐 AUTH: Status response status: 200
+ 🔵 SurveyButton: Attempt 3/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? false Found Download? false
+ 🟢 PrePostButton: Attempt 3/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? false Found Download? false
+ 🔐 AUTH: Status response data: Object
+ 🔐 AUTH: User authenticated! Setting user: Object
+ 🔐 AUTH: Store state after checkAuth: Object
+ 🔵 APP: Render - isAuthenticated: true isLoading: false user: Object
+ 🔵 APP: Rendering UI - isLoading: false isAuthenticated: true
+ 🔵 APP: Showing main interface (authenticated)
+ InputArea - showUploadModal: false
+ 🔵 APP: checkAuth result: true
+ 🔵 SurveyButton: Attempt 4/10 to find nav bar
+ 🔵 SurveyButton: Found navBar? false Found NewChat? true Found Download? true
+ 🟢 PrePostButton: Attempt 4/10 to find nav bar
+ 🟢 PrePostButton: Found navBar? false Found NewChat? true Found Download? true
+ 🟢 PrePostButton: Button inserted successfully
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ READ - Host validation failed: Object
+ Host is not supported
+ Host is not valid or supported
+ Host is not in insights whitelist
+:5013/vite.svg:1  Failed to load resource: the server responded with a status of 404 (NOT FOUND)
+ Cannot read properties of undefined (reading 'map') at chrome-extension://ekhagklcjbdpajgpjgmbionohlpdbjgc/offscreen/offscreenTranslate.js:96
+logError @ zotero.js:300
+ InputArea - showUploadModal: false
+ Starting data analysis upload with formData: FormData
+ Data analysis upload response: Object
+ Response data: Object
+ Response data status: success
+ Using backend session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ Triggering data analysis chat API with session: b143a78a-b042-4897-ad96-04aa0fa725cc
+ Data analysis chat response: 200
+ Data analysis triggered successfully: Object
+ Data analysis mode activated
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: start the tpr workflow
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: start the tpr workflow
+   Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-07T21:05:31.957Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: ## Malaria Burden Analysis Workflow
+
+Great! Let's analyze your malaria testing data to calculate ward-level Malaria Burd
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: yes
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: yes
+   Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-07T21:05:48.665Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: **State:** kw Kwara State (auto-selected)
+
+Now, which health facility level would you like to analyze?
+
+- **primary** **
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: primary
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: primary
+   Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-07T21:06:09.067Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: Perfect! You've selected **Primary** facilities. These facilities conducted 1,500,303 tests.
+
+Perfect! **Primary facilit
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: u5
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: u5
+   Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-07T21:06:13.830Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 0
+   Has Message: true
+   Message Preview: ## Malaria Burden Analysis Complete
+
+Using primary facilities and focusing on children under 5 years, I calculated malar
+ ───────────────────────────────────────────────────────────
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ InputArea - showUploadModal: false
+ 🎯 FRONTEND: sendMessage called
+   📝 Message: map malaria burden distribution
+   🔍 Data Analysis Mode: true
+   🆔 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+ 🎯 FRONTEND: Endpoint Selection
+   🌐 Using endpoint: /api/v1/data-analysis/chat
+   🔍 Data Analysis Mode: true
+ ═══════════════════════════════════════════════════════════
+ 📊 DATA ANALYSIS V3 REQUEST
+   Message: map malaria burden distribution
+   Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+   Endpoint: /api/v1/data-analysis/chat
+   Timestamp: 2026-04-07T21:10:50.065Z
+ ═══════════════════════════════════════════════════════════
+ InputArea - showUploadModal: false
+ ───────────────────────────────────────────────────────────
+ ✅ DATA ANALYSIS V3 RESPONSE
+   Success: true
+   Visualizations: 1
+index-DEkihWic.js:279   Has Message: true
+index-DEkihWic.js:279   Message Preview: I've created a spatial distribution map showing how the **malaria burden** varies across the wards. Here are some key st
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+Burden_distribution_map_20260407_161054.html:1 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+Burden_distribution_map_20260407_161054.html:22 WARN: mapbox subplots and traces are deprecated! Please consider switching to `map` subplots and traces. Learn more at: https://plotly.com/python/maplibre-migration/ as well as https://plotly.com/javascript/maplibre-migration/
+Eq.warn @ Burden_distribution_map_20260407_161054.html:22
+Np.plot @ Burden_distribution_map_20260407_161054.html:3215
+ld.drawData @ Burden_distribution_map_20260407_161054.html:25
+li.syncOrAsync @ Burden_distribution_map_20260407_161054.html:24
+nht @ Burden_distribution_map_20260407_161054.html:25
+lht @ Burden_distribution_map_20260407_161054.html:25
+(anonymous) @ Burden_distribution_…07_161054.html:3883
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:279 🎯 FRONTEND: sendMessage called
+index-DEkihWic.js:279   📝 Message: run malaria risk analysis
+index-DEkihWic.js:279   🔍 Data Analysis Mode: true
+index-DEkihWic.js:279   🆔 Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+index-DEkihWic.js:279 🎯 FRONTEND: Endpoint Selection
+index-DEkihWic.js:279   🌐 Using endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   🔍 Data Analysis Mode: true
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:279 📊 DATA ANALYSIS V3 REQUEST
+index-DEkihWic.js:279   Message: run malaria risk analysis
+index-DEkihWic.js:279   Session ID: b143a78a-b042-4897-ad96-04aa0fa725cc
+index-DEkihWic.js:279   Endpoint: /api/v1/data-analysis/chat
+index-DEkihWic.js:279   Timestamp: 2026-04-07T21:11:44.582Z
+index-DEkihWic.js:279 ═══════════════════════════════════════════════════════════
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:279 ✅ DATA ANALYSIS V3 RESPONSE
+index-DEkihWic.js:279   Success: true
+index-DEkihWic.js:279   Visualizations: 0
+index-DEkihWic.js:279   Has Message: true
+index-DEkihWic.js:279   Message Preview: I've completed a comprehensive malaria risk analysis and ranked all 193 wards by their risk levels. Here's a summary of 
+index-DEkihWic.js:279 ───────────────────────────────────────────────────────────
+index-DEkihWic.js:280 InputArea - showUploadModal: false
+index-DEkihWic.js:280 InputArea - showUploadModal: false

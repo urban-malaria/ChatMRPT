@@ -1,0 +1,15 @@
+ChatMRPT Weekly Progress — Timelines
+
+LOW CONNECTIVITY OPTIMIZATION
+- Phase 1 (complete): Extended upload timeouts, direct file streaming, Snappy compression on outputs, upload progress spinner
+- Phase 2 (in progress, due Apr 24): Chunked/resumable uploads, Gzip HTTP response compression, real percentage progress bar, retry logic with exponential backoff
+- Connectivity report due: Apr 24
+
+WHATSAPP INTEGRATION
+- Research: Complete
+- Phase 1 — Meta app registration & phone number setup: May 2
+- Phase 2 — Webhook endpoint (GET/POST /webhook/whatsapp): May 9
+- Phase 3 — Agent routing (phone number → session mapping): May 16
+- Phase 4 — Response formatter (text chunking, PNG maps, markdown): May 21
+- Phase 5 — End-to-end testing & deployment to both AWS instances: May 30
+- Full integration live: May 30

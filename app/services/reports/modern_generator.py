@@ -86,7 +86,7 @@ class ModernReportGenerator:
         """Generate comprehensive ITN distribution export package"""
         try:
             # Import the export tool functionality
-            from ...tools.export_tools import ExportITNResults
+            from app.planning.export_tools import ExportITNResults
             
             # Create export tool instance
             export_tool = ExportITNResults(

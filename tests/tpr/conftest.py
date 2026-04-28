@@ -34,7 +34,7 @@ def no_llm_schema_inference():
         "pw_microscopy_positive": None,
     }
     with patch(
-        "app.data_analysis_v3.tpr.data_analyzer.TPRDataAnalyzer._call_llm_schema",
+        "app.tpr.data_analyzer.TPRDataAnalyzer._call_llm_schema",
         return_value=minimal_schema,
     ):
         yield

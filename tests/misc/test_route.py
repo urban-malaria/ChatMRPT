@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, '/home/ec2-user/ChatMRPT')
 import asyncio
-from app.web.routes.analysis_routes import route_with_mistral
+from app.api.analysis.chat_routing import route_with_mistral
 
 async def test():
     context = {'has_uploaded_files': True, 'csv_loaded': True, 'session_id': 'test'}

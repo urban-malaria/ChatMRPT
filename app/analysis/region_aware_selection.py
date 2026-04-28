@@ -16,7 +16,7 @@ import geopandas as gpd
 from typing import Dict, List, Optional, Tuple, Any
 from difflib import SequenceMatcher
 import re
-from ..core.variable_matcher import variable_matcher
+from app.utils.variable_matcher import variable_matcher
 
 logger = logging.getLogger(__name__)
 
@@ -564,7 +564,7 @@ def _fallback_to_llm_selection(available_variables: List[str], llm_manager, clea
         List of LLM-selected variables
     """
     try:
-        from ..core.llm_manager import select_optimal_variables_with_llm
+        from app.services.llm_manager import select_optimal_variables_with_llm
         
         # Filter out identifier columns
         analysis_variables = [var for var in available_variables if var not in IDENTIFIER_COLUMNS]
