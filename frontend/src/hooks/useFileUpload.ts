@@ -24,6 +24,11 @@ export function useFileUpload() {
           setUploadStatus(`Connection issue, retrying... (${attempt}/3)`);
         }
       );
+    } catch (err: any) {
+      if (err.code === 'ECONNABORTED') {
+        setUploadStatus('Upload timed out. File may be too large for your connection speed. Please try again.');
+      }
+      throw err;
     } finally {
       // Only clear the spinner — caller controls progress reset via resetProgress()
       setIsUploading(false);

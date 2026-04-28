@@ -16,7 +16,7 @@ const axiosInstance: AxiosInstance = axios.create({
   withCredentials: true, // For session cookies
 });
 
-// Retry wrapper with exponential backoff — only retries network errors and 5xx, never 4xx
+// Retry wrapper with exponential backoff — only retries network errors and 5xx, never 4xx or timeouts
 async function withRetry<T>(
   fn: () => Promise<T>,
   onRetry?: (attempt: number) => void,
@@ -27,10 +27,13 @@ async function withRetry<T>(
       return await fn();
     } catch (err: any) {
       const isNetworkError = !err.response;
+      // ECONNABORTED covers both Axios timeout and explicit cancel — neither should be retried,
+      // as the original request may still be in flight on the server
+      const isTimeout = err.code === 'ECONNABORTED';
       const is5xx = err.response?.status >= 500;
       const hasRetriesLeft = attempt < maxRetries;
 
-      if ((isNetworkError || is5xx) && hasRetriesLeft) {
+      if (((isNetworkError && !isTimeout) || is5xx) && hasRetriesLeft) {
         const delay = 1000 * Math.pow(2, attempt);
         onRetry?.(attempt + 1);
         await new Promise((res) => setTimeout(res, delay));
@@ -154,7 +157,7 @@ export const api = {
       withRetry(
         () =>
           axiosInstance.post('/api/data-analysis/upload', formData, {
-            timeout: 120000,
+            timeout: 300000, // 5 min — covers 6MB at 512Kbps (~94s xfer) + server schema inference (~60s)
             headers: { 'Content-Type': undefined },
             onUploadProgress: (event) => {
               if (onProgress && event.total) {
@@ -203,7 +206,7 @@ export const api = {
       withRetry(
         () =>
           axiosInstance.post('/upload_both_files', formData, {
-            timeout: 120000,
+            timeout: 300000, // 5 min — matches analysis upload timeout
             headers: { 'Content-Type': undefined },
             onUploadProgress: (event) => {
               if (onProgress && event.total) {
