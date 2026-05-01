@@ -74,4 +74,24 @@ class WhatsAppSessionManager:
     def clear_session(self, phone: str) -> None:
         self.redis.delete(f'wa_session:{phone}')
         self.redis.delete(f'wa_history:{phone}')
+        self.redis.delete(f'wa_upload:{phone}')
         logger.info(f'WhatsApp session cleared for {phone}')
+
+    # ------------------------------------------------------------------ #
+    #  Upload metadata
+    # ------------------------------------------------------------------ #
+
+    def set_upload_metadata(self, phone: str, metadata: dict) -> None:
+        key = f'wa_upload:{phone}'
+        self.redis.setex(key, _TTL, json.dumps(metadata))
+
+    def get_upload_metadata(self, phone: str) -> Optional[dict]:
+        key = f'wa_upload:{phone}'
+        raw = self.redis.get(key)
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else json.loads(data)
+        except Exception:
+            return None
