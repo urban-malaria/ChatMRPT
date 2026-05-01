@@ -1,23 +1,22 @@
 """
-WhatsApp webhook — Phase 1 + Phase 2.
+WhatsApp webhook — Phase 1: text Q&A.
 
 Receives Twilio POST requests, validates the signature, routes the
 message through ChatMRPT's LLM, and returns a TwiML reply.
 
-Phase 2 adds: file uploads (CSV/Excel), idempotency guard, async processing.
+Phase 2 (file uploads + maps as images) will extend this file.
 """
 
 import logging
 import os
 import threading
-import uuid
 
 from flask import Blueprint, Response, current_app, request
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client as TwilioClient
 from twilio.twiml.messaging_response import MessagingResponse
 
-from app.whatsapp.formatter import chunk_text, format_error, format_upload_ack, format_welcome
+from app.whatsapp.formatter import chunk_text, format_error, format_welcome
 from app.whatsapp.session import WhatsAppSessionManager
 
 logger = logging.getLogger(__name__)
@@ -91,14 +90,6 @@ class _InMemoryRedis:
 
 
 _dev_memory_store = _InMemoryRedis()
-_idem_store = _InMemoryRedis()  # fallback idempotency store (dev only)
-
-_IDEM_TTL = 120  # seconds — covers Twilio retry window
-
-
-def _get_idem_store():
-    redis_client = current_app.config.get('SESSION_REDIS')
-    return redis_client if redis_client else _idem_store
 
 
 def _get_session_manager() -> WhatsAppSessionManager:
@@ -107,97 +98,6 @@ def _get_session_manager() -> WhatsAppSessionManager:
         logger.warning('Redis not available — using in-memory session store (dev only)')
         return WhatsAppSessionManager(_dev_memory_store)
     return WhatsAppSessionManager(redis_client)
-
-
-# --------------------------------------------------------------------------- #
-#  Media handler
-# --------------------------------------------------------------------------- #
-
-def _handle_media_message(
-    sender: str,
-    filename: str,
-    media_url: str,
-    content_type: str,
-    message_sid: str,
-    mgr: WhatsAppSessionManager,
-    app,
-) -> None:
-    """
-    Send acknowledgment immediately, then process the upload in a background thread.
-    Idempotency-guarded so Twilio retries don't double-process.
-    """
-    # Idempotency check
-    idem = _get_idem_store()
-    idem_key = f'wa_idem:{message_sid}'
-    if idem.get(idem_key):
-        logger.info(f'Duplicate media message {message_sid} — skipping')
-        return
-    idem.setex(idem_key, _IDEM_TTL, '1')
-
-    # New upload → fresh session + clear history (prevents data bleed)
-    new_session_id = str(uuid.uuid4())
-    session_key = f'wa_session:{sender}'
-    redis = mgr.redis
-    redis.setex(session_key, 86400, new_session_id)
-    redis.delete(f'wa_history:{sender}')
-    redis.delete(f'wa_upload:{sender}')
-    logger.info(f'New session for upload: {sender} → {new_session_id}')
-
-    # Acknowledgment (synchronous REST call — fast, before thread)
-    _send_messages(sender, [format_upload_ack(filename)], app)
-
-    def _process():
-        try:
-            with app.app_context():
-                from app.whatsapp.media import download_twilio_media
-                from app.whatsapp.uploader import build_summary_messages, process_whatsapp_upload
-
-                # Download
-                file_bytes, detected_ct = download_twilio_media(media_url)
-                effective_ct = detected_ct or content_type
-
-                # Process
-                result = process_whatsapp_upload(
-                    file_bytes=file_bytes,
-                    filename=filename,
-                    content_type=effective_ct,
-                    session_id=new_session_id,
-                    app=app,
-                )
-
-                if result.get('error'):
-                    _send_messages(sender, [f"⚠️ {result['error']}"], app)
-                    return
-
-                # Store upload metadata in session
-                mgr.set_upload_metadata(sender, {
-                    'filename': filename,
-                    'rows': result['rows'],
-                    'cols': result['cols'],
-                    'detected_type': result['detected_type'],
-                    'session_id': new_session_id,
-                })
-
-                # Append upload context to conversation history so LLM knows
-                key_cols = ', '.join(result.get('key_columns', [])[:5])
-                mgr.append_history(sender, 'system', (
-                    f"User has uploaded {filename} ({result['rows']:,} rows, "
-                    f"{result['cols']} columns). "
-                    f"Dataset type: {result['detected_type']}. "
-                    f"Key columns: {key_cols}. "
-                    f"Session ID: {new_session_id}. "
-                    f"Data is ready for analysis."
-                ))
-
-                # Send summary + next steps
-                msgs = build_summary_messages(filename, result)
-                _send_messages(sender, msgs, app)
-
-        except Exception:
-            logger.exception(f'Error processing WhatsApp upload from {sender}')
-            _send_messages(sender, [format_error()], app)
-
-    threading.Thread(target=_process, daemon=True).start()
 
 
 # --------------------------------------------------------------------------- #
@@ -242,25 +142,14 @@ def whatsapp_webhook():
         resp.message(format_welcome())
         return Response(str(resp), mimetype='text/xml')
 
-    # --- File upload ---
+    # --- File upload (Phase 2 stub) ---
     if num_media > 0:
-        message_sid = request.form.get('MessageSid', '')
-        media_url = request.form.get('MediaUrl0', '')
-        media_ct = request.form.get('MediaContentType0', '')
-        raw_filename = request.form.get('MediaFilename0', '').strip()
-
-        # Fallback filename when Twilio doesn't provide one
-        if not raw_filename:
-            ext = {
-                'text/csv': '.csv',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-                'application/vnd.ms-excel': '.xls',
-            }.get(media_ct, '')
-            raw_filename = f'upload{ext}' if ext else 'upload.bin'
-
-        app = current_app._get_current_object()
-        _handle_media_message(sender, raw_filename, media_url, media_ct, message_sid, mgr, app)
-        return _twiml_empty()
+        resp = MessagingResponse()
+        resp.message(
+            "📂 File uploads are coming soon. For now, please use the "
+            "ChatMRPT web app to upload your data files."
+        )
+        return Response(str(resp), mimetype='text/xml')
 
     # --- Text message → LLM (async so we return 200 immediately) ---
     session_id = mgr.get_or_create_session(sender)
