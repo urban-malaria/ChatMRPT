@@ -61,3 +61,6 @@ html2image>=2.0.3  # Lightweight HTML to image conversion
 # Testing
 pytest>=7.0.0
 pytest-asyncio>=0.21.0
+
+# WhatsApp Integration
+twilio>=9.0.0
