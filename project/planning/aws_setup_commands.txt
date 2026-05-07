@@ -1,0 +1,66 @@
+================================================================================
+ChatMRPT WhatsApp Integration — AWS Setup Commands
+================================================================================
+
+STEP 4: IAM Inline Policy (paste in JSON tab)
+----------------------------------------------
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["s3:PutObject", "s3:GetObject"],
+    "Resource": "arn:aws:s3:::chatmrpt-uploads/maps/*"
+  }]
+}
+Policy name: chatmrpt-s3-maps
+
+
+STEP 3: S3 Bucket Policy (paste in bucket Permissions tab)
+-----------------------------------------------------------
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "PublicReadMaps",
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::chatmrpt-uploads/maps/*"
+  }]
+}
+
+
+STEP 5: Add env vars — run on BOTH EC2 instances
+-------------------------------------------------
+# Instance 1
+ssh -i /tmp/chatmrpt-key2.pem ec2-user@3.21.167.170
+
+echo "" >> /home/ec2-user/ChatMRPT/.env
+echo "S3_UPLOADS_BUCKET=chatmrpt-uploads" >> /home/ec2-user/ChatMRPT/.env
+echo "CHATMRPT_USE_REDIS_MEMORY=1" >> /home/ec2-user/ChatMRPT/.env
+exit
+
+# Instance 2
+ssh -i /tmp/chatmrpt-key2.pem ec2-user@18.220.103.20
+
+echo "" >> /home/ec2-user/ChatMRPT/.env
+echo "S3_UPLOADS_BUCKET=chatmrpt-uploads" >> /home/ec2-user/ChatMRPT/.env
+echo "CHATMRPT_USE_REDIS_MEMORY=1" >> /home/ec2-user/ChatMRPT/.env
+exit
+
+
+STEP 6: Verify S3 access — run on BOTH instances
+-------------------------------------------------
+aws s3 ls s3://chatmrpt-uploads && echo "S3 OK"
+grep "S3_UPLOADS_BUCKET\|CHATMRPT_USE_REDIS_MEMORY" /home/ec2-user/ChatMRPT/.env
+
+
+STEP 7: Sanity check — public read works
+-----------------------------------------
+echo "test" > /tmp/test.html
+aws s3 cp /tmp/test.html s3://chatmrpt-uploads/maps/test/test.html
+curl -I "https://chatmrpt-uploads.s3.us-east-2.amazonaws.com/maps/test/test.html"
+# Should return: HTTP/1.1 200 OK
+
+# Clean up
+aws s3 rm s3://chatmrpt-uploads/maps/test/test.html
+================================================================================

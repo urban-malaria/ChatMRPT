@@ -8,14 +8,13 @@ import glob
 import os
 import logging
 import time
-from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, request, jsonify, session, current_app
-from werkzeug.utils import secure_filename
 from app.agent.metadata_cache import MetadataCache
 from app.tpr.language import TPRLanguageInterface
 from app.auth.decorators import require_auth
 from app.services.interaction_core import InteractionCore
+from app.services.analysis_upload_service import process_analysis_upload
 from app.upload.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
@@ -612,136 +611,18 @@ def upload_for_analysis():
                 'message': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'
             }), 400
         
-        # Create upload directory
-        upload_dir = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'instance/uploads'), session_id)
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # Save file
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(upload_dir, filename)
-        file.save(filepath)
-        
-        # Also save as a standard name for easy access
-        if filename.endswith('.csv'):
-            standard_path = os.path.join(upload_dir, 'data_analysis.csv')
-        elif filename.endswith(('.xlsx', '.xls')):
-            standard_path = os.path.join(upload_dir, 'data_analysis.xlsx')
-        elif filename.endswith('.json'):
-            standard_path = os.path.join(upload_dir, 'data_analysis.json')
-        else:
-            standard_path = os.path.join(upload_dir, 'data_analysis.txt')
-        
-        # Copy to standard name
-        import shutil
-        shutil.copy2(filepath, standard_path)
+        upload_root = current_app.config.get('UPLOAD_FOLDER', 'instance/uploads')
+        upload_result = process_analysis_upload(
+            session_id=session_id,
+            file_obj=file,
+            original_filename=file.filename,
+            upload_root=upload_root,
+        )
 
-        # Normalise to uploaded_data.csv with correct headers immediately on upload.
-        # LLM-based schema inference (infer_schema_from_file) handles any file structure:
-        # blank preamble rows, DHIS2 exports, HMIS, NMEP-processed Excel, custom formats.
-        # The LLM reads all rows raw (header=None) and determines the actual header row.
-        # Result is saved so ALL downstream paths see correct column names from the first
-        # question asked — no per-consumer patches, no hardcoded row assumptions.
-        uploaded_csv_path = os.path.join(upload_dir, 'uploaded_data.csv')
-        schema_at_upload = {'header_row': 0}
-        try:
-            from app.tpr.data_analyzer import TPRDataAnalyzer as _Analyzer
-            _analyzer = _Analyzer()
-            df_upload, schema_at_upload = _analyzer.infer_schema_from_file(filepath)
+        filename = upload_result.original_filename
+        standard_path = str(upload_result.standard_path)
+        metadata = upload_result.metadata or {}
 
-            # --- DHIS2 Cleaner (v4) ---
-            # Runs after schema inference. If it merges duplicates or fixes
-            # mojibake, we apply the rename_map to schema_at_upload so
-            # downstream code sees consistent column names.
-            try:
-                from app.utils.dhis2_cleaner import (
-                    clean_dhis2_export, get_cleaner_mode, apply_rename_map_to_schema
-                )
-                _cleaner_mode = get_cleaner_mode()
-                if _cleaner_mode != 'off':
-                    df_upload, _cleaning_report = clean_dhis2_export(df_upload, mode=_cleaner_mode)
-                    if _cleaning_report.column_rename_map:
-                        schema_at_upload = apply_rename_map_to_schema(
-                            schema_at_upload, _cleaning_report.column_rename_map
-                        )
-                        logger.info(
-                            f"[DHIS2_CLEANER] Updated schema for "
-                            f"{len(_cleaning_report.column_rename_map)} renamed columns"
-                        )
-                    # Persist cleaning report for audit + agent context
-                    try:
-                        import json as _json
-                        _report_path = os.path.join(upload_dir, 'cleaning_report.json')
-                        with open(_report_path, 'w') as _rf:
-                            _json.dump(_cleaning_report.to_dict(), _rf, indent=2)
-                    except Exception as _report_exc:
-                        logger.warning(f"[DHIS2_CLEANER] Could not save cleaning report: {_report_exc}")
-                    if _cleaning_report.cleaning_applied:
-                        logger.info(
-                            f"[DHIS2_CLEANER] mode={_cleaner_mode} "
-                            f"detected={_cleaning_report.detected_as} "
-                            f"duplicates={len(_cleaning_report.duplicates_merged)} "
-                            f"mojibake={len(_cleaning_report.mojibake_fixed)} "
-                            f"warnings={len(_cleaning_report.data_quality_warnings)}"
-                        )
-            except Exception as _clean_exc:
-                # NEVER let cleaner failure break upload
-                logger.exception(f"[DHIS2_CLEANER] Failed (using uncleaned data): {_clean_exc}")
-
-            df_upload.to_csv(uploaded_csv_path, index=False)
-            logger.info(
-                f"✅ Schema inferred at upload: header_row={schema_at_upload.get('header_row')}, "
-                f"shape={df_upload.shape}, columns={df_upload.columns.tolist()[:5]}"
-            )
-        except Exception as _exc:
-            # LLM unavailable or file unreadable — fall back to header=0 so upload
-            # still succeeds. TPR workflow will re-try inference when it starts.
-            logger.warning(f"⚠️  Schema inference failed at upload (falling back to header=0): {_exc}")
-            try:
-                from app.agent.encoding_handler import EncodingHandler as _EH
-                if filename.lower().endswith(('.xlsx', '.xls')):
-                    df_upload = _EH.read_excel_with_encoding(filepath, header=0)
-                else:
-                    df_upload = _EH.read_csv_with_encoding(filepath)
-
-                # Still apply cleaner in fallback path (no schema to update here —
-                # Path C will re-infer from the cleaned uploaded_data.csv later)
-                try:
-                    from app.utils.dhis2_cleaner import clean_dhis2_export, get_cleaner_mode
-                    _cleaner_mode = get_cleaner_mode()
-                    if _cleaner_mode != 'off':
-                        df_upload, _cr = clean_dhis2_export(df_upload, mode=_cleaner_mode)
-                        if _cr.cleaning_applied:
-                            logger.info(
-                                f"[DHIS2_CLEANER fallback] Applied on raw read: "
-                                f"duplicates={len(_cr.duplicates_merged)} "
-                                f"mojibake={len(_cr.mojibake_fixed)}"
-                            )
-                except Exception as _clean_exc:
-                    logger.exception(f"[DHIS2_CLEANER fallback] Failed: {_clean_exc}")
-
-                df_upload.to_csv(uploaded_csv_path, index=False)
-                logger.info(f"✅ Fallback: saved uploaded_data.csv with header=0, shape={df_upload.shape}")
-            except Exception as _exc2:
-                logger.warning(f"⚠️  Could not save uploaded_data.csv at upload time: {_exc2}")
-
-        # Extract and cache metadata for quick access
-        logger.info(f"📊 Extracting metadata for {filename}...")
-        metadata = MetadataCache.update_file_metadata(session_id, filepath, filename)
-
-        # Also cache metadata for the standard file
-        if standard_path != filepath:
-            standard_filename = os.path.basename(standard_path)
-            MetadataCache.update_file_metadata(session_id, standard_path, standard_filename)
-
-        # Profile uploaded_data.csv (the normalised file the agent actually loads).
-        # This ensures MetadataCache has value distributions for the correct columns.
-        if os.path.exists(uploaded_csv_path):
-            try:
-                MetadataCache.update_file_metadata(session_id, uploaded_csv_path, 'uploaded_data.csv')
-                logger.info(f"📊 Profiled uploaded_data.csv for session {session_id}")
-            except Exception as _prof_exc:
-                logger.warning(f"⚠️  Could not profile uploaded_data.csv: {_prof_exc}")
-        
         logger.info(f"📊 Data Analysis file uploaded: {filename} for session {session_id}")
         if metadata.get('is_sampled'):
             logger.info(f"📊 Large file detected ({metadata.get('file_size_mb')}MB), using sampling for metadata")
@@ -760,38 +641,6 @@ def upload_for_analysis():
 
         session.modified = True
         logger.info(f"✓ Data Analysis V3 mode activated for session {session_id}")
-        
-        # Also create a flag file for cross-worker detection
-        flag_file = os.path.join(upload_dir, '.data_analysis_mode')
-        with open(flag_file, 'w') as f:
-            f.write(f'{filename}\n{datetime.now().isoformat()}')
-        
-        # Clear any leftover workflow transition state from previous sessions
-        from app.conversation.workflow_state import WorkflowStateManager, WorkflowSource, WorkflowStage
-        workflow_manager = WorkflowStateManager(session_id)
-        
-        # Transition to Data Analysis V3 workflow
-        workflow_manager.transition_workflow(
-            from_source=WorkflowSource.STANDARD,
-            to_source=WorkflowSource.DATA_ANALYSIS_V3,
-            new_stage=WorkflowStage.UPLOADED,
-            clear_markers=['.analysis_complete']  # Clear stale markers
-        )
-        logger.info(f"Transitioned to Data Analysis V3 workflow for session {session_id}")
-        
-        # CRITICAL: Also clear the DataAnalysisStateManager flags
-        # The chat endpoint checks DataAnalysisStateManager, not WorkflowStateManager
-        from app.agent.state_manager import DataAnalysisStateManager
-        da_state_manager = DataAnalysisStateManager(session_id)
-        da_state_manager.update_state({
-            'workflow_transitioned': False,
-            'tpr_completed': False,
-            'column_schema': schema_at_upload,
-        })
-        logger.info(
-            f"✅ Cleared DataAnalysisStateManager flags, saved schema "
-            f"(header_row={schema_at_upload.get('header_row')}) for session {session_id}"
-        )
         
         # Sync to other instances for multi-instance support
         try:
@@ -823,7 +672,7 @@ def upload_for_analysis():
             'session_id': session_id,
             'filename': filename,
             'filepath': standard_path,
-            'file_size': os.path.getsize(filepath),
+            'file_size': upload_result.file_size,
             'metadata': {
                 'rows': metadata.get('rows', 'Unknown'),
                 'columns': metadata.get('columns', 'Unknown'),
