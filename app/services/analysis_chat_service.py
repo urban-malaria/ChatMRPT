@@ -220,6 +220,24 @@ def _run_agent_sync(agent, message: str, workflow_context: dict | None = None):
         loop.close()
 
 
+def ensure_analysis_session_available(session_id: str) -> bool:
+    """Best-effort cross-instance restore before analysis."""
+    marker = Path("instance/uploads") / session_id / ".data_analysis_mode"
+    if marker.exists():
+        return True
+
+    try:
+        from app.services.instance_sync import ensure_session_available
+
+        restored = ensure_session_available(session_id)
+        if not restored:
+            logger.warning("[SESSION SYNC] Session %s is not locally available", session_id)
+        return restored
+    except Exception as exc:
+        logger.warning("[SESSION SYNC] Could not ensure session %s is available: %s", session_id, exc)
+        return False
+
+
 def handle_tpr_active(session_id, message, state_manager, current_state, tpr_language):
     """Handle a message when the TPR workflow is already in progress."""
     from app.agent.encoding_handler import EncodingHandler
@@ -485,6 +503,8 @@ def run_analysis_message(session_id: str, message: str) -> dict:
     from app.agent.agent import DataAnalysisAgent
     from app.agent.state_manager import DataAnalysisStateManager
 
+    ensure_analysis_session_available(session_id)
+
     state_manager = DataAnalysisStateManager(session_id)
     current_state = state_manager.get_state() or {}
     lower_message = (message or "").lower().strip()
@@ -526,6 +546,7 @@ def stream_analysis_events(session_id: str, message: str) -> Iterator[dict[str, 
     from app.agent.state_manager import DataAnalysisStateManager
 
     yield {"type": "status", "status": "started"}
+    ensure_analysis_session_available(session_id)
 
     state_manager = DataAnalysisStateManager(session_id)
     current_state = state_manager.get_state() or {}
