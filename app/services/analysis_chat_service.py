@@ -406,9 +406,10 @@ def handle_tpr_start(session_id, message, state_manager, current_state):
         or {}
     )
     tpr_cols = ("tested_pos", "u5_pos", "o5_pos", "pw_pos", "total_tested")
+    rdt_cols = ("u5_rdt_tested", "u5_rdt_positive", "o5_rdt_tested", "o5_rdt_positive")
     schema_complete = (
         saved_schema.get("header_row") is not None
-        and any(saved_schema.get(c) for c in tpr_cols)
+        and (any(saved_schema.get(c) for c in tpr_cols) or any(saved_schema.get(c) for c in rdt_cols))
     )
 
     df = None
