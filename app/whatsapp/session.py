@@ -8,6 +8,7 @@ main app so state is shared across both EC2 instances.
 Keys:
   wa_session:{phone}  → session_id (string, TTL 24h)
   wa_history:{phone}  → JSON list of {role, content} dicts (TTL 24h)
+  wa_upload:{phone}   → JSON metadata for the latest upload (TTL 24h)
 """
 
 import json
@@ -42,6 +43,11 @@ class WhatsAppSessionManager:
         logger.info(f'New WhatsApp session created: {phone} → {session_id}')
         return session_id
 
+    def set_session_id(self, phone: str, session_id: str) -> None:
+        """Bind this WhatsApp sender to a specific ChatMRPT session."""
+        self.redis.setex(f'wa_session:{phone}', _TTL, session_id)
+        logger.info(f'WhatsApp session updated: {phone} → {session_id}')
+
     def get_session_id(self, phone: str) -> Optional[str]:
         key = f'wa_session:{phone}'
         val = self.redis.get(key)
@@ -71,7 +77,32 @@ class WhatsAppSessionManager:
             history = history[-_MAX_HISTORY:]
         self.redis.setex(key, _TTL, json.dumps(history))
 
+    def clear_history(self, phone: str) -> None:
+        self.redis.delete(f'wa_history:{phone}')
+
+    # ------------------------------------------------------------------ #
+    #  Upload metadata
+    # ------------------------------------------------------------------ #
+
+    def set_upload_metadata(self, phone: str, metadata: dict) -> None:
+        self.redis.setex(f'wa_upload:{phone}', _TTL, json.dumps(metadata, default=str))
+
+    def get_upload_metadata(self, phone: str) -> dict | None:
+        raw = self.redis.get(f'wa_upload:{phone}')
+        if not raw:
+            return None
+        try:
+            if isinstance(raw, bytes):
+                raw = raw.decode('utf-8')
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    def clear_upload_metadata(self, phone: str) -> None:
+        self.redis.delete(f'wa_upload:{phone}')
+
     def clear_session(self, phone: str) -> None:
         self.redis.delete(f'wa_session:{phone}')
         self.redis.delete(f'wa_history:{phone}')
+        self.redis.delete(f'wa_upload:{phone}')
         logger.info(f'WhatsApp session cleared for {phone}')
