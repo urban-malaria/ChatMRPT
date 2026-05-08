@@ -23,6 +23,48 @@ class TPRStartError(RuntimeError):
     """Raised when the TPR workflow cannot start; message is user-facing."""
 
 
+def _no_data_answer(message: str) -> dict | None:
+    """Answer safe educational questions that do not require an uploaded dataset."""
+    text = (message or "").lower().strip()
+    if not text:
+        return None
+
+    tpr_terms = ("tpr", "test positivity", "positivity rate")
+    if any(term in text for term in tpr_terms) and any(
+        term in text for term in ("what", "explain", "definition", "mean", "surveillance")
+    ):
+        return {
+            "success": True,
+            "message": (
+                "TPR means Test Positivity Rate. In malaria surveillance, it is the percentage of tested people "
+                "whose malaria test is positive.\n\n"
+                "Formula: TPR = positive malaria tests / total malaria tests x 100.\n\n"
+                "A higher TPR usually suggests more malaria transmission or targeted testing among people likely "
+                "to have malaria. A lower TPR can suggest lower transmission, broader testing, or changes in care-seeking. "
+                "To calculate TPR for your own facilities, send a CSV or Excel file with tested and positive counts."
+            ),
+            "session_id": None,
+            "workflow": "no_data_help",
+        }
+
+    malaria_terms = ("malaria surveillance", "malaria analysis", "risk map", "risk mapping", "itn")
+    if any(term in text for term in malaria_terms) and any(
+        term in text for term in ("what", "explain", "how", "definition", "mean")
+    ):
+        return {
+            "success": True,
+            "message": (
+                "I can explain malaria surveillance concepts before you upload data. For dataset-specific analysis, "
+                "maps, TPR calculations, or ITN planning, send a CSV or Excel file first so I can use your actual rows "
+                "and columns."
+            ),
+            "session_id": None,
+            "workflow": "no_data_help",
+        }
+
+    return None
+
+
 def _select_metadata_entry(cache: dict) -> tuple[dict, str] | tuple[None, None]:
     """Pick the most relevant metadata entry from the cache."""
     files = (cache or {}).get("files", {})
@@ -500,7 +542,6 @@ def handle_tpr_start(session_id, message, state_manager, current_state):
 
 def run_analysis_message(session_id: str, message: str) -> dict:
     """Run the sync Data Analysis V3 orchestration and return a plain result dict."""
-    from app.agent.agent import DataAnalysisAgent
     from app.agent.state_manager import DataAnalysisStateManager
 
     ensure_analysis_session_available(session_id)
@@ -529,8 +570,16 @@ def run_analysis_message(session_id: str, message: str) -> dict:
         except TPRStartError as exc:
             return {"success": False, "message": str(exc), "session_id": session_id, "workflow": "tpr"}
 
-    agent = DataAnalysisAgent(session_id)
     workflow_context = build_general_workflow_context(session_id)
+    if not workflow_context.get("data_loaded"):
+        no_data_response = _no_data_answer(message)
+        if no_data_response:
+            no_data_response["session_id"] = session_id
+            return no_data_response
+
+    from app.agent.agent import DataAnalysisAgent
+
+    agent = DataAnalysisAgent(session_id)
     logger.info(
         "[AGENT CONTEXT] Session %s -> stage=%s columns=%d",
         session_id,

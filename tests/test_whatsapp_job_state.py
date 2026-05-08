@@ -48,3 +48,13 @@ def test_failed_job_can_be_reclaimed_with_retry_count():
     payload = json.loads(redis.store[job_state.job_key("SM1")])
     assert payload["retry_count"] == 1
     assert payload["status"] == "processing"
+
+
+def test_whatsapp_rq_job_id_uses_only_rq_safe_characters():
+    from app.whatsapp.queue import make_whatsapp_job_id
+
+    job_id = make_whatsapp_job_id("SM123abc", "analysis")
+
+    assert job_id.startswith("wa_analysis_SM123abc_")
+    assert ":" not in job_id
+    assert all(ch.isalnum() or ch in {"_", "-"} for ch in job_id)

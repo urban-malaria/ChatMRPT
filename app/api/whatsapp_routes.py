@@ -186,8 +186,9 @@ def whatsapp_webhook():
         return Response(str(resp), mimetype='text/xml')
 
     # --- Welcome / help ---
-    if body.lower() in _HELP_COMMANDS and not mgr.get_session_id(sender):
-        mgr.get_or_create_session(sender)
+    if body.lower() in _HELP_COMMANDS:
+        if not mgr.get_session_id(sender):
+            mgr.get_or_create_session(sender)
         resp = MessagingResponse()
         resp.message(format_welcome())
         return Response(str(resp), mimetype='text/xml')
