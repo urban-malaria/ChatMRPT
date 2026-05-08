@@ -4,18 +4,14 @@ Handles file uploads and queries for the Data Analysis tab
 """
 from __future__ import annotations
 
-import glob
 import os
 import logging
 import time
-from datetime import datetime
-from pathlib import Path
 from flask import Blueprint, request, jsonify, session, current_app
-from werkzeug.utils import secure_filename
-from app.agent.metadata_cache import MetadataCache
-from app.tpr.language import TPRLanguageInterface
 from app.auth.decorators import require_auth
 from app.services.interaction_core import InteractionCore
+from app.services.analysis_chat_service import run_analysis_message, stream_analysis_events
+from app.services.analysis_upload_service import process_analysis_upload
 from app.upload.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
@@ -50,507 +46,6 @@ def _save_and_respond(response_dict, session_id, status_code=200):
 def allowed_file(filename):
     """Check if file extension is allowed."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-def _select_metadata_entry(cache: dict) -> tuple[dict, str] | tuple[None, None]:
-    """Pick the most relevant metadata entry from the cache."""
-    files = (cache or {}).get('files', {})
-    if not files:
-        return None, None
-
-    priority = [
-        'unified_dataset.csv',
-        'data_analysis.csv',
-        'raw_data.csv',
-        'uploaded_data.csv',
-    ]
-
-    for name in priority:
-        if name in files:
-            return files[name], name
-
-    # Fallback to first available entry
-    name, meta = next(iter(files.items()))
-    return meta, name
-
-
-def _build_general_workflow_context(session_id: str) -> dict:
-    """Construct workflow context for general (non-TPR) data analysis."""
-    context: dict = {
-        'workflow': 'data_analysis_v3',
-        'stage': 'no_data',
-        'valid_options': [],
-        'data_loaded': False,
-        'session_id': session_id,
-    }
-
-    columns: list[str] = []
-    rows: int | None = None
-    dataset_name: str | None = None
-
-    try:
-        cache = MetadataCache.load_cache(session_id) or {}
-        metadata, dataset_name = _select_metadata_entry(cache)
-
-        if metadata:
-            columns = metadata.get('column_names') or []
-            rows = metadata.get('rows') if isinstance(metadata.get('rows'), (int, float)) else None
-            profile = metadata.get('profile', {}) or {}
-            metrics = profile.get('metrics', {}) or {}
-
-            if not columns:
-                columns = metrics.get('column_examples', [])
-
-            dtype_summary = metrics.get('dtype_summary', {})
-
-            context.update({
-                'data_loaded': True,
-                'data_columns': columns,
-                'columns_total': len(columns),
-                'data_shape': {
-                    'rows': rows,
-                    'cols': len(columns),
-                },
-                'data_types': dtype_summary,
-                'dataset_name': dataset_name,
-            })
-
-            if metrics.get('numeric_columns'):
-                context['numeric_samples'] = metrics['numeric_columns']
-            if metrics.get('categorical_columns'):
-                context['categorical_samples'] = metrics['categorical_columns']
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"[WORKFLOW CONTEXT] Failed to load metadata cache for {session_id}: {exc}")
-
-    session_path = Path('instance/uploads') / session_id
-
-    # If columns look wrong (many Unnamed: entries from wrong header row), try to
-    # re-read the Excel using the saved schema's header_row so the agent sees real names.
-    unnamed_count = sum(1 for c in columns if str(c).startswith('Unnamed:'))
-    if columns and unnamed_count > len(columns) * 0.5:
-        try:
-            from app.agent.state_manager import DataAnalysisStateManager
-            from app.agent.encoding_handler import EncodingHandler
-
-            sm = DataAnalysisStateManager(session_id)
-            saved_state = sm.load_state() or {}
-            saved_schema = saved_state.get('column_schema')
-            header_row = int(saved_schema.get('header_row', 1)) if saved_schema else 1
-
-            for candidate in ['data_analysis.xlsx', 'data_analysis.xls']:
-                candidate_path = session_path / candidate
-                if candidate_path.exists():
-                    sample = EncodingHandler.read_excel_with_encoding(
-                        str(candidate_path), header=header_row, nrows=5
-                    )
-                    real_cols = sample.columns.tolist()
-                    if real_cols:
-                        columns = real_cols
-                        context['data_columns'] = columns
-                        context['columns_total'] = len(columns)
-                        logger.info(
-                            "[WORKFLOW CONTEXT] Re-read Excel with header_row=%d → %d real columns",
-                            header_row, len(columns)
-                        )
-                    break
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning(f"[WORKFLOW CONTEXT] Failed to fix Excel header: {exc}")
-
-    if not columns:
-        # Fallback: load a tiny sample directly
-        for candidate in ['unified_dataset.csv', 'data_analysis.csv', 'raw_data.csv', 'uploaded_data.csv']:
-            candidate_path = session_path / candidate
-            if candidate_path.exists():
-                try:
-                    from app.agent.encoding_handler import EncodingHandler
-
-                    sample = EncodingHandler.read_csv_with_encoding(candidate_path, nrows=5)
-                    columns = sample.columns.tolist()
-                    rows = rows or sample.shape[0]
-                    context.update({
-                        'data_loaded': True,
-                        'data_columns': columns,
-                        'columns_total': len(columns),
-                        'data_shape': {
-                            'rows': rows,
-                            'cols': len(columns),
-                        },
-                        'dataset_name': dataset_name or candidate,
-                    })
-                    break
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning(f"[WORKFLOW CONTEXT] Failed to sample {candidate_path}: {exc}")
-
-    if session_path.joinpath('unified_dataset.csv').exists():
-        context['stage'] = 'post_analysis'
-    elif context['data_loaded']:
-        context['stage'] = 'data_exploring'
-
-    # Limit columns to avoid overwhelming the prompt
-    if context.get('data_columns') and len(context['data_columns']) > 120:
-        context['data_columns_preview'] = context['data_columns'][:120]
-
-    # If we have a saved schema, inject a human-readable column mapping so the
-    # agent can describe columns with confidence instead of guessing.
-    try:
-        from app.agent.state_manager import DataAnalysisStateManager
-
-        sm = DataAnalysisStateManager(session_id)
-        saved_state = sm.load_state() or {}
-        saved_schema = saved_state.get('column_schema')
-        if saved_schema:
-            _label = {
-                'state': 'State',
-                'lga': 'LGA (Local Government Area)',
-                'ward': 'Ward',
-                'facility_name': 'Facility name',
-                'facility_level': 'Facility level (Primary/Secondary/Tertiary)',
-                'period': 'Reporting period',
-                'u5_rdt_tested': 'Under-5 RDT tested (denominator)',
-                'u5_rdt_positive': 'Under-5 RDT positive (numerator)',
-                'o5_rdt_tested': 'Over-5 RDT tested (denominator)',
-                'o5_rdt_positive': 'Over-5 RDT positive (numerator)',
-                'pw_rdt_tested': 'Pregnant women RDT tested (denominator)',
-                'pw_rdt_positive': 'Pregnant women RDT positive (numerator)',
-                'u5_microscopy_tested': 'Under-5 Microscopy tested (denominator)',
-                'u5_microscopy_positive': 'Under-5 Microscopy positive (numerator)',
-                'o5_microscopy_tested': 'Over-5 Microscopy tested (denominator)',
-                'o5_microscopy_positive': 'Over-5 Microscopy positive (numerator)',
-                'pw_microscopy_tested': 'Pregnant women Microscopy tested (denominator)',
-                'pw_microscopy_positive': 'Pregnant women Microscopy positive (numerator)',
-            }
-            mapping_lines = [
-                f"  {v} → column: \"{saved_schema[k]}\""
-                for k, v in _label.items()
-                if saved_schema.get(k)
-            ]
-            if mapping_lines:
-                context['column_schema_description'] = (
-                    "Known column meanings (from schema inference):\n"
-                    + "\n".join(mapping_lines)
-                )
-    except Exception:
-        pass
-
-    return context
-
-
-class TPRStartError(RuntimeError):
-    """Raised by _handle_tpr_start when workflow cannot be started (message is user-facing)."""
-
-
-def _run_agent_sync(agent, message, workflow_context=None):
-    """Run agent.analyze() synchronously in a dedicated event loop."""
-    import asyncio as _asyncio
-    loop = _asyncio.new_event_loop()
-    _asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(agent.analyze(message, workflow_context=workflow_context))
-    finally:
-        _asyncio.set_event_loop(None)
-        loop.close()
-
-
-def _handle_tpr_active(session_id, message, state_manager, current_state, tpr_language):
-    """
-    Handle a message when the TPR workflow is already in progress.
-    Returns a result dict. Shared by /chat and /stream.
-    """
-    from app.tpr.workflow_manager import TPRWorkflowHandler
-    from app.tpr.data_analyzer import TPRDataAnalyzer
-    from app.agent.encoding_handler import EncodingHandler
-    from app.agent.state_manager import ConversationStage
-
-    tpr_analyzer = TPRDataAnalyzer()
-    saved_state = state_manager.load_state() or {}
-    saved_schema = saved_state.get('column_schema')
-    if saved_schema:
-        tpr_analyzer._schema = saved_schema
-        logger.info(
-            "[TPR-ACTIVE] Restored column_schema (%d mapped fields)",
-            len([v for v in saved_schema.values() if v]),
-        )
-    else:
-        logger.warning("[TPR-ACTIVE] No column_schema in state_manager")
-
-    tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-
-    df = None
-    try:
-        data_dir = os.path.join('instance', 'uploads', session_id)
-        uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
-        if os.path.exists(uploaded_csv):
-            df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
-            logger.info("[TPR-ACTIVE] Loaded uploaded_data.csv (%d rows)", df.shape[0])
-        else:
-            data_files = (
-                glob.glob(os.path.join(data_dir, '*.csv')) +
-                glob.glob(os.path.join(data_dir, '*.xlsx')) +
-                glob.glob(os.path.join(data_dir, '*.xls'))
-            )
-            if data_files:
-                from app.utils.dhis2_cleaner import (
-                    _select_raw_upload_file, clean_dhis2_export,
-                    get_cleaner_mode, apply_rename_map_to_schema,
-                )
-                try:
-                    latest = _select_raw_upload_file(data_files)
-                except FileNotFoundError:
-                    latest = None
-                if latest:
-                    if latest.lower().endswith(('.xlsx', '.xls')):
-                        header_row = int(saved_schema.get('header_row', 0)) if saved_schema else 0
-                        df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
-                    else:
-                        df = EncodingHandler.read_csv_with_encoding(latest)
-                    _cleaner_mode = get_cleaner_mode()
-                    if _cleaner_mode != 'off':
-                        try:
-                            df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
-                            if _cr.column_rename_map:
-                                saved_schema = apply_rename_map_to_schema(
-                                    saved_schema or {}, _cr.column_rename_map
-                                )
-                                state_manager.update_state({'column_schema': saved_schema})
-                                tpr_analyzer._schema = saved_schema
-                        except Exception as _cexc:
-                            logger.exception("[TPR-ACTIVE] Cleaner failed: %s", _cexc)
-        if df is not None:
-            tpr_handler.set_data(df)
-    except Exception as load_err:
-        logger.error("[TPR-ACTIVE] Failed to load dataset: %s", load_err)
-
-    tpr_handler.load_state_from_manager()
-    current_stage = state_manager.get_workflow_stage()
-
-    # Build valid_options — TPR_STATE_SELECTION reads actual state names from data
-    valid_options = []
-    if current_stage == ConversationStage.TPR_STATE_SELECTION:
-        if df is not None:
-            try:
-                state_analysis = tpr_analyzer.analyze_states(df)
-                valid_options = list(state_analysis.get('states', {}).keys())
-            except Exception:
-                pass
-        valid_options.extend(['yes', 'continue', 'back', 'exit', 'status'])
-    elif current_stage == ConversationStage.TPR_FACILITY_LEVEL:
-        valid_options = ['primary', 'secondary', 'tertiary', 'all', 'back', 'exit', 'status']
-    elif current_stage == ConversationStage.TPR_AGE_GROUP:
-        valid_options = ['u5', 'o5', 'pw', 'all', 'back', 'exit', 'status']
-    else:
-        valid_options = ['yes', 'continue', 'start', 'back', 'exit']
-
-    lower_message = (message or '').lower().strip()
-
-    # Priority 1: confirmation
-    if current_state.get('tpr_awaiting_confirmation'):
-        confirmation_keywords = [
-            'yes', 'y', 'continue', 'proceed', 'start', 'begin', 'ok', 'okay', 'sure', 'ready'
-        ]
-        if lower_message in confirmation_keywords or any(
-            kw in lower_message.split() for kw in confirmation_keywords
-        ):
-            logger.info("[TPR-ACTIVE] Confirmation detected")
-            return tpr_handler.execute_confirmation()
-
-    # Priority 2: intent classification → selection or question
-    intent_result = tpr_language.classify_intent(
-        message=message,
-        stage=current_stage.name if current_stage else 'unknown',
-        valid_options=valid_options,
-    )
-
-    if intent_result['intent'] == 'selection' and intent_result['confidence'] >= 0.7:
-        logger.info(
-            "[TPR-ACTIVE] Selection intent (confidence=%.2f, rationale=%s)",
-            intent_result['confidence'],
-            intent_result.get('rationale', ''),
-        )
-        command = tpr_language.extract_command(
-            message=message,
-            stage=current_stage.name if current_stage else 'unknown',
-            valid_options=valid_options,
-            context={'session_id': session_id, 'stage': current_stage},
-        )
-        if command:
-            logger.info("[TPR-ACTIVE] Extracted command: '%s'", command)
-            return tpr_handler.execute_command(command, current_stage)
-        return {
-            'success': True,
-            'message': (
-                f"I understood you're making a selection, but couldn't determine which option. "
-                f"Please choose from: {', '.join(valid_options)}"
-            ),
-            'session_id': session_id,
-            'workflow': 'tpr',
-            'stage': current_stage.name if current_stage else None,
-        }
-
-    # Question → agent
-    logger.info("[TPR-ACTIVE] Question detected, routing to agent")
-    from app.agent.agent import DataAnalysisAgent
-    agent = DataAnalysisAgent(session_id)
-    workflow_context = {
-        'workflow': 'tpr',
-        'stage': current_stage.name if current_stage else None,
-        'valid_options': valid_options,
-        'selections': state_manager.get_tpr_selections() or {},
-        'data_loaded': df is not None,
-        'session_id': session_id,
-    }
-    return _run_agent_sync(agent, message, workflow_context=workflow_context)
-
-
-def _handle_tpr_start(session_id, message, state_manager, current_state):
-    """
-    Load data and start the TPR workflow from scratch.
-    Returns a result dict. Raises TPRStartError with a user-facing message on failure.
-    Shared by /chat and /stream.
-    """
-    from app.tpr.workflow_manager import TPRWorkflowHandler
-    from app.tpr.data_analyzer import TPRDataAnalyzer
-    from app.tpr.language import TPRLanguageInterface as _TPRLang
-    from app.agent.encoding_handler import EncodingHandler
-    from app.agent.state_manager import ConversationStage
-    from app.utils.dhis2_cleaner import (
-        _select_raw_upload_file, clean_dhis2_export,
-        get_cleaner_mode, apply_rename_map_to_schema,
-    )
-
-    logger.info("[TPR-START] Starting workflow for session %s", session_id)
-
-    data_dir = os.path.join('instance', 'uploads', session_id)
-    data_files = (
-        glob.glob(os.path.join(data_dir, '*.csv')) +
-        glob.glob(os.path.join(data_dir, '*.xlsx')) +
-        glob.glob(os.path.join(data_dir, '*.xls'))
-    )
-    if not data_files:
-        raise TPRStartError(
-            'No data found. Please upload your dataset before starting the TPR workflow.'
-        )
-
-    tpr_analyzer = TPRDataAnalyzer()
-    tpr_language = _TPRLang(session_id)
-    try:
-        tpr_language.update_from_metadata(current_state)
-    except Exception:
-        pass
-
-    uploaded_csv = os.path.join(data_dir, 'uploaded_data.csv')
-    _saved_schema = (
-        current_state.get('column_schema')
-        or (state_manager.load_state() or {}).get('column_schema')
-        or {}
-    )
-    _tpr_cols = ('tested_pos', 'u5_pos', 'o5_pos', 'pw_pos', 'total_tested')
-    _schema_complete = (
-        _saved_schema.get('header_row') is not None
-        and any(_saved_schema.get(c) for c in _tpr_cols)
-    )
-
-    df = None
-
-    if os.path.exists(uploaded_csv):
-        df = EncodingHandler.read_csv_with_encoding(uploaded_csv)
-        if _schema_complete:
-            tpr_analyzer._schema = _saved_schema
-            logger.info("[TPR-START] Using cleaned uploaded_data.csv + saved schema (%d rows)", df.shape[0])
-        else:
-            try:
-                df, schema = tpr_analyzer.infer_schema_from_file(uploaded_csv)
-                state_manager.update_state({'column_schema': schema})
-                logger.info("[TPR-START] Re-inferred schema from uploaded_data.csv")
-            except RuntimeError as exc:
-                raise TPRStartError(f'Could not parse your data file: {exc}') from exc
-    else:
-        try:
-            latest = _select_raw_upload_file(data_files)
-        except FileNotFoundError:
-            raise TPRStartError('No data file found. Please re-upload your dataset.')
-
-        if _schema_complete:
-            tpr_analyzer._schema = _saved_schema
-            header_row = int(_saved_schema.get('header_row', 0))
-            try:
-                if latest.lower().endswith(('.xlsx', '.xls')):
-                    df = EncodingHandler.read_excel_with_encoding(latest, header=header_row)
-                else:
-                    df = EncodingHandler.read_csv_with_encoding(latest)
-            except Exception as exc:
-                logger.warning("[TPR-START] Re-read with saved schema failed (%s), re-inferring", exc)
-                _schema_complete = False
-
-        if not _schema_complete:
-            try:
-                df, schema = tpr_analyzer.infer_schema_from_file(latest)
-                state_manager.update_state({'column_schema': schema})
-            except RuntimeError as exc:
-                raise TPRStartError(f'Could not parse your data file: {exc}') from exc
-
-        _cleaner_mode = get_cleaner_mode()
-        if _cleaner_mode != 'off' and df is not None:
-            try:
-                df, _cr = clean_dhis2_export(df, mode=_cleaner_mode)
-                if _cr.column_rename_map:
-                    schema = apply_rename_map_to_schema(tpr_analyzer._schema or {}, _cr.column_rename_map)
-                    tpr_analyzer._schema = schema
-                    state_manager.update_state({'column_schema': schema})
-                logger.info("[TPR-START] Applied cleaner to raw re-read (mode=%s)", _cleaner_mode)
-            except Exception as exc:
-                logger.exception("[TPR-START] Cleaner failed: %s", exc)
-
-    if df is None:
-        raise TPRStartError('Could not load data file. Please re-upload your dataset.')
-
-    tpr_handler = TPRWorkflowHandler(session_id, state_manager, tpr_analyzer)
-    tpr_handler.set_data(df)
-    try:
-        tpr_language.update_from_dataframe(df)
-    except Exception:
-        pass
-
-    state_manager.mark_tpr_workflow_active()
-    state_manager.update_workflow_stage(ConversationStage.TPR_STATE_SELECTION)
-    logger.info("[TPR-START] Workflow marked active, starting")
-
-    return tpr_handler.start_workflow()
-
-
-def _wrap_tpr_as_sse(result, session_id, mem_sid, app_obj, interaction_core_obj):
-    """Wrap a TPR result dict as a Server-Sent Events Response."""
-    import json as _json
-    from flask import Response, stream_with_context
-
-    def _generate():
-        with app_obj.app_context():
-            yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
-            yield f"data: {_json.dumps({'type': 'result', 'data': result})}\n\n"
-            assistant_text = result.get('message', '') if isinstance(result, dict) else str(result)
-            try:
-                from app.services.session_memory import SessionMemory, MessageType
-                SessionMemory(mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
-            except Exception:
-                pass
-            try:
-                interaction_core_obj.log_message(
-                    session_id=session_id, sender='assistant',
-                    content=assistant_text, intent=None,
-                    entities={
-                        'endpoint': '/api/v1/data-analysis/chat/stream',
-                        'workflow': result.get('workflow', 'tpr') if isinstance(result, dict) else 'tpr',
-                        'success': result.get('success', True) if isinstance(result, dict) else False,
-                    }
-                )
-            except Exception:
-                pass
-            yield "data: [DONE]\n\n"
-
-    resp = Response(stream_with_context(_generate()), mimetype='text/event-stream')
-    resp.headers['Cache-Control'] = 'no-cache'
-    resp.headers['Connection'] = 'keep-alive'
-    resp.headers['X-Accel-Buffering'] = 'no'
-    return resp
 
 
 @data_analysis_v3_bp.route('/api/data-analysis/upload', methods=['POST'])
@@ -612,136 +107,18 @@ def upload_for_analysis():
                 'message': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'
             }), 400
         
-        # Create upload directory
-        upload_dir = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'instance/uploads'), session_id)
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # Save file
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(upload_dir, filename)
-        file.save(filepath)
-        
-        # Also save as a standard name for easy access
-        if filename.endswith('.csv'):
-            standard_path = os.path.join(upload_dir, 'data_analysis.csv')
-        elif filename.endswith(('.xlsx', '.xls')):
-            standard_path = os.path.join(upload_dir, 'data_analysis.xlsx')
-        elif filename.endswith('.json'):
-            standard_path = os.path.join(upload_dir, 'data_analysis.json')
-        else:
-            standard_path = os.path.join(upload_dir, 'data_analysis.txt')
-        
-        # Copy to standard name
-        import shutil
-        shutil.copy2(filepath, standard_path)
+        upload_root = current_app.config.get('UPLOAD_FOLDER', 'instance/uploads')
+        upload_result = process_analysis_upload(
+            session_id=session_id,
+            file_obj=file,
+            original_filename=file.filename,
+            upload_root=upload_root,
+        )
 
-        # Normalise to uploaded_data.csv with correct headers immediately on upload.
-        # LLM-based schema inference (infer_schema_from_file) handles any file structure:
-        # blank preamble rows, DHIS2 exports, HMIS, NMEP-processed Excel, custom formats.
-        # The LLM reads all rows raw (header=None) and determines the actual header row.
-        # Result is saved so ALL downstream paths see correct column names from the first
-        # question asked — no per-consumer patches, no hardcoded row assumptions.
-        uploaded_csv_path = os.path.join(upload_dir, 'uploaded_data.csv')
-        schema_at_upload = {'header_row': 0}
-        try:
-            from app.tpr.data_analyzer import TPRDataAnalyzer as _Analyzer
-            _analyzer = _Analyzer()
-            df_upload, schema_at_upload = _analyzer.infer_schema_from_file(filepath)
+        filename = upload_result.original_filename
+        standard_path = str(upload_result.standard_path)
+        metadata = upload_result.metadata or {}
 
-            # --- DHIS2 Cleaner (v4) ---
-            # Runs after schema inference. If it merges duplicates or fixes
-            # mojibake, we apply the rename_map to schema_at_upload so
-            # downstream code sees consistent column names.
-            try:
-                from app.utils.dhis2_cleaner import (
-                    clean_dhis2_export, get_cleaner_mode, apply_rename_map_to_schema
-                )
-                _cleaner_mode = get_cleaner_mode()
-                if _cleaner_mode != 'off':
-                    df_upload, _cleaning_report = clean_dhis2_export(df_upload, mode=_cleaner_mode)
-                    if _cleaning_report.column_rename_map:
-                        schema_at_upload = apply_rename_map_to_schema(
-                            schema_at_upload, _cleaning_report.column_rename_map
-                        )
-                        logger.info(
-                            f"[DHIS2_CLEANER] Updated schema for "
-                            f"{len(_cleaning_report.column_rename_map)} renamed columns"
-                        )
-                    # Persist cleaning report for audit + agent context
-                    try:
-                        import json as _json
-                        _report_path = os.path.join(upload_dir, 'cleaning_report.json')
-                        with open(_report_path, 'w') as _rf:
-                            _json.dump(_cleaning_report.to_dict(), _rf, indent=2)
-                    except Exception as _report_exc:
-                        logger.warning(f"[DHIS2_CLEANER] Could not save cleaning report: {_report_exc}")
-                    if _cleaning_report.cleaning_applied:
-                        logger.info(
-                            f"[DHIS2_CLEANER] mode={_cleaner_mode} "
-                            f"detected={_cleaning_report.detected_as} "
-                            f"duplicates={len(_cleaning_report.duplicates_merged)} "
-                            f"mojibake={len(_cleaning_report.mojibake_fixed)} "
-                            f"warnings={len(_cleaning_report.data_quality_warnings)}"
-                        )
-            except Exception as _clean_exc:
-                # NEVER let cleaner failure break upload
-                logger.exception(f"[DHIS2_CLEANER] Failed (using uncleaned data): {_clean_exc}")
-
-            df_upload.to_csv(uploaded_csv_path, index=False)
-            logger.info(
-                f"✅ Schema inferred at upload: header_row={schema_at_upload.get('header_row')}, "
-                f"shape={df_upload.shape}, columns={df_upload.columns.tolist()[:5]}"
-            )
-        except Exception as _exc:
-            # LLM unavailable or file unreadable — fall back to header=0 so upload
-            # still succeeds. TPR workflow will re-try inference when it starts.
-            logger.warning(f"⚠️  Schema inference failed at upload (falling back to header=0): {_exc}")
-            try:
-                from app.agent.encoding_handler import EncodingHandler as _EH
-                if filename.lower().endswith(('.xlsx', '.xls')):
-                    df_upload = _EH.read_excel_with_encoding(filepath, header=0)
-                else:
-                    df_upload = _EH.read_csv_with_encoding(filepath)
-
-                # Still apply cleaner in fallback path (no schema to update here —
-                # Path C will re-infer from the cleaned uploaded_data.csv later)
-                try:
-                    from app.utils.dhis2_cleaner import clean_dhis2_export, get_cleaner_mode
-                    _cleaner_mode = get_cleaner_mode()
-                    if _cleaner_mode != 'off':
-                        df_upload, _cr = clean_dhis2_export(df_upload, mode=_cleaner_mode)
-                        if _cr.cleaning_applied:
-                            logger.info(
-                                f"[DHIS2_CLEANER fallback] Applied on raw read: "
-                                f"duplicates={len(_cr.duplicates_merged)} "
-                                f"mojibake={len(_cr.mojibake_fixed)}"
-                            )
-                except Exception as _clean_exc:
-                    logger.exception(f"[DHIS2_CLEANER fallback] Failed: {_clean_exc}")
-
-                df_upload.to_csv(uploaded_csv_path, index=False)
-                logger.info(f"✅ Fallback: saved uploaded_data.csv with header=0, shape={df_upload.shape}")
-            except Exception as _exc2:
-                logger.warning(f"⚠️  Could not save uploaded_data.csv at upload time: {_exc2}")
-
-        # Extract and cache metadata for quick access
-        logger.info(f"📊 Extracting metadata for {filename}...")
-        metadata = MetadataCache.update_file_metadata(session_id, filepath, filename)
-
-        # Also cache metadata for the standard file
-        if standard_path != filepath:
-            standard_filename = os.path.basename(standard_path)
-            MetadataCache.update_file_metadata(session_id, standard_path, standard_filename)
-
-        # Profile uploaded_data.csv (the normalised file the agent actually loads).
-        # This ensures MetadataCache has value distributions for the correct columns.
-        if os.path.exists(uploaded_csv_path):
-            try:
-                MetadataCache.update_file_metadata(session_id, uploaded_csv_path, 'uploaded_data.csv')
-                logger.info(f"📊 Profiled uploaded_data.csv for session {session_id}")
-            except Exception as _prof_exc:
-                logger.warning(f"⚠️  Could not profile uploaded_data.csv: {_prof_exc}")
-        
         logger.info(f"📊 Data Analysis file uploaded: {filename} for session {session_id}")
         if metadata.get('is_sampled'):
             logger.info(f"📊 Large file detected ({metadata.get('file_size_mb')}MB), using sampling for metadata")
@@ -760,38 +137,6 @@ def upload_for_analysis():
 
         session.modified = True
         logger.info(f"✓ Data Analysis V3 mode activated for session {session_id}")
-        
-        # Also create a flag file for cross-worker detection
-        flag_file = os.path.join(upload_dir, '.data_analysis_mode')
-        with open(flag_file, 'w') as f:
-            f.write(f'{filename}\n{datetime.now().isoformat()}')
-        
-        # Clear any leftover workflow transition state from previous sessions
-        from app.conversation.workflow_state import WorkflowStateManager, WorkflowSource, WorkflowStage
-        workflow_manager = WorkflowStateManager(session_id)
-        
-        # Transition to Data Analysis V3 workflow
-        workflow_manager.transition_workflow(
-            from_source=WorkflowSource.STANDARD,
-            to_source=WorkflowSource.DATA_ANALYSIS_V3,
-            new_stage=WorkflowStage.UPLOADED,
-            clear_markers=['.analysis_complete']  # Clear stale markers
-        )
-        logger.info(f"Transitioned to Data Analysis V3 workflow for session {session_id}")
-        
-        # CRITICAL: Also clear the DataAnalysisStateManager flags
-        # The chat endpoint checks DataAnalysisStateManager, not WorkflowStateManager
-        from app.agent.state_manager import DataAnalysisStateManager
-        da_state_manager = DataAnalysisStateManager(session_id)
-        da_state_manager.update_state({
-            'workflow_transitioned': False,
-            'tpr_completed': False,
-            'column_schema': schema_at_upload,
-        })
-        logger.info(
-            f"✅ Cleared DataAnalysisStateManager flags, saved schema "
-            f"(header_row={schema_at_upload.get('header_row')}) for session {session_id}"
-        )
         
         # Sync to other instances for multi-instance support
         try:
@@ -823,7 +168,7 @@ def upload_for_analysis():
             'session_id': session_id,
             'filename': filename,
             'filepath': standard_path,
-            'file_size': os.path.getsize(filepath),
+            'file_size': upload_result.file_size,
             'metadata': {
                 'rows': metadata.get('rows', 'Unknown'),
                 'columns': metadata.get('columns', 'Unknown'),
@@ -1049,76 +394,26 @@ def data_analysis_chat():
         except Exception:
             pass
 
-        from app.agent.state_manager import DataAnalysisStateManager
-        state_manager = DataAnalysisStateManager(session_id)
-        current_state = state_manager.get_state() or {}
-
-        tpr_language = TPRLanguageInterface(session_id)
-        try:
-            tpr_language.update_from_metadata(current_state)
-        except Exception:
-            pass
-
-        if current_state.get('workflow_transitioned'):
-            logger.info("Workflow transitioned for session %s — staying in V3 agent mode", session_id)
-
-        lower_message = (message or '').lower().strip()
-        is_tpr_active = state_manager.is_tpr_workflow_active()
-
-        if is_tpr_active:
-            logger.info("[CHAT] TPR active for session %s", session_id)
-            response = _handle_tpr_active(session_id, message, state_manager, current_state, tpr_language)
-            response_time = time.time() - request_start_time
-            assistant_message = response.get('message', '') if isinstance(response, dict) else str(response)
-            interaction_core.log_message(
-                session_id=session_id, sender='assistant', content=assistant_message,
-                intent=response.get('workflow') if isinstance(response, dict) else None,
-                entities={
-                    'response_length': len(assistant_message),
-                    'response_time_seconds': response_time,
-                    'endpoint': '/api/v1/data-analysis/chat',
-                    'workflow': 'tpr',
-                    'stage': response.get('stage') if isinstance(response, dict) else None,
-                    'visualizations_count': len(response.get('visualizations') or []) if isinstance(response, dict) else 0,
-                    'status': response.get('success', True) if isinstance(response, dict) else True,
-                }
-            )
-            return _save_and_respond(response, session_id)
-
-        start_triggers = ['start tpr', 'start the tpr', 'tpr workflow', 'run tpr']
-        if any(t in lower_message for t in start_triggers):
-            try:
-                response = _handle_tpr_start(session_id, message, state_manager, current_state)
-            except TPRStartError as e:
-                response = {'success': False, 'message': str(e), 'session_id': session_id}
-            return _save_and_respond(response, session_id)
-
-        from app.agent.agent import DataAnalysisAgent
-        agent = DataAnalysisAgent(session_id)
-        workflow_context = _build_general_workflow_context(session_id)
-        logger.info(
-            "[AGENT CONTEXT] Session %s → stage=%s columns=%d",
-            session_id,
-            workflow_context.get('stage'),
-            len(workflow_context.get('data_columns') or [])
-        )
-        result = _run_agent_sync(agent, message, workflow_context=workflow_context)
+        result = run_analysis_message(session_id, message)
 
         response_time = time.time() - request_start_time
         assistant_message = result.get('message', '') if isinstance(result, dict) else str(result)
+        workflow = result.get('workflow') if isinstance(result, dict) else None
+        workflow = workflow or 'data_analysis_v3_agent'
         interaction_core.log_message(
             session_id=session_id, sender='assistant', content=assistant_message,
-            intent='agent_query',
+            intent=workflow if workflow == 'tpr' else 'agent_query',
             entities={
                 'response_length': len(assistant_message),
                 'response_time_seconds': response_time,
                 'endpoint': '/api/v1/data-analysis/chat',
-                'workflow': 'data_analysis_v3_agent',
+                'workflow': workflow,
+                'stage': result.get('stage') if isinstance(result, dict) else None,
                 'visualizations_count': len(result.get('visualizations') or []) if isinstance(result, dict) else 0,
                 'status': result.get('success', True) if isinstance(result, dict) else True,
             }
         )
-        logger.info("✅ Agent response logged for session %s (%.2fs)", session_id, response_time)
+        logger.info("Agent response logged for session %s (%.2fs)", session_id, response_time)
         return _save_and_respond(result, session_id)
 
     except Exception as e:
@@ -1150,8 +445,7 @@ def data_analysis_chat():
 def data_analysis_chat_stream():
     """
     SSE streaming endpoint for data analysis chat.
-    TPR paths run synchronously and are SSE-wrapped via _wrap_tpr_as_sse().
-    General queries stream token-by-token via agent.analyze_stream().
+    The shared service emits orchestration events; this route formats them as SSE.
     """
     import json as _json
     from flask import Response, stream_with_context
@@ -1193,58 +487,26 @@ def data_analysis_chat_stream():
     except Exception:
         pass
 
-    from app.agent.state_manager import DataAnalysisStateManager
-    state_manager = DataAnalysisStateManager(session_id)
-    current_state = state_manager.get_state() or {}
-    lower_message = (message or '').lower().strip()
-    is_tpr_active = state_manager.is_tpr_workflow_active()
     app_obj = current_app._get_current_object()
-
-    if current_state.get('workflow_transitioned'):
-        logger.info("Workflow transitioned for session %s — staying in V3 agent mode", session_id)
-
-    if is_tpr_active:
-        tpr_language = TPRLanguageInterface(session_id)
-        try:
-            tpr_language.update_from_metadata(current_state)
-        except Exception:
-            pass
-        try:
-            result = _handle_tpr_active(session_id, message, state_manager, current_state, tpr_language)
-        except Exception as e:
-            logger.exception("[STREAM-TPR-ACTIVE] Error for session %s: %s", session_id, e)
-            result = {'success': False, 'message': str(e), 'session_id': session_id}
-        return _wrap_tpr_as_sse(result, session_id, mem_sid, app_obj, interaction_core)
-
-    start_triggers = ['start tpr', 'start the tpr', 'tpr workflow', 'run tpr']
-    if any(t in lower_message for t in start_triggers):
-        try:
-            result = _handle_tpr_start(session_id, message, state_manager, current_state)
-        except TPRStartError as e:
-            result = {'success': False, 'message': str(e), 'session_id': session_id}
-        except Exception as e:
-            logger.exception("[STREAM-TPR-START] Unexpected error for session %s: %s", session_id, e)
-            result = {'success': False, 'message': 'Failed to start TPR workflow.', 'session_id': session_id}
-        return _wrap_tpr_as_sse(result, session_id, mem_sid, app_obj, interaction_core)
-
-    # Agent streaming path — analyze_stream() is inherently different from sync analyze()
-    workflow_context = _build_general_workflow_context(session_id)
     captured_session_id = session_id
     captured_mem_sid = mem_sid
 
     def generate():
         with app_obj.app_context():
-            yield f"data: {_json.dumps({'type': 'status', 'status': 'started'})}\n\n"
+            request_start = time.time()
             try:
-                from app.agent.agent import DataAnalysisAgent
                 from app.services.session_memory import SessionMemory, MessageType
-                agent = DataAnalysisAgent(captured_session_id)
-                request_start = time.time()
-                for event in agent.analyze_stream(message, workflow_context=workflow_context):
+
+                for event in stream_analysis_events(captured_session_id, message):
                     yield f"data: {_json.dumps(event)}\n\n"
                     if event.get('type') == 'result':
                         response_time = time.time() - request_start
-                        assistant_text = event.get('data', {}).get('message', '')
+                        event_data = event.get('data') or {}
+                        if not isinstance(event_data, dict):
+                            event_data = {}
+                        assistant_text = event_data.get('message', '')
+                        workflow = event_data.get('workflow')
+                        workflow = workflow or 'data_analysis_v3_agent'
                         try:
                             SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
                         except Exception:
@@ -1252,14 +514,17 @@ def data_analysis_chat_stream():
                         try:
                             interaction_core.log_message(
                                 session_id=captured_session_id, sender='assistant',
-                                content=assistant_text, intent='agent_query',
+                                content=assistant_text,
+                                intent=workflow if workflow == 'tpr' else 'agent_query',
                                 entities={
                                     'response_time_seconds': response_time,
                                     'endpoint': '/api/v1/data-analysis/chat/stream',
-                                    'workflow': 'data_analysis_v3_agent',
+                                    'workflow': workflow,
+                                    'stage': event_data.get('stage'),
                                     'visualizations_count': len(
-                                        event.get('data', {}).get('visualizations') or []
+                                        event_data.get('visualizations') or []
                                     ),
+                                    'status': event_data.get('success', True),
                                 }
                             )
                         except Exception:

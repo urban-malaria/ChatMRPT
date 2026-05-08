@@ -8,6 +8,7 @@ Goals:
 """
 
 import json
+import logging
 import os
 import threading
 from datetime import datetime
@@ -15,6 +16,8 @@ from typing import Dict, Any, List, Optional
 
 from app.services.data_state import get_data_state
 from app.services.redis_state import get_redis_state_manager
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryService:
@@ -30,11 +33,21 @@ class MemoryService:
         self._lock = threading.Lock()
         # Optional Redis backing
         self._use_redis = os.getenv('CHATMRPT_USE_REDIS_MEMORY', '0') == '1'
+        self._redis_strict = os.getenv('CHATMRPT_REDIS_MEMORY_STRICT', '0') == '1'
         self._redis_mgr = None
         if self._use_redis:
             try:
                 self._redis_mgr = get_redis_state_manager()
+                if not getattr(self._redis_mgr, '_client', None):
+                    raise RuntimeError('Redis memory manager initialized without an active Redis client')
+                self._redis_mgr._client.ping()
             except Exception:
+                logger.exception('Redis-backed memory initialization failed')
+                if self._redis_strict:
+                    raise RuntimeError(
+                        'CHATMRPT_USE_REDIS_MEMORY=1 but Redis memory is unavailable; '
+                        'disable CHATMRPT_REDIS_MEMORY_STRICT or fix Redis before serving WhatsApp analysis'
+                    )
                 self._use_redis = False
 
     def _path(self, session_id: str) -> str:
@@ -142,14 +155,37 @@ class MemoryService:
             msgs = msgs[-self.max_messages:]
         return msgs
 
+    def health_check(self) -> bool:
+        """Verify Redis-backed memory is usable when strict Redis memory is enabled."""
+        if not self._use_redis:
+            if self._redis_strict:
+                raise RuntimeError('Redis memory strict mode is enabled but Redis memory is not active')
+            return False
+        try:
+            self._redis_mgr._client.ping()
+            probe_session = '__memory_healthcheck__'
+            probe_payload = {'ok': True}
+            if not self._redis_mgr.set_custom_data(probe_session, 'memory_probe', probe_payload):
+                raise RuntimeError('Redis memory health-check write returned false')
+            if self._redis_mgr.get_custom_data(probe_session, 'memory_probe') != probe_payload:
+                raise RuntimeError('Redis memory health-check read did not match write')
+            return True
+        except Exception:
+            logger.exception('Redis memory health-check failed')
+            if self._redis_strict:
+                raise
+            return False
+
     # --- Internal helpers ---
     def _read(self, session_id: str) -> Dict[str, Any]:
         if self._use_redis and self._redis_mgr:
             try:
                 data = self._redis_mgr.get_custom_data(session_id, 'memory')
                 return data or {}
-            except Exception:
-                pass
+            except Exception as exc:
+                if self._redis_strict:
+                    raise RuntimeError(f'Redis memory read failed for session {session_id}') from exc
+                logger.warning('Redis memory read failed; falling back to file memory', exc_info=True)
         path = self._path(session_id)
         if not os.path.exists(path):
             return {}
@@ -162,10 +198,13 @@ class MemoryService:
     def _write(self, session_id: str, data: Dict[str, Any]) -> None:
         if self._use_redis and self._redis_mgr:
             try:
-                self._redis_mgr.set_custom_data(session_id, 'memory', data)
+                if not self._redis_mgr.set_custom_data(session_id, 'memory', data):
+                    raise RuntimeError('Redis memory write returned false')
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                if self._redis_strict:
+                    raise RuntimeError(f'Redis memory write failed for session {session_id}') from exc
+                logger.warning('Redis memory write failed; falling back to file memory', exc_info=True)
         path = self._path(session_id)
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
@@ -181,3 +220,7 @@ def get_memory_service() -> MemoryService:
     if _memory_service is None:
         _memory_service = MemoryService()
     return _memory_service
+
+
+def verify_redis_memory_ready() -> bool:
+    return get_memory_service().health_check()

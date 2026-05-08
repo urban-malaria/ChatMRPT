@@ -26,6 +26,7 @@ from .export_routes import export_bp
 from .session_routes import session_bp
 from .arena_routes import arena_bp
 from .conversation_routes import conversations_bp
+from .whatsapp_routes import whatsapp_bp
 
 # API routes for React frontend
 try:
@@ -86,6 +87,7 @@ __all__ = [
     'session_bp',
     'arena_bp',
     'conversations_bp',
+    'whatsapp_bp',
     'api_bp',
     'data_analysis_bp',
     'register_all_blueprints'
@@ -128,6 +130,9 @@ def register_all_blueprints(app):
 
     # Register Conversation History routes
     app.register_blueprint(conversations_bp)
+
+    # Register WhatsApp webhook
+    app.register_blueprint(whatsapp_bp)
 
     # Register API routes (React frontend API)
     if API_ROUTES_AVAILABLE and api_bp:

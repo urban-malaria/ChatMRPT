@@ -1,0 +1,17 @@
+[Unit]
+Description=ChatMRPT WhatsApp RQ Worker
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/ChatMRPT
+EnvironmentFile=/home/ec2-user/ChatMRPT/.env
+ExecStart=/home/ec2-user/chatmrpt_env/bin/python scripts/whatsapp_worker.py
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
