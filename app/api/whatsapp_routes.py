@@ -20,7 +20,7 @@ from twilio.rest import Client as TwilioClient
 from twilio.twiml.messaging_response import MessagingResponse
 from werkzeug.utils import secure_filename
 
-from app.whatsapp.formatter import chunk_text, format_error, format_upload_ack, format_welcome
+from app.whatsapp.formatter import format_error, format_upload_ack, format_welcome
 from app.whatsapp.session import WhatsAppSessionManager
 
 logger = logging.getLogger(__name__)
@@ -334,6 +334,52 @@ def _process_upload_job(
             _finish_job(mgr.redis, message_sid, 'failed', session_id=session_id, error=exc)
 
 
+def _process_analysis_job(
+    *,
+    mgr: WhatsAppSessionManager,
+    sender: str,
+    message_sid: str,
+    body: str,
+    session_id: str,
+    app,
+) -> None:
+    try:
+        with app.app_context():
+            from app.whatsapp.responder import run_whatsapp_analysis_and_respond
+
+            _send_messages(sender, ['Running analysis...'], app)
+            response = run_whatsapp_analysis_and_respond(
+                user_message=body,
+                sender=sender,
+                session_id=session_id,
+                send_fn=_send_messages,
+                app=app,
+            )
+
+            assistant_message = response.get('message') or 'Analysis complete.'
+            mgr.append_history(sender, 'user', body)
+            mgr.append_history(sender, 'assistant', assistant_message)
+            _finish_job(mgr.redis, message_sid, 'succeeded', session_id=session_id)
+            logger.info(
+                'WhatsApp analysis completed: sid=%s sender=%s session=%s',
+                message_sid,
+                sender,
+                session_id,
+            )
+
+    except Exception as exc:
+        logger.exception(
+            'WhatsApp analysis job failed: sid=%s sender=%s session=%s',
+            message_sid,
+            sender,
+            session_id,
+        )
+        try:
+            _send_messages(sender, [format_error()], app)
+        finally:
+            _finish_job(mgr.redis, message_sid, 'failed', session_id=session_id, error=exc)
+
+
 # --------------------------------------------------------------------------- #
 #  Webhook
 # --------------------------------------------------------------------------- #
@@ -415,35 +461,28 @@ def whatsapp_webhook():
         thread.start()
         return _twiml_empty()
 
-    # --- Text message → LLM (async so we return 200 immediately) ---
+    # --- Text message -> shared Data Analysis V3 service ---
+    if not message_sid:
+        logger.warning('WhatsApp text webhook missing MessageSid; ignoring')
+        return _twiml_empty()
+
+    if not _claim_job(mgr.redis, message_sid, sender, 'analysis'):
+        return _twiml_empty()
+
     session_id = mgr.get_or_create_session(sender)
-    history = mgr.get_history(sender)
-
     app = current_app._get_current_object()
-
-    def process_and_reply():
-        try:
-            with app.app_context():
-                llm_manager = app.services.llm_manager
-                reply_text = llm_manager.generate_response(
-                    prompt=body,
-                    context={'conversation_history': history} if history else None,
-                    session_id=session_id,
-                    max_tokens=1500,
-                )
-                reply_text = (reply_text or '').strip()
-
-                mgr.append_history(sender, 'user', body)
-                mgr.append_history(sender, 'assistant', reply_text)
-
-                chunks = chunk_text(reply_text) if reply_text else [format_error()]
-                _send_messages(sender, chunks, app)
-
-        except Exception:
-            logger.exception(f'Error processing WhatsApp message from {sender}')
-            _send_messages(sender, [format_error()], app)
-
-    thread = threading.Thread(target=process_and_reply, daemon=True)
+    thread = threading.Thread(
+        target=_process_analysis_job,
+        kwargs={
+            'mgr': mgr,
+            'sender': sender,
+            'message_sid': message_sid,
+            'body': body,
+            'session_id': session_id,
+            'app': app,
+        },
+        daemon=True,
+    )
     thread.start()
 
     # Return empty 200 immediately so Twilio doesn't retry
