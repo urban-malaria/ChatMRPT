@@ -6,6 +6,8 @@ WhatsApp has a 1600-character message limit. Long ChatMRPT responses
 each part reads naturally.
 """
 
+from __future__ import annotations
+
 import re
 
 _LIMIT = 1590  # leave 10 chars headroom below WhatsApp's 1600 limit

@@ -5,6 +5,8 @@ Receives Twilio POST requests, validates the signature, routes the
 message through ChatMRPT, and returns a TwiML reply quickly.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import time
