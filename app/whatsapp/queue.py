@@ -60,7 +60,7 @@ def get_whatsapp_queue(app=None):
 
 
 def make_whatsapp_job_id(message_sid: str, job_type: str) -> str:
-    return f"wa:{job_type}:{message_sid}:{int(time.time() * 1000)}:{uuid.uuid4().hex[:8]}"
+    return f"wa_{job_type}_{message_sid}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
 
 
 def enqueue_whatsapp_job(
