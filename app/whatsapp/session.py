@@ -12,6 +12,8 @@ Keys:
   wa_arena:{phone}    → JSON metadata for the active Arena battle (TTL 24h)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import uuid
