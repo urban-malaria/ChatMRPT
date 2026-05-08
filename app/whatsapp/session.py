@@ -9,6 +9,7 @@ Keys:
   wa_session:{phone}  → session_id (string, TTL 24h)
   wa_history:{phone}  → JSON list of {role, content} dicts (TTL 24h)
   wa_upload:{phone}   → JSON metadata for the latest upload (TTL 24h)
+  wa_arena:{phone}    → JSON metadata for the active Arena battle (TTL 24h)
 """
 
 import json
@@ -101,8 +102,30 @@ class WhatsAppSessionManager:
     def clear_upload_metadata(self, phone: str) -> None:
         self.redis.delete(f'wa_upload:{phone}')
 
+    # ------------------------------------------------------------------ #
+    #  Arena state
+    # ------------------------------------------------------------------ #
+
+    def set_arena_state(self, phone: str, metadata: dict) -> None:
+        self.redis.setex(f'wa_arena:{phone}', _TTL, json.dumps(metadata, default=str))
+
+    def get_arena_state(self, phone: str) -> dict | None:
+        raw = self.redis.get(f'wa_arena:{phone}')
+        if not raw:
+            return None
+        try:
+            if isinstance(raw, bytes):
+                raw = raw.decode('utf-8')
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    def clear_arena_state(self, phone: str) -> None:
+        self.redis.delete(f'wa_arena:{phone}')
+
     def clear_session(self, phone: str) -> None:
         self.redis.delete(f'wa_session:{phone}')
         self.redis.delete(f'wa_history:{phone}')
         self.redis.delete(f'wa_upload:{phone}')
+        self.redis.delete(f'wa_arena:{phone}')
         logger.info(f'WhatsApp session cleared for {phone}')

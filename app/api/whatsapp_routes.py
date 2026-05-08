@@ -16,18 +16,17 @@ from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 from werkzeug.utils import secure_filename
 
-from app.whatsapp.formatter import format_error, format_welcome
+from app.whatsapp.formatter import chunk_text, format_error, format_welcome
 from app.whatsapp.job_state import claim_job, finish_job, mark_job_queued
 from app.whatsapp.observability import log_event
 from app.whatsapp.queue import enqueue_whatsapp_job, make_whatsapp_job_id, whatsapp_requires_redis
+from app.whatsapp.routing import WhatsAppRouteType, classify_whatsapp_message
 from app.whatsapp.session import WhatsAppSessionManager
 
 logger = logging.getLogger(__name__)
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
-_RESET_COMMANDS = {'reset', 'restart', 'new chat', 'start over'}
-_HELP_COMMANDS = {'help', 'hi', 'hello', 'start'}
 _ALLOWED_MEDIA_EXTENSIONS = {'.csv', '.xlsx', '.xls'}
 _CONTENT_TYPE_EXTENSIONS = {
     'text/csv': '.csv',
@@ -148,6 +147,40 @@ def _filename_from_media(form, message_sid: str) -> tuple[str | None, str | None
     return None, 'Please send a CSV or Excel file (.csv, .xlsx, or .xls).'
 
 
+def _reply_twiml(message: str) -> Response:
+    resp = MessagingResponse()
+    for chunk in chunk_text(message):
+        resp.message(chunk)
+    return Response(str(resp), mimetype='text/xml')
+
+
+def _finish_conversation_reply(mgr: WhatsAppSessionManager, sender: str, message_sid: str, body: str, reply: str, *, session_id=None) -> Response:
+    mgr.append_history(sender, 'user', body)
+    mgr.append_history(sender, 'assistant', reply)
+    finish_job(mgr.redis, message_sid, 'succeeded', session_id=session_id)
+    return _reply_twiml(reply)
+
+
+def _has_ready_upload_metadata(upload_metadata: dict) -> bool:
+    """Treat legacy upload metadata with a session_id and no status as ready."""
+    if not upload_metadata.get('session_id'):
+        return False
+    status = upload_metadata.get('status')
+    return status == 'ready' or status is None
+
+
+def _is_tpr_workflow_active(session_id: str | None) -> bool:
+    if not session_id:
+        return False
+    try:
+        from app.agent.state_manager import DataAnalysisStateManager
+
+        return bool(DataAnalysisStateManager(session_id).is_tpr_workflow_active())
+    except Exception:
+        logger.warning('Could not check TPR workflow state for WhatsApp session %s', session_id, exc_info=True)
+        return False
+
+
 # --------------------------------------------------------------------------- #
 #  Webhook
 # --------------------------------------------------------------------------- #
@@ -178,21 +211,6 @@ def whatsapp_webhook():
         resp.message(format_error())
         return Response(str(resp), mimetype='text/xml')
 
-    # --- Reset command ---
-    if body.lower() in _RESET_COMMANDS:
-        mgr.clear_session(sender)
-        resp = MessagingResponse()
-        resp.message("✅ Session reset. " + format_welcome())
-        return Response(str(resp), mimetype='text/xml')
-
-    # --- Welcome / help ---
-    if body.lower() in _HELP_COMMANDS:
-        if not mgr.get_session_id(sender):
-            mgr.get_or_create_session(sender)
-        resp = MessagingResponse()
-        resp.message(format_welcome())
-        return Response(str(resp), mimetype='text/xml')
-
     # --- File upload ---
     if num_media > 0:
         if not message_sid:
@@ -215,6 +233,13 @@ def whatsapp_webhook():
             resp = MessagingResponse()
             resp.message(validation_error or format_error())
             return Response(str(resp), mimetype='text/xml')
+
+        mgr.set_upload_metadata(sender, {
+            'status': 'processing',
+            'message_sid': message_sid,
+            'filename': filename,
+            'started_at': time.time(),
+        })
 
         app = current_app._get_current_object()
         try:
@@ -246,18 +271,140 @@ def whatsapp_webhook():
 
         return _twiml_empty()
 
-    # --- Text message -> shared Data Analysis V3 service ---
+    # --- Text message -> WhatsApp conversation router / analysis / Arena ---
     if not message_sid:
         logger.warning('WhatsApp text webhook missing MessageSid; ignoring')
         return _twiml_empty()
 
-    session_id = mgr.get_or_create_session(sender)
-    if not claim_job(mgr.redis, message_sid, sender, 'analysis'):
+    if not claim_job(mgr.redis, message_sid, sender, 'conversation'):
         return _twiml_empty()
+
+    session_id = mgr.get_session_id(sender)
+    upload_metadata = mgr.get_upload_metadata(sender) or {}
+    upload_status = upload_metadata.get('status')
+    has_ready_upload = _has_ready_upload_metadata(upload_metadata)
+    upload_processing = upload_status == 'processing'
+    if has_ready_upload:
+        session_id = upload_metadata.get('session_id') or session_id
+    workflow_active = _is_tpr_workflow_active(session_id) if has_ready_upload else False
+    arena_state = mgr.get_arena_state(sender) or {}
+
+    decision = classify_whatsapp_message(
+        body,
+        has_ready_upload=has_ready_upload,
+        upload_processing=upload_processing,
+        workflow_active=workflow_active,
+        arena_active=bool(arena_state.get('battle_id')),
+    )
+    log_event(
+        "text_route_decided",
+        sender=sender,
+        message_sid=message_sid,
+        route=decision.route_type.value,
+        reason=decision.reason,
+        has_ready_upload=has_ready_upload,
+        workflow_active=workflow_active,
+    )
+
+    if decision.route_type == WhatsAppRouteType.RESET:
+        mgr.clear_session(sender)
+        return _finish_conversation_reply(
+            mgr,
+            sender,
+            message_sid,
+            body,
+            "✅ Session reset. " + format_welcome(),
+            session_id=session_id,
+        )
+
+    if decision.route_type == WhatsAppRouteType.ARENA_CANCEL:
+        mgr.clear_arena_state(sender)
+        return _finish_conversation_reply(
+            mgr,
+            sender,
+            message_sid,
+            body,
+            decision.reply or format_welcome(),
+            session_id=session_id,
+        )
+
+    if decision.route_type in {
+        WhatsAppRouteType.WELCOME,
+        WhatsAppRouteType.SIDE_HELP,
+        WhatsAppRouteType.NO_DATA_EDUCATION,
+        WhatsAppRouteType.UPLOAD_NEEDED,
+        WhatsAppRouteType.UPLOAD_PROCESSING,
+        WhatsAppRouteType.UNSUPPORTED,
+    }:
+        return _finish_conversation_reply(
+            mgr,
+            sender,
+            message_sid,
+            body,
+            decision.reply or format_welcome(),
+            session_id=session_id,
+        )
 
     app = current_app._get_current_object()
     try:
+        if decision.route_type == WhatsAppRouteType.ARENA_COMMAND:
+            from app.whatsapp.jobs import process_whatsapp_arena_job
+
+            session_id = session_id or mgr.get_or_create_session(sender)
+            rq_job_id = make_whatsapp_job_id(message_sid, 'arena')
+            mark_job_queued(mgr.redis, message_sid, rq_job_id=rq_job_id, session_id=session_id)
+            job = enqueue_whatsapp_job(
+                process_whatsapp_arena_job,
+                kwargs={
+                    'sender': sender,
+                    'message_sid': message_sid,
+                    'prompt': decision.arena_prompt or body,
+                    'session_id': session_id,
+                },
+                message_sid=message_sid,
+                job_type='arena',
+                job_id=rq_job_id,
+                app=app,
+            )
+            log_event("arena_job_enqueued", sender=sender, message_sid=message_sid, session_id=session_id, rq_job_id=job.id)
+            return _twiml_empty()
+
+        if decision.route_type == WhatsAppRouteType.ARENA_VOTE:
+            from app.whatsapp.jobs import process_whatsapp_arena_vote_job
+
+            battle_id = arena_state.get('battle_id')
+            if not battle_id:
+                return _finish_conversation_reply(
+                    mgr,
+                    sender,
+                    message_sid,
+                    body,
+                    "I could not find an active Arena comparison. Start one with `arena: your question`.",
+                    session_id=session_id,
+                )
+
+            rq_job_id = make_whatsapp_job_id(message_sid, 'arena_vote')
+            mark_job_queued(mgr.redis, message_sid, rq_job_id=rq_job_id, session_id=session_id)
+            job = enqueue_whatsapp_job(
+                process_whatsapp_arena_vote_job,
+                kwargs={
+                    'sender': sender,
+                    'message_sid': message_sid,
+                    'vote': decision.arena_vote or body,
+                    'battle_id': battle_id,
+                    'session_id': session_id,
+                },
+                message_sid=message_sid,
+                job_type='arena_vote',
+                job_id=rq_job_id,
+                app=app,
+            )
+            log_event("arena_vote_job_enqueued", sender=sender, message_sid=message_sid, session_id=session_id, rq_job_id=job.id, battle_id=battle_id)
+            return _twiml_empty()
+
         from app.whatsapp.jobs import process_whatsapp_analysis_job
+
+        session_id = session_id or mgr.get_or_create_session(sender)
 
         rq_job_id = make_whatsapp_job_id(message_sid, 'analysis')
         mark_job_queued(mgr.redis, message_sid, rq_job_id=rq_job_id, session_id=session_id)

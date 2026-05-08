@@ -164,6 +164,7 @@ def process_whatsapp_upload_job(
                 mgr.clear_history(sender)
                 mgr.clear_upload_metadata(sender)
                 mgr.set_upload_metadata(sender, {
+                    "status": "ready",
                     "session_id": session_id,
                     "filename": upload_result.original_filename,
                     "rows": upload_result.rows,
@@ -189,6 +190,13 @@ def process_whatsapp_upload_job(
         )
         log_event("upload_job_failed", logging.ERROR, sender=sender, message_sid=message_sid, session_id=session_id, error=exc)
         try:
+            mgr.set_upload_metadata(sender, {
+                "status": "failed",
+                "message_sid": message_sid,
+                "filename": filename,
+                "error": str(exc),
+                "finished_at": time.time(),
+            })
             _send_messages(sender, [format_error()], app)
         finally:
             finish_job(mgr.redis, message_sid, "failed", session_id=session_id, error=exc)
@@ -240,6 +248,93 @@ def process_whatsapp_analysis_job(
             session_id,
         )
         log_event("analysis_job_failed", logging.ERROR, sender=sender, message_sid=message_sid, session_id=session_id, error=exc)
+        try:
+            _send_messages(sender, [format_error()], app)
+        finally:
+            finish_job(mgr.redis, message_sid, "failed", session_id=session_id, error=exc)
+        raise
+
+
+def process_whatsapp_arena_job(
+    *,
+    sender: str,
+    message_sid: str,
+    prompt: str,
+    session_id: str | None = None,
+) -> None:
+    app = _create_app()
+    mgr = _get_session_manager(app)
+    mark_job_processing(mgr.redis, message_sid, session_id=session_id)
+    log_event("arena_job_started", sender=sender, message_sid=message_sid, session_id=session_id)
+
+    try:
+        with app.app_context():
+            from app.whatsapp import arena as whatsapp_arena
+
+            with _sender_lock(mgr.redis, sender):
+                _send_messages(sender, ["Comparing expert answers..."], app)
+                result = whatsapp_arena.start_battle(prompt, session_id=session_id)
+                message = whatsapp_arena.format_battle(result)
+
+                if result and not result.get("error"):
+                    mgr.set_arena_state(sender, {
+                        "battle_id": result.get("battle_id"),
+                        "session_id": session_id,
+                        "prompt": prompt,
+                        "started_at": time.time(),
+                    })
+
+                if not _send_messages(sender, [message], app):
+                    raise RuntimeError("Failed to send WhatsApp Arena response")
+                mgr.append_history(sender, "user", f"arena: {prompt}")
+                mgr.append_history(sender, "assistant", message)
+                finish_job(mgr.redis, message_sid, "succeeded", session_id=session_id)
+                log_event("arena_job_succeeded", sender=sender, message_sid=message_sid, session_id=session_id)
+
+    except Exception as exc:
+        logger.exception("WhatsApp Arena job failed: sid=%s sender=%s", message_sid, sender)
+        log_event("arena_job_failed", logging.ERROR, sender=sender, message_sid=message_sid, session_id=session_id, error=exc)
+        try:
+            _send_messages(sender, [format_error()], app)
+        finally:
+            finish_job(mgr.redis, message_sid, "failed", session_id=session_id, error=exc)
+        raise
+
+
+def process_whatsapp_arena_vote_job(
+    *,
+    sender: str,
+    message_sid: str,
+    vote: str,
+    battle_id: str,
+    session_id: str | None = None,
+) -> None:
+    app = _create_app()
+    mgr = _get_session_manager(app)
+    mark_job_processing(mgr.redis, message_sid, session_id=session_id)
+    log_event("arena_vote_started", sender=sender, message_sid=message_sid, session_id=session_id, battle_id=battle_id)
+
+    try:
+        with app.app_context():
+            from app.whatsapp import arena as whatsapp_arena
+
+            with _sender_lock(mgr.redis, sender):
+                result = whatsapp_arena.submit_vote(battle_id, vote)
+                message = whatsapp_arena.format_vote_result(result)
+
+                if result and not result.get("error") and not result.get("continue"):
+                    mgr.clear_arena_state(sender)
+
+                if not _send_messages(sender, [message], app):
+                    raise RuntimeError("Failed to send WhatsApp Arena vote response")
+                mgr.append_history(sender, "user", vote)
+                mgr.append_history(sender, "assistant", message)
+                finish_job(mgr.redis, message_sid, "succeeded", session_id=session_id)
+                log_event("arena_vote_succeeded", sender=sender, message_sid=message_sid, session_id=session_id, battle_id=battle_id)
+
+    except Exception as exc:
+        logger.exception("WhatsApp Arena vote job failed: sid=%s sender=%s", message_sid, sender)
+        log_event("arena_vote_failed", logging.ERROR, sender=sender, message_sid=message_sid, session_id=session_id, battle_id=battle_id, error=exc)
         try:
             _send_messages(sender, [format_error()], app)
         finally:

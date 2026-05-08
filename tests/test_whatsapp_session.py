@@ -40,9 +40,11 @@ def test_session_id_and_upload_metadata_round_trip():
 
     mgr.set_session_id("whatsapp:+123", "session-1")
     mgr.set_upload_metadata("whatsapp:+123", {"session_id": "session-1", "rows": 10})
+    mgr.set_arena_state("whatsapp:+123", {"battle_id": "battle-1"})
 
     assert mgr.get_session_id("whatsapp:+123") == "session-1"
     assert mgr.get_upload_metadata("whatsapp:+123") == {"session_id": "session-1", "rows": 10}
+    assert mgr.get_arena_state("whatsapp:+123") == {"battle_id": "battle-1"}
 
 
 def test_clear_session_removes_upload_metadata():
@@ -52,9 +54,11 @@ def test_clear_session_removes_upload_metadata():
     mgr.set_session_id("whatsapp:+123", "session-1")
     mgr.append_history("whatsapp:+123", "user", "hello")
     mgr.set_upload_metadata("whatsapp:+123", {"session_id": "session-1"})
+    mgr.set_arena_state("whatsapp:+123", {"battle_id": "battle-1"})
 
     mgr.clear_session("whatsapp:+123")
 
     assert mgr.get_session_id("whatsapp:+123") is None
     assert mgr.get_history("whatsapp:+123") == []
     assert mgr.get_upload_metadata("whatsapp:+123") is None
+    assert mgr.get_arena_state("whatsapp:+123") is None
