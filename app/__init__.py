@@ -133,6 +133,11 @@ def create_app(config_name=None):
         app.logger.info("🚫 Tool scoring disabled for faster startup")
     
     init_services(app)
+
+    if os.environ.get('CHATMRPT_USE_REDIS_MEMORY', '0') == '1' and os.environ.get('CHATMRPT_REDIS_MEMORY_STRICT', '0') == '1':
+        from .services.memory_service import verify_redis_memory_ready
+        verify_redis_memory_ready()
+        app.logger.info("✅ Redis-backed memory strict mode verified")
     
     # --- Memory System Removed ---
     # Using simpler in-memory conversation tracking in request_interpreter.py

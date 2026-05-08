@@ -31,6 +31,8 @@ def _install_fake_app_modules(monkeypatch, result, local_path, calls):
     formatter_mod = types.ModuleType("app.whatsapp.formatter")
     formatter_mod.chunk_text = lambda text: [text]
     formatter_mod.format_error = lambda: "error"
+    observability_mod = types.ModuleType("app.whatsapp.observability")
+    observability_mod.log_event = lambda *args, **kwargs: None
 
     services_pkg = types.ModuleType("app.services")
     services_pkg.__path__ = []
@@ -52,6 +54,7 @@ def _install_fake_app_modules(monkeypatch, result, local_path, calls):
         "app": app_pkg,
         "app.whatsapp": whatsapp_pkg,
         "app.whatsapp.formatter": formatter_mod,
+        "app.whatsapp.observability": observability_mod,
         "app.services": services_pkg,
         "app.services.analysis_chat_service": analysis_mod,
         "app.services.instance_sync": instance_sync_mod,

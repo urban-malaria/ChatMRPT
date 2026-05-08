@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from app.whatsapp.formatter import chunk_text, format_error
+from app.whatsapp.observability import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,11 @@ def run_whatsapp_analysis_and_respond(
         ensure_session_available(session_id)
 
         try:
+            log_event("analysis_start", sender=sender, session_id=session_id)
             result = run_analysis_message(session_id=session_id, message=user_message)
+            log_event("analysis_end", sender=sender, session_id=session_id, success=True)
         except Exception:
+            log_event("analysis_end", logging.ERROR, sender=sender, session_id=session_id, success=False)
             send_fn(sender, [format_error()], app)
             raise
 
@@ -72,6 +76,7 @@ def run_whatsapp_analysis_and_respond(
                 f"maps/{session_id}/{local_path.name}",
             )
             if not public_url:
+                log_event("s3_map_upload_failure", logging.ERROR, sender=sender, session_id=session_id, local_path=str(local_path))
                 continue
 
             title = viz.get("title") or "Map"
@@ -82,7 +87,11 @@ def run_whatsapp_analysis_and_respond(
                 "local_path": str(local_path),
             })
 
-        sync_session_after_upload(session_id)
+        try:
+            sync_session_after_upload(session_id)
+        except Exception:
+            log_event("instance_sync_failure", logging.ERROR, sender=sender, session_id=session_id)
+            raise
         return {
             "success": True,
             "message": message,
