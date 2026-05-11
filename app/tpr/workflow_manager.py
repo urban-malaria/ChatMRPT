@@ -940,7 +940,6 @@ class TPRWorkflowHandler:
                                 '| Year | Burden per 1,000 | Change |\n'
                                 '|------|-----------------|--------|\n'
                                 + '\n'.join(year_rows_table)
-                                + '\n\nRun **"malaria risk analysis"** to generate vulnerability rankings for any year.'
                             )
                             message = message + table_md
 
