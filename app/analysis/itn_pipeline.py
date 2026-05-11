@@ -103,14 +103,6 @@ def detect_state(data_handler) -> Optional[str]:
             state = _normalize_state(data_handler.csv_data['StateCode'].iloc[0])
             if state:
                 return state
-        # DHIS2 exports store state in orgunitlevel2
-        if 'orgunitlevel2' in data_handler.csv_data.columns:
-            non_null = data_handler.csv_data['orgunitlevel2'].dropna()
-            if len(non_null) > 0:
-                state = _normalize_state(str(non_null.iloc[0]))
-                if state:
-                    logger.info(f"Detected state from DHIS2 orgunitlevel2: {state}")
-                    return state
 
     # Check unified dataset as another fallback
     if hasattr(data_handler, 'unified_dataset') and data_handler.unified_dataset is not None:
@@ -162,13 +154,6 @@ def detect_state(data_handler) -> Optional[str]:
             state = _normalize_state(session['state_name'])
             if state:
                 logger.info(f"Detected state from session: {state}")
-                return state
-        # TPR workflow stores the selected state under tpr_selections
-        tpr_state = session.get('tpr_selections', {}).get('state')
-        if tpr_state:
-            state = _normalize_state(tpr_state)
-            if state:
-                logger.info(f"Detected state from TPR selections in session: {state}")
                 return state
     except:
         pass
