@@ -622,107 +622,50 @@ def _load_session_rankings(upload_dir: str) -> Optional[pd.DataFrame]:
 @handle_errors
 @log_execution_time
 def explain_visualization():
-    """Handle visualization explanation requests using AI vision"""
+    """Handle data-grounded visualization explanation requests."""
     try:
-        data = request.json
-        viz_url = data.get('viz_url')  # New: handle URL from explain button
-        viz_path = data.get('viz_path')  # New: relative path
-        visualization_path = data.get('visualization_path')  # Legacy support
+        data = request.get_json(silent=True) or {}
+        viz_url = data.get('viz_url')
+        viz_path = data.get('viz_path')
+        visualization_path = data.get('visualization_path')
         base64_data = data.get('base64_data')
         title = data.get('title', 'Visualization')
         viz_type = data.get('viz_type', 'unknown')
 
-        # Get session ID - try multiple sources
         session_id = session.get('session_id') or data.get('session_id')
 
-        logger.info(f"Explain visualization called with viz_path: {viz_path}, session_id: {session_id}")
-
-        # Get the universal visualization explainer service
         from app.visualization.explainer import get_universal_viz_explainer
+        from app.visualization.explain_resolver import (
+            ExplainResolutionError,
+            resolve_explain_target,
+        )
 
-        # Get LLM manager from services container
         llm_manager = current_app.services.llm_manager
-
-        # Create explainer instance
         explainer = get_universal_viz_explainer(llm_manager=llm_manager)
 
-        # LOG ALL INCOMING DATA
-        logger.info(f"=== EXPLAIN VISUALIZATION REQUEST ===")
-        logger.info(f"viz_path received: {viz_path}")
-        logger.info(f"visualization_path received: {visualization_path}")
-        logger.info(f"viz_url received: {viz_url}")
-        logger.info(f"session_id: {session_id}")
+        logger.info(
+            "explain_visualization_request",
+            extra={
+                "session_id": session_id,
+                "viz_type": viz_type,
+                "has_viz_url": bool(viz_url),
+                "has_viz_path": bool(viz_path),
+                "has_visualization_path": bool(visualization_path),
+                "has_base64": bool(base64_data),
+                "hardened": current_app.config.get("ENABLE_HARDENED_EXPLAIN", True),
+            },
+        )
 
-        # CRITICAL: Check if viz_path is actually being used as the primary path
-        # The frontend sends viz_path, NOT visualization_path!
-        if not visualization_path and viz_path:
-            logger.info(f"Entering viz_path construction block")
-            # Handle different types of viz_path
-            import os
-
-            # Check if it's a pickle URL from Data Analysis V3
-            if viz_path.startswith('/images/plotly_figures/pickle/'):
-                # Extract the pickle filename from the URL
-                pickle_filename = viz_path.split('/')[-1]  # Get filename like "xxx.pickle"
-
-                if not session_id:
-                    logger.error(f"No session_id available for pickle file: {pickle_filename}")
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Session ID required for pickle file explanations'
-                    }), 400
-
-                # Construct ABSOLUTE path to the pickle file in session uploads/visualizations subdirectory
-                visualization_path = os.path.join(current_app.instance_path, 'uploads', session_id, 'visualizations', pickle_filename)
-                logger.info(f"Constructed pickle path: {visualization_path}")
-                logger.info(f"File exists at constructed path: {os.path.exists(visualization_path)}")
-            elif viz_path.startswith('/static/visualizations/'):
-                # Handle static HTML visualizations from Data Analysis V3
-                # These are in the app/static/visualizations directory
-                viz_filename = viz_path.split('/')[-1]  # Get filename like "data_analysis_xxx.html"
-                visualization_path = os.path.join(current_app.root_path, 'static/visualizations', viz_filename)
-            elif viz_path.startswith('/serve_viz_file/'):
-                # Handle served session visualization paths:
-                #   /serve_viz_file/<session_id>/visualizations/<file>
-                #   /serve_viz_file/<session_id>/<file>  (e.g. tpr_distribution_map.html)
-                try:
-                    parts = viz_path.strip('/').split('/')
-                    # parts[0] = 'serve_viz_file', parts[1] = session_id, rest = relative path
-                    if len(parts) >= 3 and parts[0] == 'serve_viz_file':
-                        sid = parts[1]
-                        rel_path = '/'.join(parts[2:])
-                        visualization_path = os.path.join(
-                            current_app.instance_path, 'uploads', sid, rel_path
-                        )
-                        logger.info(f"Resolved serve_viz_file path to: {visualization_path}")
-                    elif session_id:
-                        filename = parts[-1]
-                        visualization_path = os.path.join(
-                            current_app.instance_path, 'uploads', session_id, filename
-                        )
-                        logger.info(f"Resolved serve_viz_file path using request session_id to: {visualization_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to resolve serve_viz_file path: {e}")
-            else:
-                # For other paths, construct from viz_path
-                visualization_path = os.path.join(current_app.instance_path, 'uploads', viz_path)
-        
-        # Generate AI-powered explanation
         if base64_data:
-            # For base64 images, we need to save temporarily and process
             import tempfile
             import base64
             
-            # Decode base64 to image file
             img_data = base64.b64decode(base64_data)
-            
-            # Save to temporary file
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.png', delete=False) as tmp_file:
                 tmp_file.write(img_data)
                 tmp_path = tmp_file.name
             
             try:
-                # Get AI explanation
                 explanation = explainer.explain_visualization(
                     viz_path=tmp_path,
                     viz_type=viz_type,
@@ -733,76 +676,65 @@ def explain_visualization():
                 import os
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-                    
-        elif visualization_path:
-            logger.info(f"Entering visualization_path block with path: {visualization_path}")
-            # For file-based visualizations, construct full path
-            import os
-
-            # Normalize and safely join to avoid duplicating the session ID
-            if not os.path.isabs(visualization_path):
-                uploads_root = current_app.config['UPLOAD_FOLDER']  # instance/uploads
-                # Strip any leading slashes to ensure consistent joining
-                vis_rel = visualization_path.lstrip('/')
-                # If path already begins with the session_id, join from uploads_root
-                if session_id and (vis_rel.startswith(f"{session_id}/") or vis_rel == session_id):
-                    full_path = os.path.join(uploads_root, vis_rel)
-                else:
-                    # Otherwise, treat it as relative to this session's folder
-                    full_path = os.path.join(uploads_root, session_id, vis_rel)
-            else:
-                full_path = visualization_path
-
-            # Debug logging
-            logger.info(f"=== CALLING EXPLAINER ===")
-            logger.info(f"Full path for explanation: {full_path}")
-            logger.info(f"File exists: {os.path.exists(full_path)}")
-            logger.info(f"viz_type: {viz_type}")
-
-            # Get AI explanation
-            explanation = explainer.explain_visualization(
-                viz_path=full_path,
-                viz_type=viz_type,
-                session_id=session_id
-            )
-            logger.info(f"Explanation result: {explanation[:100] if explanation else 'None'}")
         else:
-            logger.error(f"No visualization_path or base64_data available!")
-            logger.error(f"viz_path: {viz_path}, visualization_path: {visualization_path}, base64_data: {bool(base64_data)}")
-
-            # FALLBACK: Try to use viz_path directly if it's a pickle URL
-            if viz_path and viz_path.startswith('/images/plotly_figures/pickle/'):
-                logger.warning("FALLBACK: Using viz_path directly for pickle file")
-                pickle_filename = viz_path.split('/')[-1]
-
-                if session_id:
-                    import os
-                    full_path = os.path.join(current_app.instance_path, 'uploads', session_id, 'visualizations', pickle_filename)
-                    logger.info(f"FALLBACK path: {full_path}, exists: {os.path.exists(full_path)}")
-
-                    explanation = explainer.explain_visualization(
-                        viz_path=full_path,
-                        viz_type=viz_type,
-                        session_id=session_id
-                    )
-                else:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Session ID required for pickle file explanations'
-                    }), 400
-            else:
+            try:
+                target = resolve_explain_target(
+                    viz_url=viz_url,
+                    viz_path=viz_path,
+                    visualization_path=visualization_path,
+                    request_session_id=session_id,
+                )
+            except ExplainResolutionError as exc:
+                logger.warning(
+                    "explain_visualization_resolution_failed",
+                    extra={
+                        "session_id": session_id,
+                        "viz_type": viz_type,
+                        "error": str(exc),
+                    },
+                )
                 return jsonify({
-                    'status': 'error',
-                    'message': 'Either visualization_path or base64_data must be provided'
+                    "status": "error",
+                    "message": str(exc),
                 }), 400
+
+            logger.info(
+                "explain_visualization_resolved",
+                extra={
+                    "request_session_id": session_id,
+                    "target_session_id": target.session_id,
+                    "viz_type": viz_type,
+                    "source": target.source,
+                    "has_local_path": bool(target.local_path),
+                    "has_s3_url": bool(target.s3_url),
+                    "restored_session": target.restored_session,
+                },
+            )
+            explanation = explainer.explain_visualization(
+                viz_path=target.viz_path,
+                viz_type=viz_type,
+                session_id=target.session_id or session_id,
+            )
         
         # If explainer returned an explicit error string, surface it as an error response
         if isinstance(explanation, str) and explanation.strip().upper().startswith('ERROR:'):
+            logger.warning(
+                "explain_visualization_generation_failed",
+                extra={"session_id": session_id, "viz_type": viz_type, "error": explanation[:500]},
+            )
             return jsonify({
                 'status': 'error',
                 'message': explanation.replace('ERROR:', '').strip() or 'Explanation failed'
             }), 400
 
+        logger.info(
+            "explain_visualization_success",
+            extra={
+                "session_id": session_id,
+                "viz_type": viz_type,
+                "response_chars": len(explanation or ""),
+            },
+        )
         return jsonify({
             'status': 'success',
             'explanation': explanation,

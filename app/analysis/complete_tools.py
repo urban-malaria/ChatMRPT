@@ -996,30 +996,32 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
                 kmo_value = pca_result.get('data', {}).get('kmo_value', 0)
                 bartlett_p = pca_result.get('data', {}).get('bartlett_p_value', 1)
                 # Interpret KMO value
-                kmo_interpret = "Your data variables show weak relationships"
+                kmo_interpret = "Your data variables meet only the minimum KMO threshold"
                 if kmo_value < 0.3:
                     kmo_interpret = "Your data variables are mostly independent"
                 elif kmo_value < 0.5:
                     kmo_interpret = "Your data variables show limited relationships"
+                elif kmo_value < 0.6:
+                    kmo_interpret = "Your data variables are borderline for PCA by KMO alone"
                 
                 # Interpret Bartlett's test
-                bartlett_interpret = "No significant patterns found between variables"
+                bartlett_interpret = "The variables do not show enough shared correlation structure for PCA"
                 if bartlett_p < 0.05:
-                    bartlett_interpret = "Some patterns exist but not strong enough"
+                    bartlett_interpret = "Bartlett passed, but another PCA suitability check failed"
                 
                 pca_test_summary = f"""
 
 ### Behind the Scenes - Statistical Testing
 
-I ran two tests to check if your data is suitable for advanced pattern analysis (PCA):
+I ran two tests to check if your data is suitable for advanced pattern analysis (PCA). PCA is used only when **both** tests pass:
 
-- **Kaiser-Meyer-Olkin (KMO) Test**: {kmo_value:.3f} (needed 0.5 or higher)
+- **Kaiser-Meyer-Olkin (KMO) Test**: {kmo_value:.3f} (minimum threshold: 0.5)
   → {kmo_interpret}
 
 - **Bartlett's Test of Sphericity**: {"Failed" if bartlett_p >= 0.05 else "Passed"} (p-value = {bartlett_p:.3f})
   → {bartlett_interpret}
 
-- **My Decision**: Used the Composite Score method only, which is more reliable for this type of data
+- **My Decision**: PCA was not used because the suitability checks did not both pass. I used the Composite Score method only, which is more transparent and reliable for this dataset.
 
 """
             elif pca_data:
@@ -1039,7 +1041,7 @@ I ran two tests to check if your data is suitable for advanced pattern analysis 
                     elif kmo_value >= 0.6:
                         kmo_interpret = "Your data variables have moderate relationships"
                     elif kmo_value >= 0.5:
-                        kmo_interpret = "Your data variables have adequate relationships"
+                        kmo_interpret = "Your data variables meet the minimum KMO threshold"
                     else:
                         kmo_interpret = "Your data variables have weak relationships"
                     
@@ -1053,15 +1055,15 @@ I ran two tests to check if your data is suitable for advanced pattern analysis 
 
 ### Behind the Scenes - Statistical Testing
 
-I ran two tests to check if your data is suitable for advanced pattern analysis (PCA):
+I ran two tests to check if your data is suitable for advanced pattern analysis (PCA). PCA is used only when **both** tests pass:
 
-- **Kaiser-Meyer-Olkin (KMO) Test**: {kmo_value:.3f} (needed 0.5 or higher) ✓
+- **Kaiser-Meyer-Olkin (KMO) Test**: {kmo_value:.3f} (minimum threshold: 0.5) ✓
   → {kmo_interpret}
 
 - **Bartlett's Test of Sphericity**: Passed (p-value {bartlett_display}) ✓
   → Significant patterns found between variables
 
-- **My Decision**: Used both methods (Composite Score and PCA) for comprehensive analysis
+- **My Decision**: Used both methods (Composite Score and PCA) because KMO and Bartlett both passed
   → This gives you two different perspectives on malaria risk in your wards
 
 """
@@ -1599,4 +1601,3 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
 
 # REMOVED: GenerateComprehensiveAnalysisSummary and GenerateComprehensiveAnalysisSummaryInput
 # Dead code - never imported or called. Users should use RunMalariaRiskAnalysis instead.
-

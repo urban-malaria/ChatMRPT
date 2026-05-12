@@ -32,6 +32,8 @@ class BaseConfig:
 
     # Feature flags
     DISABLE_AUTH = os.environ.get('DISABLE_AUTH', 'false').lower() == 'true'
+    ENABLE_HARDENED_EXPLAIN = os.environ.get('ENABLE_HARDENED_EXPLAIN', 'true').lower() == 'true'
+    ENABLE_EXPLAIN_S3_URLS = os.environ.get('ENABLE_EXPLAIN_S3_URLS', 'true').lower() == 'true'
     
     # Path Configuration
     PROJECT_ROOT = Path(__file__).parent.parent.parent

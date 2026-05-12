@@ -22,6 +22,13 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
+UNSUPPORTED_CAUSAL_TERMS = {
+    'sanitation': ['sanitation', 'latrine', 'waste'],
+    'healthcare_access': ['healthcare access', 'health care access', 'facility access', 'infrastructure'],
+    'stagnant_water': ['stagnant water', 'breeding site', 'mosquito breeding'],
+    'socioeconomic': ['socioeconomic', 'poverty', 'income'],
+}
+
 # ---------------------------------------------------------------------------
 # Visualization type metadata - what each type shows and which data to read
 # ---------------------------------------------------------------------------
@@ -110,7 +117,7 @@ class UniversalVisualizationExplainer:
         if not self.llm_manager:
             return "ERROR: LLM manager not available for explanations"
 
-        viz_type = (viz_type or '').lower().replace(' ', '_')
+        viz_type = self._normalize_viz_type(viz_type, viz_path)
         logger.info(
             "Explaining visualization: type=%s path=%s session=%s",
             viz_type, viz_path, session_id,
@@ -122,14 +129,26 @@ class UniversalVisualizationExplainer:
 
             # 2. Build a type-specific prompt with real data
             prompt = self._build_prompt(viz_type, ctx)
+            hardened = current_app.config.get("ENABLE_HARDENED_EXPLAIN", True)
 
             # 3. Call LLM
-            system_message = (
-                "You are a malaria epidemiologist embedded in the ChatMRPT analysis system. "
-                "Explain the visualization clearly and specifically using the data provided. "
-                "Reference actual ward names, LGA names, and numbers. "
-                "Be concise (3-5 paragraphs). Focus on actionable insights for public health officials."
-            )
+            if hardened:
+                system_message = (
+                    "You are a malaria epidemiologist embedded in the ChatMRPT analysis system. "
+                    "Explain only from the data context provided by ChatMRPT. "
+                    "Separate observed evidence from interpretation. "
+                    "Do not state causes or drivers unless the variable is explicitly listed in the provided evidence. "
+                    "If a useful explanation would require field validation or external data, label it as a caveat. "
+                    "Reference actual ward names, LGA names, ranks, scores, coverage, and counts when provided. "
+                    "Use the requested structured headings and stay concise."
+                )
+            else:
+                system_message = (
+                    "You are a malaria epidemiologist embedded in the ChatMRPT analysis system. "
+                    "Explain the visualization clearly and specifically using the data provided. "
+                    "Reference actual ward names, LGA names, and numbers. "
+                    "Be concise and focus on actionable insights for public health officials."
+                )
 
             explanation = self.llm_manager.generate_response(
                 prompt=prompt,
@@ -140,6 +159,8 @@ class UniversalVisualizationExplainer:
             if not explanation or explanation.strip().upper().startswith('ERROR'):
                 return "ERROR: LLM failed to generate explanation"
 
+            if hardened:
+                explanation = self._remove_unsupported_claims(explanation, ctx)
             return explanation
 
         except Exception as e:
@@ -159,6 +180,8 @@ class UniversalVisualizationExplainer:
             'state_name': None,
             'facility_level': None,
             'age_group': None,
+            'allowed_evidence': [],
+            'variables_used': [],
         }
 
         if not session_id:
@@ -167,6 +190,7 @@ class UniversalVisualizationExplainer:
         sess_dir = self._get_session_dir(session_id)
         if not sess_dir:
             return ctx
+        ctx['_session_dir'] = sess_dir
 
         # Read workflow metadata (state, facility, age group)
         self._read_workflow_metadata(sess_dir, ctx)
@@ -186,6 +210,8 @@ class UniversalVisualizationExplainer:
         if lga_col:
             ctx['lga_count'] = int(df[lga_col].nunique())
             ctx['lga_names'] = df[lga_col].dropna().unique().tolist()[:10]
+
+        ctx['allowed_evidence'] = self._allowed_evidence_from_columns(df.columns)
 
         # Dispatch to viz-type-specific extractors
         extractors = {
@@ -255,6 +281,7 @@ class UniversalVisualizationExplainer:
     ):
         """Extract vulnerability map context (composite or PCA)."""
         is_pca = 'pca' in (ctx.get('viz_type') or '')
+        ctx['map_scope'] = self._infer_map_scope(viz_path)
 
         score_col = self._find_column(
             df, ['pca_score', 'pca_rank'] if is_pca else ['composite_score', 'composite_rank']
@@ -267,6 +294,11 @@ class UniversalVisualizationExplainer:
         )
 
         ctx['method'] = 'PCA' if is_pca else 'Composite'
+        ctx['ranking_basis'] = (
+            'PCA score/rank' if is_pca else 'Composite score/rank from selected malaria risk variables'
+        )
+        risk_vars = self._risk_factor_columns(df)
+        ctx['variables_used'] = risk_vars[:12]
 
         if cat_col:
             counts = df[cat_col].value_counts().to_dict()
@@ -346,6 +378,7 @@ class UniversalVisualizationExplainer:
             if col:
                 series = pd.to_numeric(df[col], errors='coerce')
                 ctx['variable_name'] = variable.replace('_', ' ').title()
+                ctx['variables_used'] = [col]
                 ctx['mean'] = round(float(series.mean(skipna=True)), 2)
                 ctx['median'] = round(float(series.median(skipna=True)), 2)
                 ctx['min'] = round(float(series.min(skipna=True)), 2)
@@ -389,6 +422,8 @@ class UniversalVisualizationExplainer:
                 'max': round(float(cov.max()), 1),
             }
 
+        self._extract_saved_itn_results(ctx)
+
         # Also get vulnerability context
         self._extract_vulnerability_context(df, ctx, ward_col, lga_col, viz_path)
 
@@ -399,6 +434,7 @@ class UniversalVisualizationExplainer:
         """Extract urban extent map context."""
         urban_col = self._find_column(df, ['urbanPercentage', 'urban_percentage', 'Urban_Percentage'])
         if urban_col:
+            ctx['variables_used'] = [urban_col]
             urban = pd.to_numeric(df[urban_col], errors='coerce')
             ctx['urban_mean'] = round(float(urban.mean(skipna=True)), 1)
             ctx['urban_median'] = round(float(urban.median(skipna=True)), 1)
@@ -440,6 +476,60 @@ class UniversalVisualizationExplainer:
             ctx['min'] = round(float(series.min(skipna=True)), 2)
             ctx['max'] = round(float(series.max(skipna=True)), 2)
 
+    def _extract_saved_itn_results(self, ctx: dict):
+        """Add allocation-specific context from saved ITN results JSON."""
+        sess_dir = ctx.get('_session_dir')
+        if not sess_dir:
+            return
+        path = os.path.join(sess_dir, 'itn_distribution_results.json')
+        if not os.path.exists(path):
+            return
+
+        try:
+            with open(path, 'r') as handle:
+                saved = json.load(handle)
+        except Exception as exc:
+            logger.debug("Could not read ITN result context %s: %s", path, exc)
+            return
+
+        stats = saved.get('stats') or saved.get('summary') or {}
+        if stats:
+            ctx['itn_stats'] = {
+                'total_nets': stats.get('total_nets'),
+                'allocated_nets': stats.get('allocated_nets') or stats.get('total_nets_allocated'),
+                'remaining_nets': stats.get('remaining_nets'),
+                'covered_population': stats.get('covered_population') or stats.get('population_covered'),
+                'coverage_percent': stats.get('coverage_percent'),
+                'prioritized_wards': stats.get('prioritized_wards'),
+                'reprioritized_wards': stats.get('reprioritized_wards'),
+            }
+
+        prioritized = saved.get('prioritized') or saved.get('distribution') or []
+        if prioritized:
+            frame = pd.DataFrame(prioritized)
+            ward_col = self._find_column(frame, ['WardName', 'ward_name', 'ward'])
+            nets_col = self._find_column(frame, ['nets_allocated', 'Nets_Allocated'])
+            rank_col = self._find_column(frame, ['overall_rank', 'composite_rank', 'rank'])
+            pop_col = self._find_column(frame, ['Population', 'population'])
+            coverage_col = self._find_column(frame, ['coverage_percent', 'Coverage_Percent'])
+
+            sort_col = rank_col or nets_col
+            if ward_col and sort_col:
+                ranked = frame.sort_values(sort_col, ascending=True if rank_col else False).head(5)
+                top_allocations = []
+                for _, row in ranked.iterrows():
+                    item = {'ward': row.get(ward_col)}
+                    if rank_col and pd.notna(row.get(rank_col)):
+                        item['rank'] = int(row.get(rank_col))
+                    if nets_col and pd.notna(row.get(nets_col)):
+                        item['nets_allocated'] = int(row.get(nets_col))
+                    if pop_col and pd.notna(row.get(pop_col)):
+                        item['population'] = int(row.get(pop_col))
+                    if coverage_col and pd.notna(row.get(coverage_col)):
+                        item['coverage_percent'] = round(float(row.get(coverage_col)), 1)
+                    top_allocations.append(item)
+                ctx['top_itn_allocations'] = top_allocations
+
     # ------------------------------------------------------------------
     # Prompt builder
     # ------------------------------------------------------------------
@@ -450,7 +540,16 @@ class UniversalVisualizationExplainer:
         description = info.get('description', 'a data visualization from the malaria risk analysis')
 
         state = ctx.get('state_name') or 'the selected state'
-        lines = [f"This is a **{label}** for **{state}** — {description}."]
+        lines = [
+            f"This is a **{label}** for **{state}** — {description}.",
+            "",
+            "**Grounding rules for your answer:**",
+            "- Use only the evidence listed below.",
+            "- Do not invent causes, drivers, field conditions, or service-access explanations.",
+            "- If a causal claim would require data not listed below, put it under Caveats as needing field validation.",
+            "- Use these exact headings: Key finding, Evidence from the data, Interpretation, Caveats, Suggested next actions.",
+            "- Keep the explanation concise and action-oriented.",
+        ]
 
         # Add facility/age context for TPR maps
         if viz_type == 'tpr_map':
@@ -459,6 +558,10 @@ class UniversalVisualizationExplainer:
             if fac or age:
                 lines.append(f"Facility level: {fac or 'all'}, Age group: {age or 'all ages'}.")
 
+        if ctx.get('error'):
+            lines.append("")
+            lines.append(f"Data availability note: {ctx['error']}")
+
         lines.append("")
         lines.append("**Key statistics from the underlying data:**")
 
@@ -466,6 +569,15 @@ class UniversalVisualizationExplainer:
         lga_count = ctx.get('lga_count', 0)
         if total:
             lines.append(f"- {total} wards analyzed across {lga_count} LGAs")
+
+        if ctx.get('map_scope'):
+            lines.append(f"- Map scope: {ctx['map_scope']}")
+        if ctx.get('ranking_basis'):
+            lines.append(f"- Ranking basis: {ctx['ranking_basis']}")
+        if ctx.get('variables_used'):
+            lines.append(f"- Variables available for interpretation: {', '.join(map(str, ctx['variables_used']))}")
+        elif ctx.get('allowed_evidence'):
+            lines.append(f"- Available evidence columns: {', '.join(map(str, ctx['allowed_evidence'][:12]))}")
 
         # Metric stats
         metric_name = ctx.get('metric_name', ctx.get('variable_name'))
@@ -525,6 +637,23 @@ class UniversalVisualizationExplainer:
             lines.append(f"- Total nets allocated: {ctx['total_nets']:,}")
             lines.append(f"- Average nets per covered ward: {ctx.get('avg_nets_per_ward', 0):,.0f}")
             lines.append(f"- Wards receiving nets: {ctx.get('wards_covered', 0)}")
+        if ctx.get('itn_stats'):
+            stats = {k: v for k, v in ctx['itn_stats'].items() if v is not None}
+            if stats:
+                stat_str = ', '.join(f"{k}: {v:,}" if isinstance(v, int) else f"{k}: {v}" for k, v in stats.items())
+                lines.append(f"- ITN allocation summary: {stat_str}")
+        if ctx.get('top_itn_allocations'):
+            alloc_strs = []
+            for item in ctx['top_itn_allocations'][:5]:
+                parts = [str(item.get('ward', '?'))]
+                if item.get('rank') is not None:
+                    parts.append(f"rank {item['rank']}")
+                if item.get('nets_allocated') is not None:
+                    parts.append(f"{item['nets_allocated']:,} nets")
+                if item.get('coverage_percent') is not None:
+                    parts.append(f"{item['coverage_percent']}% coverage")
+                alloc_strs.append(" (".join([parts[0], ", ".join(parts[1:]) + ")"]) if len(parts) > 1 else parts[0])
+            lines.append(f"- Top ITN allocations: {', '.join(alloc_strs)}")
 
         # Model info
         if ctx.get('model_count'):
@@ -535,13 +664,20 @@ class UniversalVisualizationExplainer:
             lines.append(f"- Analysis method: {ctx['method']}")
 
         lines.append("")
+        lines.append("**Unsupported-claim guardrail:**")
         lines.append(
-            "Based on this data, provide a clear interpretation:\n"
-            "1. What is the most important finding?\n"
-            "2. Which specific areas need the most urgent attention and why?\n"
-            "3. Are there any notable patterns or surprising results?\n"
-            "4. What practical next steps would you recommend?\n\n"
-            "Be specific — use the actual ward names, LGA names, and numbers provided above."
+            "Unless these are explicitly listed in the evidence columns or variables above, do not mention "
+            "sanitation, stagnant water, mosquito breeding sites, poverty, socioeconomic status, healthcare access, "
+            "healthcare infrastructure, or facility access as factual drivers."
+        )
+        lines.append("")
+        lines.append(
+            "Now write the explanation using exactly these headings:\n"
+            "## Key finding\n"
+            "## Evidence from the data\n"
+            "## Interpretation\n"
+            "## Caveats\n"
+            "## Suggested next actions"
         )
 
         return "\n".join(lines)
@@ -549,6 +685,110 @@ class UniversalVisualizationExplainer:
     # ------------------------------------------------------------------
     # Helper methods
     # ------------------------------------------------------------------
+    @staticmethod
+    def _normalize_viz_type(viz_type: str | None, viz_path: str | None = None) -> str:
+        """Normalize frontend/legacy visualization type aliases."""
+        raw = (viz_type or '').lower().replace(' ', '_')
+        path = (viz_path or '').lower()
+        if raw in {'vulnerability_map', 'vulnerability', 'composite_map'}:
+            return 'vulnerability_map_pca' if 'pca' in path else 'vulnerability_map_composite'
+        if raw in {'pca_map', 'pca_vulnerability_map'}:
+            return 'vulnerability_map_pca'
+        if raw in {'itn_distribution', 'itn_distribution_map'}:
+            return 'itn_map'
+        if raw in {'variable_map', 'variable_distribution_map'}:
+            return 'variable_distribution'
+        return raw
+
+    @staticmethod
+    def _infer_map_scope(viz_path: str | None) -> str:
+        name = os.path.basename(viz_path or '').lower()
+        if 'multi_year' in name or 'all_years' in name:
+            return (
+                'Tabbed multi-year map. All Years is aggregate environmental vulnerability; '
+                'individual year tabs blend environmental vulnerability with burden prioritization.'
+            )
+        if any(str(year) in name for year in range(2020, 2031)):
+            return 'Single-year map; interpret as year-specific prioritization.'
+        return 'Current analysis map for the active session.'
+
+    @staticmethod
+    def _allowed_evidence_from_columns(columns) -> list[str]:
+        keep = []
+        for col in columns:
+            text = str(col)
+            low = text.lower()
+            if any(token in low for token in [
+                'ward', 'lga', 'state', 'burden', 'tpr', 'positive', 'population',
+                'rainfall', 'ndvi', 'ndwi', 'elevation', 'housing', 'urban',
+                'score', 'rank', 'category', 'nets', 'coverage', 'allocation',
+                'water', 'temperature', 'humidity', 'soil',
+            ]):
+                keep.append(text)
+        return keep[:25]
+
+    @staticmethod
+    def _risk_factor_columns(df: pd.DataFrame) -> list[str]:
+        excluded = {
+            'wardcode', 'statecode', 'lgacode', 'wardname', 'lga', 'state',
+            'geopoliticalzone', 'geometry',
+        }
+        risk_vars = []
+        for col in df.columns:
+            low = str(col).lower()
+            if low in excluded:
+                continue
+            if low.startswith('model_') or low.endswith('_rank') or low.endswith('_category') or low.endswith('_score'):
+                continue
+            if low in {'overall_rank', 'composite_rank', 'pca_rank'}:
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                risk_vars.append(str(col))
+        return risk_vars
+
+    def _remove_unsupported_claims(self, explanation: str, ctx: Dict[str, Any]) -> str:
+        """Remove common unsupported causal sentences from generated explanations."""
+        evidence_text = ' '.join(
+            str(value).lower()
+            for value in (ctx.get('variables_used') or []) + (ctx.get('allowed_evidence') or [])
+        )
+        blocked_phrases = []
+        for evidence_key, phrases in UNSUPPORTED_CAUSAL_TERMS.items():
+            if evidence_key.replace('_', ' ') in evidence_text:
+                continue
+            if any(part in evidence_text for part in evidence_key.split('_')):
+                continue
+            blocked_phrases.extend(phrases)
+
+        if not blocked_phrases:
+            return explanation
+
+        sentences = []
+        removed = False
+        for sentence in explanation.replace('\n', '\n ').split('. '):
+            low = sentence.lower()
+            if any(phrase in low for phrase in blocked_phrases):
+                removed = True
+                continue
+            sentences.append(sentence.strip())
+
+        cleaned = '. '.join(s for s in sentences if s)
+        if removed:
+            cleaned = cleaned.rstrip()
+            if cleaned and not cleaned.endswith('.'):
+                cleaned += '.'
+            cleaned += (
+                "\n\n## Caveats\n"
+                "I removed unsupported causal language from the generated explanation. "
+                "Drivers such as sanitation, stagnant water, socioeconomic conditions, or healthcare access "
+                "should only be stated when those variables are present in the uploaded data or verified externally."
+            )
+            logger.warning(
+                "explain_unsupported_claims_removed",
+                extra={"viz_type": ctx.get("viz_type"), "source_file": ctx.get("source_file")},
+            )
+        return cleaned or explanation
+
     def _get_session_dir(self, session_id: str) -> Optional[str]:
         """Get the session upload directory path."""
         try:

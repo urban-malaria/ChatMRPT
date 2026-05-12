@@ -107,8 +107,6 @@ const VisualizationContainer: React.FC<VisualizationContainerProps> = ({
         body: JSON.stringify({
           viz_url: currentViz.url,
           viz_type: vizType,
-          viz_path: vizPath,
-          visualization_path: vizPath, // Include both for compatibility
           session_id: session.sessionId,
         }),
       });
