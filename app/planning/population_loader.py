@@ -20,7 +20,7 @@ class ITNPopulationLoader:
     """Loader for ITN population data sourced from the national ward dataset."""
 
     def __init__(self) -> None:
-        self.base_path = Path(__file__).resolve().parent.parent.parent.parent
+        self.base_path = Path(__file__).resolve().parents[2]
         self.population_csv_path = self.base_path / "www" / "wards_with_pop.csv"
         self.shapefile_path = self.base_path / "www" / "complete_names_wards" / "wards.shp"
 
