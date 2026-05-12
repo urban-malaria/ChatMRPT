@@ -19,6 +19,19 @@ from app.services.container import get_service_container
 logger = logging.getLogger(__name__)
 
 
+def _web_path_to_local_path(web_path: Optional[str], session_id: str) -> Optional[str]:
+    """Convert a session visualization URL to the local file path used by the agent."""
+    if not web_path:
+        return None
+
+    prefix = f"/serve_viz_file/{session_id}/"
+    if not web_path.startswith(prefix):
+        return None
+
+    relative_path = web_path[len(prefix):].lstrip("/")
+    return os.path.join("instance", "uploads", session_id, relative_path)
+
+
 class PlanITNDistribution(BaseTool):
     """
     Plan ITN (bed net) distribution based on vulnerability rankings.
@@ -144,6 +157,7 @@ class PlanITNDistribution(BaseTool):
             
             # Visualization will be rendered by frontend using web_path
             map_path = result.get('map_path')
+            file_path = _web_path_to_local_path(map_path, session_id)
             
             # Generate export documents
             download_links = []
@@ -199,7 +213,9 @@ class PlanITNDistribution(BaseTool):
                 'method_used': self.method,
                 'urban_threshold': urban_threshold,
                 'household_size': avg_household_size,
-                'top_priority_wards': self._get_top_priority_wards(result['prioritized'])
+                'top_priority_wards': self._get_top_priority_wards(result['prioritized']),
+                'file_path': file_path,
+                'web_path': map_path,
             }
             
             # CRITICAL: Mark ITN planning complete in Redis for multi-worker consistency
