@@ -13,7 +13,7 @@ from app.tpr.trend_analyzer import (
     identify_emerging_hotspots,
     identify_resolving_hotspots,
 )
-from app.tpr.utils import add_burden_to_timeseries
+from app.tpr.utils import add_burden_to_timeseries, cap_burden_per_1000
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +122,21 @@ def test_add_burden_correct_calculation():
     expected_2021 = (600 / 10000) * 1000  # 60.0
     assert abs(result[result['Period'] == 2020]['Burden'].iloc[0] - expected_2020) < 0.01
     assert abs(result[result['Period'] == 2021]['Burden'].iloc[0] - expected_2021) < 0.01
+
+
+def test_add_burden_caps_impossible_values():
+    ts = pd.DataFrame([
+        {'WardName': 'ward_a', 'LGA': 'LGA1', 'Period': 2020,
+         'Total_Positive': 1500, 'Total_Tested': 2000, 'TPR': 75.0},
+    ])
+    ward_df = _make_ward_df({'ward_a': 1000})
+    result = add_burden_to_timeseries(ts, ward_df)
+    assert result['Burden'].iloc[0] == pytest.approx(1000.0)
+
+
+def test_cap_burden_per_1000_clips_upper_and_lower_bounds():
+    result = cap_burden_per_1000(pd.Series([-5, 25, 1200]))
+    assert result.tolist() == [0.0, 25.0, 1000.0]
 
 
 def test_add_burden_missing_ward():

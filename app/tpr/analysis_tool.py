@@ -594,7 +594,9 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
         lga_avg_burden = calculate_lga_averages(
             merged_gdf, 'Burden',
             numerator_col='Total_Positive',
-            denominator_col='Population'
+            denominator_col='Population',
+            rate_multiplier=1000,
+            cap_value=1000
         )
 
         # Create hover text with LGA average and comparison

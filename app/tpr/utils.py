@@ -14,6 +14,12 @@ from typing import Dict, List, Optional, Any
 import logging
 
 logger = logging.getLogger(__name__)
+BURDEN_CAP_PER_1000 = 1000.0
+
+
+def cap_burden_per_1000(values):
+    """Cap malaria burden at 1,000 per 1,000 population."""
+    return pd.to_numeric(values, errors='coerce').clip(lower=0, upper=BURDEN_CAP_PER_1000)
 
 
 def load_state_shapefile(state_name: str):
@@ -353,7 +359,7 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                 # Cap at 1000 because burden > 1000 per 1,000 population is epidemiologically impossible
                 # (would mean >100% of population tested positive, likely due to repeat testing)
                 merged['Burden'] = merged.apply(
-                    lambda r: min(round((r['Total_Positive'] / r['Population']) * 1000, 2), 1000.0)
+                    lambda r: min(round((r['Total_Positive'] / r['Population']) * 1000, 2), BURDEN_CAP_PER_1000)
                     if pd.notna(r.get('Total_Positive')) and r['Population'] > 0 else 0,
                     axis=1
                 )
@@ -505,9 +511,10 @@ def add_burden_to_timeseries(ts_df: pd.DataFrame, ward_df: pd.DataFrame) -> pd.D
         return ts_df
     pop = ward_df[['WardName', 'Population']].drop_duplicates('WardName')
     merged = ts_df.merge(pop, on='WardName', how='left')
-    merged['Burden'] = (
+    raw_burden = (
         merged['Total_Positive'] / merged['Population'].replace(0, np.nan)
     ) * 1000
+    merged['Burden'] = cap_burden_per_1000(raw_burden).round(2)
     logger.info(
         f"add_burden_to_timeseries: {merged['Burden'].notna().sum()}/{len(merged)} "
         f"rows have valid Burden"

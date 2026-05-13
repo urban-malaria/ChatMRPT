@@ -20,6 +20,8 @@ def calculate_lga_averages(
     value_column: str,
     numerator_col: Optional[str] = None,
     denominator_col: Optional[str] = None,
+    rate_multiplier: Optional[float] = None,
+    cap_value: Optional[float] = None,
 ) -> Dict[str, float]:
     """Calculate LGA-level averages using volume-weighted method when possible.
 
@@ -37,15 +39,23 @@ def calculate_lga_averages(
 
     # Volume-weighted for rate data
     if numerator_col and denominator_col and numerator_col in gdf.columns and denominator_col in gdf.columns:
+        multiplier = rate_multiplier
+        if multiplier is None:
+            multiplier = 1000 if 'burden' in value_column.lower() else 100
         agg = gdf.groupby(code_col).agg({
             numerator_col: 'sum',
             denominator_col: 'sum'
         })
-        agg['_avg'] = (agg[numerator_col] / agg[denominator_col].replace(0, np.nan)) * 100
+        agg['_avg'] = (agg[numerator_col] / agg[denominator_col].replace(0, np.nan)) * multiplier
+        if cap_value is not None:
+            agg['_avg'] = agg['_avg'].clip(lower=0, upper=cap_value)
         return agg['_avg'].dropna().to_dict()
 
     # Simple mean fallback
-    return gdf.groupby(code_col)[value_column].mean().to_dict()
+    averages = gdf.groupby(code_col)[value_column].mean()
+    if cap_value is not None:
+        averages = averages.clip(lower=0, upper=cap_value)
+    return averages.to_dict()
 
 
 def get_lga_boundary_coords(gdf: gpd.GeoDataFrame) -> List[Dict]:

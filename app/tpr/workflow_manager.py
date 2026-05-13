@@ -820,6 +820,7 @@ class TPRWorkflowHandler:
                 from app.tpr.utils import (
                     calculate_ward_tpr_timeseries,
                     add_burden_to_timeseries,
+                    cap_burden_per_1000,
                 )
                 from app.utils.ward_matcher import normalize_ward_name, fuzzy_match_ward
                 from app.tpr.trend_analyzer import compute_trend
@@ -867,6 +868,9 @@ class TPRWorkflowHandler:
                                 .drop(columns=['_ward_key'])
                             )
 
+                            if 'Burden' in year_raw.columns:
+                                year_raw['Burden'] = cap_burden_per_1000(year_raw['Burden']).round(2)
+
                             # Fuzzy fallback for wards still unmatched after exact join
                             still_unmatched = year_raw['Burden'].isna()
                             if still_unmatched.any():
@@ -901,6 +905,9 @@ class TPRWorkflowHandler:
                                         year_raw.loc[idx, '_imputed'] = True
                                 imputed_count = year_raw['_imputed'].sum()
                                 logger.info(f"[MULTI_YEAR] {year}: imputed {imputed_count} wards from aggregate")
+
+                            if 'Burden' in year_raw.columns:
+                                year_raw['Burden'] = cap_burden_per_1000(year_raw['Burden']).round(2)
 
                             year_raw.drop(columns=['_ward_key'], errors='ignore', inplace=True)
                             year_raw.to_csv(

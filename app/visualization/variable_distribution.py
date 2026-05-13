@@ -442,10 +442,6 @@ class VariableDistribution(BaseTool):
 
             plot_data = apply_lga_highlight(plot_data, highlight_codes, 'LGACode')
 
-            lga_averages = {}
-            if plot_level == 'ward':
-                lga_averages = calculate_lga_averages(clean_data, variable)
-
             # Variable label/unit mapping
             var_lower = variable.lower()
             if 'burden' in var_lower:
@@ -480,6 +476,15 @@ class VariableDistribution(BaseTool):
                 var_label, var_unit = variable.replace('_', ' ').title(), ""
 
             colorbar_title = f"{var_label}{var_unit}" if var_unit else var_label
+
+            if 'burden' in var_lower and variable in clean_data.columns:
+                clean_data[variable] = pd.to_numeric(clean_data[variable], errors='coerce').clip(lower=0, upper=1000)
+                if plot_level == 'lga' and variable in plot_data.columns:
+                    plot_data[variable] = pd.to_numeric(plot_data[variable], errors='coerce').clip(lower=0, upper=1000)
+
+            lga_averages = {}
+            if plot_level == 'ward':
+                lga_averages = calculate_lga_averages(clean_data, variable)
 
             from shapely.geometry import mapping
 
