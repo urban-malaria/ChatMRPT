@@ -1076,34 +1076,53 @@ I ran two tests to check if your data is suitable for advanced pattern analysis 
 
 """
             
+            visual_action = (
+                "View vulnerability maps\n"
+                "   Type: **show me the vulnerability maps**"
+                if not pca_result.get("pca_skipped")
+                else
+                "Create composite vulnerability map\n"
+                "   Type: **create composite vulnerability map**"
+            )
+
+            method_name = "Composite Score and PCA" if not pca_result.get("pca_skipped") else "Composite Score"
+
             # Build conversational response
-            response = f"""Analysis complete! I've ranked all {ward_count} wards by malaria risk.
+            response = f"""Analysis complete.
 
-## Here's what I did
+I ranked all {ward_count} wards by malaria risk using {num_variables} risk factors for the {geopolitical_zone} zone.
 
-1. Cleaned your data - Fixed ward name mismatches and filled missing values using neighboring areas
-2. Selected {num_variables} risk factors - Based on {geopolitical_zone}'s malaria patterns
-3. Normalized everything - Put all variables on the same 0-1 scale for fair comparison
-4. Ran statistical tests - Checked if your data is suitable for advanced pattern analysis
-5. Calculated risk scores using {"both" if not pca_result.get("pca_skipped") else "the"} method{"s" if not pca_result.get("pca_skipped") else ""}:
-   - **Composite Score**: Simple average of all risk factors (transparent and easy to understand)
-   {f"- **PCA Score**: Statistical method that finds hidden patterns in your data" if not pca_result.get("pca_skipped") else ""}
-6. Ranked all wards - From highest to lowest risk for intervention planning
+## What you can do next
+
+1. Plan ITN / bed net distribution
+   Type: **I want to plan bed net distribution**
+
+2. View the highest-risk wards
+   Type: **show me the highest risk wards**
+
+3. View the lowest-risk wards
+   Type: **show me the lowest risk wards**
+
+4. {visual_action}
+
+5. Export the results
+   Type: **export results**
+
+## What I did
+
+- Cleaned your data by fixing ward name mismatches and filling missing values using neighboring areas.
+
+- Selected {num_variables} risk factors based on {geopolitical_zone}'s malaria patterns.
+
+- Normalized all variables to the same 0-1 scale.
+
+- Ran statistical checks to confirm the data was suitable for advanced analysis.
+
+- Calculated risk scores using {method_name}.
+
+- Ranked all wards from highest to lowest risk.
 
 {pca_test_summary}
-
-## What would you like to do next?
-
-- **Plan ITN/bed net distribution** - Allocate nets optimally based on these rankings
-- **View highest risk wards** - See wards that need urgent intervention
-- **View lowest risk wards** - Identify control areas
-{"- **Compare methods visually** - Create side-by-side vulnerability maps (say **'show me the vulnerability maps'**)" if not pca_result.get("pca_skipped") else "- **Create composite vulnerability map** - Show risk levels visually (say **'create composite vulnerability map'**)"}
-- **Export results** - Download analysis data
-
-### To start ITN planning
-
-Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs"**.
-
 """
             
             return response
@@ -1599,4 +1618,3 @@ Just say **"I want to plan bed net distribution"** or **"Help me distribute ITNs
 
 # REMOVED: GenerateComprehensiveAnalysisSummary and GenerateComprehensiveAnalysisSummaryInput
 # Dead code - never imported or called. Users should use RunMalariaRiskAnalysis instead.
-

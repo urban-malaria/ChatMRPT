@@ -89,8 +89,9 @@ class MessageFormatter:
                 message += f"  - {all_count} facilities\n\n"
 
             message += "**Need help deciding?**\n"
-            message += "- Ask me to **'show facility charts'** or **'explain the differences'**\n\n"
-            message += "Just type which level you'd like: **primary**, **secondary**, **tertiary**, or **all**"
+            message += "Ask me to **show facility charts** or **explain the differences**.\n\n"
+            message += "Just type which level you'd like:\n\n"
+            message += "**primary**, **secondary**, **tertiary**, or **all**"
         else:
             message += "I'll analyze all facilities in your dataset."
 
@@ -130,8 +131,9 @@ class MessageFormatter:
                 message += f"  - {all_count} facilities\n\n"
 
             message += "**Need help deciding?**\n"
-            message += "- Ask me to **'show facility charts'** or **'explain the differences'**\n\n"
-            message += "Just type which level you'd like: **primary**, **secondary**, **tertiary**, or **all**"
+            message += "Ask me to **show facility charts** or **explain the differences**.\n\n"
+            message += "Just type which level you'd like:\n\n"
+            message += "**primary**, **secondary**, **tertiary**, or **all**"
         else:
             message += "I'll analyze all facilities in your dataset."
 
@@ -182,8 +184,9 @@ class MessageFormatter:
             message += f"  - {total_tests:,} total tests\n\n"
 
             message += "**Need help deciding?**\n"
-            message += "- Ask me to **'show age charts'** or **'explain the differences'**\n\n"
-            message += "Just type which group you'd like: **u5**, **o5**, **pw**, or **all**"
+            message += "Ask me to **show age charts** or **explain the differences**.\n\n"
+            message += "Just type which group you'd like:\n\n"
+            message += "**u5**, **o5**, **pw**, or **all**"
         else:
             message += "All age groups will be analyzed.\n"
 
