@@ -139,6 +139,24 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                               a: ({ ...props }) => (
                                 <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" />
                               ),
+                              p: ({ ...props }) => (
+                                <p className="my-2 leading-relaxed" {...props} />
+                              ),
+                              h2: ({ ...props }) => (
+                                <h2 className="mt-4 mb-2 text-base font-semibold leading-snug" {...props} />
+                              ),
+                              h3: ({ ...props }) => (
+                                <h3 className="mt-3 mb-2 text-sm font-semibold leading-snug" {...props} />
+                              ),
+                              ul: ({ ...props }) => (
+                                <ul className="my-2 ml-5 list-disc space-y-2" {...props} />
+                              ),
+                              ol: ({ ...props }) => (
+                                <ol className="my-2 ml-5 list-decimal space-y-2" {...props} />
+                              ),
+                              li: ({ ...props }) => (
+                                <li className="leading-relaxed" {...props} />
+                              ),
                             }}
                           >
                             {remainingContent}
@@ -170,6 +188,24 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                     },
                     a: ({ ...props }) => (
                       <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" />
+                    ),
+                    p: ({ ...props }) => (
+                      <p className="my-2 leading-relaxed" {...props} />
+                    ),
+                    h2: ({ ...props }) => (
+                      <h2 className="mt-4 mb-2 text-base font-semibold leading-snug" {...props} />
+                    ),
+                    h3: ({ ...props }) => (
+                      <h3 className="mt-3 mb-2 text-sm font-semibold leading-snug" {...props} />
+                    ),
+                    ul: ({ ...props }) => (
+                      <ul className="my-2 ml-5 list-disc space-y-2" {...props} />
+                    ),
+                    ol: ({ ...props }) => (
+                      <ol className="my-2 ml-5 list-decimal space-y-2" {...props} />
+                    ),
+                    li: ({ ...props }) => (
+                      <li className="leading-relaxed" {...props} />
                     ),
                     table: ({ ...props }) => (
                       <div className="overflow-x-auto my-2">
