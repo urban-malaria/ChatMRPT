@@ -29,6 +29,7 @@ function App() {
     console.log('🔵 APP: useEffect triggered');
 
     // Ensure conversation ID exists and sync to URL
+    storage.clearLegacyChatState();
     const conversationId = storage.ensureConversationId();
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');

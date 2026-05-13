@@ -322,24 +322,29 @@ def _load_year_specific_unified_dataset(session_folder: str, year: int,
 def plan_itn_distribution(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
-    total_nets: int,
-    avg_household_size: float = 5.0,
+    total_nets: Optional[int] = None,
+    avg_household_size: Optional[float] = None,
     urban_threshold: float = 75.0,
     method: str = "composite",
     year: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Plan optimal ITN (bed net) distribution across wards.
 
-    Allocates nets using a two-tier system: rural high-risk wards first,
-    then urban wards with remaining nets. Produces a map, CSV export,
-    and interactive dashboard.
+    If total_nets or avg_household_size has not been explicitly provided by
+    the user, ask for the missing values before calculating. Do not assume a
+    net count or household size.
+
+    Allocates nets using a two-tier system: rural high-risk wards first, then
+    urban wards with remaining nets. Produces a map, CSV export, and
+    interactive dashboard.
 
     Must be run AFTER risk analysis is complete.
 
     Args:
         thought: Your reasoning about ITN planning parameters.
-        total_nets: Total number of nets available for distribution.
-        avg_household_size: Average household size (default 5.0).
+        total_nets: Total number of nets available for distribution. Required
+                    before calculating.
+        avg_household_size: Average household size. Required before calculating.
         urban_threshold: Urban % cutoff for rural priority (default 75%).
         method: 'composite' (default) or 'pca' ranking method.
         year: Optional year (e.g. 2023) for year-specific ITN planning in

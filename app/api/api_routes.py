@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request, session, current_app, send_file, 
 from werkzeug.utils import secure_filename
 import pandas as pd
 from app.auth.decorators import require_auth
+from app.utils.session_scope import ensure_base_session_id, get_effective_session_id
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -40,29 +41,16 @@ def api_health():
 def start_session():
     """Initialize a new session for the user."""
     try:
-        # Create new session ID if not exists
-        if 'session_id' not in session:
-            session_id = str(uuid.uuid4())
-            session['session_id'] = session_id
-            session['base_session_id'] = session_id
-            session['created_at'] = datetime.utcnow().isoformat()
-        else:
-            session_id = session['session_id']
-            if 'base_session_id' not in session:
-                session['base_session_id'] = session_id.split('__', 1)[0] if '__' in session_id else session_id
+        ensure_base_session_id()
+        session.setdefault('created_at', datetime.utcnow().isoformat())
+        session_id = get_effective_session_id()
 
-        if getattr(g, 'conversation_id', None):
-            base_session_id = session.get('base_session_id', session_id)
-            composite = f"{base_session_id}__{g.conversation_id}"
-            session['session_id'] = composite
-            session_id = composite
-
-        # Initialize session data
-        session['conversation_history'] = []
-        session['data_loaded'] = False
-        session['analysis_complete'] = False
-        session['csv_loaded'] = False
-        session['shapefile_loaded'] = False
+        # Initialize session defaults without wiping an existing conversation.
+        session.setdefault('conversation_history', [])
+        session.setdefault('data_loaded', False)
+        session.setdefault('analysis_complete', False)
+        session.setdefault('csv_loaded', False)
+        session.setdefault('shapefile_loaded', False)
 
         # Create session directory
         session_dir = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'instance/uploads'), session_id)

@@ -1,6 +1,7 @@
 const AUTH_TOKEN_KEY = 'auth_token';
 const SESSION_ID_KEY = 'session_id';
 const CONVERSATION_ID_KEY = 'conversation_id';
+const LEGACY_CHAT_STORAGE_KEY = 'chat-storage';
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -22,6 +23,19 @@ const getLocalStorage = (): StorageLike | null => {
     console.warn('Local storage unavailable', err);
     return null;
   }
+};
+
+const sanitizeConversationId = (conversationId: string): string =>
+  conversationId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+
+const getConversationIdFromUrl = (): string | null => {
+  if (typeof window === 'undefined') return null;
+
+  const urlConversationId = new URLSearchParams(window.location.search).get(CONVERSATION_ID_KEY);
+  if (!urlConversationId) return null;
+
+  const safeConversationId = sanitizeConversationId(urlConversationId);
+  return safeConversationId || null;
 };
 
 export const storage = {
@@ -75,7 +89,7 @@ export const storage = {
       localStore?.removeItem(SESSION_ID_KEY);
     }
 
-    return legacy;
+    return null;
   },
 
   clearSessionId() {
@@ -85,7 +99,7 @@ export const storage = {
 
   setConversationId(conversationId: string) {
     const sessionStore = getSessionStorage();
-    sessionStore?.setItem(CONVERSATION_ID_KEY, conversationId);
+    sessionStore?.setItem(CONVERSATION_ID_KEY, sanitizeConversationId(conversationId));
   },
 
   getConversationId(): string | null {
@@ -103,6 +117,12 @@ export const storage = {
     }
 
     const sessionStore = getSessionStorage();
+    const urlConversationId = getConversationIdFromUrl();
+    if (urlConversationId) {
+      sessionStore?.setItem(CONVERSATION_ID_KEY, urlConversationId);
+      return urlConversationId;
+    }
+
     let conversationId = sessionStore?.getItem(CONVERSATION_ID_KEY) ?? null;
 
     if (!conversationId && typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -116,6 +136,20 @@ export const storage = {
     }
 
     return conversationId;
+  },
+
+  getConversationScopedKey(baseKey: string, conversationId?: string): string {
+    return `${baseKey}:${conversationId || this.ensureConversationId()}`;
+  },
+
+  clearConversationState(baseKey: string = LEGACY_CHAT_STORAGE_KEY, conversationId?: string) {
+    const localStore = getLocalStorage();
+    localStore?.removeItem(this.getConversationScopedKey(baseKey, conversationId));
+    localStore?.removeItem(baseKey);
+  },
+
+  clearLegacyChatState() {
+    getLocalStorage()?.removeItem(LEGACY_CHAT_STORAGE_KEY);
   },
 };
 

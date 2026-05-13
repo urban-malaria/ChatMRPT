@@ -102,6 +102,11 @@ tpr_ward_cleaning/*
 # Compiled React builds
 app/static/react/
 app/static/react-stable/
+!app/static/react/
+!app/static/react/index.html
+!app/static/react/assets/
+!app/static/react/assets/index-*.js
+!app/static/react/assets/index-*.css
 !app/static/react/.gitkeep
 !app/static/react/README.md
 !app/static/react-stable/.gitkeep
