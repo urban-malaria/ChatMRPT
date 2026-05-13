@@ -390,6 +390,7 @@ class PlanITNDistribution(BaseTool):
 To optimize the distribution, I need a few inputs:
 
 1. **Total number of nets available**: How many ITN nets do you have for distribution?
+
 2. **Average household size**: What's the typical household size in this region?
 
 Please provide these values and I'll calculate the optimal distribution plan based on the vulnerability rankings using composite method with a 75% urban threshold."""
@@ -410,13 +411,17 @@ Please provide these values and I'll calculate the optimal distribution plan bas
 ### Allocation Summary
 
 - Total nets available: {stats['total_nets']:,}
+
 - Nets allocated: {stats['allocated']:,}
+
 - Remaining: {stats['remaining']:,}
 
 ### Coverage Statistics
 
 - Population covered: {stats['covered_population']:,} ({stats['coverage_percent']}%)
+
 - Prioritized rural wards: {stats['prioritized_wards']}
+
 - Additional urban wards: {stats['reprioritized_wards']}"""
 
         # Add top priority wards if available
@@ -426,7 +431,9 @@ Please provide these values and I'll calculate the optimal distribution plan bas
             summary += "\n\n### Top 5 Highest Risk Wards (Prioritized for Distribution)\n\n"
             for i, (_, ward) in enumerate(top_5.iterrows(), 1):
                 coverage = (ward['nets_allocated'] * 1.8 / ward['Population'] * 100) if ward['Population'] > 0 else 0
-                summary += f"{i}. {ward['WardName']} (Risk Rank #{ward['overall_rank']}) - {ward['nets_allocated']} nets ({coverage:.1f}% coverage)\n"
+                summary += f"{i}. {ward['WardName']} (Risk Rank #{ward['overall_rank']})\n\n"
+                summary += f"   - {ward['nets_allocated']} nets\n\n"
+                summary += f"   - {coverage:.1f}% coverage\n\n"
         
         summary += "\n\n📊 View the interactive distribution map below to see the allocation across all wards."
         

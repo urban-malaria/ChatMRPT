@@ -1324,36 +1324,48 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
 🎉 **Malaria Burden Analysis Successfully Completed!**
 
 **What Just Happened:**
+
 I've calculated ward-level malaria burden per 1,000 population for **{state_name}** and created a unified dataset combining:
+
 • Malaria burden data ({summary['mean_burden']:.1f} cases per 1,000 population across {total_count} wards)
+
 • Geographic boundaries (ward shapefiles)
+
 • Environmental variables for **{geopolitical_zone}** zone: {', '.join(formatted_vars)}
 
 **Why This Matters:**
+
 You now have a complete geospatial dataset ready for malaria risk analysis and intervention planning.
 
 **Recommended Next Steps:**
 
 📍 **Step 1: Visualize Malaria Burden**
+
 Try: "**map malaria burden distribution**" to see case patterns across wards
 
 🌍 **Step 2: Explore Environmental Factors**
+
 Available variables for your region ({geopolitical_zone}):
 """
                 # Add individual variable suggestions
                 for var in formatted_vars[:3]:  # Show first 3 variables
-                    result += f"• \"map {var.lower()} distribution\"\n"
+                    result += f"\n• \"map {var.lower()} distribution\"\n"
                 if len(formatted_vars) > 3:
-                    result += f"• Plus {len(formatted_vars) - 3} more variables!\n"
+                    result += f"\n• Plus {len(formatted_vars) - 3} more variables!\n"
 
                 result += f"""
 📊 **Step 3: Run Comprehensive Analysis**
+
 Try: "**run malaria risk analysis**" to rank wards by malaria risk
 
 🔄 **Explore Other Combinations**
+
 All 15 facility/age combinations are ready. You can switch at any time:
+
 - "**switch to secondary facilities, under 5**"
+
 - "**switch to all facilities, pregnant women**"
+
 - "**compare all combinations**" to see a summary table
 
 Your analysis files (raw_data.csv, shapefile) will be updated automatically.

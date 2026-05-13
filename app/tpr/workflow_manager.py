@@ -1012,14 +1012,19 @@ Great! Let's analyze your malaria testing data to calculate ward-level Malaria B
 **What This Workflow Does:**
 
 Your uploaded data contains malaria testing records from health facilities. This workflow will:
+
 - Calculate Malaria Burden for each ward: (Positive cases ÷ Ward Population) × 1,000
+
 - Use WorldPop population data matched to your selected age group
+
 - Help identify high-burden areas for targeted interventions
 
 **Three Simple Steps:**
 
 1. **State Selection** - Choose which state to analyze
+
 2. **Facility Level** - Select Primary, Secondary, Tertiary, or All facilities
+
 3. **Age Group** - Choose Under-5, Over-5, Pregnant Women, or All ages
 
 {state_info}
@@ -1027,12 +1032,18 @@ Your uploaded data contains malaria testing records from health facilities. This
 **After Burden Calculation:**
 
 Once we calculate ward-level malaria burden, the system will:
+
 - Extract ward boundary shapefiles from our database for your state
+
 - Add relevant environmental variables (rainfall, vegetation, water indices, etc.) specific to your geopolitical zone
+
 - Create a unified dataset combining burden data with environmental factors
+
 - Output: Ready-to-use dataset for comprehensive risk analysis and ward ranking for resource allocation
 
-**Ready to begin?** Just type **'yes'** when you're ready, or ask me any questions about the workflow.
+**Ready to begin?**
+
+Just type **yes** when you're ready, or ask me any questions about the workflow.
 """
 
         # Set stage to AWAITING_CONFIRMATION (we'll add this stage)
