@@ -16,6 +16,7 @@ from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 
 from .state import DataAnalysisState
+from .canonical_response import select_final_message
 from app.agent.tools.python_tool import analyze_data
 from app.agent.prompts.system_prompt import MAIN_SYSTEM_PROMPT, TPR_WORKFLOW_GUIDANCE
 from .encoding_handler import EncodingHandler
@@ -488,6 +489,10 @@ class DataAnalysisAgent:
         """
         # Add session_id to state for tools to access
         state_with_session = {**state, "session_id": self.session_id}
+        state_with_session["canonical_responses"] = list(state.get("canonical_responses") or [])
+        state_with_session["output_plots"] = list(state.get("output_plots") or [])
+        canonical_before = list(state_with_session["canonical_responses"])
+        plots_before = list(state_with_session["output_plots"])
 
         # Execute tools
         result = self.tool_node.invoke(state_with_session)
@@ -507,6 +512,15 @@ class DataAnalysisAgent:
 
         result['tool_call_count'] = new_tool_count
         result['consecutive_error_count'] = new_error_count
+
+        canonical_after = list(state_with_session.get("canonical_responses") or [])
+        if len(canonical_after) > len(canonical_before):
+            result["canonical_responses"] = canonical_after[len(canonical_before):]
+
+        plots_after = list(state_with_session.get("output_plots") or [])
+        if len(plots_after) > len(plots_before) and "output_plots" not in result:
+            result["output_plots"] = plots_after[len(plots_before):]
+
         return result
 
     def _route_from_tools(
@@ -635,15 +649,15 @@ class DataAnalysisAgent:
             logger.info(f"[AGENT] Graph completed in {time.time() - start_time:.2f} seconds")
 
             self.chat_history = result.get("messages", [])
+            finalized = self._finalize_result_from_state(result)
 
             try:
                 mem = get_memory_service()
-                final_msg = self.chat_history[-1] if self.chat_history else None
-                mem.append_message(self.session_id, 'assistant', (final_msg.content if final_msg else 'Analysis complete.'))
+                mem.append_message(self.session_id, 'assistant', finalized.get("message") or "Analysis complete.")
             except Exception:
                 pass
 
-            return self._finalize_result_from_state(result)
+            return finalized
 
         except Exception as e:
             logger.error(f"[CLEAN AGENT] Error during analysis: {e}", exc_info=True)
@@ -762,6 +776,7 @@ class DataAnalysisAgent:
             "intermediate_outputs": [],
             "current_variables": {},
             "output_plots": [],
+            "canonical_responses": [],
             "insights": [],
             "errors": [],
             "tool_call_count": 0,
@@ -775,7 +790,7 @@ class DataAnalysisAgent:
         visualizations = self._process_visualizations(state.get("output_plots", []))
         logger.info(f"[AGENT] Analysis complete, {len(visualizations)} visualizations")
 
-        final_content = final_message.content if final_message else "Analysis complete."
+        final_content, final_selection = select_final_message(state, final_message)
         final_content = ResponseFormatter.normalize_spacing(final_content)
 
         if visualizations:
@@ -787,6 +802,7 @@ class DataAnalysisAgent:
             "message": final_content,
             "visualizations": visualizations,
             "session_id": self.session_id,
+            "response_source": final_selection,
         }
 
     def analyze_stream(self, user_query: str, workflow_context: Dict[str, Any] = None):
@@ -835,13 +851,13 @@ class DataAnalysisAgent:
 
         if last_state is not None:
             self.chat_history = last_state.get("messages", [])
+            finalized = self._finalize_result_from_state(last_state)
             try:
                 mem = get_memory_service()
-                final_msg = self.chat_history[-1] if self.chat_history else None
-                mem.append_message(self.session_id, 'assistant', (final_msg.content if final_msg else 'Analysis complete.'))
+                mem.append_message(self.session_id, 'assistant', finalized.get("message") or "Analysis complete.")
             except Exception:
                 pass
-            yield {'type': 'result', 'data': self._finalize_result_from_state(last_state)}
+            yield {'type': 'result', 'data': finalized}
         else:
             yield {'type': 'error', 'error': 'No state produced by agent graph'}
 

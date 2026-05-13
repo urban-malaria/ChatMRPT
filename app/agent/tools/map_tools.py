@@ -23,6 +23,59 @@ from langgraph.prebuilt import InjectedState
 logger = logging.getLogger(__name__)
 
 
+def _safe_dict(value: Any) -> Dict[str, Any]:
+    """Return dict values only; ToolExecutionResult extras may be pydantic models."""
+    return value if isinstance(value, dict) else {}
+
+
+def _add_canonical_response(
+    graph_state: dict,
+    *,
+    tool_name: str,
+    message: str,
+    success: bool,
+    metadata: Optional[Dict[str, Any]] = None,
+    data: Optional[Dict[str, Any]] = None,
+    priority: int = 100,
+    source: str = "tool_result",
+) -> None:
+    """Capture deterministic tool output for final user display."""
+    message = (message or "").strip()
+    if not message:
+        return
+
+    metadata = metadata or {}
+    data = data or {}
+    requires_user_input = bool(
+        metadata.get("requires_user_input")
+        or data.get("waiting_for_parameters")
+        or data.get("requires_user_input")
+    )
+    if requires_user_input:
+        priority = max(priority, 120)
+    elif not success:
+        priority = max(priority, 110)
+
+    responses = graph_state.setdefault("canonical_responses", [])
+    responses.append({
+        "tool_name": tool_name,
+        "message": message,
+        "success": bool(success),
+        "requires_user_input": requires_user_input,
+        "priority": priority,
+        "source": source,
+        "metadata": metadata,
+        "sequence": len(responses) + 1,
+    })
+    logger.info(
+        "Captured canonical response: tool=%s success=%s requires_input=%s priority=%s",
+        tool_name,
+        success,
+        requires_user_input,
+        priority,
+    )
+
+
 def _add_viz_to_state(graph_state: dict, file_path: str) -> None:
     """Add a visualization file path to graph_state['output_plots']."""
     if file_path and os.path.exists(file_path):
@@ -292,14 +345,33 @@ def run_risk_analysis(
     try:
         from app.analysis.complete_tools import RunMalariaRiskAnalysis
         result = RunMalariaRiskAnalysis().execute(session_id=session_id)
+        message = result.message or "Risk analysis complete. Unified dataset created."
+        _add_canonical_response(
+            graph_state,
+            tool_name="run_risk_analysis",
+            message=message,
+            success=result.success,
+            metadata=_safe_dict(result.metadata),
+            data=_safe_dict(result.data),
+            priority=100,
+        )
 
         if not result.success:
-            return result.message, {}
+            return message, {}
 
-        return result.message or "Risk analysis complete. Unified dataset created.", {}
+        return message, {}
     except Exception as e:
         logger.error(f"run_risk_analysis failed: {e}", exc_info=True)
-        return f"Error running risk analysis: {e}", {}
+        message = f"Error running risk analysis: {e}"
+        _add_canonical_response(
+            graph_state,
+            tool_name="run_risk_analysis",
+            message=message,
+            success=False,
+            priority=110,
+            source="tool_exception",
+        )
+        return message, {}
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -356,6 +428,13 @@ def plan_itn_distribution(
             session_folder = os.path.join('instance', 'uploads', session_id)
             year_tag, err = _resolve_year_tag(session_id, year)
             if err:
+                _add_canonical_response(
+                    graph_state,
+                    tool_name="plan_itn_distribution",
+                    message=err,
+                    success=False,
+                    priority=110,
+                )
                 return err, {}
             from app.services.data_handler import DataHandler
             dh = DataHandler(session_folder)
@@ -368,24 +447,51 @@ def plan_itn_distribution(
             urban_threshold=urban_threshold,
             method=method,
         ).execute(session_id=session_id)
-
-        if not result.success:
-            return result.message, {}
+        message = result.message or "ITN distribution plan created."
 
         data = result.data or {}
+        if not result.success:
+            _add_canonical_response(
+                graph_state,
+                tool_name="plan_itn_distribution",
+                message=message,
+                success=False,
+                metadata=_safe_dict(result.metadata),
+                data=_safe_dict(result.data),
+                priority=110,
+            )
+            return message, {}
+
         _add_viz_to_state(graph_state, data.get('file_path'))
 
-        message = result.message or "ITN distribution plan created."
         download_links = data.get('download_links', [])
         if download_links:
             message += "\n\n**Downloads available:**"
             for link in download_links:
                 message += f"\n- [{link.get('description', 'Download')}]({link.get('url', '')})"
 
+        _add_canonical_response(
+            graph_state,
+            tool_name="plan_itn_distribution",
+            message=message,
+            success=True,
+            metadata=_safe_dict(result.metadata),
+            data=_safe_dict(result.data),
+            priority=105,
+        )
         return message, {}
     except Exception as e:
         logger.error(f"plan_itn_distribution failed: {e}", exc_info=True)
-        return f"Error planning ITN distribution: {e}", {}
+        message = f"Error planning ITN distribution: {e}"
+        _add_canonical_response(
+            graph_state,
+            tool_name="plan_itn_distribution",
+            message=message,
+            success=False,
+            priority=110,
+            source="tool_exception",
+        )
+        return message, {}
 
 
 # ─────────────────────────────────────────────────────────────────────

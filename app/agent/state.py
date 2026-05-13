@@ -27,6 +27,9 @@ class DataAnalysisState(TypedDict):
     
     # Plotly figure paths for visualization
     output_plots: Annotated[List[str], operator.add]
+
+    # Canonical deterministic tool responses that should beat LLM paraphrases
+    canonical_responses: Annotated[List[dict], operator.add]
     
     # User-friendly insights generated from analysis
     insights: Annotated[List[str], operator.add]

@@ -92,6 +92,11 @@ def detect_state(data_handler) -> Optional[str]:
         if len(upper_value) == 2 and upper_value in code_to_name:
             return code_to_name[upper_value]
 
+        # DHIS2 exports can contain values like "kw Kwara State".
+        first_token = state_str.split()[0].upper() if state_str.split() else ""
+        if len(first_token) == 2 and first_token in code_to_name:
+            return code_to_name[first_token]
+
         lower_value = state_str.lower()
         if lower_value in name_to_name:
             return name_to_name[lower_value]
@@ -109,29 +114,43 @@ def detect_state(data_handler) -> Optional[str]:
 
     # Check shapefile data first
     if hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None:
-        # Check for State column
-        if 'State' in data_handler.shapefile_data.columns:
-            state = _normalize_state(data_handler.shapefile_data['State'].iloc[0])
-            if state:
-                return state
-        # Check for StateCode column
-        if 'StateCode' in data_handler.shapefile_data.columns:
-            state = _normalize_state(data_handler.shapefile_data['StateCode'].iloc[0])
-            if state:
-                return state
+        state_candidates = ['State', 'state', 'StateName', 'state_name']
+        for col_name in state_candidates:
+            if col_name in data_handler.shapefile_data.columns:
+                non_null_values = data_handler.shapefile_data[col_name].dropna()
+                if len(non_null_values) > 0:
+                    state = _normalize_state(non_null_values.iloc[0])
+                    if state:
+                        return state
+
+        statecode_candidates = ['StateCode', 'state_code', 'STATECODE']
+        for col_name in statecode_candidates:
+            if col_name in data_handler.shapefile_data.columns:
+                non_null_values = data_handler.shapefile_data[col_name].dropna()
+                if len(non_null_values) > 0:
+                    state = _normalize_state(non_null_values.iloc[0])
+                    if state:
+                        return state
 
     # Check CSV data
     if hasattr(data_handler, 'csv_data') and data_handler.csv_data is not None:
-        # Check for State column
-        if 'State' in data_handler.csv_data.columns:
-            state = _normalize_state(data_handler.csv_data['State'].iloc[0])
-            if state:
-                return state
-        # Check for StateCode column
-        if 'StateCode' in data_handler.csv_data.columns:
-            state = _normalize_state(data_handler.csv_data['StateCode'].iloc[0])
-            if state:
-                return state
+        state_candidates = ['State', 'state', 'StateName', 'state_name']
+        for col_name in state_candidates:
+            if col_name in data_handler.csv_data.columns:
+                non_null_values = data_handler.csv_data[col_name].dropna()
+                if len(non_null_values) > 0:
+                    state = _normalize_state(non_null_values.iloc[0])
+                    if state:
+                        return state
+
+        statecode_candidates = ['StateCode', 'state_code', 'STATECODE']
+        for col_name in statecode_candidates:
+            if col_name in data_handler.csv_data.columns:
+                non_null_values = data_handler.csv_data[col_name].dropna()
+                if len(non_null_values) > 0:
+                    state = _normalize_state(non_null_values.iloc[0])
+                    if state:
+                        return state
 
     # Check unified dataset as another fallback
     if hasattr(data_handler, 'unified_dataset') and data_handler.unified_dataset is not None:
