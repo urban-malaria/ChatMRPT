@@ -871,6 +871,10 @@ def generate_itn_map(
             rankings_merge_cols.append('urban_pct')
         if 'Population' in rankings.columns:
             rankings_merge_cols.append('Population')
+        if 'overall_rank' in rankings.columns:
+            rankings_merge_cols.append('overall_rank')
+        if 'vulnerability_category' in rankings.columns:
+            rankings_merge_cols.append('vulnerability_category')
 
         # Merge rankings data for ALL wards
         shp_data = shp_data.merge(
@@ -887,6 +891,11 @@ def generate_itn_map(
         if 'Population_from_rankings' in shp_data.columns:
             shp_data['Population'] = shp_data['Population_from_rankings']
             logger.info(f"✅ Set Population from rankings for {shp_data['Population'].notna().sum()} wards")
+        if 'overall_rank_from_rankings' in shp_data.columns:
+            shp_data['overall_rank'] = shp_data['overall_rank_from_rankings']
+            logger.info(f"✅ Set overall_rank from rankings for {shp_data['overall_rank'].notna().sum()} wards")
+        if 'vulnerability_category_from_rankings' in shp_data.columns:
+            shp_data['vulnerability_category'] = shp_data['vulnerability_category_from_rankings']
 
     # Merge prioritized allocations - GeoDataFrame.merge preserves geometry automatically
     # Include priority_tier and urban_pct for display
