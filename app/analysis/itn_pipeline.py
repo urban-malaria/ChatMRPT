@@ -28,6 +28,35 @@ from fuzzywuzzy import process
 
 logger = logging.getLogger(__name__)
 
+
+def _format_rank_range(df: pd.DataFrame) -> str:
+    """Format the vulnerability rank range represented by a dataframe."""
+    if df.empty or 'overall_rank' not in df.columns:
+        return "None"
+
+    ranks = pd.to_numeric(df['overall_rank'], errors='coerce').dropna()
+    if ranks.empty:
+        return "None"
+
+    return f"{int(ranks.min())}-{int(ranks.max())}"
+
+
+def _risk_tier_from_rank(rank: Any, total_ranked: int) -> str:
+    """Classify a vulnerability rank into high, medium, or low risk thirds."""
+    if total_ranked <= 0 or pd.isna(rank):
+        return "Unranked"
+
+    rank_value = int(rank)
+    high_cutoff = int(np.ceil(total_ranked / 3))
+    medium_cutoff = int(np.ceil((total_ranked * 2) / 3))
+
+    if rank_value <= high_cutoff:
+        return "High Risk"
+    if rank_value <= medium_cutoff:
+        return "Medium Risk"
+    return "Low Risk"
+
+
 def detect_state(data_handler) -> Optional[str]:
     """Detect state from available data sources using the population loader."""
     loader = get_population_loader()
@@ -1162,6 +1191,7 @@ def generate_itn_map(
                           '<b>LGA:</b> %{customdata[5]}<br>' +
                           '─────────────────<br>' +
                           '<b>Status:</b> No nets allocated<br>' +
+                          '<b>Risk Rank:</b> #%{customdata[6]:,.0f}<br>' +
                           '<b>Urban %:</b> %{customdata[3]:.1f}%<br>' +
                           '<b>Threshold:</b> ' + str(urban_threshold) + '%<br>' +
                           '<b>Population:</b> %{customdata[0]:,.0f}<br>' +
@@ -1173,7 +1203,8 @@ def generate_itn_map(
                 uncovered_data['allocation_phase'],  # [2] allocation_phase
                 uncovered_data['urban_pct_display'],  # [3] urban_pct_display
                 uncovered_data['no_alloc_reason'],  # [4] dynamic reason
-                uncovered_lga_names  # [5] LGA name
+                uncovered_lga_names,  # [5] LGA name
+                uncovered_data['overall_rank'].fillna(0)  # [6] risk rank
             )),
             marker_opacity=0.7,  # Increased opacity for visibility
             marker_line_width=1.5,  # Thicker borders for visibility
@@ -1234,6 +1265,7 @@ def generate_itn_map(
                               '─────────────────<br>' +
                               '<b>Allocation Status:</b> %{customdata[2]}<br>' +
                               '<b>Priority Tier:</b> %{customdata[5]}<br>' +
+                              '<b>Risk Rank:</b> #%{customdata[7]:,.0f}<br>' +
                               '<b>Urban %:</b> %{customdata[3]:.1f}% (threshold: ' + str(urban_threshold) + '%)<br>' +
                               '─────────────────<br>' +
                               '<b>Nets Allocated:</b> %{z:,.0f}<br>' +
@@ -1249,7 +1281,8 @@ def generate_itn_map(
                     tier1_data['urban_pct_display'].fillna(0),
                     tier1_data['nets_needed'].fillna(0),
                     tier1_data['tier_display'],
-                    tier1_data['lga_display']
+                    tier1_data['lga_display'],
+                    tier1_data['overall_rank'].fillna(0)
                 )),
                 marker_opacity=0.9,
                 marker_line_width=2,
@@ -1286,6 +1319,7 @@ def generate_itn_map(
                               '─────────────────<br>' +
                               '<b>Allocation Status:</b> %{customdata[2]}<br>' +
                               '<b>Priority Tier:</b> %{customdata[5]}<br>' +
+                              '<b>Risk Rank:</b> #%{customdata[7]:,.0f}<br>' +
                               '<b>Urban %:</b> %{customdata[3]:.1f}% (threshold: ' + str(urban_threshold) + '%)<br>' +
                               '─────────────────<br>' +
                               '<b>Nets Allocated:</b> %{z:,.0f}<br>' +
@@ -1301,7 +1335,8 @@ def generate_itn_map(
                     tier2_data['urban_pct_display'].fillna(0),
                     tier2_data['nets_needed'].fillna(0),
                     tier2_data['tier_display'],
-                    tier2_data['lga_display']
+                    tier2_data['lga_display'],
+                    tier2_data['overall_rank'].fillna(0)
                 )),
                 marker_opacity=0.9,
                 marker_line_width=2,
@@ -1336,6 +1371,27 @@ def generate_itn_map(
         tier2_wards = len(tier2_data)
         tier2_nets = int(tier2_data['nets_allocated'].sum()) if len(tier2_data) > 0 else 0
 
+    top_allocated_ward = "None"
+    top_allocated_rank = None
+    if not prioritized.empty and 'overall_rank' in prioritized.columns:
+        ranked_allocations = prioritized.copy()
+        ranked_allocations['overall_rank'] = pd.to_numeric(ranked_allocations['overall_rank'], errors='coerce')
+        ranked_allocations = ranked_allocations.dropna(subset=['overall_rank']).sort_values('overall_rank')
+        if not ranked_allocations.empty:
+            top_row = ranked_allocations.iloc[0]
+            top_allocated_ward = str(top_row.get('WardName', 'Unknown'))
+            top_allocated_rank = int(top_row['overall_rank'])
+
+    tier1_rank_range = _format_rank_range(tier1_data) if 'tier1_data' in locals() else "None"
+    tier2_rank_range = _format_rank_range(tier2_data) if 'tier2_data' in locals() else "None"
+    tier1_rank_display = f"#{tier1_rank_range}" if tier1_rank_range != "None" else "None"
+    tier2_rank_display = f"#{tier2_rank_range}" if tier2_rank_range != "None" else "None"
+    top_allocated_text = (
+        f"{top_allocated_ward} (#{top_allocated_rank})"
+        if top_allocated_rank is not None
+        else "None"
+    )
+
     # Add LGA boundary overlay for visual clarity
     try:
         add_lga_boundary_overlay(fig, shp_data_valid)
@@ -1349,8 +1405,11 @@ def generate_itn_map(
             text=f"<b>Allocation Strategy</b><br>" +
                  f"<b>Tier 1 (Rural Priority):</b> Urban < {urban_threshold}%<br>" +
                  f"  • Wards: {tier1_wards} | Nets: {tier1_nets:,}<br>" +
+                 f"  • Risk ranks: {tier1_rank_display}<br>" +
                  f"<b>Tier 2 (Urban Surplus):</b> Urban >= {urban_threshold}%<br>" +
                  f"  • Wards: {tier2_wards} | Nets: {tier2_nets:,}<br>" +
+                 f"  • Risk ranks: {tier2_rank_display}<br>" +
+                 f"<b>Rule:</b> allocate by risk rank within each tier<br>" +
                  f"<b>Net Ratio:</b> 1 net per 1.8 people<br>" +
                  f"<i>Hover over wards for details</i>",
             showarrow=False,
@@ -1368,7 +1427,8 @@ def generate_itn_map(
                  f"<b>Allocated:</b> {stats['allocated']:,}<br>" +
                  f"<b>Remaining:</b> {stats.get('remaining', 0):,}<br>" +
                  f"<b>Pop Coverage:</b> {stats['coverage_percent']}%<br>" +
-                 f"<b>Wards Covered:</b> {stats.get('prioritized_wards', 0)}" if stats else f"Total Nets: {total_nets:,}",
+                 f"<b>Wards Covered:</b> {stats.get('prioritized_wards', 0)}<br>" +
+                 f"<b>Highest Risk Covered:</b> {top_allocated_text}" if stats else f"Total Nets: {total_nets:,}",
             showarrow=False,
             xref="paper", yref="paper",
             x=0.98, y=0.98,
