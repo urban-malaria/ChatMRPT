@@ -86,7 +86,9 @@
       "Bash([ -f \"app/$f\" ])",
       "Bash([ -f \"app/auth/$f\" ])",
       "Bash([ -f \"app/services/$f\" ])",
-      "Bash([ -f \"app/config/$f\" ])"
+      "Bash([ -f \"app/config/$f\" ])",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ],
     "deny": []
   }

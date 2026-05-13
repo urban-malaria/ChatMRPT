@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import storage from '@/utils/storage';
 import type {
   Message, 
@@ -45,6 +45,21 @@ interface ChatState {
   setUploadedFiles: (csv?: string, shapefile?: string) => void;
   resetSession: () => void;
 }
+
+const CHAT_STORAGE_KEY = 'chat-storage';
+
+const conversationScopedStorage: StateStorage = {
+  getItem: (name) => {
+    storage.clearLegacyChatState();
+    return localStorage.getItem(storage.getConversationScopedKey(name));
+  },
+  setItem: (name, value) => {
+    localStorage.setItem(storage.getConversationScopedKey(name), value);
+  },
+  removeItem: (name) => {
+    storage.clearConversationState(name);
+  },
+};
 
 export const useChatStore = create<ChatState>()(
   devtools(
@@ -190,7 +205,7 @@ export const useChatStore = create<ChatState>()(
               nextState.currentArena = null;
 
               try {
-                sessionStorage.removeItem('chat-storage');
+                storage.clearConversationState(CHAT_STORAGE_KEY);
               } catch (error) {
                 console.warn('Failed to clear chat storage', error);
               }
@@ -220,16 +235,16 @@ export const useChatStore = create<ChatState>()(
           })),
         
         resetSession: () => {
-          // Clear old conversation ID and generate new one
-          storage.clearConversationId();
-          const newConversationId = storage.ensureConversationId();
-
-          // Clear persisted chat storage to start fresh
+          const currentConversationId = storage.getConversationId() || storage.ensureConversationId();
           try {
-            localStorage.removeItem('chat-storage');
+            storage.clearConversationState(CHAT_STORAGE_KEY, currentConversationId);
           } catch (e) {
             console.warn('Failed to clear chat storage:', e);
           }
+
+          // Clear old conversation ID and generate new one
+          storage.clearConversationId();
+          const newConversationId = storage.ensureConversationId();
 
           return set({
             session: {
@@ -245,8 +260,8 @@ export const useChatStore = create<ChatState>()(
         },
       }),
       {
-        name: 'chat-storage',
-        storage: createJSONStorage(() => localStorage),
+        name: CHAT_STORAGE_KEY,
+        storage: createJSONStorage(() => conversationScopedStorage),
         partialize: (state) => ({
           messages: state.messages.slice(-50), // Keep last 50 messages
           session: {
@@ -254,6 +269,7 @@ export const useChatStore = create<ChatState>()(
             startTime: state.session.startTime,
             messageCount: state.session.messageCount,
             hasUploadedFiles: state.session.hasUploadedFiles,
+            conversationId: storage.ensureConversationId(),
             uploadedFiles: state.session.uploadedFiles,
           },
         }),

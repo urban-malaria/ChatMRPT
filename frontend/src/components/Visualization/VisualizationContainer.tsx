@@ -3,6 +3,7 @@ import VisualizationFrame from './VisualizationFrame';
 import VisualizationControls from './VisualizationControls';
 import useVisualization from '@/hooks/useVisualization';
 import { useChatStore } from '@/stores/chatStore';
+import storage from '@/utils/storage';
 import toast from 'react-hot-toast';
 
 interface VisualizationContainerProps {
@@ -103,12 +104,11 @@ const VisualizationContainer: React.FC<VisualizationContainerProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Conversation-ID': storage.ensureConversationId(),
         },
         body: JSON.stringify({
           viz_url: currentViz.url,
           viz_type: vizType,
-          viz_path: vizPath,
-          visualization_path: vizPath, // Include both for compatibility
           session_id: session.sessionId,
         }),
       });

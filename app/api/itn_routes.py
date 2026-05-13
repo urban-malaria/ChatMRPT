@@ -13,7 +13,8 @@ itn_bp = Blueprint('itn', __name__, url_prefix='/api/itn')
 def update_itn_distribution():
     """Update ITN distribution with new threshold."""
     try:
-        data = request.get_json()
+        payload = request.get_json(silent=True)
+        data = payload if isinstance(payload, dict) else {}
         # Get session_id from multiple sources
         session_id = data.get('session_id') or session.get('session_id')
         
@@ -46,18 +47,35 @@ def update_itn_distribution():
             except Exception as e:
                 logger.debug(f"Could not get params from file: {e}")
         
-        # Get parameters - use stored values as defaults if available
+        missing_params = []
+
+        # Get parameters - use stored values as defaults only after an initial plan exists.
         if stored_params:
             urban_threshold = float(data.get('urban_threshold', stored_params.get('urban_threshold', 30)))
-            total_nets = int(data.get('total_nets', stored_params.get('total_nets', 10000)))
-            avg_household_size = float(data.get('avg_household_size', stored_params.get('avg_household_size', 5.0)))
+            total_nets_value = data.get('total_nets', stored_params.get('total_nets'))
+            avg_household_size_value = data.get('avg_household_size', stored_params.get('avg_household_size'))
             method = data.get('method', stored_params.get('method', 'composite'))
         else:
-            # Use provided values or defaults
             urban_threshold = float(data.get('urban_threshold', 30))
-            total_nets = int(data.get('total_nets', 10000))
-            avg_household_size = float(data.get('avg_household_size', 5.0))
+            total_nets_value = data.get('total_nets')
+            avg_household_size_value = data.get('avg_household_size')
             method = data.get('method', 'composite')
+
+        if total_nets_value in (None, ''):
+            missing_params.append('total_nets')
+        if avg_household_size_value in (None, ''):
+            missing_params.append('avg_household_size')
+
+        if missing_params:
+            return jsonify({
+                'status': 'requires_user_input',
+                'message': 'Please provide the total number of nets and average household size before planning ITN distribution.',
+                'missing_parameters': missing_params,
+                'requires_user_input': True
+            }), 400
+
+        total_nets = int(total_nets_value)
+        avg_household_size = float(avg_household_size_value)
         
         logger.info(f"Using parameters: threshold={urban_threshold}, nets={total_nets}, household={avg_household_size}, method={method}")
         

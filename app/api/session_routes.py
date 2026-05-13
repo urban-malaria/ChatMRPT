@@ -7,8 +7,9 @@ in multi-worker environments.
 """
 
 import logging
-from flask import Blueprint, session, jsonify
+from flask import Blueprint, session, jsonify, g
 from app.utils.decorators import handle_errors
+from app.utils.session_scope import get_effective_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +80,11 @@ def get_session_status():
     Returns:
         JSON response with session status information
     """
+    session_id = get_effective_session_id()
     return jsonify({
-        'session_id': session.get('session_id'),
+        'session_id': session_id,
+        'base_session_id': session.get('base_session_id'),
+        'conversation_id': getattr(g, 'conversation_id', None),
         'data_loaded': session.get('data_loaded', False),
         'csv_loaded': session.get('csv_loaded', False),
         'shapefile_loaded': session.get('shapefile_loaded', False),

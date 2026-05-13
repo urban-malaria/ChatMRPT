@@ -45,13 +45,14 @@ async function withRetry<T>(
   throw new Error('Max retries exceeded');
 }
 
-// Request interceptor for adding session ID
+// Request interceptor for adding request-scoping headers
 axiosInstance.interceptors.request.use(
   (config) => {
     const sessionId = storage.getSessionId();
     if (sessionId) {
       config.headers['X-Session-ID'] = sessionId;
     }
+    config.headers['X-Conversation-ID'] = storage.ensureConversationId();
     return config;
   },
   (error) => Promise.reject(error)

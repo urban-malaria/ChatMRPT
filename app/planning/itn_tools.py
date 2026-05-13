@@ -47,7 +47,7 @@ class PlanITNDistribution(BaseTool):
     
     avg_household_size: Optional[float] = Field(
         None,
-        description="Average household size in the region (default: 5.0)"
+        description="Average household size in the region"
     )
     
     urban_threshold: Optional[float] = Field(
@@ -79,7 +79,6 @@ class PlanITNDistribution(BaseTool):
             "I want to distribute bed nets",
             "I want to plan bed net distribution",
             "Help me plan net distribution",
-            "Allocate 10000 nets across wards",
             "Plan bed net distribution with 50000 nets",
             "Plan ITN/bed net distribution",
             "Help me distribute ITNs"
@@ -111,12 +110,11 @@ class PlanITNDistribution(BaseTool):
                     "Analysis has not been completed yet. Please run malaria risk analysis first before planning ITN distribution."
                 )
             
-            # Check if parameters are provided
-            if self.total_nets is None:
+            # Check if required user-provided parameters are available.
+            if self.total_nets is None or self.avg_household_size is None:
                 return self._create_parameter_request_result()
             
-            # Use defaults if not provided
-            avg_household_size = self.avg_household_size or 5.0
+            avg_household_size = self.avg_household_size
             urban_threshold = self.urban_threshold or 75.0
             
             # Run ITN distribution calculation
@@ -392,7 +390,7 @@ class PlanITNDistribution(BaseTool):
 To optimize the distribution, I need a few inputs:
 
 1. **Total number of nets available**: How many ITN nets do you have for distribution?
-2. **Average household size**: What's the typical household size in this region? (default is 5)
+2. **Average household size**: What's the typical household size in this region?
 
 Please provide these values and I'll calculate the optimal distribution plan based on the vulnerability rankings using composite method with a 75% urban threshold."""
         

@@ -14,7 +14,7 @@ import uuid
 import logging
 import time
 import traceback
-from flask import Blueprint, render_template, session, request, current_app, jsonify, send_from_directory
+from flask import Blueprint, render_template, session, request, current_app, jsonify, send_from_directory, g
 from datetime import datetime
 
 from app.utils.decorators import handle_errors, log_execution_time, validate_session
@@ -283,7 +283,9 @@ def session_info():
     Provides information about the current session state including
     loaded data files and analysis status.
     """
-    session_id = session.get('session_id', 'unknown')
+    from app.utils.session_scope import get_effective_session_id
+
+    session_id = get_effective_session_id()
     
     # Get data service for additional information
     data_service = current_app.services.data_service if hasattr(current_app, 'services') else None
@@ -291,6 +293,8 @@ def session_info():
     # Prepare session information
     info = {
         'session_id': session_id,
+        'base_session_id': session.get('base_session_id'),
+        'conversation_id': getattr(g, 'conversation_id', None),
         'csv_loaded': session.get('csv_loaded', False),
         'shapefile_loaded': session.get('shapefile_loaded', False),
         'analysis_complete': session.get('analysis_complete', False),

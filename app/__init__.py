@@ -206,6 +206,11 @@ def create_app(config_name=None):
             return
 
         g.conversation_id = safe_conversation
+        try:
+            from app.utils.session_scope import get_effective_session_id
+            g.effective_session_id = get_effective_session_id(safe_conversation)
+        except Exception:
+            app.logger.debug("Could not derive effective session id", exc_info=True)
     
     # Log startup information
     app.logger.info("ChatMRPT v3.0 - Modern Architecture Initialized")
