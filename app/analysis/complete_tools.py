@@ -310,11 +310,25 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
                     else:
                         logger.warning(f"❌ Unified dataset creation failed: {unified_result['message']}")
                         unified_result['success'] = False  # Add success key for compatibility
-                        # Continue anyway - analyses succeeded
+                        return ToolExecutionResult(
+                            success=False,
+                            message=(
+                                "Risk analysis could not complete because the unified dataset was not created. "
+                                f"Reason: {unified_result.get('message', 'Unknown unified dataset error')}"
+                            ),
+                            error_details=unified_result.get('message')
+                        )
                 except Exception as e:
                     logger.error(f"💥 Error creating unified dataset: {e}")
                     unified_result = {'success': False, 'message': f'Error: {str(e)}'}
-                    # Continue anyway - analyses succeeded
+                    return ToolExecutionResult(
+                        success=False,
+                        message=(
+                            "Risk analysis could not complete because the unified dataset was not created. "
+                            f"Reason: {str(e)}"
+                        ),
+                        error_details=str(e)
+                    )
             
             # Generate comparison summary (only if PCA was actually run)
             if pca_result.get('pca_skipped'):

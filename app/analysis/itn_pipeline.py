@@ -112,6 +112,32 @@ def detect_state(data_handler) -> Optional[str]:
 
         return None
 
+    def _detect_state_from_frame(df: pd.DataFrame, source_name: str) -> Optional[str]:
+        if df is None or df.empty:
+            return None
+
+        state_candidates = ['State', 'state', 'StateName', 'state_name', 'orgunitlevel2']
+        for col_name in state_candidates:
+            if col_name in df.columns:
+                non_null_values = df[col_name].dropna()
+                if len(non_null_values) > 0:
+                    state = _normalize_state(non_null_values.iloc[0])
+                    if state:
+                        logger.info(f"✅ Detected state from {source_name} ({col_name} column): {state}")
+                        return state
+
+        statecode_candidates = ['StateCode', 'state_code', 'STATECODE']
+        for col_name in statecode_candidates:
+            if col_name in df.columns:
+                non_null_values = df[col_name].dropna()
+                if len(non_null_values) > 0:
+                    state = _normalize_state(non_null_values.iloc[0])
+                    if state:
+                        logger.info(f"✅ Detected state from {source_name} ({col_name} column): {state}")
+                        return state
+
+        return None
+
     # Check shapefile data first
     if hasattr(data_handler, 'shapefile_data') and data_handler.shapefile_data is not None:
         state_candidates = ['State', 'state', 'StateName', 'state_name']
@@ -205,6 +231,22 @@ def detect_state(data_handler) -> Optional[str]:
                 return state
     except:
         pass
+
+    # WhatsApp/RQ sessions can reload analysis_cleaned_data.csv into the handler
+    # while the TPR-derived raw_data.csv still contains the state metadata.
+    session_folder = getattr(data_handler, 'session_folder', None)
+    if session_folder:
+        for filename in ['raw_data.csv', 'unified_dataset.csv', 'uploaded_data.csv', 'data_analysis.csv']:
+            file_path = os.path.join(session_folder, filename)
+            if not os.path.exists(file_path):
+                continue
+            try:
+                df = pd.read_csv(file_path, nrows=500)
+                state = _detect_state_from_frame(df, filename)
+                if state:
+                    return state
+            except Exception as exc:
+                logger.warning(f"Could not inspect {filename} for state detection: {exc}")
 
     # Log error - state detection failed
     available_states = ', '.join(loader.get_available_states())
@@ -463,9 +505,83 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
     else:
         # Fall back to original approach
         if method == 'composite':
-            rankings = data_handler.vulnerability_rankings.copy()
+            rankings_source = getattr(data_handler, 'vulnerability_rankings', None)
         else:
-            rankings = data_handler.vulnerability_rankings_pca.copy()
+            rankings_source = getattr(data_handler, 'vulnerability_rankings_pca', None)
+
+        if rankings_source is None:
+            session_folder = getattr(data_handler, 'session_folder', None)
+            filename = 'analysis_vulnerability_rankings.csv' if method == 'composite' else 'analysis_vulnerability_rankings_pca.csv'
+            rankings_path = os.path.join(session_folder, filename) if session_folder else None
+            if rankings_path and os.path.exists(rankings_path):
+                rankings_source = pd.read_csv(rankings_path)
+                logger.info(f"Loaded ITN rankings from {filename}")
+
+        if rankings_source is None:
+            return {
+                'status': 'error',
+                'message': 'Risk rankings were not found. Please run malaria risk analysis before planning ITN distribution.'
+            }
+
+        rankings = rankings_source.copy()
+
+        if 'overall_rank' not in rankings.columns:
+            for candidate in ['composite_rank', 'pca_rank', 'rank', 'Rank']:
+                if candidate in rankings.columns:
+                    rankings = rankings.rename(columns={candidate: 'overall_rank'})
+                    break
+
+        if 'overall_rank' not in rankings.columns:
+            return {
+                'status': 'error',
+                'message': 'Risk rankings are missing an overall_rank column. Please rerun malaria risk analysis before planning ITN distribution.'
+            }
+
+        if 'vulnerability_category' not in rankings.columns:
+            for candidate in ['combined_category', 'composite_category', 'pca_category', 'category']:
+                if candidate in rankings.columns:
+                    rankings = rankings.rename(columns={candidate: 'vulnerability_category'})
+                    break
+
+        session_folder = getattr(data_handler, 'session_folder', None)
+        if session_folder:
+            for filename in ['raw_data.csv', 'unified_dataset.csv']:
+                file_path = os.path.join(session_folder, filename)
+                if not os.path.exists(file_path):
+                    continue
+                try:
+                    session_df = pd.read_csv(file_path)
+                except Exception as exc:
+                    logger.warning(f"Could not load {filename} for ITN context merge: {exc}")
+                    continue
+
+                context_cols = [
+                    col for col in [
+                        'WardName', 'WardCode', 'State', 'StateCode', 'LGA',
+                        'Population', 'urban_percentage', 'urban_pct',
+                        'UrbanPercent', 'urbanPercentage'
+                    ]
+                    if col in session_df.columns
+                ]
+                if 'WardName' not in context_cols:
+                    continue
+
+                context_df = session_df[context_cols].drop_duplicates(subset=['WardName'])
+                if 'WardCode' in rankings.columns and 'WardCode' in context_df.columns:
+                    merge_key = 'WardCode'
+                else:
+                    merge_key = 'WardName'
+
+                add_cols = [merge_key] + [
+                    col for col in context_df.columns
+                    if col != merge_key and col not in rankings.columns
+                ]
+                if len(add_cols) <= 1:
+                    continue
+
+                rankings = rankings.merge(context_df[add_cols], on=merge_key, how='left')
+                logger.info(f"Merged ITN ranking context from {filename} using {merge_key}")
+                break
     
     shp_data = data_handler.shapefile_data
     
@@ -1185,6 +1301,8 @@ def generate_itn_map(
     uncovered_with_data = uncovered_mask & ~no_data_mask
     if uncovered_with_data.any():
         uncovered_data = shp_data_valid[uncovered_with_data].copy()
+        if 'overall_rank' not in uncovered_data.columns:
+            uncovered_data['overall_rank'] = 0
 
         # ✅ FIX: Create DYNAMIC reason field based on each ward's actual urban percentage
         def get_no_allocation_reason(row):

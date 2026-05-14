@@ -69,6 +69,8 @@ def _sender_lock(redis_client, sender: str):
 
 
 def _send_messages(to: str, messages: list[str], app) -> bool:
+    from app.whatsapp.formatter import chunk_text
+
     account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
     auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
     from_number = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
@@ -81,13 +83,14 @@ def _send_messages(to: str, messages: list[str], app) -> bool:
     success = True
     with app.app_context():
         for msg in messages:
-            try:
-                client.messages.create(body=msg, from_=from_number, to=to)
-                log_event("twilio_send_success", sender=to)
-            except Exception:
-                logger.exception("Failed to send WhatsApp message to %s", to)
-                log_event("twilio_send_failure", logging.ERROR, sender=to)
-                success = False
+            for chunk in chunk_text(msg):
+                try:
+                    client.messages.create(body=chunk, from_=from_number, to=to)
+                    log_event("twilio_send_success", sender=to)
+                except Exception:
+                    logger.exception("Failed to send WhatsApp message to %s", to)
+                    log_event("twilio_send_failure", logging.ERROR, sender=to)
+                    success = False
     return success
 
 

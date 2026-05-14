@@ -25,6 +25,7 @@ geopandas>=0.14.3
 fiona>=1.10.0
 pyproj>=3.0.1
 shapely>=2.0.0
+pyarrow>=20.0.0
 rtree>=1.0.1
 mapclassify>=2.5.0
 GDAL==3.6.2

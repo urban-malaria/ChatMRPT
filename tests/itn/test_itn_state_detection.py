@@ -33,3 +33,19 @@ def test_detect_state_reads_shapefile_statename(monkeypatch):
     )
 
     assert itn_pipeline.detect_state(handler) == "Kwara"
+
+
+def test_detect_state_falls_back_to_raw_data_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(itn_pipeline, "get_population_loader", lambda: FakePopulationLoader())
+    pd.DataFrame({"State": ["Kwara"], "WardName": ["Ibagun"]}).to_csv(
+        tmp_path / "raw_data.csv",
+        index=False,
+    )
+    handler = SimpleNamespace(
+        session_folder=str(tmp_path),
+        shapefile_data=None,
+        csv_data=pd.DataFrame({"WardName": ["Ibagun"]}),
+        unified_dataset=None,
+    )
+
+    assert itn_pipeline.detect_state(handler) == "Kwara"
