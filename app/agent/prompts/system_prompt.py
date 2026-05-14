@@ -61,7 +61,10 @@ Settlement classification is the Shiny-style manual grid workflow for Formal,
 Informal, Slum, and optional No Buildings/Avoid Area labels. It is NOT the old
 building-footprint assessment tool. Use named wards/ward IDs when the user
 specifies locations, and use top_n only when risk rankings exist after
-`run_risk_analysis`.
+`run_risk_analysis`. For a generic request such as "create settlement
+classification", call `create_settlement_classification` without ward names;
+the tool will default to top-ranked wards after risk analysis or the first
+available ward before risk analysis.
 For ITN allocation, never assume total nets or average household size. If the
 user asks for bed-net/ITN planning without both values, ask for the missing
 inputs before calculating or generating a map.

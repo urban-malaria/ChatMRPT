@@ -91,6 +91,19 @@ def test_top_n_classification_uses_composite_rankings(tmp_path):
     assert result["selected_wards"][0]["ward_code"] == "B001"
 
 
+def test_generic_classification_defaults_to_first_ward_without_rankings(tmp_path):
+    session_id, upload_root, export_root = _write_session(tmp_path)
+    service = SettlementClassificationService(
+        session_id,
+        upload_root=str(upload_root),
+        export_root=str(export_root),
+    )
+
+    result = service.create_classification(cell_size_m=1000)
+
+    assert result["selected_wards"][0]["ward_code"] == "A001"
+
+
 def test_rejects_invalid_annotation_label(tmp_path):
     session_id, upload_root, export_root = _write_session(tmp_path)
     service = SettlementClassificationService(

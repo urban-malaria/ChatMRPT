@@ -513,7 +513,9 @@ def create_settlement_classification(
 
     Use this when users ask to classify settlement patterns, validate wards
     against satellite imagery, create a Shiny-style formal/informal/slum grid,
-    or classify top-risk wards after malaria risk analysis.
+    or classify top-risk wards after malaria risk analysis. If the user gives
+    a generic request like "create settlement classification", call this tool
+    without ward_names/top_n; it will choose sensible defaults.
 
     This tool requires uploaded/enriched data and a shapefile. It does not
     require malaria risk analysis unless the user asks for top-risk wards.

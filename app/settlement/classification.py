@@ -435,7 +435,25 @@ class SettlementClassificationService:
             selected = gdf.loc[selected_indices].copy()
             return selected, f"Created classifier for the top {len(selected)} {method} risk-ranked ward(s)."
 
-        raise ValueError("Select ward names/IDs or provide top_n for ranked ward selection.")
+        ranking_lookup = self._build_ranking_lookup(method)
+        if not ranking_lookup and method == "pca":
+            method = "composite"
+            ranking_lookup = self._build_ranking_lookup(method)
+
+        if ranking_lookup:
+            ranked_rows = []
+            for idx, row in gdf.iterrows():
+                rank_info = ranking_lookup.get(str(row["_settlement_ward_id"])) or ranking_lookup.get(_normalize(row.get(meta["name_col"])))
+                if rank_info and rank_info.get("rank") is not None:
+                    ranked_rows.append((float(rank_info["rank"]), idx))
+            ranked_rows.sort(key=lambda item: item[0])
+            selected_indices = [idx for _, idx in ranked_rows[:10]]
+            if selected_indices:
+                selected = gdf.loc[selected_indices].copy()
+                return selected, f"Created classifier for the top {len(selected)} {method} risk-ranked ward(s)."
+
+        selected = gdf.head(1).copy()
+        return selected, "Created classifier for the first available ward. Run risk analysis first to auto-select top-risk wards."
 
     def _build_grid(self, selected: gpd.GeoDataFrame, cell_size_m: int, max_cells: int) -> gpd.GeoDataFrame:
         metric_crs = selected.estimate_utm_crs()
