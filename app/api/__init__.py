@@ -23,6 +23,7 @@ from .reports_routes import reports_bp
 from .debug_routes import debug_bp
 from .itn_routes import itn_bp, itn_embed_bp
 from .export_routes import export_bp
+from .settlement_routes import settlement_bp
 from .session_routes import session_bp
 from .arena_routes import arena_bp
 from .conversation_routes import conversations_bp
@@ -84,6 +85,7 @@ __all__ = [
     'itn_bp',
     'itn_embed_bp',
     'export_bp',
+    'settlement_bp',
     'session_bp',
     'arena_bp',
     'conversations_bp',
@@ -121,6 +123,9 @@ def register_all_blueprints(app):
     
     # Register export routes (export download functionality)
     app.register_blueprint(export_bp)
+
+    # Register settlement classification routes
+    app.register_blueprint(settlement_bp)
     
     # Register session routes (session state verification)
     app.register_blueprint(session_bp)
@@ -148,6 +153,7 @@ def register_all_blueprints(app):
 
     logger = logging.getLogger(__name__)
     logger.info("✅ Export routes registered")
+    logger.info("✅ Settlement classification routes registered")
     logger.info("✅ Session routes registered")
     logger.info("✅ Arena routes registered")
     logger.info("✅ Conversation history routes registered")
