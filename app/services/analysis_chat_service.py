@@ -10,6 +10,7 @@ from __future__ import annotations
 import glob
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -218,6 +219,62 @@ def _run_agent_sync(agent, message: str, workflow_context: dict | None = None):
     finally:
         _asyncio.set_event_loop(None)
         loop.close()
+
+
+def _is_generic_settlement_classification_request(message: str) -> bool:
+    """Return True for direct generic settlement-classification commands."""
+    lower = (message or "").lower().strip()
+    if "settlement" not in lower or "classification" not in lower:
+        return False
+    if " for " in lower and "top" not in lower and "highest" not in lower and "risk" not in lower:
+        return False
+    generic_phrases = [
+        "create settlement classification",
+        "start settlement classification",
+        "open settlement classification",
+        "run settlement classification",
+        "settlement classification",
+    ]
+    return any(phrase in lower for phrase in generic_phrases)
+
+
+def _extract_top_n(message: str) -> int | None:
+    lower = (message or "").lower()
+    if not any(token in lower for token in ("top", "highest", "risk")):
+        return None
+    match = re.search(r"\btop\s+(\d+)\b", lower)
+    if match:
+        return max(1, min(int(match.group(1)), 25))
+    return 10
+
+
+def _run_settlement_classification_direct(session_id: str, message: str) -> dict:
+    """Create settlement classification without relying on LLM tool selection."""
+    from app.agent.viz_processor import process_visualizations
+    from app.settlement import SettlementClassificationTool
+
+    top_n = _extract_top_n(message)
+    tool = SettlementClassificationTool(top_n=top_n)
+    result = tool.execute(session_id=session_id)
+    data = result.data or {}
+    visualizations = process_visualizations(session_id, [data.get("file_path")] if data.get("file_path") else [])
+
+    response_message = result.message
+    download_links = data.get("download_links") or []
+    if result.success and download_links:
+        response_message += "\n\n**Downloads available:**"
+        for link in download_links:
+            response_message += f"\n- [{link.get('description', 'Download')}]({link.get('url', '')})"
+
+    return {
+        "success": result.success,
+        "message": response_message,
+        "visualizations": visualizations,
+        "download_links": download_links,
+        "session_id": session_id,
+        "workflow": "settlement_classification",
+        "data": data,
+    }
 
 
 def ensure_analysis_session_available(session_id: str) -> bool:
@@ -528,6 +585,9 @@ def run_analysis_message(session_id: str, message: str) -> dict:
         except TPRStartError as exc:
             return {"success": False, "message": str(exc), "session_id": session_id, "workflow": "tpr"}
 
+    if _is_generic_settlement_classification_request(message):
+        return _run_settlement_classification_direct(session_id, message)
+
     workflow_context = build_general_workflow_context(session_id)
     from app.agent.agent import DataAnalysisAgent
 
@@ -585,6 +645,11 @@ def stream_analysis_events(session_id: str, message: str) -> Iterator[dict[str, 
                 "session_id": session_id,
                 "workflow": "tpr",
             }
+        yield {"type": "result", "data": result}
+        return
+
+    if _is_generic_settlement_classification_request(message):
+        result = _run_settlement_classification_direct(session_id, message)
         yield {"type": "result", "data": result}
         return
 
