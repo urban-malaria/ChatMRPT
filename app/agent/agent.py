@@ -81,6 +81,7 @@ class DataAnalysisAgent:
                 create_urban_extent_map,
                 run_risk_analysis,
                 plan_itn_distribution,
+                create_settlement_classification,
                 switch_tpr_combination,
             )
             self.tools = [
@@ -91,6 +92,7 @@ class DataAnalysisAgent:
                 create_urban_extent_map,
                 run_risk_analysis,
                 plan_itn_distribution,
+                create_settlement_classification,
                 switch_tpr_combination,
             ]
 

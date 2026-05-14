@@ -495,7 +495,97 @@ def plan_itn_distribution(
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 7. SWITCH TPR COMBINATION
+# 7. SETTLEMENT CLASSIFICATION
+# ─────────────────────────────────────────────────────────────────────
+
+@tool
+def create_settlement_classification(
+    graph_state: Annotated[dict, InjectedState],
+    thought: str,
+    ward_names: Optional[List[str]] = None,
+    ward_ids: Optional[List[str]] = None,
+    top_n: Optional[int] = None,
+    method: str = "composite",
+    cell_size_m: int = 500,
+    include_no_buildings: bool = True,
+) -> Tuple[str, Dict[str, Any]]:
+    """Create a manual settlement classification grid map.
+
+    Use this when users ask to classify settlement patterns, validate wards
+    against satellite imagery, create a Shiny-style formal/informal/slum grid,
+    or classify top-risk wards after malaria risk analysis.
+
+    This tool requires uploaded/enriched data and a shapefile. It does not
+    require malaria risk analysis unless the user asks for top-risk wards.
+
+    Args:
+        thought: Your reasoning about which wards or rankings to use.
+        ward_names: Optional ward names to classify.
+        ward_ids: Optional stable ward IDs to classify.
+        top_n: Optional number of top risk-ranked wards to classify.
+        method: Ranking method for top_n: 'composite' or 'pca'.
+        cell_size_m: Grid size in meters. Default 500.
+        include_no_buildings: Include the utility "No Buildings/Avoid Area" label.
+    """
+    session_id = graph_state.get('session_id', 'default')
+    try:
+        from app.settlement import SettlementClassificationTool
+        result = SettlementClassificationTool(
+            ward_names=ward_names,
+            ward_ids=ward_ids,
+            top_n=top_n,
+            method=method,
+            cell_size_m=cell_size_m,
+            include_no_buildings=include_no_buildings,
+        ).execute(session_id=session_id)
+
+        message = result.message or "Settlement classification map created."
+        data = result.data or {}
+        if not result.success:
+            _add_canonical_response(
+                graph_state,
+                tool_name="create_settlement_classification",
+                message=message,
+                success=False,
+                metadata=_safe_dict(result.metadata),
+                data=_safe_dict(result.data),
+                priority=110,
+            )
+            return message, {}
+
+        _add_viz_to_state(graph_state, data.get('file_path'))
+        download_links = data.get('download_links', [])
+        if download_links:
+            message += "\n\n**Downloads available:**"
+            for link in download_links:
+                message += f"\n- [{link.get('description', 'Download')}]({link.get('url', '')})"
+
+        _add_canonical_response(
+            graph_state,
+            tool_name="create_settlement_classification",
+            message=message,
+            success=True,
+            metadata=_safe_dict(result.metadata),
+            data=_safe_dict(result.data),
+            priority=105,
+        )
+        return message, {}
+    except Exception as e:
+        logger.error(f"create_settlement_classification failed: {e}", exc_info=True)
+        message = f"Error creating settlement classification map: {e}"
+        _add_canonical_response(
+            graph_state,
+            tool_name="create_settlement_classification",
+            message=message,
+            success=False,
+            priority=110,
+            source="tool_exception",
+        )
+        return message, {}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 8. SWITCH TPR COMBINATION
 # ─────────────────────────────────────────────────────────────────────
 
 @tool

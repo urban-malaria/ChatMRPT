@@ -1111,15 +1111,18 @@ I ranked all {ward_count} wards by malaria risk using {num_variables} risk facto
 1. Plan ITN / bed net distribution
    Type: **I want to plan bed net distribution**
 
-2. View the highest-risk wards
+2. Classify settlements in priority wards
+   Type: **create settlement classification for the top 10 highest-risk wards**
+
+3. View the highest-risk wards
    Type: **show me the highest risk wards**
 
-3. View the lowest-risk wards
+4. View the lowest-risk wards
    Type: **show me the lowest risk wards**
 
-4. {visual_action}
+5. {visual_action}
 
-5. Export the results
+6. Export the results
    Type: **export results**
 
 ## What I did
@@ -1244,6 +1247,7 @@ I ranked all {ward_count} wards by malaria risk using {num_variables} risk facto
             summary_parts.append("### 💡 Next Steps\n")
             summary_parts.append("\n")
             summary_parts.append('- **Visualize Risk Levels:** "plot the vulnerability map"\n')
+            summary_parts.append('- **Classify Settlements:** "create settlement classification for the top 10 highest-risk wards"\n')
             summary_parts.append('- **Plan Interventions:** "I want to plan bed net distribution"\n')
             summary_parts.append('- **View Rankings:** "show me the top 10 highest risk wards"\n')
             summary_parts.append('- **Export results** for intervention planning\n')
