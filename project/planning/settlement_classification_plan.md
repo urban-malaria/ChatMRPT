@@ -13,19 +13,46 @@ The workflow should work in two modes:
 - Standalone mode: after the user has uploaded/enriched data and a shapefile exists for the target area.
 - Post-analysis mode: after malaria risk analysis, where risk rankings can help prioritize wards for classification.
 
+The interaction model should be map-first with progressive filtering, not a rigid LGA-then-ward ladder.
+
 ## Product Scope
 
 ### Core User Flows
 
 1. User uploads data and shapefile through the existing ChatMRPT data workflow.
 2. User asks for settlement classification, for example:
-   - "Create settlement classification grids for these wards."
+   - "Create settlement classification."
    - "Let me classify settlements in the top 10 high-risk wards."
    - "After the malaria risk analysis, open the settlement classification tool."
-3. ChatMRPT generates an interactive map in the chat visualization area.
-4. User clicks grid cells, selects a settlement class, and adds optional notes.
-5. ChatMRPT persists each annotation.
-6. User exports CSV, GeoJSON, and eventually shapefile/static map outputs.
+3. ChatMRPT generates a full-state overview map first, with an LGA/ward/risk selector panel and a satellite layer switcher.
+4. User chooses a focus mode and selection target:
+   - state overview only
+   - by LGA
+   - by ward
+   - by risk-ranked wards
+   - by click/draw selection on the map
+5. ChatMRPT generates grid cells only after the selected area is clear.
+6. User classifies each cell and adds optional notes.
+7. ChatMRPT persists each annotation.
+8. User exports CSV, GeoJSON, and eventually shapefile/static map outputs.
+
+### Selection Modes
+
+The first screen should be a selector, not a grid.
+
+Recommended modes:
+
+- `By LGA`
+- `By Ward`
+- `By Risk-ranked wards`
+- `Draw/select on map`
+
+Behavior:
+
+- `By LGA`: show the state map, let the user choose an LGA, then optionally narrow to wards in that LGA.
+- `By Ward`: show the state map and allow direct ward search/selection.
+- `By Risk-ranked wards`: when risk analysis is available, auto-suggest top wards but still let the user override the selection.
+- `Draw/select on map`: let the user pick visible polygons directly when they do not want to think in admin tiers.
 
 ### Classification Labels
 
@@ -107,8 +134,9 @@ Create a new package:
 Responsibilities:
 
 - load session data and shapefile
-- detect ward identifiers
-- select wards manually or from risk rankings
+- detect ward identifiers and admin hierarchy
+- build the overview selector map
+- support LGA, ward, and risk-ranked selection modes
 - generate grid cells
 - render classifier HTML
 - persist annotations
@@ -133,14 +161,17 @@ Execution behavior:
 1. Resolve session folder.
 2. Load data through `DataHandler`.
 3. Verify shapefile exists.
-4. Resolve selected wards.
-5. Generate classification record and grid.
-6. Save grid GeoJSON and metadata.
-7. Render interactive classifier HTML.
-8. Return a `ToolExecutionResult` with:
+4. Render the overview selector map first.
+5. Wait for or accept a selected LGA/ward/risk selection.
+6. Resolve selected wards or polygons.
+7. Generate classification record and grid.
+8. Save grid GeoJSON and metadata.
+9. Render interactive classifier HTML.
+10. Return a `ToolExecutionResult` with:
    - `file_path`
    - `web_path`
    - `classification_id`
+   - `selection_mode`
    - selected wards
    - grid count
    - download links when available
@@ -182,6 +213,8 @@ The ward-list API should expose:
 - whether the name is duplicated
 - ranking fields when available
 
+The API should also expose LGA-level groupings so the UI can filter wards by LGA before generating the grid.
+
 If a requested ward name is ambiguous, the tool should return an actionable clarification message instead of guessing.
 
 ### 5. Grid Generation
@@ -206,6 +239,7 @@ Guardrails:
 - set a maximum cell count per generated map
 - reject or require confirmation for very small cell sizes
 - provide clear messages when the request is too large
+- do not auto-generate a large grid until the user has confirmed the area selection
 
 Initial recommended defaults:
 
@@ -253,6 +287,20 @@ Writes should be atomic:
 6. regenerate CSV
 
 This avoids corrupted files during rapid iframe autosaves.
+
+## Map and Imagery Plan
+
+The overview selector and the classification view should both support multiple basemaps.
+
+Recommended basemaps:
+
+- Esri World Imagery
+- OpenStreetMap reference
+- at least one lighter satellite or hybrid layer if legally and technically supported
+
+Use Leaflet layer controls so the user can compare imagery without leaving the workflow.
+
+If a split-screen compare view is too much for version one, keep the base map switcher first and defer split view to a later phase.
 
 ## Settlement API Plan
 

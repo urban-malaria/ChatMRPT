@@ -148,6 +148,90 @@ class SettlementClassificationService:
 
         return sorted(records, key=lambda item: (item.get("rank") is None, item.get("rank") or 999999, item["display_name"]))
 
+    def load_boundaries_geojson(self, method: str = "composite") -> Dict[str, Any]:
+        """Return prepared ward boundaries for the overview selector map."""
+        gdf = self._load_shapefile()
+        prepared, meta = self._prepare_ward_gdf(gdf)
+        ranking_lookup = self._build_ranking_lookup(method)
+
+        records = prepared.copy()
+        records = records.to_crs(epsg=4326)
+        try:
+            records["geometry"] = records.geometry.simplify(0.00005, preserve_topology=True)
+        except Exception:
+            logger.debug("Boundary simplification failed", exc_info=True)
+
+        records["ward_id"] = records["_settlement_ward_id"]
+        records["display_name"] = records["_settlement_display_name"]
+        records["ward_name"] = records[meta["name_col"]]
+        records["ward_code"] = records[meta["code_col"]] if meta.get("code_col") else None
+        records["lga"] = records[meta["lga_col"]] if meta.get("lga_col") else None
+        records["state"] = records[meta["state_col"]] if meta.get("state_col") else None
+        records["rank"] = None
+
+        for idx, row in records.iterrows():
+            rank_info = ranking_lookup.get(str(row["ward_id"])) or ranking_lookup.get(_normalize(row.get("ward_name")))
+            if rank_info:
+                records.at[idx, "rank"] = rank_info.get("rank")
+
+        keep_cols = [
+            "ward_id",
+            "display_name",
+            "ward_name",
+            "ward_code",
+            "lga",
+            "state",
+            "rank",
+            "geometry",
+        ]
+        return json.loads(records[keep_cols].to_json())
+
+    def create_selector_map(
+        self,
+        method: str = "composite",
+        cell_size_m: int = 500,
+        include_no_buildings: bool = True,
+    ) -> Dict[str, Any]:
+        """Create the full-state overview selector before grid generation."""
+        gdf = self._load_shapefile()
+        prepared, meta = self._prepare_ward_gdf(gdf)
+        selector_dir = self.settlement_root / "selector"
+        selector_dir.mkdir(parents=True, exist_ok=True)
+        html_path = selector_dir / "settlement_selector.html"
+
+        wards = self.list_wards(include_rankings=True, method=method)
+        lgas = sorted({
+            str(item.get("lga")).strip()
+            for item in wards
+            if item.get("lga") not in (None, "")
+        })
+        states = sorted({
+            str(item.get("state")).strip()
+            for item in wards
+            if item.get("state") not in (None, "")
+        })
+        metadata = {
+            "session_id": self.session_id,
+            "method": method,
+            "cell_size_m": cell_size_m,
+            "include_no_buildings": include_no_buildings,
+            "ward_count": int(len(prepared)),
+            "lga_count": len(lgas),
+            "state_names": states,
+            "name_column": meta["name_col"],
+            "lga_column": meta.get("lga_col"),
+        }
+        html_path.write_text(self._render_selector_html(metadata, wards, lgas), encoding="utf-8")
+        return {
+            "selector": True,
+            "file_path": _json_responseable_path(html_path),
+            "web_path": f"/serve_viz_file/{self.session_id}/settlement/selector/settlement_selector.html",
+            "ward_count": int(len(prepared)),
+            "lga_count": len(lgas),
+            "message": "Opened settlement classification selector.",
+            "download_links": [],
+        }
+
     def create_classification(
         self,
         ward_names: Optional[Sequence[str]] = None,
@@ -614,6 +698,384 @@ class SettlementClassificationService:
             },
         ]
 
+    def _render_selector_html(self, metadata: Dict[str, Any], wards: List[Dict[str, Any]], lgas: List[str]) -> str:
+        payload = {
+            "sessionId": self.session_id,
+            "method": metadata["method"],
+            "cellSizeM": metadata["cell_size_m"],
+            "includeNoBuildings": metadata["include_no_buildings"],
+            "boundariesUrl": f"/api/settlement/{self.session_id}/boundaries?method={metadata['method']}",
+            "createUrl": f"/api/settlement/{self.session_id}/classifications",
+            "wards": wards,
+            "lgas": lgas,
+            "wardCount": metadata["ward_count"],
+            "lgaCount": metadata["lga_count"],
+        }
+        config_json = json.dumps(payload, ensure_ascii=False)
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settlement Classification Selector</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body {{ height: 100%; margin: 0; font-family: Arial, sans-serif; color: #17202a; }}
+    #app {{ display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: 840px; background: #f7f9fb; }}
+    #map {{ min-height: 760px; background: #dce5ea; }}
+    #panel {{ border-left: 1px solid #d0d7de; padding: 14px; overflow-y: auto; background: #fff; }}
+    h1 {{ font-size: 18px; margin: 0 0 6px; }}
+    h2 {{ font-size: 14px; margin: 18px 0 8px; }}
+    .muted {{ color: #57606a; font-size: 13px; line-height: 1.35; }}
+    .row {{ margin: 12px 0; }}
+    .mode {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }}
+    .mode button {{ background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }}
+    .mode button.active {{ background: #0969da; color: #fff; border-color: #0969da; }}
+    label {{ display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }}
+    select, input, textarea, button {{ width: 100%; box-sizing: border-box; font: inherit; }}
+    select, input, textarea {{ border: 1px solid #c9d1d9; border-radius: 6px; padding: 8px; background: #fff; }}
+    textarea {{ min-height: 90px; resize: vertical; }}
+    button {{ border: 0; border-radius: 6px; padding: 9px 10px; background: #1f6feb; color: white; cursor: pointer; }}
+    button.secondary {{ background: #57606a; }}
+    button:disabled {{ background: #9aa4b2; cursor: not-allowed; }}
+    .selected {{ padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 13px; }}
+    .status {{ font-size: 13px; min-height: 18px; }}
+    .hidden {{ display: none; }}
+    .legend-item {{ display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }}
+    .swatch {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); }}
+    .boundary-hit {{ background: #eaf5ff; border-radius: 6px; padding: 8px; font-size: 13px; }}
+    @media (max-width: 820px) {{ #app {{ grid-template-columns: 1fr; height: auto; }} #map {{ height: 600px; min-height: 600px; }} #panel {{ border-left: 0; border-top: 1px solid #d0d7de; }} }}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="map"></div>
+    <aside id="panel">
+      <section id="selectorPanel">
+        <h1>Settlement Classification</h1>
+        <div class="muted" id="overviewSummary"></div>
+        <h2>Focus</h2>
+        <div class="mode">
+          <button type="button" data-mode="lga" class="active">LGA</button>
+          <button type="button" data-mode="ward">Ward</button>
+          <button type="button" data-mode="risk">Risk-ranked</button>
+          <button type="button" data-mode="map">Map select</button>
+        </div>
+        <div class="row" id="lgaRow">
+          <label for="lgaSelect">LGA</label>
+          <select id="lgaSelect"></select>
+        </div>
+        <div class="row" id="wardRow">
+          <label for="wardSelect">Ward</label>
+          <select id="wardSelect"></select>
+        </div>
+        <div class="row hidden" id="riskRow">
+          <label for="topInput">Top-ranked wards</label>
+          <input id="topInput" type="number" min="1" max="25" value="10">
+        </div>
+        <div class="row hidden" id="mapRow">
+          <div class="boundary-hit" id="mapSelection">Click a ward polygon on the map.</div>
+        </div>
+        <div class="row">
+          <label for="cellSizeInput">Grid size (meters)</label>
+          <input id="cellSizeInput" type="number" min="100" max="5000" step="50" value="500">
+        </div>
+        <div class="row"><button id="generateBtn">Generate Grid</button></div>
+      </section>
+
+      <section id="classificationPanel" class="hidden">
+        <h1>Classify Grid</h1>
+        <div class="muted" id="classificationSummary"></div>
+        <div class="row selected" id="selectedCell">Select a grid cell on the map.</div>
+        <div class="row">
+          <label for="labelSelect">Class</label>
+          <select id="labelSelect"></select>
+        </div>
+        <div class="row">
+          <label for="notesInput">Notes</label>
+          <textarea id="notesInput" maxlength="1000" placeholder="Visible features, uncertainty, or validation notes"></textarea>
+        </div>
+        <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
+        <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
+        <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
+        <div class="row status" id="status"></div>
+        <div class="row"><strong>Legend</strong><div id="legend"></div></div>
+      </section>
+    </aside>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const CONFIG = {config_json};
+    const LABELS = ["Formal", "Informal", "Slum", "No Buildings/Avoid Area"];
+    const COLORS = {{
+      "Formal": "#2b8a3e",
+      "Informal": "#f08c00",
+      "Slum": "#c92a2a",
+      "No Buildings/Avoid Area": "#6c757d"
+    }};
+    const DEFAULT_COLOR = "#3388ff";
+    let mode = "lga";
+    let boundariesLayer = null;
+    let gridLayer = null;
+    let selectedBoundaryId = null;
+    let selectedFeature = null;
+    let selectedLayer = null;
+    let annotations = {{}};
+    let currentClassification = null;
+
+    const map = L.map("map", {{ zoomControl: true }});
+    const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{ attribution: "Tiles &copy; Esri" }});
+    const nasaBlue = L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/GoogleMapsCompatible_Level8/{{z}}/{{y}}/{{x}}.jpg", {{ attribution: "Imagery &copy; NASA GIBS", maxZoom: 8 }});
+    const osm = L.tileLayer("https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png", {{ attribution: "&copy; OpenStreetMap contributors" }});
+    const carto = L.tileLayer("https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png", {{ attribution: "&copy; OpenStreetMap &copy; CARTO" }});
+    esriImagery.addTo(map);
+    L.control.layers({{
+      "Esri satellite": esriImagery,
+      "NASA satellite": nasaBlue,
+      "OpenStreetMap": osm,
+      "Light reference": carto
+    }}, {{}}, {{ collapsed: false }}).addTo(map);
+
+    const lgaSelect = document.getElementById("lgaSelect");
+    const wardSelect = document.getElementById("wardSelect");
+    const topInput = document.getElementById("topInput");
+    const cellSizeInput = document.getElementById("cellSizeInput");
+    const generateBtn = document.getElementById("generateBtn");
+    const selectorPanel = document.getElementById("selectorPanel");
+    const classificationPanel = document.getElementById("classificationPanel");
+    const labelSelect = document.getElementById("labelSelect");
+    const notesInput = document.getElementById("notesInput");
+    const saveBtn = document.getElementById("saveBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const backBtn = document.getElementById("backBtn");
+    const statusEl = document.getElementById("status");
+    const selectedCell = document.getElementById("selectedCell");
+    const mapSelection = document.getElementById("mapSelection");
+
+    document.getElementById("overviewSummary").textContent = `${{CONFIG.wardCount}} wards${{CONFIG.lgaCount ? " across " + CONFIG.lgaCount + " LGAs" : ""}}.`;
+    LABELS.forEach(label => {{
+      const option = document.createElement("option");
+      option.value = label;
+      option.textContent = label;
+      labelSelect.appendChild(option);
+    }});
+    document.getElementById("legend").innerHTML = LABELS.map(label => `<div class="legend-item"><span class="swatch" style="background:${{COLORS[label] || DEFAULT_COLOR}}"></span>${{label}}</div>`).join("");
+
+    function setStatus(message, isError=false) {{
+      statusEl.textContent = message;
+      statusEl.style.color = isError ? "#b42318" : "#1f6f43";
+    }}
+
+    function populateSelectors() {{
+      lgaSelect.innerHTML = '<option value="">Select LGA</option>' + CONFIG.lgas.map(lga => `<option value="${{escapeAttr(lga)}}">${{escapeHtml(lga)}}</option>`).join("");
+      updateWardOptions();
+    }}
+
+    function updateWardOptions() {{
+      const lga = lgaSelect.value;
+      const filtered = CONFIG.wards.filter(w => !lga || String(w.lga || "") === lga);
+      wardSelect.innerHTML = '<option value="">Select ward</option>' + filtered.map(w => `<option value="${{escapeAttr(w.ward_id)}}">${{escapeHtml(w.display_name)}}</option>`).join("");
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+    }}
+
+    function escapeHtml(value) {{
+      return String(value ?? "").replace(/[&<>"']/g, c => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }}[c]));
+    }}
+
+    function escapeAttr(value) {{
+      return escapeHtml(value).replace(/`/g, "&#96;");
+    }}
+
+    function boundaryStyle(feature) {{
+      const props = feature.properties || {{}};
+      const lga = lgaSelect.value;
+      const ward = wardSelect.value;
+      const isSelected = selectedBoundaryId && props.ward_id === selectedBoundaryId;
+      const inLga = !lga || String(props.lga || "") === lga;
+      const isWard = ward && props.ward_id === ward;
+      const hasRank = props.rank !== null && props.rank !== undefined;
+      return {{
+        color: isSelected || isWard ? "#d9480f" : hasRank ? "#7048e8" : "#0969da",
+        weight: isSelected || isWard ? 3 : inLga ? 1.4 : 0.7,
+        fillColor: hasRank ? "#7048e8" : "#74c0fc",
+        fillOpacity: isSelected || isWard ? 0.32 : inLga ? 0.12 : 0.03
+      }};
+    }}
+
+    function onBoundary(feature, layer) {{
+      const props = feature.properties || {{}};
+      layer.bindTooltip(props.display_name || props.ward_name || "Ward", {{ sticky: true }});
+      layer.on("click", () => {{
+        selectedBoundaryId = props.ward_id;
+        wardSelect.value = props.ward_id;
+        if (props.lga) {{
+          lgaSelect.value = props.lga;
+          updateWardOptions();
+          wardSelect.value = props.ward_id;
+        }}
+        mapSelection.textContent = props.display_name || props.ward_name || props.ward_id;
+        document.querySelector('[data-mode="map"]').click();
+        boundariesLayer.setStyle(boundaryStyle);
+      }});
+    }}
+
+    async function loadOverview() {{
+      populateSelectors();
+      const response = await fetch(CONFIG.boundariesUrl);
+      if (!response.ok) throw new Error("Could not load settlement boundaries");
+      const geojson = await response.json();
+      boundariesLayer = L.geoJSON(geojson, {{ style: boundaryStyle, onEachFeature: onBoundary }}).addTo(map);
+      map.fitBounds(boundariesLayer.getBounds(), {{ padding: [16, 16] }});
+    }}
+
+    document.querySelectorAll("[data-mode]").forEach(button => {{
+      button.addEventListener("click", () => {{
+        mode = button.dataset.mode;
+        document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b === button));
+        document.getElementById("lgaRow").classList.toggle("hidden", !["lga", "ward"].includes(mode));
+        document.getElementById("wardRow").classList.toggle("hidden", !["ward"].includes(mode));
+        document.getElementById("riskRow").classList.toggle("hidden", mode !== "risk");
+        document.getElementById("mapRow").classList.toggle("hidden", mode !== "map");
+      }});
+    }});
+    lgaSelect.addEventListener("change", updateWardOptions);
+    wardSelect.addEventListener("change", () => {{
+      selectedBoundaryId = wardSelect.value;
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+    }});
+
+    function buildCreatePayload() {{
+      const payload = {{
+        method: CONFIG.method,
+        cell_size_m: Number(cellSizeInput.value || CONFIG.cellSizeM),
+        include_no_buildings: CONFIG.includeNoBuildings
+      }};
+      if (mode === "risk") {{
+        payload.top_n = Number(topInput.value || 10);
+      }} else if (mode === "lga") {{
+        const lga = lgaSelect.value;
+        if (!lga) throw new Error("Select an LGA first.");
+        payload.ward_ids = CONFIG.wards.filter(w => String(w.lga || "") === lga).map(w => w.ward_id);
+      }} else {{
+        const wardId = wardSelect.value || selectedBoundaryId;
+        if (!wardId) throw new Error("Select a ward first.");
+        payload.ward_ids = [wardId];
+      }}
+      return payload;
+    }}
+
+    generateBtn.addEventListener("click", async () => {{
+      try {{
+        generateBtn.disabled = true;
+        generateBtn.textContent = "Generating...";
+        const response = await fetch(CONFIG.createUrl, {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(buildCreatePayload())
+        }});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Grid generation failed");
+        await loadClassification(data);
+      }} catch (err) {{
+        alert(err.message);
+      }} finally {{
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Generate Grid";
+      }}
+    }});
+
+    function gridStyle(feature) {{
+      const annotation = annotations[feature.properties.grid_id];
+      const label = annotation && annotation.label;
+      return {{
+        color: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
+        fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
+        weight: selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id ? 3 : 1,
+        fillOpacity: label ? 0.45 : 0.12
+      }};
+    }}
+
+    function onGrid(feature, layer) {{
+      layer.on("click", () => {{
+        selectedFeature = feature;
+        selectedLayer = layer;
+        const ann = annotations[feature.properties.grid_id] || {{}};
+        labelSelect.value = ann.label || LABELS[0];
+        notesInput.value = ann.notes || "";
+        selectedCell.textContent = `${{feature.properties.ward_name}} | ${{feature.properties.grid_id}}`;
+        saveBtn.disabled = false;
+        gridLayer.setStyle(gridStyle);
+      }});
+    }}
+
+    async function loadClassification(data) {{
+      currentClassification = data;
+      selectorPanel.classList.add("hidden");
+      classificationPanel.classList.remove("hidden");
+      document.getElementById("classificationSummary").textContent = `${{data.message || "Grid ready."}} ${{data.grid_cell_count}} grid cells.`;
+      if (boundariesLayer) map.removeLayer(boundariesLayer);
+      if (gridLayer) map.removeLayer(gridLayer);
+      const gridUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/grid`;
+      const annUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/annotations`;
+      const [gridRes, annRes] = await Promise.all([fetch(gridUrl), fetch(annUrl)]);
+      if (!gridRes.ok || !annRes.ok) throw new Error("Could not load generated grid");
+      const grid = await gridRes.json();
+      const annDoc = await annRes.json();
+      annotations = annDoc.annotations || {{}};
+      gridLayer = L.geoJSON(grid, {{ style: gridStyle, onEachFeature: onGrid }}).addTo(map);
+      map.fitBounds(gridLayer.getBounds(), {{ padding: [20, 20] }});
+      setStatus("Ready");
+    }}
+
+    saveBtn.addEventListener("click", async () => {{
+      if (!selectedFeature || !currentClassification) return;
+      saveBtn.disabled = true;
+      setStatus("Saving...");
+      const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{currentClassification.classification_id}}/annotations`, {{
+        method: "POST",
+        headers: {{ "Content-Type": "application/json" }},
+        body: JSON.stringify({{
+          grid_id: selectedFeature.properties.grid_id,
+          label: labelSelect.value,
+          notes: notesInput.value
+        }})
+      }});
+      const data = await response.json();
+      if (!response.ok || !data.success) {{
+        saveBtn.disabled = false;
+        setStatus(data.message || "Save failed", true);
+        return;
+      }}
+      annotations[selectedFeature.properties.grid_id] = data.annotation;
+      gridLayer.setStyle(gridStyle);
+      saveBtn.disabled = false;
+      setStatus(`Saved. ${{data.count}} classified cell(s).`);
+    }});
+
+    exportBtn.addEventListener("click", async () => {{
+      if (!currentClassification) return;
+      setStatus("Refreshing exports...");
+      const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{currentClassification.classification_id}}/export`, {{ method: "POST" }});
+      const data = await response.json();
+      setStatus(response.ok && data.success ? "Exports refreshed." : (data.message || "Export failed"), !response.ok);
+    }});
+
+    backBtn.addEventListener("click", async () => {{
+      classificationPanel.classList.add("hidden");
+      selectorPanel.classList.remove("hidden");
+      selectedFeature = null;
+      selectedLayer = null;
+      saveBtn.disabled = true;
+      if (gridLayer) map.removeLayer(gridLayer);
+      await loadOverview();
+    }});
+
+    loadOverview().catch(err => alert(err.message));
+  </script>
+</body>
+</html>
+"""
+
     def _render_classifier_html(self, metadata: Dict[str, Any]) -> str:
         payload = {
             "sessionId": self.session_id,
@@ -829,18 +1291,29 @@ class SettlementClassificationTool(BaseTool):
     def execute(self, session_id: str) -> ToolExecutionResult:
         try:
             service = SettlementClassificationService(session_id)
-            result = service.create_classification(
-                ward_names=self.ward_names,
-                ward_ids=self.ward_ids,
-                top_n=self.top_n,
-                method=self.method,
-                cell_size_m=self.cell_size_m,
-                include_no_buildings=self.include_no_buildings,
-            )
-            message = (
-                f"Settlement classification map created for {len(result['selected_wards'])} ward(s) "
-                f"with {result['grid_cell_count']} grid cells. Use the map to classify cells and add notes."
-            )
+            if not self.ward_names and not self.ward_ids and self.top_n is None:
+                result = service.create_selector_map(
+                    method=self.method,
+                    cell_size_m=self.cell_size_m,
+                    include_no_buildings=self.include_no_buildings,
+                )
+                message = (
+                    f"Settlement classification selector opened with {result['ward_count']} wards. "
+                    "Choose an LGA, ward, risk-ranked set, or map selection, then generate the grid."
+                )
+            else:
+                result = service.create_classification(
+                    ward_names=self.ward_names,
+                    ward_ids=self.ward_ids,
+                    top_n=self.top_n,
+                    method=self.method,
+                    cell_size_m=self.cell_size_m,
+                    include_no_buildings=self.include_no_buildings,
+                )
+                message = (
+                    f"Settlement classification map created for {len(result['selected_wards'])} ward(s) "
+                    f"with {result['grid_cell_count']} grid cells. Use the map to classify cells and add notes."
+                )
             return self._create_success_result(message=message, data=result, web_path=result.get("web_path"))
         except Exception as exc:
             logger.error("Settlement classification failed: %s", exc, exc_info=True)

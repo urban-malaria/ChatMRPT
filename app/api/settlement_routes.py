@@ -79,6 +79,20 @@ def settlement_wards(session_id: str):
         return jsonify({"success": False, "message": str(exc), "wards": []}), 400
 
 
+@settlement_bp.route("/<session_id>/boundaries", methods=["GET"])
+@require_auth
+def settlement_boundaries(session_id: str):
+    auth_error = _authorize_session(session_id)
+    if auth_error:
+        return auth_error
+    try:
+        method = request.args.get("method", "composite")
+        return jsonify(_service(session_id).load_boundaries_geojson(method=method))
+    except Exception as exc:
+        logger.error("Settlement boundaries failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
 @settlement_bp.route("/<session_id>/classifications", methods=["POST"])
 @require_auth
 def create_classification(session_id: str):

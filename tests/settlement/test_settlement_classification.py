@@ -22,6 +22,7 @@ def _write_session(tmp_path):
         {
             "WardName": ["Alpha", "Beta"],
             "WardCode": ["A001", "B001"],
+            "LGA": ["One", "Two"],
         },
         geometry=[
             Polygon([(3.0, 8.0), (3.02, 8.0), (3.02, 8.02), (3.0, 8.02)]),
@@ -91,7 +92,7 @@ def test_top_n_classification_uses_composite_rankings(tmp_path):
     assert result["selected_wards"][0]["ward_code"] == "B001"
 
 
-def test_generic_classification_defaults_to_first_ward_without_rankings(tmp_path):
+def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     session_id, upload_root, export_root = _write_session(tmp_path)
     service = SettlementClassificationService(
         session_id,
@@ -99,9 +100,14 @@ def test_generic_classification_defaults_to_first_ward_without_rankings(tmp_path
         export_root=str(export_root),
     )
 
-    result = service.create_classification(cell_size_m=1000)
+    selector = service.create_selector_map(cell_size_m=1000)
+    boundaries = service.load_boundaries_geojson()
 
-    assert result["selected_wards"][0]["ward_code"] == "A001"
+    assert selector["selector"] is True
+    assert selector["ward_count"] == 2
+    assert selector["lga_count"] == 2
+    assert boundaries["features"][0]["properties"]["ward_id"]
+    assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 
 
 def test_rejects_invalid_annotation_label(tmp_path):
