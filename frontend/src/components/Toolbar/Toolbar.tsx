@@ -74,7 +74,8 @@ const Toolbar: React.FC = () => {
   const categoryLabels: Record<string, string> = {
     tpr: 'TPR Analysis',
     itn: 'ITN Distribution',
-    analysis: 'Risk Analysis'
+    analysis: 'Risk Analysis',
+    settlement: 'Settlement Classification'
   };
 
   const handleClearChat = () => {
@@ -209,7 +210,7 @@ const Toolbar: React.FC = () => {
                     </div>
                   ) : availableDownloads.length > 0 ? (
                     <div className="max-h-64 overflow-y-auto">
-                      {['tpr', 'itn', 'analysis'].map(category => {
+                      {['tpr', 'itn', 'analysis', 'settlement'].map(category => {
                         const categoryFiles = availableDownloads.filter(f => f.category === category);
                         if (categoryFiles.length === 0) return null;
 

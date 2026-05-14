@@ -10,6 +10,7 @@ import logging
 from flask import Blueprint, send_file, abort, session as flask_session, current_app
 from app.auth.decorators import require_auth
 from pathlib import Path
+from werkzeug.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,42 @@ def list_exports(session_id):
                         'url': f'/export/download/{session_id}/{itn_dashboard.name}',
                         'category': 'itn'
                     })
+
+            # Look for settlement classification exports
+            for settlement_dir in export_base_dir.glob('settlement_export_*'):
+                classification_id = settlement_dir.name.replace('settlement_export_', '', 1)
+                settlement_files = [
+                    (
+                        settlement_dir / 'settlement_annotations.csv',
+                        'Settlement Classification Annotations',
+                        'csv',
+                        'Settlement grid classifications and notes'
+                    ),
+                    (
+                        settlement_dir / 'settlement_classified_grid.geojson',
+                        'Classified Settlement Grid',
+                        'geojson',
+                        'GeoJSON grid with settlement labels and notes'
+                    ),
+                    (
+                        settlement_dir / 'settlement_metadata.json',
+                        'Settlement Classification Metadata',
+                        'json',
+                        'Metadata for the settlement classification run'
+                    ),
+                ]
+                for path, name, file_type, description in settlement_files:
+                    if path.exists():
+                        rel = f"{settlement_dir.name}/{path.name}"
+                        available_files.append({
+                            'name': name,
+                            'filename': path.name,
+                            'type': file_type,
+                            'description': description,
+                            'url': f'/export/download/{session_id}/{rel}',
+                            'category': 'settlement',
+                            'classification_id': classification_id
+                        })
         
         # Check for analysis results
         analysis_csv = uploads_dir / 'analysis_results_composite.csv'
@@ -130,7 +167,7 @@ def list_exports(session_id):
         }
 
 
-@export_bp.route('/download/<session_id>/<filename>')
+@export_bp.route('/download/<session_id>/<path:filename>')
 @require_auth
 def download_export(session_id, filename):
     """
@@ -148,22 +185,30 @@ def download_export(session_id, filename):
             logger.warning(f"Session mismatch but allowing download: current={current_session_id}, requested={session_id}")
         
         # Construct safe path (prevent directory traversal)
-        safe_filename = os.path.basename(filename)
+        requested_path = Path(filename)
+        if requested_path.is_absolute() or '..' in requested_path.parts:
+            logger.error(f"Path traversal attempt: {filename}")
+            abort(403, "Invalid file path")
+        safe_filename = requested_path.name
         # Check both exports and uploads directories
         export_base_dir = Path(current_app.root_path).parent / 'instance' / 'exports' / session_id
         uploads_dir = Path(current_app.root_path).parent / 'instance' / 'uploads' / session_id
         
-        # First try uploads directory (for TPR files)
-        file_path = uploads_dir / safe_filename
+        # First try an explicit export subpath such as settlement_export_<id>/file.csv
+        file_path = export_base_dir / requested_path
+
+        # Then try uploads directory (for TPR files)
+        if not file_path.exists() and len(requested_path.parts) == 1:
+            file_path = uploads_dir / safe_filename
         
         # If not found in uploads, try exports directory
-        if not file_path.exists():
+        if not file_path.exists() and len(requested_path.parts) == 1:
             file_path = export_base_dir / safe_filename
         
         # If still not found, search in timestamped subdirectories
-        if not file_path.exists():
-            # Look for the file in any export subdirectory (itn_export_* or analysis_export_*)
-            for pattern in ['itn_export_*', 'analysis_export_*']:
+        if not file_path.exists() and len(requested_path.parts) == 1:
+            # Look for legacy files in any export subdirectory by basename.
+            for pattern in ['itn_export_*', 'analysis_export_*', 'settlement_export_*']:
                 for subdir in export_base_dir.glob(pattern):
                     potential_path = subdir / safe_filename
                     if potential_path.exists():
@@ -181,7 +226,7 @@ def download_export(session_id, filename):
         resolved_path = str(file_path.resolve())
         allowed_dirs = [str(export_base_dir.resolve()), str(uploads_dir.resolve())]
 
-        if not any(resolved_path.startswith(allowed_dir) for allowed_dir in allowed_dirs):
+        if not any(resolved_path == allowed_dir or resolved_path.startswith(allowed_dir + os.path.sep) for allowed_dir in allowed_dirs):
             logger.error(f"Path traversal attempt: {file_path}")
             abort(403, "Invalid file path")
         
@@ -195,6 +240,9 @@ def download_export(session_id, filename):
         elif safe_filename.endswith('.html'):
             download_name = safe_filename
             mimetype = 'text/html'
+        elif safe_filename.endswith('.geojson') or safe_filename.endswith('.json'):
+            download_name = safe_filename
+            mimetype = 'application/geo+json' if safe_filename.endswith('.geojson') else 'application/json'
         else:
             download_name = safe_filename
             mimetype = 'application/octet-stream'
@@ -208,6 +256,8 @@ def download_export(session_id, filename):
             download_name=download_name
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error serving export file: {e}")
         abort(500, "Error downloading export file")

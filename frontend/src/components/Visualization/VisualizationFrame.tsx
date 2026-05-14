@@ -19,6 +19,8 @@ const VisualizationFrame: React.FC<VisualizationFrameProps> = ({
   const [hasError, setHasError] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(url);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const isSettlementMap = currentUrl.includes('settlement');
+  const defaultHeight = isSettlementMap ? '820px' : '600px';
   
   const handleLoad = () => {
     setIsLoading(false);
@@ -31,7 +33,7 @@ const VisualizationFrame: React.FC<VisualizationFrameProps> = ({
         const body = iframeRef.current.contentWindow.document.body;
         const height = body.scrollHeight;
         if (height > 0) {
-          iframeRef.current.style.height = `${Math.min(height + 20, 800)}px`;
+          iframeRef.current.style.height = `${Math.min(height + 20, isSettlementMap ? 920 : 800)}px`;
         }
       }
     } catch (e) {
@@ -115,7 +117,7 @@ const VisualizationFrame: React.FC<VisualizationFrameProps> = ({
         src={currentUrl}
         title={title || 'Visualization'}
         className={`w-full border-0 rounded-lg ${hasError ? 'hidden' : ''}`}
-        style={{ minHeight: '400px', height: '600px' }}
+        style={{ minHeight: isSettlementMap ? '700px' : '400px', height: defaultHeight }}
         sandbox="allow-scripts allow-same-origin allow-popups"
         loading="lazy"
         onLoad={handleLoad}

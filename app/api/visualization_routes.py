@@ -321,9 +321,9 @@ def serve_viz_file(session_id, filename):
         # Adjust as needed if tiles/CDNs require additional origins
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.plot.ly https://*.plot.ly; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.plot.ly https://*.plot.ly https://unpkg.com; "
             "worker-src 'self' blob:; "
-            "style-src 'self' 'unsafe-inline' https:; "
+            "style-src 'self' 'unsafe-inline' https: https://unpkg.com; "
             "img-src 'self' data: blob: https:; "
             "connect-src 'self' https:; "
             "font-src 'self' https:; "

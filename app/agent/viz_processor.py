@@ -30,6 +30,10 @@ def process_visualizations(session_id: str, output_plots: List) -> List[Dict[str
                 # HTML files (from map tools) — already rendered, just serve
                 if plot_path.endswith('.html'):
                     html_filename = os.path.basename(plot_path)
+                    is_settlement = 'settlement' in plot_path.lower() or 'settlement' in html_filename.lower()
+                    if is_settlement and not html_filename.lower().startswith('settlement'):
+                        parent_name = os.path.basename(os.path.dirname(plot_path))
+                        html_filename = f"settlement_{parent_name}_{html_filename}"
                     # If not already in the viz dir, copy it there
                     target_path = os.path.join(session_viz_dir, html_filename)
                     if os.path.abspath(plot_path) != os.path.abspath(target_path):
@@ -39,7 +43,7 @@ def process_visualizations(session_id: str, output_plots: List) -> List[Dict[str
                         'type': 'iframe',
                         'url': web_url,
                         'title': html_filename.replace('_', ' ').replace('.html', '').title(),
-                        'height': 600
+                        'height': 820 if is_settlement else 600
                     })
                     logger.info(f"Served HTML visualization: {plot_path} → {web_url}")
                     continue
