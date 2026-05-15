@@ -507,9 +507,9 @@ class SettlementClassificationService:
         self._write_json_atomic(metadata_path, metadata)
 
         files = [
-            {"path": csv_path, "type": "csv", "description": "Settlement annotations CSV"},
-            {"path": geojson_path, "type": "geojson", "description": "Classified settlement grid GeoJSON"},
-            {"path": metadata_path, "type": "json", "description": "Settlement classification metadata"},
+            {"path": _json_responseable_path(csv_path), "type": "csv", "description": "Settlement annotations CSV"},
+            {"path": _json_responseable_path(geojson_path), "type": "geojson", "description": "Classified settlement grid GeoJSON"},
+            {"path": _json_responseable_path(metadata_path), "type": "json", "description": "Settlement classification metadata"},
         ]
         return {
             "success": True,
