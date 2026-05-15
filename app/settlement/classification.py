@@ -244,10 +244,7 @@ class SettlementClassificationService:
         include_no_buildings: bool = True,
         max_cells: int = 2500,
     ) -> Dict[str, Any]:
-        if cell_size_m < 100:
-            raise ValueError("Cell size is too small. Use at least 100 meters.")
-        if cell_size_m > 5000:
-            raise ValueError("Cell size is too large. Use 5000 meters or less.")
+        self._validate_cell_size(cell_size_m)
 
         gdf = self._load_shapefile()
         prepared, meta = self._prepare_ward_gdf(gdf)
@@ -273,15 +270,7 @@ class SettlementClassificationService:
         grid.to_file(grid_path, driver="GeoJSON")
         self._write_json_atomic(annotations_path, {"annotations": {}, "updated_at": _utc_now()})
 
-        wards_summary = [
-            {
-                "ward_id": str(row["_settlement_ward_id"]),
-                "display_name": row["_settlement_display_name"],
-                "ward_name": row.get(meta["name_col"]),
-                "ward_code": row.get(meta["code_col"]) if meta.get("code_col") else None,
-            }
-            for _, row in selected.drop(columns="geometry", errors="ignore").iterrows()
-        ]
+        wards_summary = self._ward_summary(selected, meta)
 
         metadata = {
             "classification_id": classification_id,
@@ -358,10 +347,7 @@ class SettlementClassificationService:
         max_cells: int = 2500,
     ) -> Dict[str, Any]:
         """Estimate selected area and grid size before generating a grid."""
-        if cell_size_m < 100:
-            raise ValueError("Cell size is too small. Use at least 100 meters.")
-        if cell_size_m > 5000:
-            raise ValueError("Cell size is too large. Use 5000 meters or less.")
+        self._validate_cell_size(cell_size_m)
 
         gdf = self._load_shapefile()
         prepared, meta = self._prepare_ward_gdf(gdf)
@@ -369,9 +355,7 @@ class SettlementClassificationService:
         if selected.empty:
             raise ValueError("No wards matched the classification request.")
 
-        metric_crs = selected.estimate_utm_crs() or "EPSG:3857"
-        selected_metric = selected.to_crs(metric_crs)
-        area_sq_m = float(selected_metric.geometry.area.sum())
+        area_sq_m = self._selected_area_sq_m(selected)
         estimated_cells = max(1, int(math.ceil(area_sq_m / (cell_size_m * cell_size_m))))
         warning_level = "ok"
         message = "Grid size is within the normal range."
@@ -382,15 +366,7 @@ class SettlementClassificationService:
             warning_level = "warning"
             message = f"Estimated grid is large ({estimated_cells} cells). Consider a larger grid size."
 
-        wards_summary = [
-            {
-                "ward_id": str(row["_settlement_ward_id"]),
-                "display_name": row["_settlement_display_name"],
-                "ward_name": row.get(meta["name_col"]),
-                "ward_code": row.get(meta["code_col"]) if meta.get("code_col") else None,
-            }
-            for _, row in selected.drop(columns="geometry", errors="ignore").iterrows()
-        ]
+        wards_summary = self._ward_summary(selected, meta)
 
         return {
             "success": True,
@@ -415,8 +391,7 @@ class SettlementClassificationService:
             raise ValueError("No wards intersect the drawn area.")
 
         wards_summary = self._ward_summary(selected, meta)
-        metric_crs = selected.estimate_utm_crs() or "EPSG:3857"
-        area_sq_m = float(selected.to_crs(metric_crs).geometry.area.sum())
+        area_sq_m = self._selected_area_sq_m(selected)
         return {
             "success": True,
             "selection_message": selection_message,
@@ -590,6 +565,16 @@ class SettlementClassificationService:
         gdf["_settlement_display_name"] = display_names
         return gdf, {"name_col": name_col, "code_col": code_col, "lga_col": lga_col, "state_col": state_col}
 
+    def _validate_cell_size(self, cell_size_m: int) -> None:
+        if cell_size_m < 100:
+            raise ValueError("Cell size is too small. Use at least 100 meters.")
+        if cell_size_m > 5000:
+            raise ValueError("Cell size is too large. Use 5000 meters or less.")
+
+    def _selected_area_sq_m(self, selected: gpd.GeoDataFrame) -> float:
+        metric_crs = selected.estimate_utm_crs() or "EPSG:3857"
+        return float(selected.to_crs(metric_crs).geometry.area.sum())
+
     def _ward_summary(self, selected: gpd.GeoDataFrame, meta: Dict[str, Optional[str]]) -> List[Dict[str, Any]]:
         return [
             {
@@ -620,19 +605,27 @@ class SettlementClassificationService:
             raise ValueError("Drawn selection must be GeoJSON.")
 
         geojson_type = drawn_geojson.get("type")
-        if geojson_type == "Feature":
-            geom = shape(drawn_geojson.get("geometry") or {})
-        elif geojson_type == "FeatureCollection":
-            geometries = [
-                shape(feature.get("geometry") or {})
-                for feature in drawn_geojson.get("features", [])
-                if feature.get("geometry")
-            ]
-            if not geometries:
-                raise ValueError("Drawn selection does not contain geometry.")
-            geom = unary_union(geometries)
-        else:
-            geom = shape(drawn_geojson)
+        try:
+            if geojson_type == "Feature":
+                geometry = drawn_geojson.get("geometry")
+                if not geometry:
+                    raise ValueError("Drawn selection does not contain geometry.")
+                geom = shape(geometry)
+            elif geojson_type == "FeatureCollection":
+                geometries = [
+                    shape(feature.get("geometry"))
+                    for feature in drawn_geojson.get("features", [])
+                    if feature.get("geometry")
+                ]
+                if not geometries:
+                    raise ValueError("Drawn selection does not contain geometry.")
+                geom = unary_union(geometries)
+            else:
+                geom = shape(drawn_geojson)
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError("Drawn selection is not valid GeoJSON geometry.") from exc
 
         if geom.is_empty:
             raise ValueError("Drawn selection is empty.")

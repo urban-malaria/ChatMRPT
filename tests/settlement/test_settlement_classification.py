@@ -175,6 +175,62 @@ def test_drawn_geometry_selection_estimate_and_create(tmp_path):
     assert "drawn area" in created["message"]
 
 
+def test_drawn_geometry_rejects_invalid_and_empty_selection(tmp_path):
+    session_id, upload_root, export_root = _write_session(tmp_path)
+    service = SettlementClassificationService(
+        session_id,
+        upload_root=str(upload_root),
+        export_root=str(export_root),
+    )
+
+    try:
+        service.select_wards_by_geometry({"type": "Feature", "properties": {}, "geometry": None})
+    except ValueError as exc:
+        assert "does not contain geometry" in str(exc)
+    else:
+        raise AssertionError("Invalid drawn geometry was accepted")
+
+    empty_feature_collection = {"type": "FeatureCollection", "features": []}
+    try:
+        service.select_wards_by_geometry(empty_feature_collection)
+    except ValueError as exc:
+        assert "does not contain geometry" in str(exc)
+    else:
+        raise AssertionError("Empty drawn geometry was accepted")
+
+    outside_geojson = {
+        "type": "Polygon",
+        "coordinates": [[
+            [10.0, 10.0],
+            [10.1, 10.0],
+            [10.1, 10.1],
+            [10.0, 10.1],
+            [10.0, 10.0],
+        ]],
+    }
+    try:
+        service.select_wards_by_geometry(outside_geojson)
+    except ValueError as exc:
+        assert "No wards intersect" in str(exc)
+    else:
+        raise AssertionError("Outside drawn geometry selected wards")
+
+
+def test_estimate_reports_blocked_large_selection(tmp_path):
+    session_id, upload_root, export_root = _write_session(tmp_path)
+    service = SettlementClassificationService(
+        session_id,
+        upload_root=str(upload_root),
+        export_root=str(export_root),
+    )
+
+    estimate = service.estimate_classification(ward_ids=["A001"], cell_size_m=1000, max_cells=1)
+
+    assert estimate["warning_level"] == "blocked"
+    assert estimate["allowed"] is False
+    assert "too large" in estimate["message"]
+
+
 def test_estimate_list_archive_and_duplicate_classification(tmp_path):
     session_id, upload_root, export_root = _write_session(tmp_path)
     service = SettlementClassificationService(
