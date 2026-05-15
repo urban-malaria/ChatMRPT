@@ -118,6 +118,12 @@ def list_exports(session_id):
                         'GeoJSON grid with settlement labels and notes'
                     ),
                     (
+                        settlement_dir / 'settlement_ward_summary.csv',
+                        'Ward Settlement Summary',
+                        'csv',
+                        'Ward-level settlement class counts, percentages, and coverage'
+                    ),
+                    (
                         settlement_dir / 'settlement_metadata.json',
                         'Settlement Classification Metadata',
                         'json',
