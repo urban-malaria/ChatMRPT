@@ -133,18 +133,22 @@ class SettlementClassificationService:
         prepared, meta = self._prepare_ward_gdf(gdf)
         records: List[Dict[str, Any]] = []
         ranking_lookup = self._build_ranking_lookup(method) if include_rankings else {}
+        urban_lookup = self._load_urban_pct_lookup()
 
         for _, row in prepared.drop(columns="geometry", errors="ignore").iterrows():
             ward_id = str(row["_settlement_ward_id"])
-            rank_info = ranking_lookup.get(ward_id) or ranking_lookup.get(_normalize(row.get(meta["name_col"])))
+            ward_name = row.get(meta["name_col"])
+            rank_info = ranking_lookup.get(ward_id) or ranking_lookup.get(_normalize(ward_name))
+            urban_pct = urban_lookup.get(_normalize(ward_name))
             record = {
                 "ward_id": ward_id,
                 "display_name": row["_settlement_display_name"],
-                "ward_name": row.get(meta["name_col"]),
+                "ward_name": ward_name,
                 "ward_code": row.get(meta["code_col"]) if meta.get("code_col") else None,
                 "lga": row.get(meta["lga_col"]) if meta.get("lga_col") else None,
                 "state": row.get(meta["state_col"]) if meta.get("state_col") else None,
                 "duplicated_name": bool(row["_settlement_duplicated_name"]),
+                "urban_pct": urban_pct,
             }
             if rank_info:
                 record.update(rank_info)
@@ -165,6 +169,8 @@ class SettlementClassificationService:
         except Exception:
             logger.debug("Boundary simplification failed", exc_info=True)
 
+        urban_lookup = self._load_urban_pct_lookup()
+
         records["ward_id"] = records["_settlement_ward_id"]
         records["display_name"] = records["_settlement_display_name"]
         records["ward_name"] = records[meta["name_col"]]
@@ -173,12 +179,16 @@ class SettlementClassificationService:
         records["state"] = records[meta["state_col"]] if meta.get("state_col") else None
         records["rank"] = None
         records["vulnerability_category"] = ""
+        records["urban_pct"] = None
 
         for idx, row in records.iterrows():
             rank_info = ranking_lookup.get(str(row["ward_id"])) or ranking_lookup.get(_normalize(row.get("ward_name")))
             if rank_info:
                 records.at[idx, "rank"] = rank_info.get("rank")
                 records.at[idx, "vulnerability_category"] = rank_info.get("vulnerability_category", "")
+            urban_val = urban_lookup.get(_normalize(row.get("ward_name")))
+            if urban_val is not None:
+                records.at[idx, "urban_pct"] = urban_val
 
         keep_cols = [
             "ward_id",
@@ -189,6 +199,7 @@ class SettlementClassificationService:
             "state",
             "rank",
             "vulnerability_category",
+            "urban_pct",
             "geometry",
         ]
         return json.loads(records[keep_cols].to_json())
@@ -819,6 +830,29 @@ class SettlementClassificationService:
             logger.warning("Could not load ranking file %s", path, exc_info=True)
             return None
 
+    def _load_urban_pct_lookup(self) -> Dict[str, float]:
+        """Return {_normalize(ward_name): urban_percentage} from the unified dataset CSV."""
+        candidates = []
+        for year in range(2030, 2018, -1):
+            candidates.append(self.session_folder / f"unified_dataset_{year}.csv")
+        candidates.append(self.session_folder / "unified_dataset.csv")
+
+        for path in candidates:
+            if not path.exists():
+                continue
+            try:
+                df = pd.read_csv(path, usecols=lambda c: c in ("WardName", "urban_percentage"))
+                if "urban_percentage" not in df.columns or "WardName" not in df.columns:
+                    continue
+                return {
+                    _normalize(str(row["WardName"])): round(float(row["urban_percentage"]), 2)
+                    for _, row in df.iterrows()
+                    if pd.notna(row.get("urban_percentage"))
+                }
+            except Exception:
+                logger.debug("Could not load urban_pct from %s", path, exc_info=True)
+        return {}
+
     def _build_ranking_lookup(self, method: str) -> Dict[str, Dict[str, Any]]:
         rankings = self._load_rankings(method)
         if rankings is None or rankings.empty:
@@ -1045,6 +1079,17 @@ class SettlementClassificationService:
         <div id="searchResults" class="search-results muted">Type at least two characters.</div>
         <h2>Visible Areas</h2>
         <div id="visibleFeatureList" class="feature-list muted">Move or zoom the map to list visible wards.</div>
+        <h2>Urban Threshold</h2>
+        <div class="row">
+          <label class="check-row" for="urbanThresholdToggle">
+            <input id="urbanThresholdToggle" type="checkbox"> Apply urban extent filter
+          </label>
+        </div>
+        <div class="row hidden" id="urbanThresholdRow">
+          <label for="urbanThresholdInput">Minimum urban extent (%)</label>
+          <input id="urbanThresholdInput" type="number" min="0" max="100" step="5" value="75">
+        </div>
+        <div id="urbanThresholdSummary" class="muted"></div>
         <h2>Focus</h2>
         <div class="mode">
           <button type="button" data-mode="lga" class="active">LGA</button>
@@ -1168,6 +1213,9 @@ class SettlementClassificationService:
     let isDrawingRectangle = false;
     let drawStartLatLng = null;
     let rankLabelsLayer = null;
+    const urbanThresholdToggle = document.getElementById("urbanThresholdToggle");
+    const urbanThresholdInput = document.getElementById("urbanThresholdInput");
+    const urbanThresholdSummary = document.getElementById("urbanThresholdSummary");
     const layerState = {{
       boundaries: {{ visible: true, opacity: 1 }},
       drawnSelection: {{ visible: true, opacity: 1 }},
@@ -1332,6 +1380,11 @@ class SettlementClassificationService:
 
     function updateFocusChips() {{
       const chips = ["State view"];
+      if (urbanThresholdToggle.checked) {{
+        const threshold = Number(urbanThresholdInput.value || 75);
+        const above = activeWards().length;
+        chips.push(`Urban ≥${{threshold}}%: ${{above}} wards`);
+      }}
       if (lgaSelect.value) chips.push(`LGA: ${{lgaSelect.value}}`);
       const selectedWard = CONFIG.wards.find(w => w.ward_id === (wardSelect.value || selectedBoundaryId));
       if (selectedWard) chips.push(`Ward: ${{selectedWard.display_name}}`);
@@ -1341,6 +1394,27 @@ class SettlementClassificationService:
       focusChips.innerHTML = chips.map(chip => `<span class="focus-chip">${{escapeHtml(chip)}}</span>`).join("");
     }}
 
+    function activeWards() {{
+      if (!urbanThresholdToggle.checked) return CONFIG.wards;
+      const threshold = Number(urbanThresholdInput.value || 75);
+      return CONFIG.wards.filter(w => w.urban_pct === null || w.urban_pct === undefined || w.urban_pct >= threshold);
+    }}
+
+    function updateUrbanSummary() {{
+      if (!urbanThresholdToggle.checked) {{
+        urbanThresholdSummary.textContent = "";
+        return;
+      }}
+      const threshold = Number(urbanThresholdInput.value || 75);
+      const hasData = CONFIG.wards.some(w => w.urban_pct !== null && w.urban_pct !== undefined);
+      if (!hasData) {{
+        urbanThresholdSummary.textContent = "Urban percentage data not available for this session.";
+        return;
+      }}
+      const above = CONFIG.wards.filter(w => w.urban_pct !== null && w.urban_pct !== undefined && w.urban_pct >= threshold).length;
+      urbanThresholdSummary.textContent = `${{above}} of ${{CONFIG.wards.length}} wards meet ≥${{threshold}}% urban`;
+    }}
+
     function populateSelectors() {{
       lgaSelect.innerHTML = '<option value="">Select LGA</option>' + CONFIG.lgas.map(lga => `<option value="${{escapeAttr(lga)}}">${{escapeHtml(lga)}}</option>`).join("");
       updateWardOptions();
@@ -1348,7 +1422,7 @@ class SettlementClassificationService:
 
     function updateWardOptions(shouldEstimate=true) {{
       const lga = lgaSelect.value;
-      const filtered = CONFIG.wards.filter(w => !lga || String(w.lga || "") === lga);
+      const filtered = activeWards().filter(w => !lga || String(w.lga || "") === lga);
       wardSelect.innerHTML = '<option value="">Select ward</option>' + filtered.map(w => `<option value="${{escapeAttr(w.ward_id)}}">${{escapeHtml(w.display_name)}}</option>`).join("");
       if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
       updateFocusChips();
@@ -1371,14 +1445,23 @@ class SettlementClassificationService:
       const props = feature.properties || {{}};
       const opacity = layerOpacity("boundaries");
 
+      const thresholdActive = urbanThresholdToggle.checked;
+      const threshold = Number(urbanThresholdInput.value || 75);
+      const urbanPct = (props.urban_pct !== null && props.urban_pct !== undefined) ? Number(props.urban_pct) : null;
+      const isBelowThreshold = thresholdActive && urbanPct !== null && urbanPct < threshold;
+
       if (mode === "risk") {{
         const topN = Number(topInput.value || 10);
         const rank = (props.rank !== null && props.rank !== undefined) ? Number(props.rank) : null;
-        const isTopN = rank !== null && rank <= topN;
+        const isTopN = rank !== null && rank <= topN && !isBelowThreshold;
         if (isTopN) {{
           return {{ color: "#d9480f", weight: 2.5, opacity, fillColor: "#f76707", fillOpacity: 0.38 * opacity }};
         }}
         return {{ color: "#adb5bd", weight: 0.6, opacity: opacity * 0.5, fillColor: "#dee2e6", fillOpacity: 0.06 * opacity }};
+      }}
+
+      if (isBelowThreshold) {{
+        return {{ color: "#adb5bd", weight: 0.6, opacity: opacity * 0.6, fillColor: "#dee2e6", fillOpacity: 0.07 * opacity }};
       }}
 
       const lga = lgaSelect.value;
@@ -1618,6 +1701,23 @@ class SettlementClassificationService:
     }});
     cellSizeInput.addEventListener("input", scheduleEstimate);
     searchInput.addEventListener("input", renderSearchResults);
+
+    urbanThresholdToggle.addEventListener("change", () => {{
+      document.getElementById("urbanThresholdRow").classList.toggle("hidden", !urbanThresholdToggle.checked);
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      updateWardOptions();
+      updateUrbanSummary();
+      updateRiskLabels();
+      updateFocusChips();
+    }});
+    urbanThresholdInput.addEventListener("input", () => {{
+      if (!urbanThresholdToggle.checked) return;
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      updateWardOptions();
+      updateUrbanSummary();
+      updateRiskLabels();
+      updateFocusChips();
+    }});
 
     function renderSearchResults() {{
       const query = normalizeText(searchInput.value);
