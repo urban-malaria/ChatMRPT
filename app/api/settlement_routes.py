@@ -199,7 +199,12 @@ def duplicate_classification(session_id: str, classification_id: str):
     if auth_error:
         return auth_error
     try:
-        result = _service(session_id).duplicate_classification(classification_id)
+        payload = request.get_json(silent=True) or {}
+        cell_size_m = payload.get("cell_size_m")
+        result = _service(session_id).duplicate_classification(
+            classification_id,
+            cell_size_m=int(cell_size_m) if cell_size_m not in (None, "") else None,
+        )
         return jsonify({"success": True, **result})
     except FileNotFoundError as exc:
         return jsonify({"success": False, "message": str(exc)}), 404

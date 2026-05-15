@@ -169,6 +169,8 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "fuzzyScore" in selector_html
     assert "searchTimer" in selector_html
     assert "wardMetaLine" in selector_html
+    assert "regridClassification" in selector_html
+    assert "Regrid Smaller" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert boundaries["features"][0]["properties"]["urban_pct"] == 82.5
     assert wards[0]["urban_pct"] == 82.5
@@ -296,6 +298,13 @@ def test_estimate_list_archive_and_duplicate_classification(tmp_path):
     duplicated = service.duplicate_classification(created["classification_id"])
     assert duplicated["classification_id"] != created["classification_id"]
     assert duplicated["selected_wards"][0]["ward_id"] == "A001"
+    assert service.get_classification(duplicated["classification_id"])["cell_size_m"] == 1000
+
+    regridded = service.duplicate_classification(created["classification_id"], cell_size_m=500)
+    assert regridded["classification_id"] != created["classification_id"]
+    assert service.get_classification(regridded["classification_id"])["cell_size_m"] == 500
+    assert service.load_annotations(created["classification_id"])["annotations"]
+    assert service.load_annotations(regridded["classification_id"])["annotations"] == {}
 
     archived = service.archive_classification(created["classification_id"])
     assert archived["archived"] is True

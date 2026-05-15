@@ -299,6 +299,7 @@ class SettlementClassificationService:
             "method": method,
             "selection_message": selection_message,
             "wards": wards_summary,
+            "drawn_geojson": drawn_geojson,
             "grid_cell_count": int(len(grid)),
             "grid_path": _json_responseable_path(grid_path),
             "annotations_path": _json_responseable_path(annotations_path),
@@ -426,13 +427,16 @@ class SettlementClassificationService:
         self._write_json_atomic(self._classification_dir(classification_id) / "metadata.json", metadata)
         return {"success": True, "classification_id": classification_id, "archived": True}
 
-    def duplicate_classification(self, classification_id: str) -> Dict[str, Any]:
+    def duplicate_classification(self, classification_id: str, cell_size_m: Optional[int] = None) -> Dict[str, Any]:
         metadata = self._load_metadata(classification_id)
         ward_ids = [ward.get("ward_id") for ward in metadata.get("wards", []) if ward.get("ward_id")]
+        next_cell_size = int(cell_size_m or metadata.get("cell_size_m") or 500)
+        self._validate_cell_size(next_cell_size)
         return self.create_classification(
-            ward_ids=ward_ids,
+            ward_ids=None if metadata.get("drawn_geojson") else ward_ids,
+            drawn_geojson=metadata.get("drawn_geojson"),
             method=metadata.get("method") or "composite",
-            cell_size_m=int(metadata.get("cell_size_m") or 500),
+            cell_size_m=next_cell_size,
             include_no_buildings="No Buildings/Avoid Area" in (metadata.get("labels") or DEFAULT_LABELS),
         )
 
@@ -1125,7 +1129,7 @@ class SettlementClassificationService:
     .progress-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }}
     .progress-pill {{ padding: 6px 8px; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; font-size: 12px; }}
     .session-card {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; margin: 6px 0; background: #f6f8fa; font-size: 13px; }}
-    .session-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }}
+    .session-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }}
     .session-actions button {{ padding: 6px; font-size: 12px; }}
     .download-list {{ border: 1px solid #d0d7de; border-radius: 6px; background: #fff; padding: 8px; }}
     .download-list a {{ display: block; color: #0969da; font-size: 13px; margin: 5px 0; text-decoration: none; }}
@@ -1294,6 +1298,7 @@ class SettlementClassificationService:
           <div class="section-body">
             <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
             <div id="downloadLinks" class="download-list muted">Refresh exports to update downloads.</div>
+            <div class="row"><button id="regridBtn" class="secondary">Regrid Smaller</button></div>
             <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
             <div class="row"><strong>Legend</strong><div id="legend"></div></div>
           </div>
@@ -1494,6 +1499,7 @@ class SettlementClassificationService:
     const nextUnclassifiedBtn = document.getElementById("nextUnclassifiedBtn");
     const fitCellBtn = document.getElementById("fitCellBtn");
     const downloadLinksEl = document.getElementById("downloadLinks");
+    const regridBtn = document.getElementById("regridBtn");
 
     document.getElementById("overviewSummary").textContent = `${{CONFIG.wardCount}} wards${{CONFIG.lgaCount ? " across " + CONFIG.lgaCount + " LGAs" : ""}}.`;
     LABELS.forEach(label => {{
@@ -1853,6 +1859,7 @@ class SettlementClassificationService:
           <div class="session-actions">
             <button type="button" data-resume="${{escapeAttr(item.classification_id)}}">Resume</button>
             <button type="button" data-duplicate="${{escapeAttr(item.classification_id)}}">Duplicate</button>
+            <button type="button" data-regrid="${{escapeAttr(item.classification_id)}}" data-cell-size="${{escapeAttr(item.cell_size_m || CONFIG.cellSizeM)}}">Regrid Smaller</button>
             <button type="button" data-archive="${{escapeAttr(item.classification_id)}}">Archive</button>
           </div>
         </div>
@@ -1862,6 +1869,9 @@ class SettlementClassificationService:
       }});
       classificationList.querySelectorAll("[data-duplicate]").forEach(button => {{
         button.addEventListener("click", () => duplicateClassification(button.dataset.duplicate));
+      }});
+      classificationList.querySelectorAll("[data-regrid]").forEach(button => {{
+        button.addEventListener("click", () => regridClassification(button.dataset.regrid, Number(button.dataset.cellSize || CONFIG.cellSizeM)));
       }});
       classificationList.querySelectorAll("[data-archive]").forEach(button => {{
         button.addEventListener("click", () => archiveClassification(button.dataset.archive));
@@ -1884,6 +1894,29 @@ class SettlementClassificationService:
         const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{classificationId}}/duplicate`, {{ method: "POST" }});
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.message || "Could not duplicate classification");
+        await loadClassification(data);
+        await loadClassificationList();
+      }} catch (err) {{
+        alert(err.message);
+      }}
+    }}
+
+    async function regridClassification(classificationId, currentCellSize) {{
+      const nextCellSize = Math.max(100, Math.floor(Number(currentCellSize || CONFIG.cellSizeM) / 2));
+      if (nextCellSize >= Number(currentCellSize || CONFIG.cellSizeM)) {{
+        alert("This grid is already at the minimum 100m cell size.");
+        return;
+      }}
+      const ok = confirm(`Create a separate ${{nextCellSize}}m grid for the same area? Existing annotations stay unchanged.`);
+      if (!ok) return;
+      try {{
+        const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{classificationId}}/duplicate`, {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{ cell_size_m: nextCellSize }})
+        }});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Could not regrid classification");
         await loadClassification(data);
         await loadClassificationList();
       }} catch (err) {{
@@ -2520,6 +2553,10 @@ class SettlementClassificationService:
         renderDownloadLinks(currentClassification.download_links);
       }}
       setStatus(response.ok && data.success ? "Exports refreshed." : (data.message || "Export failed"), !response.ok);
+    }});
+    regridBtn.addEventListener("click", () => {{
+      if (!currentClassification) return;
+      regridClassification(currentClassification.classification_id, currentClassification.cell_size_m || CONFIG.cellSizeM);
     }});
 
     backBtn.addEventListener("click", async () => {{
