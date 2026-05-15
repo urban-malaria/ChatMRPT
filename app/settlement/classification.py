@@ -22,7 +22,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import geopandas as gpd
 import pandas as pd
 from pydantic import Field, validator
-from shapely.geometry import box
+from shapely.geometry import box, shape
+from shapely.ops import unary_union
 
 from app.services.data_handler import DataHandler
 from app.utils.tool_base import BaseTool, ToolCategory, ToolExecutionResult
@@ -237,6 +238,7 @@ class SettlementClassificationService:
         ward_names: Optional[Sequence[str]] = None,
         ward_ids: Optional[Sequence[str]] = None,
         top_n: Optional[int] = None,
+        drawn_geojson: Optional[Dict[str, Any]] = None,
         method: str = "composite",
         cell_size_m: int = 500,
         include_no_buildings: bool = True,
@@ -249,7 +251,7 @@ class SettlementClassificationService:
 
         gdf = self._load_shapefile()
         prepared, meta = self._prepare_ward_gdf(gdf)
-        selected, selection_message = self._select_wards(prepared, meta, ward_names, ward_ids, top_n, method)
+        selected, selection_message = self._resolve_selected_wards(prepared, meta, ward_names, ward_ids, top_n, drawn_geojson, method)
         if selected.empty:
             raise ValueError("No wards matched the classification request.")
 
@@ -350,6 +352,7 @@ class SettlementClassificationService:
         ward_names: Optional[Sequence[str]] = None,
         ward_ids: Optional[Sequence[str]] = None,
         top_n: Optional[int] = None,
+        drawn_geojson: Optional[Dict[str, Any]] = None,
         method: str = "composite",
         cell_size_m: int = 500,
         max_cells: int = 2500,
@@ -362,7 +365,7 @@ class SettlementClassificationService:
 
         gdf = self._load_shapefile()
         prepared, meta = self._prepare_ward_gdf(gdf)
-        selected, selection_message = self._select_wards(prepared, meta, ward_names, ward_ids, top_n, method)
+        selected, selection_message = self._resolve_selected_wards(prepared, meta, ward_names, ward_ids, top_n, drawn_geojson, method)
         if selected.empty:
             raise ValueError("No wards matched the classification request.")
 
@@ -401,6 +404,27 @@ class SettlementClassificationService:
             "warning_level": warning_level,
             "allowed": warning_level != "blocked",
             "message": message,
+        }
+
+    def select_wards_by_geometry(self, drawn_geojson: Dict[str, Any], method: str = "composite") -> Dict[str, Any]:
+        """Return wards intersecting a drawn GeoJSON geometry."""
+        gdf = self._load_shapefile()
+        prepared, meta = self._prepare_ward_gdf(gdf)
+        selected, selection_message = self._select_wards_by_drawn_geometry(prepared, meta, drawn_geojson)
+        if selected.empty:
+            raise ValueError("No wards intersect the drawn area.")
+
+        wards_summary = self._ward_summary(selected, meta)
+        metric_crs = selected.estimate_utm_crs() or "EPSG:3857"
+        area_sq_m = float(selected.to_crs(metric_crs).geometry.area.sum())
+        return {
+            "success": True,
+            "selection_message": selection_message,
+            "selected_ward_count": int(len(selected)),
+            "ward_ids": [ward["ward_id"] for ward in wards_summary],
+            "selected_wards": wards_summary,
+            "area_sq_km": round(area_sq_m / 1_000_000, 2),
+            "method": method,
         }
 
     def archive_classification(self, classification_id: str) -> Dict[str, Any]:
@@ -565,6 +589,74 @@ class SettlementClassificationService:
         gdf["_settlement_ward_id"] = ids
         gdf["_settlement_display_name"] = display_names
         return gdf, {"name_col": name_col, "code_col": code_col, "lga_col": lga_col, "state_col": state_col}
+
+    def _ward_summary(self, selected: gpd.GeoDataFrame, meta: Dict[str, Optional[str]]) -> List[Dict[str, Any]]:
+        return [
+            {
+                "ward_id": str(row["_settlement_ward_id"]),
+                "display_name": row["_settlement_display_name"],
+                "ward_name": row.get(meta["name_col"]),
+                "ward_code": row.get(meta["code_col"]) if meta.get("code_col") else None,
+            }
+            for _, row in selected.drop(columns="geometry", errors="ignore").iterrows()
+        ]
+
+    def _resolve_selected_wards(
+        self,
+        gdf: gpd.GeoDataFrame,
+        meta: Dict[str, Optional[str]],
+        ward_names: Optional[Sequence[str]],
+        ward_ids: Optional[Sequence[str]],
+        top_n: Optional[int],
+        drawn_geojson: Optional[Dict[str, Any]],
+        method: str,
+    ) -> Tuple[gpd.GeoDataFrame, str]:
+        if drawn_geojson:
+            return self._select_wards_by_drawn_geometry(gdf, meta, drawn_geojson)
+        return self._select_wards(gdf, meta, ward_names, ward_ids, top_n, method)
+
+    def _geometry_from_geojson(self, drawn_geojson: Dict[str, Any]):
+        if not isinstance(drawn_geojson, dict):
+            raise ValueError("Drawn selection must be GeoJSON.")
+
+        geojson_type = drawn_geojson.get("type")
+        if geojson_type == "Feature":
+            geom = shape(drawn_geojson.get("geometry") or {})
+        elif geojson_type == "FeatureCollection":
+            geometries = [
+                shape(feature.get("geometry") or {})
+                for feature in drawn_geojson.get("features", [])
+                if feature.get("geometry")
+            ]
+            if not geometries:
+                raise ValueError("Drawn selection does not contain geometry.")
+            geom = unary_union(geometries)
+        else:
+            geom = shape(drawn_geojson)
+
+        if geom.is_empty:
+            raise ValueError("Drawn selection is empty.")
+        if not geom.is_valid:
+            geom = geom.buffer(0)
+        if geom.is_empty:
+            raise ValueError("Drawn selection could not be repaired.")
+        return geom
+
+    def _select_wards_by_drawn_geometry(
+        self,
+        gdf: gpd.GeoDataFrame,
+        meta: Dict[str, Optional[str]],
+        drawn_geojson: Dict[str, Any],
+    ) -> Tuple[gpd.GeoDataFrame, str]:
+        drawn_geom = self._geometry_from_geojson(drawn_geojson)
+        drawn_series = gpd.GeoSeries([drawn_geom], crs="EPSG:4326")
+        if gdf.crs is not None:
+            drawn_geom = drawn_series.to_crs(gdf.crs).iloc[0]
+
+        selected = gdf[gdf.geometry.intersects(drawn_geom)].copy()
+        if selected.empty:
+            raise ValueError("No wards intersect the drawn area.")
+        return selected, f"Created classifier for {len(selected)} ward(s) intersecting the drawn area."
 
     def _select_wards(
         self,
@@ -816,6 +908,7 @@ class SettlementClassificationService:
             "boundariesUrl": f"/api/settlement/{self.session_id}/boundaries?method={metadata['method']}",
             "createUrl": f"/api/settlement/{self.session_id}/classifications",
             "estimateUrl": f"/api/settlement/{self.session_id}/classifications/estimate",
+            "selectionIntersectUrl": f"/api/settlement/{self.session_id}/selection/intersect",
             "classificationsUrl": f"/api/settlement/{self.session_id}/classifications",
             "wards": wards,
             "lgas": lgas,
@@ -861,6 +954,7 @@ class SettlementClassificationService:
     .feature-title {{ font-weight: 600; margin-bottom: 2px; }}
     .feature-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 7px; }}
     .feature-actions button {{ padding: 6px; font-size: 12px; }}
+    .draw-box {{ background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 8px; font-size: 13px; }}
     .check-row {{ display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 8px; }}
     .check-row input {{ width: auto; }}
     .progress-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }}
@@ -901,6 +995,7 @@ class SettlementClassificationService:
           <button type="button" data-mode="ward">Ward</button>
           <button type="button" data-mode="risk">Risk-ranked</button>
           <button type="button" data-mode="map">Map select</button>
+          <button type="button" data-mode="draw">Draw area</button>
         </div>
         <div class="row" id="lgaRow">
           <label for="lgaSelect">LGA</label>
@@ -916,6 +1011,10 @@ class SettlementClassificationService:
         </div>
         <div class="row hidden" id="mapRow">
           <div class="boundary-hit" id="mapSelection">Click a ward polygon on the map.</div>
+        </div>
+        <div class="row hidden" id="drawRow">
+          <div class="draw-box" id="drawSelection">Choose Draw area, then drag a rectangle on the map.</div>
+          <div class="row"><button id="clearDrawBtn" type="button" class="secondary">Clear Drawn Area</button></div>
         </div>
         <div class="row">
           <label for="cellSizeInput">Grid size (meters)</label>
@@ -992,6 +1091,11 @@ class SettlementClassificationService:
     let gridFeatures = [];
     let currentGridIndex = -1;
     let selectedCellSnapshot = "";
+    let drawnSelectionLayer = null;
+    let drawnSelectionGeojson = null;
+    let drawnWardIds = [];
+    let isDrawingRectangle = false;
+    let drawStartLatLng = null;
 
     const map = L.map("map", {{ zoomControl: true }});
     const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{ attribution: "Tiles &copy; Esri" }});
@@ -1009,6 +1113,7 @@ class SettlementClassificationService:
     const layerRegistry = {{
       boundaries: null,
       grid: null,
+      drawnSelection: null,
       set(name, layer) {{
         if (this[name] && this[name] !== layer && map.hasLayer(this[name])) {{
           map.removeLayer(this[name]);
@@ -1016,6 +1121,7 @@ class SettlementClassificationService:
         this[name] = layer;
         if (name === "boundaries") boundariesLayer = layer;
         if (name === "grid") gridLayer = layer;
+        if (name === "drawnSelection") drawnSelectionLayer = layer;
         if (layer && !map.hasLayer(layer)) layer.addTo(map);
         syncLayerOrder();
       }},
@@ -1025,6 +1131,7 @@ class SettlementClassificationService:
         this[name] = null;
         if (name === "boundaries") boundariesLayer = null;
         if (name === "grid") gridLayer = null;
+        if (name === "drawnSelection") drawnSelectionLayer = null;
       }},
       fit(name, padding=[16, 16]) {{
         const layer = this[name];
@@ -1038,6 +1145,7 @@ class SettlementClassificationService:
 
     function syncLayerOrder() {{
       if (layerRegistry.boundaries && map.hasLayer(layerRegistry.boundaries)) layerRegistry.boundaries.bringToBack();
+      if (layerRegistry.drawnSelection && map.hasLayer(layerRegistry.drawnSelection)) layerRegistry.drawnSelection.bringToFront();
       if (layerRegistry.grid && map.hasLayer(layerRegistry.grid)) layerRegistry.grid.bringToFront();
     }}
 
@@ -1066,6 +1174,8 @@ class SettlementClassificationService:
     const searchInput = document.getElementById("searchInput");
     const searchResults = document.getElementById("searchResults");
     const visibleFeatureList = document.getElementById("visibleFeatureList");
+    const drawSelection = document.getElementById("drawSelection");
+    const clearDrawBtn = document.getElementById("clearDrawBtn");
     const fitStateBtn = document.getElementById("fitStateBtn");
     const fitGridBtn = document.getElementById("fitGridBtn");
     const clearFocusBtn = document.getElementById("clearFocusBtn");
@@ -1105,6 +1215,7 @@ class SettlementClassificationService:
       const selectedWard = CONFIG.wards.find(w => w.ward_id === (wardSelect.value || selectedBoundaryId));
       if (selectedWard) chips.push(`Ward: ${{selectedWard.display_name}}`);
       if (mode === "risk") chips.push(`Risk-ranked: top ${{topInput.value || 10}}`);
+      if (mode === "draw" && drawnWardIds.length) chips.push(`Drawn area: ${{drawnWardIds.length}} ward(s)`);
       if (currentClassification) chips.push(`Grid: ${{currentClassification.classification_id}}`);
       focusChips.innerHTML = chips.map(chip => `<span class="focus-chip">${{escapeHtml(chip)}}</span>`).join("");
     }}
@@ -1155,6 +1266,7 @@ class SettlementClassificationService:
       const props = feature.properties || {{}};
       layer.bindTooltip(props.display_name || props.ward_name || "Ward", {{ sticky: true }});
       layer.on("click", () => {{
+        if (mode === "draw") return;
         selectWardFocus(props.ward_id, false, "map");
       }});
     }}
@@ -1308,6 +1420,8 @@ class SettlementClassificationService:
       document.getElementById("wardRow").classList.toggle("hidden", !["ward"].includes(mode));
       document.getElementById("riskRow").classList.toggle("hidden", mode !== "risk");
       document.getElementById("mapRow").classList.toggle("hidden", mode !== "map");
+      document.getElementById("drawRow").classList.toggle("hidden", mode !== "draw");
+      map.getContainer().style.cursor = mode === "draw" ? "crosshair" : "";
       updateFocusChips();
       if (shouldEstimate) scheduleEstimate();
     }}
@@ -1423,6 +1537,102 @@ class SettlementClassificationService:
 
     map.on("moveend", scheduleVisibleFeatureList);
 
+    function rectangleFeatureFromBounds(bounds) {{
+      const west = bounds.getWest();
+      const east = bounds.getEast();
+      const south = bounds.getSouth();
+      const north = bounds.getNorth();
+      return {{
+        type: "Feature",
+        properties: {{ source: "settlement-draw-rectangle" }},
+        geometry: {{
+          type: "Polygon",
+          coordinates: [[
+            [west, south],
+            [east, south],
+            [east, north],
+            [west, north],
+            [west, south]
+          ]]
+        }}
+      }};
+    }}
+
+    async function intersectDrawnSelection() {{
+      if (!drawnSelectionGeojson) return;
+      drawSelection.textContent = "Finding wards inside drawn area...";
+      try {{
+        const response = await fetch(CONFIG.selectionIntersectUrl, {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{
+            method: CONFIG.method,
+            drawn_geojson: drawnSelectionGeojson
+          }})
+        }});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Drawn selection failed");
+        drawnWardIds = data.ward_ids || [];
+        drawSelection.textContent = `${{data.selected_ward_count}} ward(s) selected by drawn area.`;
+        updateFocusChips();
+        await updateEstimate();
+      }} catch (err) {{
+        drawnWardIds = [];
+        drawSelection.textContent = err.message;
+        setEstimate(err.message, "warning");
+      }}
+    }}
+
+    function clearDrawSelection(shouldEstimate=false) {{
+      layerRegistry.remove("drawnSelection");
+      drawnSelectionGeojson = null;
+      drawnWardIds = [];
+      drawSelection.textContent = "Choose Draw area, then drag a rectangle on the map.";
+      updateFocusChips();
+      if (shouldEstimate) scheduleEstimate();
+    }}
+
+    function startRectangleDraw(event) {{
+      if (mode !== "draw") return;
+      isDrawingRectangle = true;
+      drawStartLatLng = event.latlng;
+      map.dragging.disable();
+      clearDrawSelection(false);
+      const bounds = L.latLngBounds(drawStartLatLng, drawStartLatLng);
+      layerRegistry.set("drawnSelection", L.rectangle(bounds, {{
+        color: "#d9480f",
+        weight: 2,
+        fillColor: "#ffd8a8",
+        fillOpacity: 0.2
+      }}));
+    }}
+
+    function updateRectangleDraw(event) {{
+      if (!isDrawingRectangle || !drawnSelectionLayer || !drawStartLatLng) return;
+      drawnSelectionLayer.setBounds(L.latLngBounds(drawStartLatLng, event.latlng));
+    }}
+
+    async function finishRectangleDraw(event) {{
+      if (!isDrawingRectangle || !drawnSelectionLayer || !drawStartLatLng) return;
+      isDrawingRectangle = false;
+      map.dragging.enable();
+      const bounds = L.latLngBounds(drawStartLatLng, event.latlng);
+      drawStartLatLng = null;
+      if (Math.abs(bounds.getEast() - bounds.getWest()) < 0.00001 || Math.abs(bounds.getNorth() - bounds.getSouth()) < 0.00001) {{
+        clearDrawSelection(false);
+        drawSelection.textContent = "Drawn area was too small. Drag a larger rectangle.";
+        return;
+      }}
+      drawnSelectionLayer.setBounds(bounds);
+      drawnSelectionGeojson = rectangleFeatureFromBounds(bounds);
+      await intersectDrawnSelection();
+    }}
+
+    map.on("mousedown", startRectangleDraw);
+    map.on("mousemove", updateRectangleDraw);
+    map.on("mouseup", finishRectangleDraw);
+    clearDrawBtn.addEventListener("click", () => clearDrawSelection(true));
+
     function clearSelectedCell() {{
       if (!confirmDiscardDraft()) return;
       selectedFeature = null;
@@ -1440,6 +1650,7 @@ class SettlementClassificationService:
       lgaSelect.value = "";
       wardSelect.value = "";
       updateWardOptions(false);
+      clearDrawSelection(false);
       mapSelection.textContent = "Click a ward polygon on the map.";
       latestEstimate = null;
       setEstimate("Choose a focus area to estimate grid size.", "neutral");
@@ -1485,6 +1696,10 @@ class SettlementClassificationService:
       }};
       if (mode === "risk") {{
         payload.top_n = Number(topInput.value || 10);
+      }} else if (mode === "draw") {{
+        if (!drawnSelectionGeojson || !drawnWardIds.length) throw new Error("Draw a rectangle on the map first.");
+        payload.drawn_geojson = drawnSelectionGeojson;
+        payload.ward_ids = drawnWardIds;
       }} else if (mode === "lga") {{
         const lga = lgaSelect.value;
         if (!lga) throw new Error("Select an LGA first.");

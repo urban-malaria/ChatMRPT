@@ -125,8 +125,47 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "labelFilterSelect" in selector_html
     assert "showUnclassifiedOnlyInput" in selector_html
     assert "focusGridFeature" in selector_html
+    assert "selectionIntersectUrl" in selector_html
+    assert "drawSelection" in selector_html
+    assert "rectangleFeatureFromBounds" in selector_html
+    assert "intersectDrawnSelection" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
+
+
+def test_drawn_geometry_selection_estimate_and_create(tmp_path):
+    session_id, upload_root, export_root = _write_session(tmp_path)
+    service = SettlementClassificationService(
+        session_id,
+        upload_root=str(upload_root),
+        export_root=str(export_root),
+    )
+    drawn_geojson = {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+                [2.99, 7.99],
+                [3.03, 7.99],
+                [3.03, 8.03],
+                [2.99, 8.03],
+                [2.99, 7.99],
+            ]],
+        },
+    }
+
+    selection = service.select_wards_by_geometry(drawn_geojson)
+    assert selection["selected_ward_count"] == 1
+    assert selection["ward_ids"] == ["A001"]
+
+    estimate = service.estimate_classification(drawn_geojson=drawn_geojson, cell_size_m=1000)
+    assert estimate["success"] is True
+    assert estimate["selected_wards"][0]["ward_id"] == "A001"
+
+    created = service.create_classification(drawn_geojson=drawn_geojson, cell_size_m=1000)
+    assert created["selected_wards"][0]["ward_id"] == "A001"
+    assert "drawn area" in created["message"]
 
 
 def test_estimate_list_archive_and_duplicate_classification(tmp_path):

@@ -125,6 +125,7 @@ def estimate_classification(session_id: str):
             ward_names=payload.get("ward_names"),
             ward_ids=payload.get("ward_ids"),
             top_n=payload.get("top_n"),
+            drawn_geojson=payload.get("drawn_geojson"),
             method=payload.get("method", "composite"),
             cell_size_m=int(payload.get("cell_size_m", 500)),
         )
@@ -146,6 +147,7 @@ def create_classification(session_id: str):
             ward_names=payload.get("ward_names"),
             ward_ids=payload.get("ward_ids"),
             top_n=payload.get("top_n"),
+            drawn_geojson=payload.get("drawn_geojson"),
             method=payload.get("method", "composite"),
             cell_size_m=int(payload.get("cell_size_m", 500)),
             include_no_buildings=bool(payload.get("include_no_buildings", True)),
@@ -153,6 +155,25 @@ def create_classification(session_id: str):
         return jsonify({"success": True, **result})
     except Exception as exc:
         logger.error("Settlement classification create failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@settlement_bp.route("/<session_id>/selection/intersect", methods=["POST"])
+@require_auth
+def intersect_selection(session_id: str):
+    auth_error = _authorize_session(session_id)
+    if auth_error:
+        return auth_error
+    try:
+        payload = request.get_json(silent=True) or {}
+        drawn_geojson = payload.get("drawn_geojson") or payload.get("geometry")
+        result = _service(session_id).select_wards_by_geometry(
+            drawn_geojson,
+            method=payload.get("method", "composite"),
+        )
+        return jsonify(result)
+    except Exception as exc:
+        logger.error("Settlement selection intersect failed: %s", exc, exc_info=True)
         return jsonify({"success": False, "message": str(exc)}), 400
 
 
@@ -195,7 +216,7 @@ def get_classification(session_id: str, classification_id: str):
         return auth_error
     try:
         metadata = _service(session_id).get_classification(classification_id)
-        return jsonify({"success": True, "classification": metadata})
+        return jsonify({"success": True, "classification": metadata, **metadata})
     except FileNotFoundError as exc:
         return jsonify({"success": False, "message": str(exc)}), 404
     except Exception as exc:
