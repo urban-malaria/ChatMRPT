@@ -75,9 +75,17 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     export = service.export_classification(result["classification_id"])
     assert export["success"] is True
     csv_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_annotations.csv"
+    summary_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_ward_summary.csv"
     assert csv_path.exists()
+    assert summary_path.exists()
     assert (export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_classified_grid.geojson").exists()
     assert pd.read_csv(csv_path).loc[0, "label"] == "Rural"
+    summary = pd.read_csv(summary_path)
+    assert summary.loc[0, "classified_cells"] == 1
+    assert summary.loc[0, "rural_count"] == 1
+    assert summary.loc[0, "rural_pct_of_classified"] == 100.0
+    assert summary.loc[0, "urban_pct"] == 82.5
+    assert any(link["filename"] == "settlement_ward_summary.csv" for link in export["download_links"])
 
 
 def test_top_n_classification_uses_composite_rankings(tmp_path):
@@ -156,6 +164,7 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "classifyNavigateSection" in selector_html
     assert "classifyResultsSection" in selector_html
     assert "classifyLayersSection" in selector_html
+    assert "downloadLinks" in selector_html
     assert "formatUrbanPct" in selector_html
     assert "fuzzyScore" in selector_html
     assert "searchTimer" in selector_html

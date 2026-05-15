@@ -437,7 +437,10 @@ class SettlementClassificationService:
         )
 
     def get_classification(self, classification_id: str) -> Dict[str, Any]:
-        return self._load_metadata(classification_id)
+        metadata = self._load_metadata(classification_id)
+        metadata["labels"] = self._labels_for_metadata(metadata)
+        metadata["download_links"] = self._download_links(classification_id)
+        return metadata
 
     def load_grid_geojson(self, classification_id: str) -> Dict[str, Any]:
         grid_path = self._classification_dir(classification_id) / "grid.geojson"
@@ -512,6 +515,7 @@ class SettlementClassificationService:
         ward_lookup = {w["ward_id"]: w for w in self.list_wards(include_rankings=False)}
         grid["lga"] = grid["ward_id"].map(lambda wid: ward_lookup.get(wid, {}).get("lga", ""))
         grid["state"] = grid["ward_id"].map(lambda wid: ward_lookup.get(wid, {}).get("state", ""))
+        grid["urban_pct"] = grid["ward_id"].map(lambda wid: ward_lookup.get(wid, {}).get("urban_pct"))
 
         # Clean ward_name (strip the shapefile display suffix)
         grid["ward_name_clean"] = grid["ward_id"].map(
@@ -529,6 +533,7 @@ class SettlementClassificationService:
         csv_path = export_dir / "settlement_annotations.csv"
         geojson_path = export_dir / "settlement_classified_grid.geojson"
         metadata_path = export_dir / "settlement_metadata.json"
+        ward_summary_path = export_dir / "settlement_ward_summary.csv"
 
         # Build clean CSV with all useful columns
         csv_cols = ["classification_id", "grid_id", "ward_id", "ward_name_clean", "lga", "state",
@@ -538,10 +543,12 @@ class SettlementClassificationService:
         csv_df.to_csv(csv_path, index=False)
 
         grid.to_file(geojson_path, driver="GeoJSON")
+        self._build_ward_summary(grid, metadata).to_csv(ward_summary_path, index=False)
         self._write_json_atomic(metadata_path, metadata)
 
         files = [
             {"path": _json_responseable_path(csv_path), "type": "csv", "description": "Settlement annotations CSV"},
+            {"path": _json_responseable_path(ward_summary_path), "type": "csv", "description": "Ward-level settlement summary CSV"},
             {"path": _json_responseable_path(geojson_path), "type": "geojson", "description": "Classified settlement grid GeoJSON"},
             {"path": _json_responseable_path(metadata_path), "type": "json", "description": "Settlement classification metadata"},
         ]
@@ -941,6 +948,67 @@ class SettlementClassificationService:
         pd.DataFrame(rows).to_csv(path, index=False)
         return path
 
+    def _label_export_key(self, label: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", str(label).lower()).strip("_")
+
+    def _build_ward_summary(self, grid: gpd.GeoDataFrame, metadata: Dict[str, Any]) -> pd.DataFrame:
+        labels = self._labels_for_metadata(metadata)
+        base_cols = [
+            "ward_id",
+            "ward_name",
+            "lga",
+            "state",
+            "urban_pct",
+            "cell_size_m",
+            "total_grid_cells",
+            "classified_cells",
+            "unclassified_cells",
+            "coverage_pct",
+        ]
+        label_cols = []
+        for label in labels:
+            key = self._label_export_key(label)
+            label_cols.extend([
+                f"{key}_count",
+                f"{key}_pct_of_classified",
+                f"{key}_pct_of_all_cells",
+            ])
+
+        if grid.empty:
+            return pd.DataFrame(columns=base_cols + label_cols)
+
+        rows: List[Dict[str, Any]] = []
+        grid = grid.copy()
+        if "label" not in grid.columns:
+            grid["label"] = None
+
+        for ward_id, ward_grid in grid.groupby("ward_id", dropna=False):
+            label_values = ward_grid["label"].fillna("").astype(str).str.strip()
+            total = int(len(ward_grid))
+            classified = int(label_values.ne("").sum())
+            ward_name_series = ward_grid["ward_name_clean"] if "ward_name_clean" in ward_grid.columns else ward_grid.get("ward_name")
+            row = {
+                "ward_id": ward_id,
+                "ward_name": ward_name_series.iloc[0] if ward_name_series is not None else "",
+                "lga": ward_grid["lga"].iloc[0] if "lga" in ward_grid.columns else "",
+                "state": ward_grid["state"].iloc[0] if "state" in ward_grid.columns else "",
+                "urban_pct": ward_grid["urban_pct"].iloc[0] if "urban_pct" in ward_grid.columns else None,
+                "cell_size_m": metadata.get("cell_size_m"),
+                "total_grid_cells": total,
+                "classified_cells": classified,
+                "unclassified_cells": max(0, total - classified),
+                "coverage_pct": round((classified / total) * 100, 1) if total else 0.0,
+            }
+            for label in labels:
+                key = self._label_export_key(label)
+                count = int(label_values.eq(label).sum())
+                row[f"{key}_count"] = count
+                row[f"{key}_pct_of_classified"] = round((count / classified) * 100, 1) if classified else 0.0
+                row[f"{key}_pct_of_all_cells"] = round((count / total) * 100, 1) if total else 0.0
+            rows.append(row)
+
+        return pd.DataFrame(rows, columns=base_cols + label_cols).sort_values(["lga", "ward_name"], na_position="last")
+
     def _labels_for_metadata(self, metadata: Dict[str, Any]) -> List[str]:
         """Return labels with Rural added for older saved classifications."""
         labels = list(metadata.get("labels") or DEFAULT_LABELS)
@@ -968,6 +1036,12 @@ class SettlementClassificationService:
                 "url": f"/export/download/{self.session_id}/settlement_export_{classification_id}/settlement_annotations.csv",
                 "filename": "settlement_annotations.csv",
                 "description": "Settlement annotations CSV",
+                "type": "csv",
+            },
+            {
+                "url": f"/export/download/{self.session_id}/settlement_export_{classification_id}/settlement_ward_summary.csv",
+                "filename": "settlement_ward_summary.csv",
+                "description": "Ward-level settlement summary CSV",
                 "type": "csv",
             },
             {
@@ -1053,6 +1127,9 @@ class SettlementClassificationService:
     .session-card {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; margin: 6px 0; background: #f6f8fa; font-size: 13px; }}
     .session-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }}
     .session-actions button {{ padding: 6px; font-size: 12px; }}
+    .download-list {{ border: 1px solid #d0d7de; border-radius: 6px; background: #fff; padding: 8px; }}
+    .download-list a {{ display: block; color: #0969da; font-size: 13px; margin: 5px 0; text-decoration: none; }}
+    .download-list a:hover {{ text-decoration: underline; }}
     .legend-item {{ display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }}
     .swatch {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); }}
     .boundary-hit {{ background: #eaf5ff; border-radius: 6px; padding: 8px; font-size: 13px; }}
@@ -1216,6 +1293,7 @@ class SettlementClassificationService:
           <summary>Results / Exports</summary>
           <div class="section-body">
             <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
+            <div id="downloadLinks" class="download-list muted">Refresh exports to update downloads.</div>
             <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
             <div class="row"><strong>Legend</strong><div id="legend"></div></div>
           </div>
@@ -1415,6 +1493,7 @@ class SettlementClassificationService:
     const previousCellBtn = document.getElementById("previousCellBtn");
     const nextUnclassifiedBtn = document.getElementById("nextUnclassifiedBtn");
     const fitCellBtn = document.getElementById("fitCellBtn");
+    const downloadLinksEl = document.getElementById("downloadLinks");
 
     document.getElementById("overviewSummary").textContent = `${{CONFIG.wardCount}} wards${{CONFIG.lgaCount ? " across " + CONFIG.lgaCount + " LGAs" : ""}}.`;
     LABELS.forEach(label => {{
@@ -1437,6 +1516,18 @@ class SettlementClassificationService:
     function setEstimate(message, level="neutral") {{
       estimateBox.textContent = message;
       estimateBox.style.borderLeft = level === "blocked" ? "4px solid #b42318" : level === "warning" ? "4px solid #f08c00" : "4px solid #1f6f43";
+    }}
+
+    function renderDownloadLinks(links) {{
+      const items = Array.isArray(links) ? links : [];
+      if (!downloadLinksEl) return;
+      if (!items.length) {{
+        downloadLinksEl.textContent = "Refresh exports to update downloads.";
+        return;
+      }}
+      downloadLinksEl.innerHTML = items.map(link => `
+        <a href="${{escapeAttr(link.url || "")}}" target="_blank" rel="noopener">${{escapeHtml(link.description || link.filename || "Download")}}</a>
+      `).join("");
     }}
 
     function updateFocusChips() {{
@@ -2366,6 +2457,7 @@ class SettlementClassificationService:
     async function loadClassification(data) {{
       if (!confirmDiscardDraft()) return;
       currentClassification = data;
+      renderDownloadLinks(data.download_links || []);
       updateFocusChips();
       selectorPanel.classList.add("hidden");
       classificationPanel.classList.remove("hidden");
@@ -2423,6 +2515,10 @@ class SettlementClassificationService:
       setStatus("Refreshing exports...");
       const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{currentClassification.classification_id}}/export`, {{ method: "POST" }});
       const data = await response.json();
+      if (response.ok && data.success) {{
+        currentClassification.download_links = data.download_links || currentClassification.download_links || [];
+        renderDownloadLinks(currentClassification.download_links);
+      }}
       setStatus(response.ok && data.success ? "Exports refreshed." : (data.message || "Export failed"), !response.ok);
     }});
 
@@ -2455,6 +2551,7 @@ class SettlementClassificationService:
             "gridUrl": f"/api/settlement/{self.session_id}/classifications/{metadata['classification_id']}/grid",
             "annotationsUrl": f"/api/settlement/{self.session_id}/classifications/{metadata['classification_id']}/annotations",
             "exportUrl": f"/api/settlement/{self.session_id}/classifications/{metadata['classification_id']}/export",
+            "downloadLinks": self._download_links(metadata["classification_id"]),
             "wards": metadata["wards"],
             "gridCellCount": metadata["grid_cell_count"],
             "selectionMessage": metadata["selection_message"],
@@ -2486,6 +2583,9 @@ class SettlementClassificationService:
     .swatch {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); }}
     .status {{ font-size: 13px; min-height: 18px; }}
     .selected {{ padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 13px; }}
+    .download-list {{ border: 1px solid #d0d7de; border-radius: 6px; background: #fff; padding: 8px; }}
+    .download-list a {{ display: block; color: #0969da; font-size: 13px; margin: 5px 0; text-decoration: none; }}
+    .download-list a:hover {{ text-decoration: underline; }}
     .panel-section {{ border: 1px solid #d0d7de; border-radius: 6px; margin: 10px 0; background: #fff; overflow: hidden; }}
     .panel-section > summary {{ display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; cursor: pointer; font-size: 13px; font-weight: 700; background: #f6f8fa; color: #24292f; }}
     .panel-section > summary::-webkit-details-marker {{ display: none; }}
@@ -2521,6 +2621,7 @@ class SettlementClassificationService:
         <summary>Results / Exports</summary>
         <div class="section-body">
           <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
+          <div id="downloadLinks" class="download-list muted">Refresh exports to update downloads.</div>
           <div class="row"><strong>Legend</strong><div id="legend"></div></div>
         </div>
       </details>
@@ -2556,6 +2657,7 @@ class SettlementClassificationService:
     const exportBtn = document.getElementById("exportBtn");
     const statusEl = document.getElementById("status");
     const selectedCell = document.getElementById("selectedCell");
+    const downloadLinksEl = document.getElementById("downloadLinks");
 
     CONFIG.labels.forEach(label => {{
       const option = document.createElement("option");
@@ -2569,6 +2671,17 @@ class SettlementClassificationService:
     function setStatus(message, isError=false) {{
       statusEl.textContent = message;
       statusEl.style.color = isError ? "#b42318" : "#1f6f43";
+    }}
+
+    function renderDownloadLinks(links) {{
+      const items = Array.isArray(links) ? links : [];
+      if (!items.length) {{
+        downloadLinksEl.textContent = "Refresh exports to update downloads.";
+        return;
+      }}
+      downloadLinksEl.innerHTML = items.map(link => `
+        <a href="${{String(link.url || "").replace(/"/g, "&quot;")}}" target="_blank" rel="noopener">${{String(link.description || link.filename || "Download").replace(/[&<>"']/g, c => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }}[c]))}}</a>
+      `).join("");
     }}
 
     function styleFeature(feature) {{
@@ -2640,8 +2753,10 @@ class SettlementClassificationService:
       const response = await fetch(CONFIG.exportUrl, {{ method: "POST" }});
       const data = await response.json();
       setStatus(response.ok && data.success ? "Exports refreshed." : (data.message || "Export failed"), !response.ok);
+      if (response.ok && data.success) renderDownloadLinks(data.download_links || CONFIG.downloadLinks || []);
     }});
 
+    renderDownloadLinks(CONFIG.downloadLinks || []);
     loadMap().catch(err => setStatus(err.message, true));
   </script>
 </body>
