@@ -490,6 +490,23 @@ class SettlementClassificationService:
         annotations_doc = self.load_annotations(classification_id)
         self._write_annotations_csv(classification_id, annotations_doc)
         grid = gpd.read_file(self._classification_dir(classification_id) / "grid.geojson")
+
+        # Enrich grid with centroid coordinates
+        grid_wgs84 = grid.to_crs(epsg=4326) if grid.crs and grid.crs.to_epsg() != 4326 else grid.copy()
+        centroids = grid_wgs84.geometry.centroid
+        grid["cell_lon"] = centroids.x.round(6)
+        grid["cell_lat"] = centroids.y.round(6)
+
+        # Enrich with LGA and state from ward metadata
+        ward_lookup = {w["ward_id"]: w for w in self.list_wards(include_rankings=False)}
+        grid["lga"] = grid["ward_id"].map(lambda wid: ward_lookup.get(wid, {}).get("lga", ""))
+        grid["state"] = grid["ward_id"].map(lambda wid: ward_lookup.get(wid, {}).get("state", ""))
+
+        # Clean ward_name (strip the shapefile display suffix)
+        grid["ward_name_clean"] = grid["ward_id"].map(
+            lambda wid: ward_lookup.get(wid, {}).get("ward_name") or grid.loc[grid["ward_id"] == wid, "ward_name"].iloc[0]
+        )
+
         annotations = pd.DataFrame(list(annotations_doc.get("annotations", {}).values()))
         if not annotations.empty:
             grid = grid.merge(annotations[["grid_id", "label", "notes", "updated_at"]], on="grid_id", how="left")
@@ -502,7 +519,13 @@ class SettlementClassificationService:
         geojson_path = export_dir / "settlement_classified_grid.geojson"
         metadata_path = export_dir / "settlement_metadata.json"
 
-        pd.DataFrame(list(annotations_doc.get("annotations", {}).values())).to_csv(csv_path, index=False)
+        # Build clean CSV with all useful columns
+        csv_cols = ["classification_id", "grid_id", "ward_id", "ward_name_clean", "lga", "state",
+                    "cell_lat", "cell_lon", "cell_size_m", "label", "notes", "updated_at"]
+        csv_cols = [c for c in csv_cols if c in grid.columns]
+        csv_df = grid[csv_cols].rename(columns={"ward_name_clean": "ward_name"})
+        csv_df.to_csv(csv_path, index=False)
+
         grid.to_file(geojson_path, driver="GeoJSON")
         self._write_json_atomic(metadata_path, metadata)
 
