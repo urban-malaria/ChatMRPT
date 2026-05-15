@@ -1343,7 +1343,11 @@ You now have a complete geospatial dataset ready for malaria risk analysis and i
 
 Try: "**map malaria burden distribution**" to see case patterns across wards
 
-🌍 **Step 2: Explore Environmental Factors**
+🏘️ **Step 2: Classify Settlements**
+
+Try: "**create settlement classification**" to open the state map, choose an LGA or ward, and classify settlements from satellite imagery
+
+🌍 **Step 3: Explore Environmental Factors**
 
 Available variables for your region ({geopolitical_zone}):
 """
@@ -1354,7 +1358,7 @@ Available variables for your region ({geopolitical_zone}):
                     result += f"\n• Plus {len(formatted_vars) - 3} more variables!\n"
 
                 result += f"""
-📊 **Step 3: Run Comprehensive Analysis**
+📊 **Step 4: Run Comprehensive Analysis**
 
 Try: "**run malaria risk analysis**" to rank wards by malaria risk
 
