@@ -93,6 +93,47 @@ def settlement_boundaries(session_id: str):
         return jsonify({"success": False, "message": str(exc)}), 400
 
 
+@settlement_bp.route("/<session_id>/classifications", methods=["GET"])
+@require_auth
+def list_classifications(session_id: str):
+    auth_error = _authorize_session(session_id)
+    if auth_error:
+        return auth_error
+    try:
+        include_archived = request.args.get("include_archived", "false").lower() == "true"
+        classifications = _service(session_id).list_classifications(include_archived=include_archived)
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "classifications": classifications,
+            "count": len(classifications),
+        })
+    except Exception as exc:
+        logger.error("Settlement classification list failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "message": str(exc), "classifications": []}), 400
+
+
+@settlement_bp.route("/<session_id>/classifications/estimate", methods=["POST"])
+@require_auth
+def estimate_classification(session_id: str):
+    auth_error = _authorize_session(session_id)
+    if auth_error:
+        return auth_error
+    try:
+        payload = request.get_json(silent=True) or {}
+        result = _service(session_id).estimate_classification(
+            ward_names=payload.get("ward_names"),
+            ward_ids=payload.get("ward_ids"),
+            top_n=payload.get("top_n"),
+            method=payload.get("method", "composite"),
+            cell_size_m=int(payload.get("cell_size_m", 500)),
+        )
+        return jsonify(result)
+    except Exception as exc:
+        logger.error("Settlement classification estimate failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
 @settlement_bp.route("/<session_id>/classifications", methods=["POST"])
 @require_auth
 def create_classification(session_id: str):
@@ -112,6 +153,37 @@ def create_classification(session_id: str):
         return jsonify({"success": True, **result})
     except Exception as exc:
         logger.error("Settlement classification create failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@settlement_bp.route("/<session_id>/classifications/<classification_id>/archive", methods=["POST"])
+@require_auth
+def archive_classification(session_id: str, classification_id: str):
+    auth_error = _authorize_session(session_id)
+    if auth_error:
+        return auth_error
+    try:
+        return jsonify(_service(session_id).archive_classification(classification_id))
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 404
+    except Exception as exc:
+        logger.error("Settlement archive failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@settlement_bp.route("/<session_id>/classifications/<classification_id>/duplicate", methods=["POST"])
+@require_auth
+def duplicate_classification(session_id: str, classification_id: str):
+    auth_error = _authorize_session(session_id)
+    if auth_error:
+        return auth_error
+    try:
+        result = _service(session_id).duplicate_classification(classification_id)
+        return jsonify({"success": True, **result})
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 404
+    except Exception as exc:
+        logger.error("Settlement duplicate failed: %s", exc, exc_info=True)
         return jsonify({"success": False, "message": str(exc)}), 400
 
 

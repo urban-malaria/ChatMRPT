@@ -106,8 +106,51 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert selector["selector"] is True
     assert selector["ward_count"] == 2
     assert selector["lga_count"] == 2
+    selector_html = (upload_root / session_id / "settlement" / "selector" / "settlement_selector.html").read_text(encoding="utf-8")
+    assert "classifications/estimate" in selector_html
+    assert "classificationList" in selector_html
+    assert "resumeClassification" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
+
+
+def test_estimate_list_archive_and_duplicate_classification(tmp_path):
+    session_id, upload_root, export_root = _write_session(tmp_path)
+    service = SettlementClassificationService(
+        session_id,
+        upload_root=str(upload_root),
+        export_root=str(export_root),
+    )
+
+    estimate = service.estimate_classification(ward_ids=["A001"], cell_size_m=1000)
+    assert estimate["success"] is True
+    assert estimate["allowed"] is True
+    assert estimate["selected_ward_count"] == 1
+    assert estimate["estimated_cell_count"] > 0
+
+    created = service.create_classification(ward_ids=["A001"], cell_size_m=1000)
+    grid = service.load_grid_geojson(created["classification_id"])
+    first_grid_id = grid["features"][0]["properties"]["grid_id"]
+    service.save_annotation(
+        created["classification_id"],
+        {"grid_id": first_grid_id, "label": "Formal", "notes": "sample"},
+    )
+
+    items = service.list_classifications()
+    assert [item["classification_id"] for item in items] == [created["classification_id"]]
+    assert items[0]["classified_count"] == 1
+    assert items[0]["progress_percent"] > 0
+
+    duplicated = service.duplicate_classification(created["classification_id"])
+    assert duplicated["classification_id"] != created["classification_id"]
+    assert duplicated["selected_wards"][0]["ward_id"] == "A001"
+
+    archived = service.archive_classification(created["classification_id"])
+    assert archived["archived"] is True
+    active_ids = {item["classification_id"] for item in service.list_classifications()}
+    assert created["classification_id"] not in active_ids
+    archived_ids = {item["classification_id"] for item in service.list_classifications(include_archived=True)}
+    assert created["classification_id"] in archived_ids
 
 
 def test_rejects_invalid_annotation_label(tmp_path):

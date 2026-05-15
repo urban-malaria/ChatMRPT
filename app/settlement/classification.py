@@ -311,6 +311,115 @@ class SettlementClassificationService:
             "download_links": self._download_links(classification_id),
         }
 
+    def list_classifications(self, include_archived: bool = False) -> List[Dict[str, Any]]:
+        """List saved settlement classifications for this session."""
+        if not self.settlement_root.exists():
+            return []
+
+        items: List[Dict[str, Any]] = []
+        for metadata_path in self.settlement_root.glob("settlement-*/metadata.json"):
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                if metadata.get("archived") and not include_archived:
+                    continue
+                classification_id = metadata.get("classification_id") or metadata_path.parent.name
+                annotations = self.load_annotations(classification_id).get("annotations", {})
+                grid_count = int(metadata.get("grid_cell_count") or 0)
+                items.append({
+                    "classification_id": classification_id,
+                    "created_at": metadata.get("created_at"),
+                    "updated_at": metadata.get("updated_at"),
+                    "archived": bool(metadata.get("archived")),
+                    "cell_size_m": metadata.get("cell_size_m"),
+                    "method": metadata.get("method"),
+                    "selection_message": metadata.get("selection_message"),
+                    "wards": metadata.get("wards") or [],
+                    "selected_ward_count": len(metadata.get("wards") or []),
+                    "grid_cell_count": grid_count,
+                    "classified_count": len(annotations),
+                    "progress_percent": round((len(annotations) / grid_count) * 100, 1) if grid_count else 0,
+                    "download_links": self._download_links(classification_id),
+                })
+            except Exception:
+                logger.warning("Could not list settlement classification at %s", metadata_path, exc_info=True)
+
+        return sorted(items, key=lambda item: item.get("updated_at") or "", reverse=True)
+
+    def estimate_classification(
+        self,
+        ward_names: Optional[Sequence[str]] = None,
+        ward_ids: Optional[Sequence[str]] = None,
+        top_n: Optional[int] = None,
+        method: str = "composite",
+        cell_size_m: int = 500,
+        max_cells: int = 2500,
+    ) -> Dict[str, Any]:
+        """Estimate selected area and grid size before generating a grid."""
+        if cell_size_m < 100:
+            raise ValueError("Cell size is too small. Use at least 100 meters.")
+        if cell_size_m > 5000:
+            raise ValueError("Cell size is too large. Use 5000 meters or less.")
+
+        gdf = self._load_shapefile()
+        prepared, meta = self._prepare_ward_gdf(gdf)
+        selected, selection_message = self._select_wards(prepared, meta, ward_names, ward_ids, top_n, method)
+        if selected.empty:
+            raise ValueError("No wards matched the classification request.")
+
+        metric_crs = selected.estimate_utm_crs() or "EPSG:3857"
+        selected_metric = selected.to_crs(metric_crs)
+        area_sq_m = float(selected_metric.geometry.area.sum())
+        estimated_cells = max(1, int(math.ceil(area_sq_m / (cell_size_m * cell_size_m))))
+        warning_level = "ok"
+        message = "Grid size is within the normal range."
+        if estimated_cells > max_cells:
+            warning_level = "blocked"
+            message = f"Estimated grid is too large ({estimated_cells} cells). Increase grid size or select fewer wards."
+        elif estimated_cells > max_cells * 0.75:
+            warning_level = "warning"
+            message = f"Estimated grid is large ({estimated_cells} cells). Consider a larger grid size."
+
+        wards_summary = [
+            {
+                "ward_id": str(row["_settlement_ward_id"]),
+                "display_name": row["_settlement_display_name"],
+                "ward_name": row.get(meta["name_col"]),
+                "ward_code": row.get(meta["code_col"]) if meta.get("code_col") else None,
+            }
+            for _, row in selected.drop(columns="geometry", errors="ignore").iterrows()
+        ]
+
+        return {
+            "success": True,
+            "selection_message": selection_message,
+            "selected_ward_count": int(len(selected)),
+            "selected_wards": wards_summary,
+            "area_sq_km": round(area_sq_m / 1_000_000, 2),
+            "cell_size_m": cell_size_m,
+            "estimated_cell_count": estimated_cells,
+            "max_cells": max_cells,
+            "warning_level": warning_level,
+            "allowed": warning_level != "blocked",
+            "message": message,
+        }
+
+    def archive_classification(self, classification_id: str) -> Dict[str, Any]:
+        metadata = self._load_metadata(classification_id)
+        metadata["archived"] = True
+        metadata["updated_at"] = _utc_now()
+        self._write_json_atomic(self._classification_dir(classification_id) / "metadata.json", metadata)
+        return {"success": True, "classification_id": classification_id, "archived": True}
+
+    def duplicate_classification(self, classification_id: str) -> Dict[str, Any]:
+        metadata = self._load_metadata(classification_id)
+        ward_ids = [ward.get("ward_id") for ward in metadata.get("wards", []) if ward.get("ward_id")]
+        return self.create_classification(
+            ward_ids=ward_ids,
+            method=metadata.get("method") or "composite",
+            cell_size_m=int(metadata.get("cell_size_m") or 500),
+            include_no_buildings="No Buildings/Avoid Area" in (metadata.get("labels") or DEFAULT_LABELS),
+        )
+
     def get_classification(self, classification_id: str) -> Dict[str, Any]:
         return self._load_metadata(classification_id)
 
@@ -706,6 +815,8 @@ class SettlementClassificationService:
             "includeNoBuildings": metadata["include_no_buildings"],
             "boundariesUrl": f"/api/settlement/{self.session_id}/boundaries?method={metadata['method']}",
             "createUrl": f"/api/settlement/{self.session_id}/classifications",
+            "estimateUrl": f"/api/settlement/{self.session_id}/classifications/estimate",
+            "classificationsUrl": f"/api/settlement/{self.session_id}/classifications",
             "wards": wards,
             "lgas": lgas,
             "wardCount": metadata["ward_count"],
@@ -741,6 +852,10 @@ class SettlementClassificationService:
     .selected {{ padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 13px; }}
     .status {{ font-size: 13px; min-height: 18px; }}
     .hidden {{ display: none; }}
+    .focus-chip {{ display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 3px 3px 0 0; border-radius: 999px; background: #e7f5ff; color: #0969da; font-size: 12px; }}
+    .session-card {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; margin: 6px 0; background: #f6f8fa; font-size: 13px; }}
+    .session-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }}
+    .session-actions button {{ padding: 6px; font-size: 12px; }}
     .legend-item {{ display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }}
     .swatch {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); }}
     .boundary-hit {{ background: #eaf5ff; border-radius: 6px; padding: 8px; font-size: 13px; }}
@@ -754,6 +869,7 @@ class SettlementClassificationService:
       <section id="selectorPanel">
         <h1>Settlement Classification</h1>
         <div class="muted" id="overviewSummary"></div>
+        <div class="row" id="focusChips"></div>
         <h2>Focus</h2>
         <div class="mode">
           <button type="button" data-mode="lga" class="active">LGA</button>
@@ -780,7 +896,11 @@ class SettlementClassificationService:
           <label for="cellSizeInput">Grid size (meters)</label>
           <input id="cellSizeInput" type="number" min="100" max="5000" step="50" value="500">
         </div>
+        <div class="row selected" id="estimateBox">Choose a focus area to estimate grid size.</div>
+        <div class="row"><button id="estimateBtn" class="secondary">Estimate Grid</button></div>
         <div class="row"><button id="generateBtn">Generate Grid</button></div>
+        <h2>Classifications</h2>
+        <div id="classificationList" class="muted">No saved classifications yet.</div>
       </section>
 
       <section id="classificationPanel" class="hidden">
@@ -822,6 +942,7 @@ class SettlementClassificationService:
     let selectedLayer = null;
     let annotations = {{}};
     let currentClassification = null;
+    let latestEstimate = null;
 
     const map = L.map("map", {{ zoomControl: true }});
     const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{ attribution: "Tiles &copy; Esri" }});
@@ -840,6 +961,7 @@ class SettlementClassificationService:
     const wardSelect = document.getElementById("wardSelect");
     const topInput = document.getElementById("topInput");
     const cellSizeInput = document.getElementById("cellSizeInput");
+    const estimateBtn = document.getElementById("estimateBtn");
     const generateBtn = document.getElementById("generateBtn");
     const selectorPanel = document.getElementById("selectorPanel");
     const classificationPanel = document.getElementById("classificationPanel");
@@ -851,6 +973,9 @@ class SettlementClassificationService:
     const statusEl = document.getElementById("status");
     const selectedCell = document.getElementById("selectedCell");
     const mapSelection = document.getElementById("mapSelection");
+    const focusChips = document.getElementById("focusChips");
+    const estimateBox = document.getElementById("estimateBox");
+    const classificationList = document.getElementById("classificationList");
 
     document.getElementById("overviewSummary").textContent = `${{CONFIG.wardCount}} wards${{CONFIG.lgaCount ? " across " + CONFIG.lgaCount + " LGAs" : ""}}.`;
     LABELS.forEach(label => {{
@@ -866,6 +991,21 @@ class SettlementClassificationService:
       statusEl.style.color = isError ? "#b42318" : "#1f6f43";
     }}
 
+    function setEstimate(message, level="neutral") {{
+      estimateBox.textContent = message;
+      estimateBox.style.borderLeft = level === "blocked" ? "4px solid #b42318" : level === "warning" ? "4px solid #f08c00" : "4px solid #1f6f43";
+    }}
+
+    function updateFocusChips() {{
+      const chips = ["State view"];
+      if (lgaSelect.value) chips.push(`LGA: ${{lgaSelect.value}}`);
+      const selectedWard = CONFIG.wards.find(w => w.ward_id === (wardSelect.value || selectedBoundaryId));
+      if (selectedWard) chips.push(`Ward: ${{selectedWard.display_name}}`);
+      if (mode === "risk") chips.push(`Risk-ranked: top ${{topInput.value || 10}}`);
+      if (currentClassification) chips.push(`Grid: ${{currentClassification.classification_id}}`);
+      focusChips.innerHTML = chips.map(chip => `<span class="focus-chip">${{escapeHtml(chip)}}</span>`).join("");
+    }}
+
     function populateSelectors() {{
       lgaSelect.innerHTML = '<option value="">Select LGA</option>' + CONFIG.lgas.map(lga => `<option value="${{escapeAttr(lga)}}">${{escapeHtml(lga)}}</option>`).join("");
       updateWardOptions();
@@ -876,6 +1016,8 @@ class SettlementClassificationService:
       const filtered = CONFIG.wards.filter(w => !lga || String(w.lga || "") === lga);
       wardSelect.innerHTML = '<option value="">Select ward</option>' + filtered.map(w => `<option value="${{escapeAttr(w.ward_id)}}">${{escapeHtml(w.display_name)}}</option>`).join("");
       if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      updateFocusChips();
+      scheduleEstimate();
     }}
 
     function escapeHtml(value) {{
@@ -924,8 +1066,83 @@ class SettlementClassificationService:
       const response = await fetch(CONFIG.boundariesUrl);
       if (!response.ok) throw new Error("Could not load settlement boundaries");
       const geojson = await response.json();
+      if (boundariesLayer) map.removeLayer(boundariesLayer);
       boundariesLayer = L.geoJSON(geojson, {{ style: boundaryStyle, onEachFeature: onBoundary }}).addTo(map);
       map.fitBounds(boundariesLayer.getBounds(), {{ padding: [16, 16] }});
+      await loadClassificationList();
+      updateFocusChips();
+    }}
+
+    async function loadClassificationList() {{
+      const response = await fetch(CONFIG.classificationsUrl);
+      if (!response.ok) return;
+      const data = await response.json();
+      const items = data.classifications || [];
+      if (!items.length) {{
+        classificationList.textContent = "No saved classifications yet.";
+        return;
+      }}
+      classificationList.innerHTML = items.slice(0, 6).map(item => `
+        <div class="session-card">
+          <strong>${{escapeHtml(item.selection_message || item.classification_id)}}</strong>
+          <div>${{item.classified_count}} / ${{item.grid_cell_count}} cells classified (${{item.progress_percent}}%)</div>
+          <div>${{item.selected_ward_count}} ward(s), grid ${{item.cell_size_m}}m</div>
+          <div class="session-actions">
+            <button type="button" data-resume="${{escapeAttr(item.classification_id)}}">Resume</button>
+            <button type="button" data-duplicate="${{escapeAttr(item.classification_id)}}">Duplicate</button>
+            <button type="button" data-archive="${{escapeAttr(item.classification_id)}}">Archive</button>
+          </div>
+        </div>
+      `).join("");
+      classificationList.querySelectorAll("[data-resume]").forEach(button => {{
+        button.addEventListener("click", () => resumeClassification(button.dataset.resume));
+      }});
+      classificationList.querySelectorAll("[data-duplicate]").forEach(button => {{
+        button.addEventListener("click", () => duplicateClassification(button.dataset.duplicate));
+      }});
+      classificationList.querySelectorAll("[data-archive]").forEach(button => {{
+        button.addEventListener("click", () => archiveClassification(button.dataset.archive));
+      }});
+    }}
+
+    async function resumeClassification(classificationId) {{
+      try {{
+        const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{classificationId}}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not load classification");
+        await loadClassification({{ ...data, message: data.selection_message || "Grid ready." }});
+      }} catch (err) {{
+        alert(err.message);
+      }}
+    }}
+
+    async function duplicateClassification(classificationId) {{
+      try {{
+        const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{classificationId}}/duplicate`, {{ method: "POST" }});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Could not duplicate classification");
+        await loadClassification(data);
+        await loadClassificationList();
+      }} catch (err) {{
+        alert(err.message);
+      }}
+    }}
+
+    async function archiveClassification(classificationId) {{
+      try {{
+        const response = await fetch(`/api/settlement/${{CONFIG.sessionId}}/classifications/${{classificationId}}/archive`, {{ method: "POST" }});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Could not archive classification");
+        if (currentClassification && currentClassification.classification_id === classificationId) {{
+          currentClassification = null;
+          if (gridLayer) map.removeLayer(gridLayer);
+          gridLayer = null;
+        }}
+        await loadClassificationList();
+        updateFocusChips();
+      }} catch (err) {{
+        alert(err.message);
+      }}
     }}
 
     document.querySelectorAll("[data-mode]").forEach(button => {{
@@ -936,13 +1153,19 @@ class SettlementClassificationService:
         document.getElementById("wardRow").classList.toggle("hidden", !["ward"].includes(mode));
         document.getElementById("riskRow").classList.toggle("hidden", mode !== "risk");
         document.getElementById("mapRow").classList.toggle("hidden", mode !== "map");
+        updateFocusChips();
+        scheduleEstimate();
       }});
     }});
     lgaSelect.addEventListener("change", updateWardOptions);
     wardSelect.addEventListener("change", () => {{
       selectedBoundaryId = wardSelect.value;
       if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      updateFocusChips();
+      scheduleEstimate();
     }});
+    topInput.addEventListener("input", () => {{ updateFocusChips(); scheduleEstimate(); }});
+    cellSizeInput.addEventListener("input", scheduleEstimate);
 
     function buildCreatePayload() {{
       const payload = {{
@@ -964,8 +1187,38 @@ class SettlementClassificationService:
       return payload;
     }}
 
+    let estimateTimer = null;
+    function scheduleEstimate() {{
+      window.clearTimeout(estimateTimer);
+      estimateTimer = window.setTimeout(updateEstimate, 250);
+    }}
+
+    async function updateEstimate(throwOnError=false) {{
+      try {{
+        const payload = buildCreatePayload();
+        const response = await fetch(CONFIG.estimateUrl, {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(payload)
+        }});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Estimate failed");
+        latestEstimate = data;
+        setEstimate(`${{data.selected_ward_count}} ward(s), ~${{data.estimated_cell_count}} cells, ${{data.area_sq_km}} sq km. ${{data.message}}`, data.warning_level);
+      }} catch (err) {{
+        latestEstimate = null;
+        setEstimate(err.message, "warning");
+        if (throwOnError) throw err;
+      }}
+    }}
+
+    estimateBtn.addEventListener("click", () => updateEstimate());
+
     generateBtn.addEventListener("click", async () => {{
       try {{
+        await updateEstimate(true);
+        if (!latestEstimate) throw new Error("Estimate the grid before generating.");
+        if (latestEstimate.allowed === false) throw new Error(latestEstimate.message);
         generateBtn.disabled = true;
         generateBtn.textContent = "Generating...";
         const response = await fetch(CONFIG.createUrl, {{
@@ -1010,10 +1263,10 @@ class SettlementClassificationService:
 
     async function loadClassification(data) {{
       currentClassification = data;
+      updateFocusChips();
       selectorPanel.classList.add("hidden");
       classificationPanel.classList.remove("hidden");
-      document.getElementById("classificationSummary").textContent = `${{data.message || "Grid ready."}} ${{data.grid_cell_count}} grid cells.`;
-      if (boundariesLayer) map.removeLayer(boundariesLayer);
+      document.getElementById("classificationSummary").textContent = `${{data.message || data.selection_message || "Grid ready."}} ${{data.grid_cell_count}} grid cells.`;
       if (gridLayer) map.removeLayer(gridLayer);
       const gridUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/grid`;
       const annUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/annotations`;
@@ -1023,7 +1276,9 @@ class SettlementClassificationService:
       const annDoc = await annRes.json();
       annotations = annDoc.annotations || {{}};
       gridLayer = L.geoJSON(grid, {{ style: gridStyle, onEachFeature: onGrid }}).addTo(map);
+      if (boundariesLayer) boundariesLayer.bringToBack();
       map.fitBounds(gridLayer.getBounds(), {{ padding: [20, 20] }});
+      await loadClassificationList();
       setStatus("Ready");
     }}
 
@@ -1066,8 +1321,13 @@ class SettlementClassificationService:
       selectedFeature = null;
       selectedLayer = null;
       saveBtn.disabled = true;
-      if (gridLayer) map.removeLayer(gridLayer);
-      await loadOverview();
+      if (gridLayer) {{
+        map.fitBounds(gridLayer.getBounds(), {{ padding: [20, 20] }});
+      }} else if (boundariesLayer) {{
+        map.fitBounds(boundariesLayer.getBounds(), {{ padding: [16, 16] }});
+      }}
+      await loadClassificationList();
+      updateFocusChips();
     }});
 
     loadOverview().catch(err => alert(err.message));
