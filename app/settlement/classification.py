@@ -1016,6 +1016,12 @@ class SettlementClassificationService:
     .focus-chip {{ display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 3px 3px 0 0; border-radius: 999px; background: #e7f5ff; color: #0969da; font-size: 12px; }}
     .map-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }}
     .map-actions button {{ padding: 7px; font-size: 12px; }}
+    .panel-section {{ border: 1px solid #d0d7de; border-radius: 6px; margin: 10px 0; background: #fff; overflow: hidden; }}
+    .panel-section > summary {{ display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; cursor: pointer; font-size: 13px; font-weight: 700; background: #f6f8fa; color: #24292f; }}
+    .panel-section > summary::-webkit-details-marker {{ display: none; }}
+    .panel-section > summary::after {{ content: "+"; color: #57606a; font-weight: 700; }}
+    .panel-section[open] > summary::after {{ content: "-"; }}
+    .section-body {{ padding: 2px 10px 10px; }}
     .layer-panel {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; background: #f6f8fa; }}
     .layer-row {{ display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }}
     .layer-row label {{ display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 500; }}
@@ -1055,132 +1061,171 @@ class SettlementClassificationService:
           <button id="fitGridBtn" type="button" class="secondary">Fit Grid</button>
           <button id="clearFocusBtn" type="button" class="secondary">Clear Focus</button>
         </div>
-        <h2>Layers</h2>
-        <div class="layer-panel">
-          <div class="layer-row">
-            <label for="boundaryLayerToggle"><input id="boundaryLayerToggle" type="checkbox" checked> Boundaries</label>
-            <input id="boundaryOpacityRange" type="range" min="15" max="100" value="100">
+        <details id="panelFindSection" class="panel-section" open>
+          <summary>Find Area</summary>
+          <div class="section-body">
+            <div class="row">
+              <label for="searchInput">Ward or LGA</label>
+              <input id="searchInput" type="search" placeholder="Search by ward or LGA">
+            </div>
+            <div id="searchResults" class="search-results muted">Type at least two characters.</div>
+            <div class="row"><strong>Visible Areas</strong></div>
+            <div id="visibleFeatureList" class="feature-list muted">Move or zoom the map to list visible wards.</div>
           </div>
-          <div class="layer-row">
-            <label for="drawnLayerToggle"><input id="drawnLayerToggle" type="checkbox" checked> Drawn area</label>
-            <input id="drawnOpacityRange" type="range" min="15" max="100" value="100">
+        </details>
+        <details id="panelFocusSection" class="panel-section" open>
+          <summary>Select Focus</summary>
+          <div class="section-body">
+            <div class="row">
+              <label class="check-row" for="urbanThresholdToggle">
+                <input id="urbanThresholdToggle" type="checkbox"> Apply urban extent filter
+              </label>
+            </div>
+            <div class="row hidden" id="urbanThresholdRow">
+              <label for="urbanThresholdInput">Minimum urban extent (%)</label>
+              <input id="urbanThresholdInput" type="number" min="0" max="100" step="5" value="75">
+            </div>
+            <div id="urbanThresholdSummary" class="muted"></div>
+            <div class="row mode">
+              <button type="button" data-mode="lga" class="active">LGA</button>
+              <button type="button" data-mode="ward">Ward</button>
+              <button type="button" data-mode="risk">Risk-ranked</button>
+              <button type="button" data-mode="map">Map select</button>
+              <button type="button" data-mode="draw">Draw area</button>
+            </div>
+            <div class="row" id="lgaRow">
+              <label for="lgaSelect">LGA</label>
+              <select id="lgaSelect"></select>
+            </div>
+            <div class="row" id="wardRow">
+              <label for="wardSelect">Ward</label>
+              <select id="wardSelect"></select>
+            </div>
+            <div class="row hidden" id="riskRow">
+              <label for="topInput">Top-ranked wards</label>
+              <input id="topInput" type="number" min="1" max="25" value="10">
+            </div>
+            <div class="row hidden" id="mapRow">
+              <div class="boundary-hit" id="mapSelection">Click a ward polygon on the map.</div>
+            </div>
+            <div class="row hidden" id="drawRow">
+              <div class="draw-box" id="drawSelection">Choose Draw area, then drag a rectangle on the map.</div>
+              <div class="row"><button id="clearDrawBtn" type="button" class="secondary">Clear Drawn Area</button></div>
+            </div>
           </div>
-          <div class="layer-row">
-            <label for="gridLayerToggle"><input id="gridLayerToggle" type="checkbox" checked> Active grid</label>
-            <input id="gridOpacityRange" type="range" min="15" max="100" value="100">
+        </details>
+        <details id="panelGridSection" class="panel-section" open>
+          <summary>Grid Setup</summary>
+          <div class="section-body">
+            <div class="row">
+              <label for="cellSizeInput">Grid size (meters)</label>
+              <input id="cellSizeInput" type="number" min="100" max="5000" step="50" value="500">
+            </div>
+            <div class="row selected" id="estimateBox">Choose a focus area to estimate grid size.</div>
+            <div class="row"><button id="estimateBtn" class="secondary">Estimate Grid</button></div>
+            <div class="row"><button id="generateBtn">Generate Grid</button></div>
           </div>
-          <div class="muted">Basemaps stay in the map control. NASA Blue Marble is regional context.</div>
-        </div>
-        <h2>Find</h2>
-        <div class="row">
-          <label for="searchInput">Ward or LGA</label>
-          <input id="searchInput" type="search" placeholder="Search by ward or LGA">
-        </div>
-        <div id="searchResults" class="search-results muted">Type at least two characters.</div>
-        <h2>Visible Areas</h2>
-        <div id="visibleFeatureList" class="feature-list muted">Move or zoom the map to list visible wards.</div>
-        <h2>Urban Threshold</h2>
-        <div class="row">
-          <label class="check-row" for="urbanThresholdToggle">
-            <input id="urbanThresholdToggle" type="checkbox"> Apply urban extent filter
-          </label>
-        </div>
-        <div class="row hidden" id="urbanThresholdRow">
-          <label for="urbanThresholdInput">Minimum urban extent (%)</label>
-          <input id="urbanThresholdInput" type="number" min="0" max="100" step="5" value="75">
-        </div>
-        <div id="urbanThresholdSummary" class="muted"></div>
-        <h2>Focus</h2>
-        <div class="mode">
-          <button type="button" data-mode="lga" class="active">LGA</button>
-          <button type="button" data-mode="ward">Ward</button>
-          <button type="button" data-mode="risk">Risk-ranked</button>
-          <button type="button" data-mode="map">Map select</button>
-          <button type="button" data-mode="draw">Draw area</button>
-        </div>
-        <div class="row" id="lgaRow">
-          <label for="lgaSelect">LGA</label>
-          <select id="lgaSelect"></select>
-        </div>
-        <div class="row" id="wardRow">
-          <label for="wardSelect">Ward</label>
-          <select id="wardSelect"></select>
-        </div>
-        <div class="row hidden" id="riskRow">
-          <label for="topInput">Top-ranked wards</label>
-          <input id="topInput" type="number" min="1" max="25" value="10">
-        </div>
-        <div class="row hidden" id="mapRow">
-          <div class="boundary-hit" id="mapSelection">Click a ward polygon on the map.</div>
-        </div>
-        <div class="row hidden" id="drawRow">
-          <div class="draw-box" id="drawSelection">Choose Draw area, then drag a rectangle on the map.</div>
-          <div class="row"><button id="clearDrawBtn" type="button" class="secondary">Clear Drawn Area</button></div>
-        </div>
-        <div class="row">
-          <label for="cellSizeInput">Grid size (meters)</label>
-          <input id="cellSizeInput" type="number" min="100" max="5000" step="50" value="500">
-        </div>
-        <div class="row selected" id="estimateBox">Choose a focus area to estimate grid size.</div>
-        <div class="row"><button id="estimateBtn" class="secondary">Estimate Grid</button></div>
-        <div class="row"><button id="generateBtn">Generate Grid</button></div>
-        <h2>Classifications</h2>
-        <div id="classificationList" class="muted">No saved classifications yet.</div>
+        </details>
+        <details id="panelClassificationsSection" class="panel-section" open>
+          <summary>Saved Classifications</summary>
+          <div class="section-body">
+            <div id="classificationList" class="muted">No saved classifications yet.</div>
+          </div>
+        </details>
+        <details id="panelLayersSection" class="panel-section">
+          <summary>Layers</summary>
+          <div class="section-body">
+            <div class="layer-panel">
+              <div class="layer-row">
+                <label for="boundaryLayerToggle"><input id="boundaryLayerToggle" type="checkbox" checked> Boundaries</label>
+                <input id="boundaryOpacityRange" type="range" min="15" max="100" value="100">
+              </div>
+              <div class="layer-row">
+                <label for="drawnLayerToggle"><input id="drawnLayerToggle" type="checkbox" checked> Drawn area</label>
+                <input id="drawnOpacityRange" type="range" min="15" max="100" value="100">
+              </div>
+              <div class="layer-row">
+                <label for="gridLayerToggle"><input id="gridLayerToggle" type="checkbox" checked> Active grid</label>
+                <input id="gridOpacityRange" type="range" min="15" max="100" value="100">
+              </div>
+              <div class="muted">Basemaps stay in the map control. NASA Blue Marble is regional context.</div>
+            </div>
+          </div>
+        </details>
       </section>
 
       <section id="classificationPanel" class="hidden">
         <h1>Classify Grid</h1>
         <div class="muted" id="classificationSummary"></div>
-        <div class="row selected" id="classProgress">No grid loaded.</div>
-        <div class="row selected" id="selectedCell">Select a grid cell on the map.</div>
-        <div class="row">
-          <label for="labelFilterSelect">Cell filter</label>
-          <select id="labelFilterSelect">
-            <option value="">All cells</option>
-          </select>
-          <label class="check-row" for="showUnclassifiedOnlyInput">
-            <input id="showUnclassifiedOnlyInput" type="checkbox">
-            Show unclassified only
-          </label>
-        </div>
-        <div class="row map-actions">
-          <button id="previousCellBtn" type="button" class="secondary">Previous Cell</button>
-          <button id="nextUnclassifiedBtn" type="button" class="secondary">Next Unclassified</button>
-          <button id="fitCellBtn" type="button" class="secondary">Fit Cell</button>
-        </div>
-        <div class="row">
-          <label for="labelSelect">Class</label>
-          <select id="labelSelect"></select>
-        </div>
-        <div class="row">
-          <label for="notesInput">Notes</label>
-          <textarea id="notesInput" maxlength="1000" placeholder="Visible features, uncertainty, or validation notes"></textarea>
-        </div>
-        <div class="row map-actions">
-          <button id="classifyFitStateBtn" type="button" class="secondary">Fit State</button>
-          <button id="classifyFitGridBtn" type="button" class="secondary">Fit Grid</button>
-          <button id="classifyClearCellBtn" type="button" class="secondary">Clear Cell</button>
-        </div>
-        <h2>Layers</h2>
-        <div class="layer-panel">
-          <div class="layer-row">
-            <label for="classifyBoundaryLayerToggle"><input id="classifyBoundaryLayerToggle" type="checkbox" checked> Boundaries</label>
-            <input id="classifyBoundaryOpacityRange" type="range" min="15" max="100" value="100">
+        <details id="classifyCellSection" class="panel-section" open>
+          <summary>Classify Cell</summary>
+          <div class="section-body">
+            <div class="row selected" id="classProgress">No grid loaded.</div>
+            <div class="row selected" id="selectedCell">Select a grid cell on the map.</div>
+            <div class="row">
+              <label for="labelSelect">Class</label>
+              <select id="labelSelect"></select>
+            </div>
+            <div class="row">
+              <label for="notesInput">Notes</label>
+              <textarea id="notesInput" maxlength="1000" placeholder="Visible features, uncertainty, or validation notes"></textarea>
+            </div>
+            <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
+            <div class="row status" id="status"></div>
           </div>
-          <div class="layer-row">
-            <label for="classifyDrawnLayerToggle"><input id="classifyDrawnLayerToggle" type="checkbox" checked> Drawn area</label>
-            <input id="classifyDrawnOpacityRange" type="range" min="15" max="100" value="100">
+        </details>
+        <details id="classifyNavigateSection" class="panel-section" open>
+          <summary>Navigate And Filter</summary>
+          <div class="section-body">
+            <div class="row">
+              <label for="labelFilterSelect">Cell filter</label>
+              <select id="labelFilterSelect">
+                <option value="">All cells</option>
+              </select>
+              <label class="check-row" for="showUnclassifiedOnlyInput">
+                <input id="showUnclassifiedOnlyInput" type="checkbox">
+                Show unclassified only
+              </label>
+            </div>
+            <div class="row map-actions">
+              <button id="previousCellBtn" type="button" class="secondary">Previous Cell</button>
+              <button id="nextUnclassifiedBtn" type="button" class="secondary">Next Unclassified</button>
+              <button id="fitCellBtn" type="button" class="secondary">Fit Cell</button>
+            </div>
+            <div class="row map-actions">
+              <button id="classifyFitStateBtn" type="button" class="secondary">Fit State</button>
+              <button id="classifyFitGridBtn" type="button" class="secondary">Fit Grid</button>
+              <button id="classifyClearCellBtn" type="button" class="secondary">Clear Cell</button>
+            </div>
           </div>
-          <div class="layer-row">
-            <label for="classifyGridLayerToggle"><input id="classifyGridLayerToggle" type="checkbox" checked> Active grid</label>
-            <input id="classifyGridOpacityRange" type="range" min="15" max="100" value="100">
+        </details>
+        <details id="classifyResultsSection" class="panel-section" open>
+          <summary>Results / Exports</summary>
+          <div class="section-body">
+            <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
+            <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
+            <div class="row"><strong>Legend</strong><div id="legend"></div></div>
           </div>
-        </div>
-        <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
-        <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
-        <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
-        <div class="row status" id="status"></div>
-        <div class="row"><strong>Legend</strong><div id="legend"></div></div>
+        </details>
+        <details id="classifyLayersSection" class="panel-section">
+          <summary>Layers</summary>
+          <div class="section-body">
+            <div class="layer-panel">
+              <div class="layer-row">
+                <label for="classifyBoundaryLayerToggle"><input id="classifyBoundaryLayerToggle" type="checkbox" checked> Boundaries</label>
+                <input id="classifyBoundaryOpacityRange" type="range" min="15" max="100" value="100">
+              </div>
+              <div class="layer-row">
+                <label for="classifyDrawnLayerToggle"><input id="classifyDrawnLayerToggle" type="checkbox" checked> Drawn area</label>
+                <input id="classifyDrawnOpacityRange" type="range" min="15" max="100" value="100">
+              </div>
+              <div class="layer-row">
+                <label for="classifyGridLayerToggle"><input id="classifyGridLayerToggle" type="checkbox" checked> Active grid</label>
+                <input id="classifyGridOpacityRange" type="range" min="15" max="100" value="100">
+              </div>
+            </div>
+          </div>
+        </details>
       </section>
     </aside>
   </div>
@@ -2320,6 +2365,12 @@ class SettlementClassificationService:
     .swatch {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); }}
     .status {{ font-size: 13px; min-height: 18px; }}
     .selected {{ padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 13px; }}
+    .panel-section {{ border: 1px solid #d0d7de; border-radius: 6px; margin: 10px 0; background: #fff; overflow: hidden; }}
+    .panel-section > summary {{ display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; cursor: pointer; font-size: 13px; font-weight: 700; background: #f6f8fa; color: #24292f; }}
+    .panel-section > summary::-webkit-details-marker {{ display: none; }}
+    .panel-section > summary::after {{ content: "+"; color: #57606a; font-weight: 700; }}
+    .panel-section[open] > summary::after {{ content: "-"; }}
+    .section-body {{ padding: 2px 10px 10px; }}
     @media (max-width: 760px) {{ #app {{ grid-template-columns: 1fr; height: auto; }} #map {{ height: 560px; }} #panel {{ border-left: 0; border-top: 1px solid #d8dee4; }} }}
   </style>
 </head>
@@ -2329,19 +2380,29 @@ class SettlementClassificationService:
     <aside id="panel">
       <h1>Settlement Classification</h1>
       <div class="muted" id="summary"></div>
-      <div class="row selected" id="selectedCell">Select a grid cell on the map.</div>
-      <div class="row">
-        <label for="labelSelect">Class</label>
-        <select id="labelSelect"></select>
-      </div>
-      <div class="row">
-        <label for="notesInput">Notes</label>
-        <textarea id="notesInput" maxlength="1000" placeholder="Visible features, uncertainty, or validation notes"></textarea>
-      </div>
-      <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
-      <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
-      <div class="row status" id="status"></div>
-      <div class="row"><strong>Legend</strong><div id="legend"></div></div>
+      <details id="directClassifyCellSection" class="panel-section" open>
+        <summary>Classify Cell</summary>
+        <div class="section-body">
+          <div class="row selected" id="selectedCell">Select a grid cell on the map.</div>
+          <div class="row">
+            <label for="labelSelect">Class</label>
+            <select id="labelSelect"></select>
+          </div>
+          <div class="row">
+            <label for="notesInput">Notes</label>
+            <textarea id="notesInput" maxlength="1000" placeholder="Visible features, uncertainty, or validation notes"></textarea>
+          </div>
+          <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
+          <div class="row status" id="status"></div>
+        </div>
+      </details>
+      <details id="directResultsSection" class="panel-section" open>
+        <summary>Results / Exports</summary>
+        <div class="section-body">
+          <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
+          <div class="row"><strong>Legend</strong><div id="legend"></div></div>
+        </div>
+      </details>
     </aside>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

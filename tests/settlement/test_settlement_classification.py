@@ -136,6 +136,15 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "syncLayerControls" in selector_html
     assert "setLayerVisible" in selector_html
     assert "NASA Blue Marble is regional context" in selector_html
+    assert "panelFindSection" in selector_html
+    assert "panelFocusSection" in selector_html
+    assert "panelGridSection" in selector_html
+    assert "panelClassificationsSection" in selector_html
+    assert "panelLayersSection" in selector_html
+    assert "classifyCellSection" in selector_html
+    assert "classifyNavigateSection" in selector_html
+    assert "classifyResultsSection" in selector_html
+    assert "classifyLayersSection" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 
