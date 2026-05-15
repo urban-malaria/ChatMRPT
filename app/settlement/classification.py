@@ -172,11 +172,13 @@ class SettlementClassificationService:
         records["lga"] = records[meta["lga_col"]] if meta.get("lga_col") else None
         records["state"] = records[meta["state_col"]] if meta.get("state_col") else None
         records["rank"] = None
+        records["vulnerability_category"] = ""
 
         for idx, row in records.iterrows():
             rank_info = ranking_lookup.get(str(row["ward_id"])) or ranking_lookup.get(_normalize(row.get("ward_name")))
             if rank_info:
                 records.at[idx, "rank"] = rank_info.get("rank")
+                records.at[idx, "vulnerability_category"] = rank_info.get("vulnerability_category", "")
 
         keep_cols = [
             "ward_id",
@@ -186,6 +188,7 @@ class SettlementClassificationService:
             "lga",
             "state",
             "rank",
+            "vulnerability_category",
             "geometry",
         ]
         return json.loads(records[keep_cols].to_json())
@@ -807,13 +810,25 @@ class SettlementClassificationService:
         if not rank_col:
             return {}
 
+        cat_col = _first_existing(rankings.columns, ["vulnerability_category", "category", "tier"])
+
         lookup: Dict[str, Dict[str, Any]] = {}
         for _, row in rankings.iterrows():
             try:
                 rank_value = float(row.get(rank_col))
             except Exception:
                 continue
-            info = {"rank": rank_value, "ranking_method": method, "rank_column": rank_col}
+            cat_val = ""
+            if cat_col:
+                raw_cat = row.get(cat_col)
+                if raw_cat is not None and pd.notna(raw_cat):
+                    cat_val = str(raw_cat)
+            info = {
+                "rank": rank_value,
+                "ranking_method": method,
+                "rank_column": rank_col,
+                "vulnerability_category": cat_val,
+            }
             if code_col and pd.notna(row.get(code_col)):
                 lookup[_safe_slug(str(row.get(code_col)))] = info
             if name_col and pd.notna(row.get(name_col)):
@@ -966,6 +981,7 @@ class SettlementClassificationService:
     .legend-item {{ display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }}
     .swatch {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); }}
     .boundary-hit {{ background: #eaf5ff; border-radius: 6px; padding: 8px; font-size: 13px; }}
+    .rank-label {{ background: #d9480f; color: #fff; font-size: 11px; font-weight: 700; line-height: 1.2; padding: 2px 5px; border-radius: 4px; white-space: nowrap; pointer-events: none; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.3); }}
     @media (max-width: 820px) {{ #app {{ grid-template-columns: 1fr; height: auto; }} #map {{ height: 600px; min-height: 600px; }} #panel {{ border-left: 0; border-top: 1px solid #d0d7de; }} }}
   </style>
 </head>
@@ -1128,6 +1144,7 @@ class SettlementClassificationService:
     let drawnWardIds = [];
     let isDrawingRectangle = false;
     let drawStartLatLng = null;
+    let rankLabelsLayer = null;
     const layerState = {{
       boundaries: {{ visible: true, opacity: 1 }},
       drawnSelection: {{ visible: true, opacity: 1 }},
@@ -1329,13 +1346,24 @@ class SettlementClassificationService:
 
     function boundaryStyle(feature) {{
       const props = feature.properties || {{}};
+      const opacity = layerOpacity("boundaries");
+
+      if (mode === "risk") {{
+        const topN = Number(topInput.value || 10);
+        const rank = (props.rank !== null && props.rank !== undefined) ? Number(props.rank) : null;
+        const isTopN = rank !== null && rank <= topN;
+        if (isTopN) {{
+          return {{ color: "#d9480f", weight: 2.5, opacity, fillColor: "#f76707", fillOpacity: 0.38 * opacity }};
+        }}
+        return {{ color: "#adb5bd", weight: 0.6, opacity: opacity * 0.5, fillColor: "#dee2e6", fillOpacity: 0.06 * opacity }};
+      }}
+
       const lga = lgaSelect.value;
       const ward = wardSelect.value;
       const isSelected = selectedBoundaryId && props.ward_id === selectedBoundaryId;
       const inLga = !lga || String(props.lga || "") === lga;
       const isWard = ward && props.ward_id === ward;
       const hasRank = props.rank !== null && props.rank !== undefined;
-      const opacity = layerOpacity("boundaries");
       return {{
         color: isSelected || isWard ? "#d9480f" : hasRank ? "#7048e8" : "#0969da",
         weight: isSelected || isWard ? 3 : inLga ? 1.4 : 0.7,
@@ -1343,6 +1371,30 @@ class SettlementClassificationService:
         fillColor: hasRank ? "#7048e8" : "#74c0fc",
         fillOpacity: (isSelected || isWard ? 0.32 : inLga ? 0.12 : 0.03) * opacity
       }};
+    }}
+
+    function updateRiskLabels() {{
+      if (rankLabelsLayer) {{ map.removeLayer(rankLabelsLayer); rankLabelsLayer = null; }}
+      if (mode !== "risk" || !boundariesLayer) return;
+      const topN = Number(topInput.value || 10);
+      rankLabelsLayer = L.featureGroup();
+      boundariesLayer.eachLayer(layer => {{
+        const props = (layer.feature && layer.feature.properties) || {{}};
+        const rank = (props.rank !== null && props.rank !== undefined) ? Number(props.rank) : null;
+        if (rank === null || rank > topN) return;
+        const bounds = layer.getBounds();
+        if (!bounds || !bounds.isValid()) return;
+        const center = bounds.getCenter();
+        const cat = props.vulnerability_category || "";
+        const label = cat
+          ? `${{rank}}<br><span style="font-size:9px">${{escapeHtml(cat)}}</span>`
+          : String(rank);
+        L.marker(center, {{
+          icon: L.divIcon({{ className: "", html: `<div class="rank-label">${{label}}</div>`, iconSize: null }}),
+          interactive: false
+        }}).addTo(rankLabelsLayer);
+      }});
+      rankLabelsLayer.addTo(map);
     }}
 
     function drawnSelectionStyle() {{
@@ -1424,6 +1476,7 @@ class SettlementClassificationService:
       const geojson = await response.json();
       layerRegistry.set("boundaries", L.geoJSON(geojson, {{ style: boundaryStyle, onEachFeature: onBoundary }}));
       layerRegistry.fit("boundaries", [16, 16]);
+      updateRiskLabels();
       await loadClassificationList();
       updateFocusChips();
       updateVisibleFeatureList();
@@ -1517,6 +1570,8 @@ class SettlementClassificationService:
       document.getElementById("drawRow").classList.toggle("hidden", mode !== "draw");
       map.getContainer().style.cursor = mode === "draw" ? "crosshair" : "";
       updateFocusChips();
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      updateRiskLabels();
       if (shouldEstimate) scheduleEstimate();
     }}
 
@@ -1530,7 +1585,14 @@ class SettlementClassificationService:
       updateFocusChips();
       scheduleEstimate();
     }});
-    topInput.addEventListener("input", () => {{ updateFocusChips(); scheduleEstimate(); }});
+    topInput.addEventListener("input", () => {{
+      updateFocusChips();
+      scheduleEstimate();
+      if (mode === "risk") {{
+        if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+        updateRiskLabels();
+      }}
+    }});
     cellSizeInput.addEventListener("input", scheduleEstimate);
     searchInput.addEventListener("input", renderSearchResults);
 
