@@ -1448,7 +1448,10 @@ class SettlementClassificationService:
       }}
       if (lgaSelect.value) chips.push(`LGA: ${{lgaSelect.value}}`);
       const selectedWard = CONFIG.wards.find(w => w.ward_id === (wardSelect.value || selectedBoundaryId));
-      if (selectedWard) chips.push(`Ward: ${{selectedWard.display_name}}`);
+      if (selectedWard) {{
+        chips.push(`Ward: ${{selectedWard.display_name}}`);
+        chips.push(formatUrbanPct(selectedWard));
+      }}
       if (mode === "risk") chips.push(`Risk-ranked: top ${{topInput.value || 10}}`);
       if (mode === "draw" && drawnWardIds.length) chips.push(`Drawn area: ${{drawnWardIds.length}} ward(s)`);
       if (currentClassification) chips.push(`Grid: ${{currentClassification.classification_id}}`);
@@ -1502,6 +1505,96 @@ class SettlementClassificationService:
       return String(value ?? "").trim().toLowerCase();
     }}
 
+    function normalizeSearch(value) {{
+      return normalizeText(value)
+        .normalize("NFD")
+        .replace(/[\\u0300-\\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    }}
+
+    function hasUrbanPct(item) {{
+      return item && item.urban_pct !== null && item.urban_pct !== undefined && item.urban_pct !== "";
+    }}
+
+    function formatUrbanPct(item) {{
+      if (!hasUrbanPct(item)) return "Urban % unavailable";
+      const rounded = Number(item.urban_pct).toFixed(1).replace(/\\.0$/, "");
+      return `${{rounded}}% urban`;
+    }}
+
+    function rankMeta(item) {{
+      if (!item || item.rank === null || item.rank === undefined) return "";
+      const category = item.vulnerability_category ? `, ${{item.vulnerability_category}}` : "";
+      return `rank ${{item.rank}}${{category}}`;
+    }}
+
+    function wardMetaLine(ward, prefix="Ward") {{
+      const parts = [prefix];
+      if (ward && ward.lga) parts.push(ward.lga);
+      if (ward) parts.push(formatUrbanPct(ward));
+      const rank = rankMeta(ward);
+      if (rank) parts.push(rank);
+      return parts.map(escapeHtml).join(" | ");
+    }}
+
+    function lgaMetaLine(lga, prefix="LGA") {{
+      const wards = CONFIG.wards.filter(ward => String(ward.lga || "") === String(lga || ""));
+      const urbanValues = wards.filter(hasUrbanPct).map(ward => Number(ward.urban_pct));
+      const parts = [prefix, `${{wards.length}} ward(s)`];
+      if (urbanValues.length) {{
+        const avg = urbanValues.reduce((sum, value) => sum + value, 0) / urbanValues.length;
+        parts.push(`${{avg.toFixed(1).replace(/\\.0$/, "")}}% avg urban`);
+      }}
+      return parts.map(escapeHtml).join(" | ");
+    }}
+
+    function editDistanceCapped(a, b, maxDistance=2) {{
+      if (Math.abs(a.length - b.length) > maxDistance) return maxDistance + 1;
+      let previous = Array.from({{ length: b.length + 1 }}, (_, index) => index);
+      for (let i = 1; i <= a.length; i += 1) {{
+        const current = [i];
+        let rowMin = current[0];
+        for (let j = 1; j <= b.length; j += 1) {{
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          const value = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
+          current[j] = value;
+          rowMin = Math.min(rowMin, value);
+        }}
+        if (rowMin > maxDistance) return maxDistance + 1;
+        previous = current;
+      }}
+      return previous[b.length];
+    }}
+
+    function fuzzyScore(query, fields) {{
+      const normalizedQuery = normalizeSearch(query);
+      if (!normalizedQuery) return -1;
+      const haystack = normalizeSearch(fields.filter(Boolean).join(" "));
+      if (!haystack) return -1;
+      if (haystack === normalizedQuery) return 200;
+      if (haystack.includes(normalizedQuery)) return 150 - Math.min(40, haystack.indexOf(normalizedQuery));
+      const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+      const fieldTokens = haystack.split(" ").filter(Boolean);
+      let total = 0;
+      for (const queryToken of queryTokens) {{
+        let best = 0;
+        for (const token of fieldTokens) {{
+          if (token === queryToken) best = Math.max(best, 40);
+          else if (token.startsWith(queryToken) || queryToken.startsWith(token)) best = Math.max(best, 30);
+          else if (token.includes(queryToken) || queryToken.includes(token)) best = Math.max(best, 22);
+          else if (queryToken.length >= 4 && token.length >= 4) {{
+            const distance = editDistanceCapped(queryToken, token, 2);
+            if (distance <= 1) best = Math.max(best, 18);
+            else if (distance <= 2) best = Math.max(best, 12);
+          }}
+        }}
+        if (!best) return -1;
+        total += best;
+      }}
+      return total;
+    }}
+
     function boundaryStyle(feature) {{
       const props = feature.properties || {{}};
       const opacity = layerOpacity("boundaries");
@@ -1549,13 +1642,15 @@ class SettlementClassificationService:
         const props = (layer.feature && layer.feature.properties) || {{}};
         const rank = (props.rank !== null && props.rank !== undefined) ? Number(props.rank) : null;
         if (rank === null || rank > topN) return;
+        if (urbanThresholdToggle.checked && hasUrbanPct(props) && Number(props.urban_pct) < Number(urbanThresholdInput.value || 75)) return;
         const bounds = layer.getBounds();
         if (!bounds || !bounds.isValid()) return;
         const center = bounds.getCenter();
         const cat = props.vulnerability_category || "";
+        const urbanText = formatUrbanPct(props);
         const label = cat
-          ? `${{rank}}<br><span style="font-size:9px">${{escapeHtml(cat)}}</span>`
-          : String(rank);
+          ? `${{rank}}<br><span style="font-size:9px">${{escapeHtml(cat)}}</span><br><span style="font-size:9px">${{escapeHtml(urbanText)}}</span>`
+          : `${{rank}}<br><span style="font-size:9px">${{escapeHtml(urbanText)}}</span>`;
         L.marker(center, {{
           icon: L.divIcon({{ className: "", html: `<div class="rank-label">${{label}}</div>`, iconSize: null }}),
           interactive: false
@@ -1577,7 +1672,8 @@ class SettlementClassificationService:
 
     function onBoundary(feature, layer) {{
       const props = feature.properties || {{}};
-      layer.bindTooltip(props.display_name || props.ward_name || "Ward", {{ sticky: true }});
+      const tooltip = `<strong>${{escapeHtml(props.display_name || props.ward_name || "Ward")}}</strong><br>${{wardMetaLine(props, "Ward")}}`;
+      layer.bindTooltip(tooltip, {{ sticky: true }});
       layer.on("click", () => {{
         if (mode === "draw") return;
         selectWardFocus(props.ward_id, false, "map");
@@ -1761,7 +1857,11 @@ class SettlementClassificationService:
       }}
     }});
     cellSizeInput.addEventListener("input", scheduleEstimate);
-    searchInput.addEventListener("input", renderSearchResults);
+    let searchTimer = null;
+    searchInput.addEventListener("input", () => {{
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(renderSearchResults, 180);
+    }});
 
     urbanThresholdToggle.addEventListener("change", () => {{
       document.getElementById("urbanThresholdRow").classList.toggle("hidden", !urbanThresholdToggle.checked);
@@ -1787,29 +1887,33 @@ class SettlementClassificationService:
         return;
       }}
       const lgaMatches = CONFIG.lgas
-        .filter(lga => normalizeText(lga).includes(query))
+        .map(lga => ({{ lga, score: fuzzyScore(query, [lga]) }}))
+        .filter(item => item.score >= 0)
+        .sort((a, b) => b.score - a.score || String(a.lga).localeCompare(String(b.lga)))
         .slice(0, 5)
-        .map(lga => `<div class="feature-card">
-          <div class="feature-title">${{escapeHtml(lga)}}</div>
-          <div class="muted">LGA</div>
+        .map(item => `<div class="feature-card">
+          <div class="feature-title">${{escapeHtml(item.lga)}}</div>
+          <div class="muted">${{lgaMetaLine(item.lga)}}</div>
           <div class="feature-actions">
-            <button type="button" data-select-lga="${{escapeAttr(lga)}}">Select</button>
-            <button type="button" class="secondary" data-zoom-lga="${{escapeAttr(lga)}}">Zoom</button>
+            <button type="button" data-select-lga="${{escapeAttr(item.lga)}}">Select</button>
+            <button type="button" class="secondary" data-zoom-lga="${{escapeAttr(item.lga)}}">Zoom</button>
           </div>
         </div>`);
       const wardMatches = CONFIG.wards
-        .filter(ward => normalizeText(`${{ward.display_name}} ${{ward.ward_name || ""}} ${{ward.lga || ""}}`).includes(query))
+        .map(ward => ({{ ward, score: fuzzyScore(query, [ward.display_name, ward.ward_name, ward.lga, ward.ward_id, ward.ward_code]) }}))
+        .filter(item => item.score >= 0)
+        .sort((a, b) => b.score - a.score || String(a.ward.display_name || "").localeCompare(String(b.ward.display_name || "")))
         .slice(0, 8)
-        .map(ward => `<div class="feature-card">
-          <div class="feature-title">${{escapeHtml(ward.display_name || ward.ward_name || ward.ward_id)}}</div>
-          <div class="muted">Ward${{ward.lga ? " | " + escapeHtml(ward.lga) : ""}}</div>
+        .map(item => `<div class="feature-card">
+          <div class="feature-title">${{escapeHtml(item.ward.display_name || item.ward.ward_name || item.ward.ward_id)}}</div>
+          <div class="muted">${{wardMetaLine(item.ward)}}</div>
           <div class="feature-actions">
-            <button type="button" data-select-ward="${{escapeAttr(ward.ward_id)}}">Select</button>
-            <button type="button" class="secondary" data-zoom-ward="${{escapeAttr(ward.ward_id)}}">Zoom</button>
+            <button type="button" data-select-ward="${{escapeAttr(item.ward.ward_id)}}">Select</button>
+            <button type="button" class="secondary" data-zoom-ward="${{escapeAttr(item.ward.ward_id)}}">Zoom</button>
           </div>
         </div>`);
       const rows = [...lgaMatches, ...wardMatches];
-      searchResults.innerHTML = rows.length ? rows.join("") : "No matching ward or LGA.";
+      searchResults.innerHTML = rows.length ? rows.join("") : "No close ward or LGA matches.";
       bindFeatureActionButtons(searchResults);
     }}
 
@@ -1852,7 +1956,7 @@ class SettlementClassificationService:
       const lgaRows = Array.from(visibleLgas).sort().slice(0, 5).map(lga => `
         <div class="feature-card">
           <div class="feature-title">${{escapeHtml(lga)}}</div>
-          <div class="muted">Visible LGA</div>
+          <div class="muted">${{lgaMetaLine(lga, "Visible LGA")}}</div>
           <div class="feature-actions">
             <button type="button" data-select-lga="${{escapeAttr(lga)}}">Select</button>
             <button type="button" class="secondary" data-zoom-lga="${{escapeAttr(lga)}}">Zoom</button>
@@ -1861,7 +1965,7 @@ class SettlementClassificationService:
       const wardRows = visibleWards.slice(0, 10).map(props => `
         <div class="feature-card">
           <div class="feature-title">${{escapeHtml(props.display_name || props.ward_name || props.ward_id)}}</div>
-          <div class="muted">Visible ward${{props.lga ? " | " + escapeHtml(props.lga) : ""}}</div>
+          <div class="muted">${{wardMetaLine(props, "Visible ward")}}</div>
           <div class="feature-actions">
             <button type="button" data-select-ward="${{escapeAttr(props.ward_id)}}">Select</button>
             <button type="button" class="secondary" data-zoom-ward="${{escapeAttr(props.ward_id)}}">Zoom</button>

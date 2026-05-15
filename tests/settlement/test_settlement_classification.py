@@ -17,6 +17,10 @@ def _write_session(tmp_path):
         "WardName": ["Alpha", "Beta"],
         "value": [1, 2],
     }).to_csv(session_folder / "raw_data.csv", index=False)
+    pd.DataFrame({
+        "WardName": ["Alpha", "Beta"],
+        "urban_percentage": [82.5, 34.0],
+    }).to_csv(session_folder / "unified_dataset.csv", index=False)
 
     gdf = gpd.GeoDataFrame(
         {
@@ -105,6 +109,7 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
 
     selector = service.create_selector_map(cell_size_m=1000)
     boundaries = service.load_boundaries_geojson()
+    wards = service.list_wards()
 
     assert selector["selector"] is True
     assert selector["ward_count"] == 2
@@ -151,7 +156,13 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "classifyNavigateSection" in selector_html
     assert "classifyResultsSection" in selector_html
     assert "classifyLayersSection" in selector_html
+    assert "formatUrbanPct" in selector_html
+    assert "fuzzyScore" in selector_html
+    assert "searchTimer" in selector_html
+    assert "wardMetaLine" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
+    assert boundaries["features"][0]["properties"]["urban_pct"] == 82.5
+    assert wards[0]["urban_pct"] == 82.5
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 
 
