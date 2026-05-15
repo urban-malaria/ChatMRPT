@@ -861,6 +861,10 @@ class SettlementClassificationService:
     .feature-title {{ font-weight: 600; margin-bottom: 2px; }}
     .feature-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 7px; }}
     .feature-actions button {{ padding: 6px; font-size: 12px; }}
+    .check-row {{ display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 8px; }}
+    .check-row input {{ width: auto; }}
+    .progress-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }}
+    .progress-pill {{ padding: 6px 8px; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; font-size: 12px; }}
     .session-card {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; margin: 6px 0; background: #f6f8fa; font-size: 13px; }}
     .session-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }}
     .session-actions button {{ padding: 6px; font-size: 12px; }}
@@ -927,7 +931,23 @@ class SettlementClassificationService:
       <section id="classificationPanel" class="hidden">
         <h1>Classify Grid</h1>
         <div class="muted" id="classificationSummary"></div>
+        <div class="row selected" id="classProgress">No grid loaded.</div>
         <div class="row selected" id="selectedCell">Select a grid cell on the map.</div>
+        <div class="row">
+          <label for="labelFilterSelect">Cell filter</label>
+          <select id="labelFilterSelect">
+            <option value="">All cells</option>
+          </select>
+          <label class="check-row" for="showUnclassifiedOnlyInput">
+            <input id="showUnclassifiedOnlyInput" type="checkbox">
+            Show unclassified only
+          </label>
+        </div>
+        <div class="row map-actions">
+          <button id="previousCellBtn" type="button" class="secondary">Previous Cell</button>
+          <button id="nextUnclassifiedBtn" type="button" class="secondary">Next Unclassified</button>
+          <button id="fitCellBtn" type="button" class="secondary">Fit Cell</button>
+        </div>
         <div class="row">
           <label for="labelSelect">Class</label>
           <select id="labelSelect"></select>
@@ -969,6 +989,9 @@ class SettlementClassificationService:
     let annotations = {{}};
     let currentClassification = null;
     let latestEstimate = null;
+    let gridFeatures = [];
+    let currentGridIndex = -1;
+    let selectedCellSnapshot = "";
 
     const map = L.map("map", {{ zoomControl: true }});
     const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{ attribution: "Tiles &copy; Esri" }});
@@ -1027,11 +1050,14 @@ class SettlementClassificationService:
     const selectorPanel = document.getElementById("selectorPanel");
     const classificationPanel = document.getElementById("classificationPanel");
     const labelSelect = document.getElementById("labelSelect");
+    const labelFilterSelect = document.getElementById("labelFilterSelect");
+    const showUnclassifiedOnlyInput = document.getElementById("showUnclassifiedOnlyInput");
     const notesInput = document.getElementById("notesInput");
     const saveBtn = document.getElementById("saveBtn");
     const exportBtn = document.getElementById("exportBtn");
     const backBtn = document.getElementById("backBtn");
     const statusEl = document.getElementById("status");
+    const classProgress = document.getElementById("classProgress");
     const selectedCell = document.getElementById("selectedCell");
     const mapSelection = document.getElementById("mapSelection");
     const focusChips = document.getElementById("focusChips");
@@ -1046,6 +1072,9 @@ class SettlementClassificationService:
     const classifyFitStateBtn = document.getElementById("classifyFitStateBtn");
     const classifyFitGridBtn = document.getElementById("classifyFitGridBtn");
     const classifyClearCellBtn = document.getElementById("classifyClearCellBtn");
+    const previousCellBtn = document.getElementById("previousCellBtn");
+    const nextUnclassifiedBtn = document.getElementById("nextUnclassifiedBtn");
+    const fitCellBtn = document.getElementById("fitCellBtn");
 
     document.getElementById("overviewSummary").textContent = `${{CONFIG.wardCount}} wards${{CONFIG.lgaCount ? " across " + CONFIG.lgaCount + " LGAs" : ""}}.`;
     LABELS.forEach(label => {{
@@ -1053,6 +1082,10 @@ class SettlementClassificationService:
       option.value = label;
       option.textContent = label;
       labelSelect.appendChild(option);
+      const filterOption = document.createElement("option");
+      filterOption.value = label;
+      filterOption.textContent = label;
+      labelFilterSelect.appendChild(filterOption);
     }});
     document.getElementById("legend").innerHTML = LABELS.map(label => `<div class="legend-item"><span class="swatch" style="background:${{COLORS[label] || DEFAULT_COLOR}}"></span>${{label}}</div>`).join("");
 
@@ -1253,6 +1286,13 @@ class SettlementClassificationService:
         if (currentClassification && currentClassification.classification_id === classificationId) {{
           currentClassification = null;
           layerRegistry.remove("grid");
+          gridFeatures = [];
+          annotations = {{}};
+          selectedFeature = null;
+          selectedLayer = null;
+          selectedCellSnapshot = "";
+          currentGridIndex = -1;
+          updateProgressSummary();
         }}
         await loadClassificationList();
         updateFocusChips();
@@ -1384,11 +1424,14 @@ class SettlementClassificationService:
     map.on("moveend", scheduleVisibleFeatureList);
 
     function clearSelectedCell() {{
+      if (!confirmDiscardDraft()) return;
       selectedFeature = null;
       selectedLayer = null;
       notesInput.value = "";
       selectedCell.textContent = "Select a grid cell on the map.";
       saveBtn.disabled = true;
+      currentGridIndex = -1;
+      selectedCellSnapshot = "";
       if (gridLayer) gridLayer.setStyle(gridStyle);
     }}
 
@@ -1416,6 +1459,23 @@ class SettlementClassificationService:
       if (!layerRegistry.fit("grid", [20, 20])) alert("No active grid to fit yet.");
     }});
     classifyClearCellBtn.addEventListener("click", clearSelectedCell);
+    previousCellBtn.addEventListener("click", () => navigateFilteredCell(-1));
+    nextUnclassifiedBtn.addEventListener("click", nextUnclassifiedCell);
+    fitCellBtn.addEventListener("click", () => {{
+      if (!selectedLayer || !selectedLayer.getBounds) {{
+        alert("Select a grid cell first.");
+        return;
+      }}
+      map.fitBounds(selectedLayer.getBounds(), {{ padding: [28, 28], maxZoom: 17 }});
+    }});
+    labelFilterSelect.addEventListener("change", refreshGridView);
+    showUnclassifiedOnlyInput.addEventListener("change", refreshGridView);
+    labelSelect.addEventListener("change", () => {{
+      if (hasUnsavedDraft()) setStatus("Unsaved cell changes.");
+    }});
+    notesInput.addEventListener("input", () => {{
+      if (hasUnsavedDraft()) setStatus("Unsaved cell changes.");
+    }});
 
     function buildCreatePayload() {{
       const payload = {{
@@ -1487,37 +1547,158 @@ class SettlementClassificationService:
       }}
     }});
 
+    function gridId(feature) {{
+      return feature && feature.properties && feature.properties.grid_id;
+    }}
+
+    function currentDraftValue() {{
+      return JSON.stringify({{
+        grid_id: selectedFeature ? gridId(selectedFeature) : "",
+        label: labelSelect.value,
+        notes: notesInput.value
+      }});
+    }}
+
+    function markDraftClean() {{
+      selectedCellSnapshot = selectedFeature ? currentDraftValue() : "";
+    }}
+
+    function hasUnsavedDraft() {{
+      return Boolean(selectedFeature && selectedCellSnapshot && currentDraftValue() !== selectedCellSnapshot);
+    }}
+
+    function confirmDiscardDraft() {{
+      return !hasUnsavedDraft() || confirm("Discard unsaved changes for this cell?");
+    }}
+
+    function annotationForFeature(feature) {{
+      return annotations[gridId(feature)] || null;
+    }}
+
+    function featurePassesCellFilter(feature) {{
+      const annotation = annotationForFeature(feature);
+      const labelFilter = labelFilterSelect.value;
+      if (showUnclassifiedOnlyInput.checked && annotation) return false;
+      if (labelFilter && (!annotation || annotation.label !== labelFilter)) return false;
+      return true;
+    }}
+
     function gridStyle(feature) {{
-      const annotation = annotations[feature.properties.grid_id];
+      const annotation = annotationForFeature(feature);
       const label = annotation && annotation.label;
+      const visible = featurePassesCellFilter(feature);
       return {{
         color: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
         fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
         weight: selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id ? 3 : 1,
-        fillOpacity: label ? 0.45 : 0.12
+        opacity: visible ? 1 : 0.18,
+        fillOpacity: visible ? (label ? 0.45 : 0.12) : 0.02
       }};
+    }}
+
+    function gridLayerForFeature(feature) {{
+      let found = null;
+      const id = gridId(feature);
+      if (!gridLayer || !id) return found;
+      gridLayer.eachLayer(layer => {{
+        if (gridId(layer.feature) === id) found = layer;
+      }});
+      return found;
+    }}
+
+    function updateProgressSummary() {{
+      const total = gridFeatures.length;
+      if (!total) {{
+        classProgress.textContent = "No grid loaded.";
+        return;
+      }}
+      const gridIds = new Set(gridFeatures.map(feature => gridId(feature)));
+      const classified = Object.keys(annotations).filter(id => gridIds.has(id)).length;
+      const remaining = Math.max(0, total - classified);
+      const percent = total ? Math.round((classified / total) * 100) : 0;
+      const labelCounts = LABELS.map(label => {{
+        const count = Object.values(annotations).filter(annotation => annotation.label === label).length;
+        return `<div class="progress-pill">${{escapeHtml(label)}}: ${{count}}</div>`;
+      }}).join("");
+      classProgress.innerHTML = `
+        <strong>${{classified}} / ${{total}}</strong> cells classified (${{percent}}%). ${{remaining}} remaining.
+        <div class="progress-grid">${{labelCounts}}</div>
+      `;
+    }}
+
+    function refreshGridView() {{
+      if (gridLayer) gridLayer.setStyle(gridStyle);
+      updateProgressSummary();
+    }}
+
+    function focusGridFeature(feature, shouldZoom=false) {{
+      if (!feature || !confirmDiscardDraft()) return false;
+      selectedFeature = feature;
+      selectedLayer = gridLayerForFeature(feature);
+      currentGridIndex = gridFeatures.findIndex(item => gridId(item) === gridId(feature));
+      const ann = annotationForFeature(feature) || {{}};
+      labelSelect.value = ann.label || LABELS[0];
+      notesInput.value = ann.notes || "";
+      const ordinal = currentGridIndex >= 0 ? `Cell ${{currentGridIndex + 1}} of ${{gridFeatures.length}} | ` : "";
+      selectedCell.textContent = `${{ordinal}}${{feature.properties.ward_name}} | ${{feature.properties.grid_id}}`;
+      saveBtn.disabled = false;
+      markDraftClean();
+      refreshGridView();
+      if (shouldZoom && selectedLayer && selectedLayer.getBounds) {{
+        map.fitBounds(selectedLayer.getBounds(), {{ padding: [28, 28], maxZoom: 17 }});
+      }}
+      return true;
+    }}
+
+    function filteredGridFeatures() {{
+      return gridFeatures.filter(featurePassesCellFilter);
+    }}
+
+    function navigateFilteredCell(direction) {{
+      const candidates = filteredGridFeatures();
+      if (!candidates.length) {{
+        alert("No cells match the current filter.");
+        return;
+      }}
+      const currentId = selectedFeature ? gridId(selectedFeature) : null;
+      let index = candidates.findIndex(feature => gridId(feature) === currentId);
+      if (index < 0) index = direction > 0 ? -1 : 0;
+      const nextIndex = (index + direction + candidates.length) % candidates.length;
+      focusGridFeature(candidates[nextIndex], true);
+    }}
+
+    function nextUnclassifiedCell() {{
+      const startIndex = currentGridIndex >= 0 ? currentGridIndex + 1 : 0;
+      for (let offset = 0; offset < gridFeatures.length; offset += 1) {{
+        const candidate = gridFeatures[(startIndex + offset) % gridFeatures.length];
+        if (!annotationForFeature(candidate)) {{
+          focusGridFeature(candidate, true);
+          return;
+        }}
+      }}
+      alert("All cells in this grid are classified.");
     }}
 
     function onGrid(feature, layer) {{
       layer.on("click", () => {{
-        selectedFeature = feature;
-        selectedLayer = layer;
-        const ann = annotations[feature.properties.grid_id] || {{}};
-        labelSelect.value = ann.label || LABELS[0];
-        notesInput.value = ann.notes || "";
-        selectedCell.textContent = `${{feature.properties.ward_name}} | ${{feature.properties.grid_id}}`;
-        saveBtn.disabled = false;
-        gridLayer.setStyle(gridStyle);
+        focusGridFeature(feature, false);
       }});
     }}
 
     async function loadClassification(data) {{
+      if (!confirmDiscardDraft()) return;
       currentClassification = data;
       updateFocusChips();
       selectorPanel.classList.add("hidden");
       classificationPanel.classList.remove("hidden");
       document.getElementById("classificationSummary").textContent = `${{data.message || data.selection_message || "Grid ready."}} ${{data.grid_cell_count}} grid cells.`;
       layerRegistry.remove("grid");
+      selectedFeature = null;
+      selectedLayer = null;
+      currentGridIndex = -1;
+      selectedCellSnapshot = "";
+      saveBtn.disabled = true;
+      selectedCell.textContent = "Select a grid cell on the map.";
       const gridUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/grid`;
       const annUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/annotations`;
       const [gridRes, annRes] = await Promise.all([fetch(gridUrl), fetch(annUrl)]);
@@ -1525,8 +1706,10 @@ class SettlementClassificationService:
       const grid = await gridRes.json();
       const annDoc = await annRes.json();
       annotations = annDoc.annotations || {{}};
+      gridFeatures = grid.features || [];
       layerRegistry.set("grid", L.geoJSON(grid, {{ style: gridStyle, onEachFeature: onGrid }}));
       layerRegistry.fit("grid", [20, 20]);
+      refreshGridView();
       await loadClassificationList();
       setStatus("Ready");
     }}
@@ -1551,7 +1734,8 @@ class SettlementClassificationService:
         return;
       }}
       annotations[selectedFeature.properties.grid_id] = data.annotation;
-      gridLayer.setStyle(gridStyle);
+      markDraftClean();
+      refreshGridView();
       saveBtn.disabled = false;
       setStatus(`Saved. ${{data.count}} classified cell(s).`);
     }});
@@ -1565,10 +1749,12 @@ class SettlementClassificationService:
     }});
 
     backBtn.addEventListener("click", async () => {{
+      if (!confirmDiscardDraft()) return;
       classificationPanel.classList.add("hidden");
       selectorPanel.classList.remove("hidden");
       selectedFeature = null;
       selectedLayer = null;
+      selectedCellSnapshot = "";
       saveBtn.disabled = true;
       if (!layerRegistry.fit("grid", [20, 20])) {{
         layerRegistry.fit("boundaries", [16, 16]);

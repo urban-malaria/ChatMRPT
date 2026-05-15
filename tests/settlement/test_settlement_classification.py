@@ -119,6 +119,12 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "renderSearchResults" in selector_html
     assert "updateVisibleFeatureList" in selector_html
     assert "selectWardFocus" in selector_html
+    assert "classProgress" in selector_html
+    assert "nextUnclassifiedBtn" in selector_html
+    assert "previousCellBtn" in selector_html
+    assert "labelFilterSelect" in selector_html
+    assert "showUnclassifiedOnlyInput" in selector_html
+    assert "focusGridFeature" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 
