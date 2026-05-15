@@ -182,6 +182,8 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "Regrid Smaller" in selector_html
     assert "Map Layers / Show-Hide Overlays" in selector_html
     assert "Uncheck Active grid" in selector_html
+    assert "Boundaries are outline-only" in selector_html
+    assert "fillOpacity: 0" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert boundaries["features"][0]["properties"]["urban_pct"] == 82.5
     assert wards[0]["urban_pct"] == 82.5

@@ -1263,7 +1263,7 @@ class SettlementClassificationService:
           <summary>Map Layers / Show-Hide Overlays</summary>
           <div class="section-body">
             <div class="layer-panel">
-              <div class="muted">Use these controls to include or exclude map overlays that may cover the satellite image.</div>
+              <div class="muted">Boundaries are outline-only. Use these controls to include or exclude map overlays while inspecting the satellite image.</div>
               <div class="layer-row">
                 <label for="boundaryLayerToggle"><input id="boundaryLayerToggle" type="checkbox" checked> Boundaries</label>
                 <input id="boundaryOpacityRange" type="range" min="15" max="100" value="100">
@@ -1341,7 +1341,7 @@ class SettlementClassificationService:
           <summary>Map Layers / Show-Hide Overlays</summary>
           <div class="section-body">
             <div class="layer-panel">
-              <div class="muted">Uncheck Active grid to hide the grid overlay while inspecting rooftops; recheck it to continue selecting cells.</div>
+              <div class="muted">Boundaries are outline-only. Uncheck Active grid to hide the grid overlay while inspecting rooftops; recheck it to continue selecting cells.</div>
               <div class="layer-row">
                 <label for="classifyBoundaryLayerToggle"><input id="classifyBoundaryLayerToggle" type="checkbox" checked> Boundaries</label>
                 <input id="classifyBoundaryOpacityRange" type="range" min="15" max="100" value="100">
@@ -1741,13 +1741,13 @@ class SettlementClassificationService:
         const rank = (props.rank !== null && props.rank !== undefined) ? Number(props.rank) : null;
         const isTopN = rank !== null && rank <= topN && !isBelowThreshold;
         if (isTopN) {{
-          return {{ color: "#d9480f", weight: 2.8, opacity, fillColor: "#f76707", fillOpacity: 0.14 * opacity }};
+          return {{ color: "#d9480f", weight: 2.8, opacity, fillColor: "#f76707", fillOpacity: 0 }};
         }}
-        return {{ color: "#adb5bd", weight: 0.8, opacity: opacity * 0.55, fillColor: "#dee2e6", fillOpacity: 0.02 * opacity }};
+        return {{ color: "#adb5bd", weight: 0.8, opacity: opacity * 0.55, fillColor: "#dee2e6", fillOpacity: 0 }};
       }}
 
       if (isBelowThreshold) {{
-        return {{ color: "#adb5bd", weight: 0.8, opacity: opacity * 0.6, fillColor: "#dee2e6", fillOpacity: 0.02 * opacity }};
+        return {{ color: "#adb5bd", weight: 0.8, opacity: opacity * 0.6, fillColor: "#dee2e6", fillOpacity: 0 }};
       }}
 
       const lga = lgaSelect.value;
@@ -1761,7 +1761,7 @@ class SettlementClassificationService:
         weight: isSelected || isWard ? 3.2 : inLga ? 1.5 : 0.8,
         opacity,
         fillColor: hasRank ? "#7048e8" : "#74c0fc",
-        fillOpacity: (isSelected || isWard ? 0.12 : inLga ? 0.04 : 0.01) * opacity
+        fillOpacity: 0
       }};
     }}
 
@@ -1798,7 +1798,7 @@ class SettlementClassificationService:
         weight: 2,
         opacity,
         fillColor: "#ffd8a8",
-        fillOpacity: 0.2 * opacity
+        fillOpacity: 0
       }};
     }}
 
