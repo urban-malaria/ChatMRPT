@@ -853,6 +853,8 @@ class SettlementClassificationService:
     .status {{ font-size: 13px; min-height: 18px; }}
     .hidden {{ display: none; }}
     .focus-chip {{ display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 3px 3px 0 0; border-radius: 999px; background: #e7f5ff; color: #0969da; font-size: 12px; }}
+    .map-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }}
+    .map-actions button {{ padding: 7px; font-size: 12px; }}
     .session-card {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; margin: 6px 0; background: #f6f8fa; font-size: 13px; }}
     .session-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }}
     .session-actions button {{ padding: 6px; font-size: 12px; }}
@@ -870,6 +872,11 @@ class SettlementClassificationService:
         <h1>Settlement Classification</h1>
         <div class="muted" id="overviewSummary"></div>
         <div class="row" id="focusChips"></div>
+        <div class="row map-actions">
+          <button id="fitStateBtn" type="button" class="secondary">Fit State</button>
+          <button id="fitGridBtn" type="button" class="secondary">Fit Grid</button>
+          <button id="clearFocusBtn" type="button" class="secondary">Clear Focus</button>
+        </div>
         <h2>Focus</h2>
         <div class="mode">
           <button type="button" data-mode="lga" class="active">LGA</button>
@@ -915,6 +922,11 @@ class SettlementClassificationService:
           <label for="notesInput">Notes</label>
           <textarea id="notesInput" maxlength="1000" placeholder="Visible features, uncertainty, or validation notes"></textarea>
         </div>
+        <div class="row map-actions">
+          <button id="classifyFitStateBtn" type="button" class="secondary">Fit State</button>
+          <button id="classifyFitGridBtn" type="button" class="secondary">Fit Grid</button>
+          <button id="classifyClearCellBtn" type="button" class="secondary">Clear Cell</button>
+        </div>
         <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
         <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
         <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
@@ -957,6 +969,41 @@ class SettlementClassificationService:
       "Light reference": carto
     }}, {{}}, {{ collapsed: false }}).addTo(map);
 
+    const layerRegistry = {{
+      boundaries: null,
+      grid: null,
+      set(name, layer) {{
+        if (this[name] && this[name] !== layer && map.hasLayer(this[name])) {{
+          map.removeLayer(this[name]);
+        }}
+        this[name] = layer;
+        if (name === "boundaries") boundariesLayer = layer;
+        if (name === "grid") gridLayer = layer;
+        if (layer && !map.hasLayer(layer)) layer.addTo(map);
+        syncLayerOrder();
+      }},
+      remove(name) {{
+        const layer = this[name];
+        if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+        this[name] = null;
+        if (name === "boundaries") boundariesLayer = null;
+        if (name === "grid") gridLayer = null;
+      }},
+      fit(name, padding=[16, 16]) {{
+        const layer = this[name];
+        if (!layer || !layer.getBounds) return false;
+        const bounds = layer.getBounds();
+        if (!bounds || !bounds.isValid()) return false;
+        map.fitBounds(bounds, {{ padding }});
+        return true;
+      }}
+    }};
+
+    function syncLayerOrder() {{
+      if (layerRegistry.boundaries && map.hasLayer(layerRegistry.boundaries)) layerRegistry.boundaries.bringToBack();
+      if (layerRegistry.grid && map.hasLayer(layerRegistry.grid)) layerRegistry.grid.bringToFront();
+    }}
+
     const lgaSelect = document.getElementById("lgaSelect");
     const wardSelect = document.getElementById("wardSelect");
     const topInput = document.getElementById("topInput");
@@ -976,6 +1023,12 @@ class SettlementClassificationService:
     const focusChips = document.getElementById("focusChips");
     const estimateBox = document.getElementById("estimateBox");
     const classificationList = document.getElementById("classificationList");
+    const fitStateBtn = document.getElementById("fitStateBtn");
+    const fitGridBtn = document.getElementById("fitGridBtn");
+    const clearFocusBtn = document.getElementById("clearFocusBtn");
+    const classifyFitStateBtn = document.getElementById("classifyFitStateBtn");
+    const classifyFitGridBtn = document.getElementById("classifyFitGridBtn");
+    const classifyClearCellBtn = document.getElementById("classifyClearCellBtn");
 
     document.getElementById("overviewSummary").textContent = `${{CONFIG.wardCount}} wards${{CONFIG.lgaCount ? " across " + CONFIG.lgaCount + " LGAs" : ""}}.`;
     LABELS.forEach(label => {{
@@ -1011,13 +1064,13 @@ class SettlementClassificationService:
       updateWardOptions();
     }}
 
-    function updateWardOptions() {{
+    function updateWardOptions(shouldEstimate=true) {{
       const lga = lgaSelect.value;
       const filtered = CONFIG.wards.filter(w => !lga || String(w.lga || "") === lga);
       wardSelect.innerHTML = '<option value="">Select ward</option>' + filtered.map(w => `<option value="${{escapeAttr(w.ward_id)}}">${{escapeHtml(w.display_name)}}</option>`).join("");
       if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
       updateFocusChips();
-      scheduleEstimate();
+      if (shouldEstimate) scheduleEstimate();
     }}
 
     function escapeHtml(value) {{
@@ -1056,7 +1109,7 @@ class SettlementClassificationService:
           wardSelect.value = props.ward_id;
         }}
         mapSelection.textContent = props.display_name || props.ward_name || props.ward_id;
-        document.querySelector('[data-mode="map"]').click();
+        setMode("map");
         boundariesLayer.setStyle(boundaryStyle);
       }});
     }}
@@ -1066,9 +1119,8 @@ class SettlementClassificationService:
       const response = await fetch(CONFIG.boundariesUrl);
       if (!response.ok) throw new Error("Could not load settlement boundaries");
       const geojson = await response.json();
-      if (boundariesLayer) map.removeLayer(boundariesLayer);
-      boundariesLayer = L.geoJSON(geojson, {{ style: boundaryStyle, onEachFeature: onBoundary }}).addTo(map);
-      map.fitBounds(boundariesLayer.getBounds(), {{ padding: [16, 16] }});
+      layerRegistry.set("boundaries", L.geoJSON(geojson, {{ style: boundaryStyle, onEachFeature: onBoundary }}));
+      layerRegistry.fit("boundaries", [16, 16]);
       await loadClassificationList();
       updateFocusChips();
     }}
@@ -1135,8 +1187,7 @@ class SettlementClassificationService:
         if (!response.ok || !data.success) throw new Error(data.message || "Could not archive classification");
         if (currentClassification && currentClassification.classification_id === classificationId) {{
           currentClassification = null;
-          if (gridLayer) map.removeLayer(gridLayer);
-          gridLayer = null;
+          layerRegistry.remove("grid");
         }}
         await loadClassificationList();
         updateFocusChips();
@@ -1145,17 +1196,19 @@ class SettlementClassificationService:
       }}
     }}
 
+    function setMode(nextMode, shouldEstimate=true) {{
+      mode = nextMode;
+      document.querySelectorAll("[data-mode]").forEach(button => button.classList.toggle("active", button.dataset.mode === nextMode));
+      document.getElementById("lgaRow").classList.toggle("hidden", !["lga", "ward"].includes(mode));
+      document.getElementById("wardRow").classList.toggle("hidden", !["ward"].includes(mode));
+      document.getElementById("riskRow").classList.toggle("hidden", mode !== "risk");
+      document.getElementById("mapRow").classList.toggle("hidden", mode !== "map");
+      updateFocusChips();
+      if (shouldEstimate) scheduleEstimate();
+    }}
+
     document.querySelectorAll("[data-mode]").forEach(button => {{
-      button.addEventListener("click", () => {{
-        mode = button.dataset.mode;
-        document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b === button));
-        document.getElementById("lgaRow").classList.toggle("hidden", !["lga", "ward"].includes(mode));
-        document.getElementById("wardRow").classList.toggle("hidden", !["ward"].includes(mode));
-        document.getElementById("riskRow").classList.toggle("hidden", mode !== "risk");
-        document.getElementById("mapRow").classList.toggle("hidden", mode !== "map");
-        updateFocusChips();
-        scheduleEstimate();
-      }});
+      button.addEventListener("click", () => setMode(button.dataset.mode));
     }});
     lgaSelect.addEventListener("change", updateWardOptions);
     wardSelect.addEventListener("change", () => {{
@@ -1166,6 +1219,40 @@ class SettlementClassificationService:
     }});
     topInput.addEventListener("input", () => {{ updateFocusChips(); scheduleEstimate(); }});
     cellSizeInput.addEventListener("input", scheduleEstimate);
+
+    function clearSelectedCell() {{
+      selectedFeature = null;
+      selectedLayer = null;
+      notesInput.value = "";
+      selectedCell.textContent = "Select a grid cell on the map.";
+      saveBtn.disabled = true;
+      if (gridLayer) gridLayer.setStyle(gridStyle);
+    }}
+
+    function clearFocus() {{
+      selectedBoundaryId = null;
+      lgaSelect.value = "";
+      wardSelect.value = "";
+      updateWardOptions(false);
+      mapSelection.textContent = "Click a ward polygon on the map.";
+      latestEstimate = null;
+      setEstimate("Choose a focus area to estimate grid size.", "neutral");
+      setMode("lga", false);
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      updateFocusChips();
+      layerRegistry.fit("boundaries", [16, 16]);
+    }}
+
+    fitStateBtn.addEventListener("click", () => layerRegistry.fit("boundaries", [16, 16]));
+    fitGridBtn.addEventListener("click", () => {{
+      if (!layerRegistry.fit("grid", [20, 20])) alert("No active grid to fit yet.");
+    }});
+    clearFocusBtn.addEventListener("click", clearFocus);
+    classifyFitStateBtn.addEventListener("click", () => layerRegistry.fit("boundaries", [16, 16]));
+    classifyFitGridBtn.addEventListener("click", () => {{
+      if (!layerRegistry.fit("grid", [20, 20])) alert("No active grid to fit yet.");
+    }});
+    classifyClearCellBtn.addEventListener("click", clearSelectedCell);
 
     function buildCreatePayload() {{
       const payload = {{
@@ -1275,9 +1362,8 @@ class SettlementClassificationService:
       const grid = await gridRes.json();
       const annDoc = await annRes.json();
       annotations = annDoc.annotations || {{}};
-      gridLayer = L.geoJSON(grid, {{ style: gridStyle, onEachFeature: onGrid }}).addTo(map);
-      if (boundariesLayer) boundariesLayer.bringToBack();
-      map.fitBounds(gridLayer.getBounds(), {{ padding: [20, 20] }});
+      layerRegistry.set("grid", L.geoJSON(grid, {{ style: gridStyle, onEachFeature: onGrid }}));
+      layerRegistry.fit("grid", [20, 20]);
       await loadClassificationList();
       setStatus("Ready");
     }}
@@ -1321,10 +1407,8 @@ class SettlementClassificationService:
       selectedFeature = null;
       selectedLayer = null;
       saveBtn.disabled = true;
-      if (gridLayer) {{
-        map.fitBounds(gridLayer.getBounds(), {{ padding: [20, 20] }});
-      }} else if (boundariesLayer) {{
-        map.fitBounds(boundariesLayer.getBounds(), {{ padding: [16, 16] }});
+      if (!layerRegistry.fit("grid", [20, 20])) {{
+        layerRegistry.fit("boundaries", [16, 16]);
       }}
       await loadClassificationList();
       updateFocusChips();

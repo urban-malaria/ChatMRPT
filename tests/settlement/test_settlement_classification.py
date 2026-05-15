@@ -110,6 +110,10 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "classifications/estimate" in selector_html
     assert "classificationList" in selector_html
     assert "resumeClassification" in selector_html
+    assert "layerRegistry" in selector_html
+    assert "clearFocus" in selector_html
+    assert "Fit State" in selector_html
+    assert "Fit Grid" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 
