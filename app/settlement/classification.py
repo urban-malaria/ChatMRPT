@@ -825,7 +825,7 @@ class SettlementClassificationService:
 
     const map = L.map("map", {{ zoomControl: true }});
     const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{ attribution: "Tiles &copy; Esri" }});
-    const nasaBlue = L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/GoogleMapsCompatible_Level8/{{z}}/{{y}}/{{x}}.jpg", {{ attribution: "Imagery &copy; NASA GIBS", maxZoom: 8 }});
+    const nasaBlue = L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/GoogleMapsCompatible_Level8/{{z}}/{{y}}/{{x}}.jpg", {{ attribution: "Imagery &copy; NASA GIBS", maxNativeZoom: 8, maxZoom: 19 }});
     const osm = L.tileLayer("https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png", {{ attribution: "&copy; OpenStreetMap contributors" }});
     const carto = L.tileLayer("https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png", {{ attribution: "&copy; OpenStreetMap &copy; CARTO" }});
     esriImagery.addTo(map);
