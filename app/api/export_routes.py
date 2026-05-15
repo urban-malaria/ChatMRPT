@@ -124,6 +124,12 @@ def list_exports(session_id):
                         'Ward-level settlement class counts, percentages, and coverage'
                     ),
                     (
+                        settlement_dir / 'settlement_cells_with_ward_summary.csv',
+                        'Settlement Cells With Ward Summary',
+                        'csv',
+                        'Grid-cell annotations with ward-level settlement percentages repeated on each row'
+                    ),
+                    (
                         settlement_dir / 'settlement_metadata.json',
                         'Settlement Classification Metadata',
                         'json',

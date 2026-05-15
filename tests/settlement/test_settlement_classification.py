@@ -71,13 +71,18 @@ def test_create_classification_save_annotation_and_export(tmp_path):
 
     annotations = service.load_annotations(result["classification_id"])
     assert annotations["annotations"][first_grid_id]["notes"] == "sparse buildings and vegetation"
+    auto_export_dir = export_root / session_id / f"settlement_export_{result['classification_id']}"
+    assert (auto_export_dir / "settlement_annotations.csv").exists()
+    assert pd.read_csv(auto_export_dir / "settlement_annotations.csv").loc[0, "label"] == "Rural"
 
     export = service.export_classification(result["classification_id"])
     assert export["success"] is True
     csv_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_annotations.csv"
     summary_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_ward_summary.csv"
+    combined_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_cells_with_ward_summary.csv"
     assert csv_path.exists()
     assert summary_path.exists()
+    assert combined_path.exists()
     assert (export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_classified_grid.geojson").exists()
     assert pd.read_csv(csv_path).loc[0, "label"] == "Rural"
     summary = pd.read_csv(summary_path)
@@ -85,7 +90,11 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     assert summary.loc[0, "rural_count"] == 1
     assert summary.loc[0, "rural_pct_of_classified"] == 100.0
     assert summary.loc[0, "urban_pct"] == 82.5
+    combined = pd.read_csv(combined_path)
+    assert "ward_summary_rural_pct_of_classified" in combined.columns
+    assert combined.loc[0, "ward_summary_rural_pct_of_classified"] == 100.0
     assert any(link["filename"] == "settlement_ward_summary.csv" for link in export["download_links"])
+    assert any(link["filename"] == "settlement_cells_with_ward_summary.csv" for link in export["download_links"])
 
 
 def test_top_n_classification_uses_composite_rankings(tmp_path):
@@ -171,6 +180,8 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "wardMetaLine" in selector_html
     assert "regridClassification" in selector_html
     assert "Regrid Smaller" in selector_html
+    assert "Map Layers / Show-Hide Overlays" in selector_html
+    assert "Uncheck Active grid" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert boundaries["features"][0]["properties"]["urban_pct"] == 82.5
     assert wards[0]["urban_pct"] == 82.5

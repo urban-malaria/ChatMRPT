@@ -498,6 +498,10 @@ class SettlementClassificationService:
         self._write_json_atomic(annotations_path, annotations_doc)
         self._write_annotations_csv(classification_id, annotations_doc)
         self._touch_metadata(classification_id)
+        try:
+            self.export_classification(classification_id, include_static_map=False)
+        except Exception:
+            logger.warning("Could not refresh settlement export after annotation save", exc_info=True)
         return {"success": True, "annotation": annotations[grid_id], "count": len(annotations)}
 
     def export_classification(self, classification_id: str, include_static_map: bool = False) -> Dict[str, Any]:
@@ -538,6 +542,7 @@ class SettlementClassificationService:
         geojson_path = export_dir / "settlement_classified_grid.geojson"
         metadata_path = export_dir / "settlement_metadata.json"
         ward_summary_path = export_dir / "settlement_ward_summary.csv"
+        combined_path = export_dir / "settlement_cells_with_ward_summary.csv"
 
         # Build clean CSV with all useful columns
         csv_cols = ["classification_id", "grid_id", "ward_id", "ward_name_clean", "lga", "state",
@@ -547,12 +552,15 @@ class SettlementClassificationService:
         csv_df.to_csv(csv_path, index=False)
 
         grid.to_file(geojson_path, driver="GeoJSON")
-        self._build_ward_summary(grid, metadata).to_csv(ward_summary_path, index=False)
+        ward_summary = self._build_ward_summary(grid, metadata)
+        ward_summary.to_csv(ward_summary_path, index=False)
+        self._build_combined_cell_summary(csv_df, ward_summary).to_csv(combined_path, index=False)
         self._write_json_atomic(metadata_path, metadata)
 
         files = [
             {"path": _json_responseable_path(csv_path), "type": "csv", "description": "Settlement annotations CSV"},
             {"path": _json_responseable_path(ward_summary_path), "type": "csv", "description": "Ward-level settlement summary CSV"},
+            {"path": _json_responseable_path(combined_path), "type": "csv", "description": "Cell annotations with ward summary CSV"},
             {"path": _json_responseable_path(geojson_path), "type": "geojson", "description": "Classified settlement grid GeoJSON"},
             {"path": _json_responseable_path(metadata_path), "type": "json", "description": "Settlement classification metadata"},
         ]
@@ -1013,6 +1021,25 @@ class SettlementClassificationService:
 
         return pd.DataFrame(rows, columns=base_cols + label_cols).sort_values(["lga", "ward_name"], na_position="last")
 
+    def _build_combined_cell_summary(self, cell_df: pd.DataFrame, ward_summary: pd.DataFrame) -> pd.DataFrame:
+        if cell_df.empty:
+            return cell_df.copy()
+        if ward_summary.empty:
+            return cell_df.copy()
+
+        summary_cols = [
+            col for col in ward_summary.columns
+            if col not in {"ward_name", "lga", "state", "urban_pct", "cell_size_m"}
+        ]
+        summary = ward_summary[summary_cols].copy()
+        rename_cols = {
+            col: f"ward_summary_{col}"
+            for col in summary.columns
+            if col != "ward_id"
+        }
+        summary = summary.rename(columns=rename_cols)
+        return cell_df.merge(summary, on="ward_id", how="left")
+
     def _labels_for_metadata(self, metadata: Dict[str, Any]) -> List[str]:
         """Return labels with Rural added for older saved classifications."""
         labels = list(metadata.get("labels") or DEFAULT_LABELS)
@@ -1046,6 +1073,12 @@ class SettlementClassificationService:
                 "url": f"/export/download/{self.session_id}/settlement_export_{classification_id}/settlement_ward_summary.csv",
                 "filename": "settlement_ward_summary.csv",
                 "description": "Ward-level settlement summary CSV",
+                "type": "csv",
+            },
+            {
+                "url": f"/export/download/{self.session_id}/settlement_export_{classification_id}/settlement_cells_with_ward_summary.csv",
+                "filename": "settlement_cells_with_ward_summary.csv",
+                "description": "Cell annotations with ward summary CSV",
                 "type": "csv",
             },
             {
@@ -1226,10 +1259,11 @@ class SettlementClassificationService:
             <div id="classificationList" class="muted">No saved classifications yet.</div>
           </div>
         </details>
-        <details id="panelLayersSection" class="panel-section">
-          <summary>Layers</summary>
+        <details id="panelLayersSection" class="panel-section" open>
+          <summary>Map Layers / Show-Hide Overlays</summary>
           <div class="section-body">
             <div class="layer-panel">
+              <div class="muted">Use these controls to include or exclude map overlays that may cover the satellite image.</div>
               <div class="layer-row">
                 <label for="boundaryLayerToggle"><input id="boundaryLayerToggle" type="checkbox" checked> Boundaries</label>
                 <input id="boundaryOpacityRange" type="range" min="15" max="100" value="100">
@@ -1303,10 +1337,11 @@ class SettlementClassificationService:
             <div class="row"><strong>Legend</strong><div id="legend"></div></div>
           </div>
         </details>
-        <details id="classifyLayersSection" class="panel-section">
-          <summary>Layers</summary>
+        <details id="classifyLayersSection" class="panel-section" open>
+          <summary>Map Layers / Show-Hide Overlays</summary>
           <div class="section-body">
             <div class="layer-panel">
+              <div class="muted">Uncheck Active grid to hide the grid overlay while inspecting rooftops; recheck it to continue selecting cells.</div>
               <div class="layer-row">
                 <label for="classifyBoundaryLayerToggle"><input id="classifyBoundaryLayerToggle" type="checkbox" checked> Boundaries</label>
                 <input id="classifyBoundaryOpacityRange" type="range" min="15" max="100" value="100">
