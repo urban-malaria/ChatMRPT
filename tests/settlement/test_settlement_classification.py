@@ -129,6 +129,13 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "drawSelection" in selector_html
     assert "rectangleFeatureFromBounds" in selector_html
     assert "intersectDrawnSelection" in selector_html
+    assert "layer-panel" in selector_html
+    assert "boundaryLayerToggle" in selector_html
+    assert "gridOpacityRange" in selector_html
+    assert "drawnOpacityRange" in selector_html
+    assert "syncLayerControls" in selector_html
+    assert "setLayerVisible" in selector_html
+    assert "NASA Blue Marble is regional context" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 

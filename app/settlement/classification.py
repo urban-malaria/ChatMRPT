@@ -948,6 +948,11 @@ class SettlementClassificationService:
     .focus-chip {{ display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 3px 3px 0 0; border-radius: 999px; background: #e7f5ff; color: #0969da; font-size: 12px; }}
     .map-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }}
     .map-actions button {{ padding: 7px; font-size: 12px; }}
+    .layer-panel {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; background: #f6f8fa; }}
+    .layer-row {{ display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }}
+    .layer-row label {{ display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 500; }}
+    .layer-row input[type="checkbox"] {{ width: auto; }}
+    .layer-row input[type="range"] {{ padding: 0; }}
     .search-results, .feature-list {{ max-height: 230px; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; }}
     .feature-card {{ padding: 8px; border-bottom: 1px solid #eaeef2; font-size: 13px; }}
     .feature-card:last-child {{ border-bottom: 0; }}
@@ -980,6 +985,22 @@ class SettlementClassificationService:
           <button id="fitStateBtn" type="button" class="secondary">Fit State</button>
           <button id="fitGridBtn" type="button" class="secondary">Fit Grid</button>
           <button id="clearFocusBtn" type="button" class="secondary">Clear Focus</button>
+        </div>
+        <h2>Layers</h2>
+        <div class="layer-panel">
+          <div class="layer-row">
+            <label for="boundaryLayerToggle"><input id="boundaryLayerToggle" type="checkbox" checked> Boundaries</label>
+            <input id="boundaryOpacityRange" type="range" min="15" max="100" value="100">
+          </div>
+          <div class="layer-row">
+            <label for="drawnLayerToggle"><input id="drawnLayerToggle" type="checkbox" checked> Drawn area</label>
+            <input id="drawnOpacityRange" type="range" min="15" max="100" value="100">
+          </div>
+          <div class="layer-row">
+            <label for="gridLayerToggle"><input id="gridLayerToggle" type="checkbox" checked> Active grid</label>
+            <input id="gridOpacityRange" type="range" min="15" max="100" value="100">
+          </div>
+          <div class="muted">Basemaps stay in the map control. NASA Blue Marble is regional context.</div>
         </div>
         <h2>Find</h2>
         <div class="row">
@@ -1060,6 +1081,21 @@ class SettlementClassificationService:
           <button id="classifyFitGridBtn" type="button" class="secondary">Fit Grid</button>
           <button id="classifyClearCellBtn" type="button" class="secondary">Clear Cell</button>
         </div>
+        <h2>Layers</h2>
+        <div class="layer-panel">
+          <div class="layer-row">
+            <label for="classifyBoundaryLayerToggle"><input id="classifyBoundaryLayerToggle" type="checkbox" checked> Boundaries</label>
+            <input id="classifyBoundaryOpacityRange" type="range" min="15" max="100" value="100">
+          </div>
+          <div class="layer-row">
+            <label for="classifyDrawnLayerToggle"><input id="classifyDrawnLayerToggle" type="checkbox" checked> Drawn area</label>
+            <input id="classifyDrawnOpacityRange" type="range" min="15" max="100" value="100">
+          </div>
+          <div class="layer-row">
+            <label for="classifyGridLayerToggle"><input id="classifyGridLayerToggle" type="checkbox" checked> Active grid</label>
+            <input id="classifyGridOpacityRange" type="range" min="15" max="100" value="100">
+          </div>
+        </div>
         <div class="row"><button id="saveBtn" disabled>Save Classification</button></div>
         <div class="row"><button id="backBtn" class="secondary">Back to Overview</button></div>
         <div class="row"><button id="exportBtn" class="secondary">Refresh Exports</button></div>
@@ -1096,6 +1132,11 @@ class SettlementClassificationService:
     let drawnWardIds = [];
     let isDrawingRectangle = false;
     let drawStartLatLng = null;
+    const layerState = {{
+      boundaries: {{ visible: true, opacity: 1 }},
+      drawnSelection: {{ visible: true, opacity: 1 }},
+      grid: {{ visible: true, opacity: 1 }}
+    }};
 
     const map = L.map("map", {{ zoomControl: true }});
     const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{ attribution: "Tiles &copy; Esri" }});
@@ -1122,7 +1163,8 @@ class SettlementClassificationService:
         if (name === "boundaries") boundariesLayer = layer;
         if (name === "grid") gridLayer = layer;
         if (name === "drawnSelection") drawnSelectionLayer = layer;
-        if (layer && !map.hasLayer(layer)) layer.addTo(map);
+        if (layer && layerState[name] && layerState[name].visible && !map.hasLayer(layer)) layer.addTo(map);
+        applyLayerStyles(name);
         syncLayerOrder();
       }},
       remove(name) {{
@@ -1147,6 +1189,37 @@ class SettlementClassificationService:
       if (layerRegistry.boundaries && map.hasLayer(layerRegistry.boundaries)) layerRegistry.boundaries.bringToBack();
       if (layerRegistry.drawnSelection && map.hasLayer(layerRegistry.drawnSelection)) layerRegistry.drawnSelection.bringToFront();
       if (layerRegistry.grid && map.hasLayer(layerRegistry.grid)) layerRegistry.grid.bringToFront();
+    }}
+
+    function layerOpacity(name) {{
+      return layerState[name] ? layerState[name].opacity : 1;
+    }}
+
+    function applyLayerStyles(name) {{
+      if (name === "boundaries" && boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      if (name === "grid" && gridLayer) gridLayer.setStyle(gridStyle);
+      if (name === "drawnSelection" && drawnSelectionLayer && drawnSelectionLayer.setStyle) {{
+        drawnSelectionLayer.setStyle(drawnSelectionStyle());
+      }}
+    }}
+
+    function setLayerVisible(name, visible) {{
+      if (!layerState[name]) return;
+      layerState[name].visible = visible;
+      const layer = layerRegistry[name];
+      if (layer) {{
+        if (visible && !map.hasLayer(layer)) layer.addTo(map);
+        if (!visible && map.hasLayer(layer)) map.removeLayer(layer);
+      }}
+      syncLayerOrder();
+      syncLayerControls();
+    }}
+
+    function setLayerOpacity(name, value) {{
+      if (!layerState[name]) return;
+      layerState[name].opacity = Math.max(0.15, Math.min(1, Number(value) / 100));
+      applyLayerStyles(name);
+      syncLayerControls();
     }}
 
     const lgaSelect = document.getElementById("lgaSelect");
@@ -1179,9 +1252,21 @@ class SettlementClassificationService:
     const fitStateBtn = document.getElementById("fitStateBtn");
     const fitGridBtn = document.getElementById("fitGridBtn");
     const clearFocusBtn = document.getElementById("clearFocusBtn");
+    const boundaryLayerToggle = document.getElementById("boundaryLayerToggle");
+    const boundaryOpacityRange = document.getElementById("boundaryOpacityRange");
+    const drawnLayerToggle = document.getElementById("drawnLayerToggle");
+    const drawnOpacityRange = document.getElementById("drawnOpacityRange");
+    const gridLayerToggle = document.getElementById("gridLayerToggle");
+    const gridOpacityRange = document.getElementById("gridOpacityRange");
     const classifyFitStateBtn = document.getElementById("classifyFitStateBtn");
     const classifyFitGridBtn = document.getElementById("classifyFitGridBtn");
     const classifyClearCellBtn = document.getElementById("classifyClearCellBtn");
+    const classifyBoundaryLayerToggle = document.getElementById("classifyBoundaryLayerToggle");
+    const classifyBoundaryOpacityRange = document.getElementById("classifyBoundaryOpacityRange");
+    const classifyDrawnLayerToggle = document.getElementById("classifyDrawnLayerToggle");
+    const classifyDrawnOpacityRange = document.getElementById("classifyDrawnOpacityRange");
+    const classifyGridLayerToggle = document.getElementById("classifyGridLayerToggle");
+    const classifyGridOpacityRange = document.getElementById("classifyGridOpacityRange");
     const previousCellBtn = document.getElementById("previousCellBtn");
     const nextUnclassifiedBtn = document.getElementById("nextUnclassifiedBtn");
     const fitCellBtn = document.getElementById("fitCellBtn");
@@ -1254,11 +1339,24 @@ class SettlementClassificationService:
       const inLga = !lga || String(props.lga || "") === lga;
       const isWard = ward && props.ward_id === ward;
       const hasRank = props.rank !== null && props.rank !== undefined;
+      const opacity = layerOpacity("boundaries");
       return {{
         color: isSelected || isWard ? "#d9480f" : hasRank ? "#7048e8" : "#0969da",
         weight: isSelected || isWard ? 3 : inLga ? 1.4 : 0.7,
+        opacity,
         fillColor: hasRank ? "#7048e8" : "#74c0fc",
-        fillOpacity: isSelected || isWard ? 0.32 : inLga ? 0.12 : 0.03
+        fillOpacity: (isSelected || isWard ? 0.32 : inLga ? 0.12 : 0.03) * opacity
+      }};
+    }}
+
+    function drawnSelectionStyle() {{
+      const opacity = layerOpacity("drawnSelection");
+      return {{
+        color: "#d9480f",
+        weight: 2,
+        opacity,
+        fillColor: "#ffd8a8",
+        fillOpacity: 0.2 * opacity
       }};
     }}
 
@@ -1599,12 +1697,7 @@ class SettlementClassificationService:
       map.dragging.disable();
       clearDrawSelection(false);
       const bounds = L.latLngBounds(drawStartLatLng, drawStartLatLng);
-      layerRegistry.set("drawnSelection", L.rectangle(bounds, {{
-        color: "#d9480f",
-        weight: 2,
-        fillColor: "#ffd8a8",
-        fillOpacity: 0.2
-      }}));
+      layerRegistry.set("drawnSelection", L.rectangle(bounds, drawnSelectionStyle()));
     }}
 
     function updateRectangleDraw(event) {{
@@ -1632,6 +1725,28 @@ class SettlementClassificationService:
     map.on("mousemove", updateRectangleDraw);
     map.on("mouseup", finishRectangleDraw);
     clearDrawBtn.addEventListener("click", () => clearDrawSelection(true));
+
+    const layerControlPairs = [
+      ["boundaries", boundaryLayerToggle, boundaryOpacityRange],
+      ["boundaries", classifyBoundaryLayerToggle, classifyBoundaryOpacityRange],
+      ["drawnSelection", drawnLayerToggle, drawnOpacityRange],
+      ["drawnSelection", classifyDrawnLayerToggle, classifyDrawnOpacityRange],
+      ["grid", gridLayerToggle, gridOpacityRange],
+      ["grid", classifyGridLayerToggle, classifyGridOpacityRange]
+    ];
+
+    function syncLayerControls() {{
+      layerControlPairs.forEach(([name, toggle, range]) => {{
+        if (toggle) toggle.checked = layerState[name].visible;
+        if (range) range.value = String(Math.round(layerState[name].opacity * 100));
+      }});
+    }}
+
+    layerControlPairs.forEach(([name, toggle, range]) => {{
+      if (toggle) toggle.addEventListener("change", () => setLayerVisible(name, toggle.checked));
+      if (range) range.addEventListener("input", () => setLayerOpacity(name, range.value));
+    }});
+    syncLayerControls();
 
     function clearSelectedCell() {{
       if (!confirmDiscardDraft()) return;
@@ -1802,12 +1917,13 @@ class SettlementClassificationService:
       const annotation = annotationForFeature(feature);
       const label = annotation && annotation.label;
       const visible = featurePassesCellFilter(feature);
+      const opacity = layerOpacity("grid");
       return {{
         color: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
         fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
         weight: selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id ? 3 : 1,
-        opacity: visible ? 1 : 0.18,
-        fillOpacity: visible ? (label ? 0.45 : 0.12) : 0.02
+        opacity: (visible ? 1 : 0.18) * opacity,
+        fillOpacity: (visible ? (label ? 0.45 : 0.12) : 0.02) * opacity
       }};
     }}
 
