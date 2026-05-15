@@ -31,7 +31,7 @@ from app.utils.tool_base import BaseTool, ToolCategory, ToolExecutionResult
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_LABELS = ["Formal", "Informal", "Slum", "No Buildings/Avoid Area"]
+DEFAULT_LABELS = ["Formal", "Informal", "Slum", "Rural", "No Buildings/Avoid Area"]
 WARD_NAME_CANDIDATES = [
     "WardName",
     "ward_name",
@@ -278,7 +278,7 @@ class SettlementClassificationService:
         class_dir.mkdir(parents=True, exist_ok=True)
         grid["classification_id"] = classification_id
 
-        labels = DEFAULT_LABELS if include_no_buildings else ["Formal", "Informal", "Slum"]
+        labels = DEFAULT_LABELS if include_no_buildings else ["Formal", "Informal", "Slum", "Rural"]
         grid_path = class_dir / "grid.geojson"
         annotations_path = class_dir / "annotations.json"
         html_path = class_dir / "classifier.html"
@@ -460,7 +460,7 @@ class SettlementClassificationService:
             raise ValueError("grid_id is required.")
 
         label = str(payload.get("label") or "").strip()
-        if label not in metadata.get("labels", DEFAULT_LABELS):
+        if label not in self._labels_for_metadata(metadata):
             raise ValueError(f"Invalid settlement label: {label}")
 
         notes = str(payload.get("notes") or "").strip()
@@ -941,6 +941,17 @@ class SettlementClassificationService:
         pd.DataFrame(rows).to_csv(path, index=False)
         return path
 
+    def _labels_for_metadata(self, metadata: Dict[str, Any]) -> List[str]:
+        """Return labels with Rural added for older saved classifications."""
+        labels = list(metadata.get("labels") or DEFAULT_LABELS)
+        if "Rural" not in labels:
+            if "No Buildings/Avoid Area" in labels:
+                insert_at = labels.index("No Buildings/Avoid Area")
+                labels.insert(insert_at, "Rural")
+            else:
+                labels.append("Rural")
+        return labels
+
     def _write_json_atomic(self, path: Path, payload: Dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=str(path.parent), delete=False) as tmp:
@@ -1022,6 +1033,7 @@ class SettlementClassificationService:
     .panel-section > summary::after {{ content: "+"; color: #57606a; font-weight: 700; }}
     .panel-section[open] > summary::after {{ content: "-"; }}
     .section-body {{ padding: 2px 10px 10px; }}
+    .helper-text {{ color: #57606a; font-size: 12px; line-height: 1.35; margin-top: 6px; }}
     .layer-panel {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; background: #f6f8fa; }}
     .layer-row {{ display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }}
     .layer-row label {{ display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 500; }}
@@ -1120,6 +1132,7 @@ class SettlementClassificationService:
             <div class="row">
               <label for="cellSizeInput">Grid size (meters)</label>
               <input id="cellSizeInput" type="number" min="100" max="5000" step="50" value="500">
+              <div class="helper-text">500m is a good first pass. Use 250m or smaller for mixed dense areas; use larger cells for broad review.</div>
             </div>
             <div class="row selected" id="estimateBox">Choose a focus area to estimate grid size.</div>
             <div class="row"><button id="estimateBtn" class="secondary">Estimate Grid</button></div>
@@ -1232,11 +1245,14 @@ class SettlementClassificationService:
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const CONFIG = {config_json};
-    const LABELS = ["Formal", "Informal", "Slum", "No Buildings/Avoid Area"];
+    const LABELS = CONFIG.includeNoBuildings
+      ? ["Formal", "Informal", "Slum", "Rural", "No Buildings/Avoid Area"]
+      : ["Formal", "Informal", "Slum", "Rural"];
     const COLORS = {{
       "Formal": "#2b8a3e",
       "Informal": "#f08c00",
       "Slum": "#c92a2a",
+      "Rural": "#1971c2",
       "No Buildings/Avoid Area": "#6c757d"
     }};
     const DEFAULT_COLOR = "#3388ff";
@@ -1500,13 +1516,13 @@ class SettlementClassificationService:
         const rank = (props.rank !== null && props.rank !== undefined) ? Number(props.rank) : null;
         const isTopN = rank !== null && rank <= topN && !isBelowThreshold;
         if (isTopN) {{
-          return {{ color: "#d9480f", weight: 2.5, opacity, fillColor: "#f76707", fillOpacity: 0.38 * opacity }};
+          return {{ color: "#d9480f", weight: 2.8, opacity, fillColor: "#f76707", fillOpacity: 0.14 * opacity }};
         }}
-        return {{ color: "#adb5bd", weight: 0.6, opacity: opacity * 0.5, fillColor: "#dee2e6", fillOpacity: 0.06 * opacity }};
+        return {{ color: "#adb5bd", weight: 0.8, opacity: opacity * 0.55, fillColor: "#dee2e6", fillOpacity: 0.02 * opacity }};
       }}
 
       if (isBelowThreshold) {{
-        return {{ color: "#adb5bd", weight: 0.6, opacity: opacity * 0.6, fillColor: "#dee2e6", fillOpacity: 0.07 * opacity }};
+        return {{ color: "#adb5bd", weight: 0.8, opacity: opacity * 0.6, fillColor: "#dee2e6", fillOpacity: 0.02 * opacity }};
       }}
 
       const lga = lgaSelect.value;
@@ -1517,10 +1533,10 @@ class SettlementClassificationService:
       const hasRank = props.rank !== null && props.rank !== undefined;
       return {{
         color: isSelected || isWard ? "#d9480f" : hasRank ? "#7048e8" : "#0969da",
-        weight: isSelected || isWard ? 3 : inLga ? 1.4 : 0.7,
+        weight: isSelected || isWard ? 3.2 : inLga ? 1.5 : 0.8,
         opacity,
         fillColor: hasRank ? "#7048e8" : "#74c0fc",
-        fillOpacity: (isSelected || isWard ? 0.32 : inLga ? 0.12 : 0.03) * opacity
+        fillOpacity: (isSelected || isWard ? 0.12 : inLga ? 0.04 : 0.01) * opacity
       }};
     }}
 
@@ -2144,12 +2160,13 @@ class SettlementClassificationService:
       const label = annotation && annotation.label;
       const visible = featurePassesCellFilter(feature);
       const opacity = layerOpacity("grid");
+      const isSelected = selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id;
       return {{
-        color: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
-        fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
-        weight: selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id ? 3 : 1,
-        opacity: (visible ? 1 : 0.18) * opacity,
-        fillOpacity: (visible ? (label ? 0.45 : 0.12) : 0.02) * opacity
+        color: isSelected ? "#111827" : label ? (COLORS[label] || DEFAULT_COLOR) : "#1d4ed8",
+        fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : "#ffffff",
+        weight: isSelected ? 3.4 : label ? 1.5 : 1.1,
+        opacity: (visible ? 0.95 : 0.18) * opacity,
+        fillOpacity: (visible ? (label ? 0.26 : 0.015) : 0.005) * opacity
       }};
     }}
 
@@ -2330,7 +2347,7 @@ class SettlementClassificationService:
         payload = {
             "sessionId": self.session_id,
             "classificationId": metadata["classification_id"],
-            "labels": metadata["labels"],
+            "labels": self._labels_for_metadata(metadata),
             "gridUrl": f"/api/settlement/{self.session_id}/classifications/{metadata['classification_id']}/grid",
             "annotationsUrl": f"/api/settlement/{self.session_id}/classifications/{metadata['classification_id']}/annotations",
             "exportUrl": f"/api/settlement/{self.session_id}/classifications/{metadata['classification_id']}/export",
@@ -2412,6 +2429,7 @@ class SettlementClassificationService:
       "Formal": "#2b8a3e",
       "Informal": "#f08c00",
       "Slum": "#c92a2a",
+      "Rural": "#1971c2",
       "No Buildings/Avoid Area": "#6c757d"
     }};
     const DEFAULT_COLOR = "#3388ff";
@@ -2452,11 +2470,13 @@ class SettlementClassificationService:
     function styleFeature(feature) {{
       const annotation = annotations[feature.properties.grid_id];
       const label = annotation && annotation.label;
+      const isSelected = selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id;
       return {{
-        color: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
-        fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : DEFAULT_COLOR,
-        weight: selectedFeature && selectedFeature.properties.grid_id === feature.properties.grid_id ? 3 : 1,
-        fillOpacity: label ? 0.45 : 0.12
+        color: isSelected ? "#111827" : label ? (COLORS[label] || DEFAULT_COLOR) : "#1d4ed8",
+        fillColor: label ? (COLORS[label] || DEFAULT_COLOR) : "#ffffff",
+        weight: isSelected ? 3.4 : label ? 1.5 : 1.1,
+        opacity: 0.95,
+        fillOpacity: label ? 0.26 : 0.015
       }};
     }}
 

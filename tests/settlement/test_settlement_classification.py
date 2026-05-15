@@ -48,6 +48,7 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     assert result["classification_id"].startswith("settlement-")
     assert result["grid_cell_count"] > 0
     assert result["selected_wards"][0]["ward_code"] == "A001"
+    assert "Rural" in service.get_classification(result["classification_id"])["labels"]
 
     grid = service.load_grid_geojson(result["classification_id"])
     first_grid_id = grid["features"][0]["properties"]["grid_id"]
@@ -56,21 +57,23 @@ def test_create_classification_save_annotation_and_export(tmp_path):
         result["classification_id"],
         {
             "grid_id": first_grid_id,
-            "label": "Formal",
-            "notes": "planned roads and regular blocks",
+            "label": "Rural",
+            "notes": "sparse buildings and vegetation",
         },
     )
 
     assert saved["success"] is True
-    assert saved["annotation"]["label"] == "Formal"
+    assert saved["annotation"]["label"] == "Rural"
 
     annotations = service.load_annotations(result["classification_id"])
-    assert annotations["annotations"][first_grid_id]["notes"] == "planned roads and regular blocks"
+    assert annotations["annotations"][first_grid_id]["notes"] == "sparse buildings and vegetation"
 
     export = service.export_classification(result["classification_id"])
     assert export["success"] is True
-    assert (export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_annotations.csv").exists()
+    csv_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_annotations.csv"
+    assert csv_path.exists()
     assert (export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_classified_grid.geojson").exists()
+    assert pd.read_csv(csv_path).loc[0, "label"] == "Rural"
 
 
 def test_top_n_classification_uses_composite_rankings(tmp_path):
@@ -136,6 +139,9 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "syncLayerControls" in selector_html
     assert "setLayerVisible" in selector_html
     assert "NASA Blue Marble is regional context" in selector_html
+    assert "Rural" in selector_html
+    assert "500m is a good first pass" in selector_html
+    assert "0.015" in selector_html
     assert "panelFindSection" in selector_html
     assert "panelFocusSection" in selector_html
     assert "panelGridSection" in selector_html
