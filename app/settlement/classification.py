@@ -100,10 +100,13 @@ class SettlementClassificationService:
     """Create, persist, and export manual settlement classifications."""
 
     def __init__(self, session_id: str, upload_root: str = "instance/uploads", export_root: str = "instance/exports"):
-        self.session_id = session_id
+        safe = _safe_slug(session_id, fallback="unknown-session")
+        self.session_id = safe
         self.upload_root = Path(upload_root).resolve()
         self.export_root = Path(export_root).resolve()
-        self.session_folder = (self.upload_root / session_id).resolve()
+        self.session_folder = (self.upload_root / safe).resolve()
+        if not str(self.session_folder).startswith(str(self.upload_root) + os.sep):
+            raise ValueError(f"Invalid session_id: {session_id!r}")
         self.settlement_root = self.session_folder / "settlement"
 
     @property
