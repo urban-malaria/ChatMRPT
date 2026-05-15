@@ -855,6 +855,12 @@ class SettlementClassificationService:
     .focus-chip {{ display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 3px 3px 0 0; border-radius: 999px; background: #e7f5ff; color: #0969da; font-size: 12px; }}
     .map-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }}
     .map-actions button {{ padding: 7px; font-size: 12px; }}
+    .search-results, .feature-list {{ max-height: 230px; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; }}
+    .feature-card {{ padding: 8px; border-bottom: 1px solid #eaeef2; font-size: 13px; }}
+    .feature-card:last-child {{ border-bottom: 0; }}
+    .feature-title {{ font-weight: 600; margin-bottom: 2px; }}
+    .feature-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 7px; }}
+    .feature-actions button {{ padding: 6px; font-size: 12px; }}
     .session-card {{ border: 1px solid #d0d7de; border-radius: 6px; padding: 8px; margin: 6px 0; background: #f6f8fa; font-size: 13px; }}
     .session-actions {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }}
     .session-actions button {{ padding: 6px; font-size: 12px; }}
@@ -877,6 +883,14 @@ class SettlementClassificationService:
           <button id="fitGridBtn" type="button" class="secondary">Fit Grid</button>
           <button id="clearFocusBtn" type="button" class="secondary">Clear Focus</button>
         </div>
+        <h2>Find</h2>
+        <div class="row">
+          <label for="searchInput">Ward or LGA</label>
+          <input id="searchInput" type="search" placeholder="Search by ward or LGA">
+        </div>
+        <div id="searchResults" class="search-results muted">Type at least two characters.</div>
+        <h2>Visible Areas</h2>
+        <div id="visibleFeatureList" class="feature-list muted">Move or zoom the map to list visible wards.</div>
         <h2>Focus</h2>
         <div class="mode">
           <button type="button" data-mode="lga" class="active">LGA</button>
@@ -1023,6 +1037,9 @@ class SettlementClassificationService:
     const focusChips = document.getElementById("focusChips");
     const estimateBox = document.getElementById("estimateBox");
     const classificationList = document.getElementById("classificationList");
+    const searchInput = document.getElementById("searchInput");
+    const searchResults = document.getElementById("searchResults");
+    const visibleFeatureList = document.getElementById("visibleFeatureList");
     const fitStateBtn = document.getElementById("fitStateBtn");
     const fitGridBtn = document.getElementById("fitGridBtn");
     const clearFocusBtn = document.getElementById("clearFocusBtn");
@@ -1081,6 +1098,10 @@ class SettlementClassificationService:
       return escapeHtml(value).replace(/`/g, "&#96;");
     }}
 
+    function normalizeText(value) {{
+      return String(value ?? "").trim().toLowerCase();
+    }}
+
     function boundaryStyle(feature) {{
       const props = feature.properties || {{}};
       const lga = lgaSelect.value;
@@ -1101,17 +1122,60 @@ class SettlementClassificationService:
       const props = feature.properties || {{}};
       layer.bindTooltip(props.display_name || props.ward_name || "Ward", {{ sticky: true }});
       layer.on("click", () => {{
-        selectedBoundaryId = props.ward_id;
-        wardSelect.value = props.ward_id;
-        if (props.lga) {{
-          lgaSelect.value = props.lga;
-          updateWardOptions();
-          wardSelect.value = props.ward_id;
-        }}
-        mapSelection.textContent = props.display_name || props.ward_name || props.ward_id;
-        setMode("map");
-        boundariesLayer.setStyle(boundaryStyle);
+        selectWardFocus(props.ward_id, false, "map");
       }});
+    }}
+
+    function boundaryLayerForWard(wardId) {{
+      let found = null;
+      if (!boundariesLayer) return found;
+      boundariesLayer.eachLayer(layer => {{
+        const props = (layer.feature && layer.feature.properties) || {{}};
+        if (props.ward_id === wardId) found = layer;
+      }});
+      return found;
+    }}
+
+    function fitBoundaryLayer(layer) {{
+      if (!layer || !layer.getBounds) return false;
+      const bounds = layer.getBounds();
+      if (!bounds || !bounds.isValid()) return false;
+      map.fitBounds(bounds, {{ padding: [24, 24] }});
+      return true;
+    }}
+
+    function selectWardFocus(wardId, shouldZoom=true, nextMode="ward") {{
+      const ward = CONFIG.wards.find(item => item.ward_id === wardId);
+      if (!ward) return;
+      selectedBoundaryId = wardId;
+      if (ward.lga) {{
+        lgaSelect.value = ward.lga;
+        updateWardOptions(false);
+      }}
+      wardSelect.value = wardId;
+      mapSelection.textContent = ward.display_name || ward.ward_name || ward.ward_id;
+      setMode(nextMode);
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      if (shouldZoom) fitBoundaryLayer(boundaryLayerForWard(wardId));
+      updateVisibleFeatureList();
+    }}
+
+    function selectLgaFocus(lga, shouldZoom=true) {{
+      selectedBoundaryId = null;
+      lgaSelect.value = lga;
+      updateWardOptions(false);
+      wardSelect.value = "";
+      setMode("lga");
+      if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
+      if (shouldZoom && boundariesLayer) {{
+        const lgaGroup = L.featureGroup();
+        boundariesLayer.eachLayer(layer => {{
+          const props = (layer.feature && layer.feature.properties) || {{}};
+          if (String(props.lga || "") === lga) lgaGroup.addLayer(layer);
+        }});
+        fitBoundaryLayer(lgaGroup);
+      }}
+      updateVisibleFeatureList();
     }}
 
     async function loadOverview() {{
@@ -1123,6 +1187,7 @@ class SettlementClassificationService:
       layerRegistry.fit("boundaries", [16, 16]);
       await loadClassificationList();
       updateFocusChips();
+      updateVisibleFeatureList();
     }}
 
     async function loadClassificationList() {{
@@ -1210,7 +1275,7 @@ class SettlementClassificationService:
     document.querySelectorAll("[data-mode]").forEach(button => {{
       button.addEventListener("click", () => setMode(button.dataset.mode));
     }});
-    lgaSelect.addEventListener("change", updateWardOptions);
+    lgaSelect.addEventListener("change", () => updateWardOptions());
     wardSelect.addEventListener("change", () => {{
       selectedBoundaryId = wardSelect.value;
       if (boundariesLayer) boundariesLayer.setStyle(boundaryStyle);
@@ -1219,6 +1284,104 @@ class SettlementClassificationService:
     }});
     topInput.addEventListener("input", () => {{ updateFocusChips(); scheduleEstimate(); }});
     cellSizeInput.addEventListener("input", scheduleEstimate);
+    searchInput.addEventListener("input", renderSearchResults);
+
+    function renderSearchResults() {{
+      const query = normalizeText(searchInput.value);
+      if (query.length < 2) {{
+        searchResults.textContent = "Type at least two characters.";
+        return;
+      }}
+      const lgaMatches = CONFIG.lgas
+        .filter(lga => normalizeText(lga).includes(query))
+        .slice(0, 5)
+        .map(lga => `<div class="feature-card">
+          <div class="feature-title">${{escapeHtml(lga)}}</div>
+          <div class="muted">LGA</div>
+          <div class="feature-actions">
+            <button type="button" data-select-lga="${{escapeAttr(lga)}}">Select</button>
+            <button type="button" class="secondary" data-zoom-lga="${{escapeAttr(lga)}}">Zoom</button>
+          </div>
+        </div>`);
+      const wardMatches = CONFIG.wards
+        .filter(ward => normalizeText(`${{ward.display_name}} ${{ward.ward_name || ""}} ${{ward.lga || ""}}`).includes(query))
+        .slice(0, 8)
+        .map(ward => `<div class="feature-card">
+          <div class="feature-title">${{escapeHtml(ward.display_name || ward.ward_name || ward.ward_id)}}</div>
+          <div class="muted">Ward${{ward.lga ? " | " + escapeHtml(ward.lga) : ""}}</div>
+          <div class="feature-actions">
+            <button type="button" data-select-ward="${{escapeAttr(ward.ward_id)}}">Select</button>
+            <button type="button" class="secondary" data-zoom-ward="${{escapeAttr(ward.ward_id)}}">Zoom</button>
+          </div>
+        </div>`);
+      const rows = [...lgaMatches, ...wardMatches];
+      searchResults.innerHTML = rows.length ? rows.join("") : "No matching ward or LGA.";
+      bindFeatureActionButtons(searchResults);
+    }}
+
+    function bindFeatureActionButtons(root) {{
+      root.querySelectorAll("[data-select-lga]").forEach(button => {{
+        button.addEventListener("click", () => selectLgaFocus(button.dataset.selectLga, false));
+      }});
+      root.querySelectorAll("[data-zoom-lga]").forEach(button => {{
+        button.addEventListener("click", () => selectLgaFocus(button.dataset.zoomLga, true));
+      }});
+      root.querySelectorAll("[data-select-ward]").forEach(button => {{
+        button.addEventListener("click", () => selectWardFocus(button.dataset.selectWard, false));
+      }});
+      root.querySelectorAll("[data-zoom-ward]").forEach(button => {{
+        button.addEventListener("click", () => selectWardFocus(button.dataset.zoomWard, true));
+      }});
+    }}
+
+    let visibleListTimer = null;
+    function scheduleVisibleFeatureList() {{
+      window.clearTimeout(visibleListTimer);
+      visibleListTimer = window.setTimeout(updateVisibleFeatureList, 180);
+    }}
+
+    function updateVisibleFeatureList() {{
+      if (!boundariesLayer) {{
+        visibleFeatureList.textContent = "Move or zoom the map to list visible wards.";
+        return;
+      }}
+      const bounds = map.getBounds();
+      const visibleWards = [];
+      const visibleLgas = new Set();
+      boundariesLayer.eachLayer(layer => {{
+        if (!layer.getBounds || !layer.getBounds().intersects(bounds)) return;
+        const props = (layer.feature && layer.feature.properties) || {{}};
+        if (!props.ward_id) return;
+        visibleWards.push(props);
+        if (props.lga) visibleLgas.add(String(props.lga));
+      }});
+      const lgaRows = Array.from(visibleLgas).sort().slice(0, 5).map(lga => `
+        <div class="feature-card">
+          <div class="feature-title">${{escapeHtml(lga)}}</div>
+          <div class="muted">Visible LGA</div>
+          <div class="feature-actions">
+            <button type="button" data-select-lga="${{escapeAttr(lga)}}">Select</button>
+            <button type="button" class="secondary" data-zoom-lga="${{escapeAttr(lga)}}">Zoom</button>
+          </div>
+        </div>`);
+      const wardRows = visibleWards.slice(0, 10).map(props => `
+        <div class="feature-card">
+          <div class="feature-title">${{escapeHtml(props.display_name || props.ward_name || props.ward_id)}}</div>
+          <div class="muted">Visible ward${{props.lga ? " | " + escapeHtml(props.lga) : ""}}</div>
+          <div class="feature-actions">
+            <button type="button" data-select-ward="${{escapeAttr(props.ward_id)}}">Select</button>
+            <button type="button" class="secondary" data-zoom-ward="${{escapeAttr(props.ward_id)}}">Zoom</button>
+          </div>
+        </div>`);
+      if (!visibleWards.length) {{
+        visibleFeatureList.textContent = "No ward boundaries are visible at this zoom.";
+        return;
+      }}
+      visibleFeatureList.innerHTML = `<div class="feature-card"><strong>${{visibleWards.length}}</strong> visible ward(s), <strong>${{visibleLgas.size}}</strong> visible LGA(s)</div>${{lgaRows.join("")}}${{wardRows.join("")}}`;
+      bindFeatureActionButtons(visibleFeatureList);
+    }}
+
+    map.on("moveend", scheduleVisibleFeatureList);
 
     function clearSelectedCell() {{
       selectedFeature = null;
@@ -1354,7 +1517,7 @@ class SettlementClassificationService:
       selectorPanel.classList.add("hidden");
       classificationPanel.classList.remove("hidden");
       document.getElementById("classificationSummary").textContent = `${{data.message || data.selection_message || "Grid ready."}} ${{data.grid_cell_count}} grid cells.`;
-      if (gridLayer) map.removeLayer(gridLayer);
+      layerRegistry.remove("grid");
       const gridUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/grid`;
       const annUrl = `/api/settlement/${{CONFIG.sessionId}}/classifications/${{data.classification_id}}/annotations`;
       const [gridRes, annRes] = await Promise.all([fetch(gridUrl), fetch(annUrl)]);

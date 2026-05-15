@@ -114,6 +114,11 @@ def test_selector_map_and_boundaries_include_filter_properties(tmp_path):
     assert "clearFocus" in selector_html
     assert "Fit State" in selector_html
     assert "Fit Grid" in selector_html
+    assert "searchInput" in selector_html
+    assert "visibleFeatureList" in selector_html
+    assert "renderSearchResults" in selector_html
+    assert "updateVisibleFeatureList" in selector_html
+    assert "selectWardFocus" in selector_html
     assert boundaries["features"][0]["properties"]["ward_id"]
     assert {feature["properties"]["lga"] for feature in boundaries["features"]} == {"One", "Two"}
 
