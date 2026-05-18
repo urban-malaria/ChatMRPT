@@ -315,7 +315,7 @@ class SettlementClassificationService:
         self._write_json_atomic(metadata_path, metadata)
         html_path.write_text(self._render_classifier_html(metadata), encoding="utf-8")
 
-        self.export_classification(classification_id, include_static_map=False)
+        self.export_classification(classification_id, include_static_map=True)
 
         web_path = f"/serve_viz_file/{self.session_id}/settlement/{classification_id}/classifier.html"
         return {
@@ -507,7 +507,7 @@ class SettlementClassificationService:
         self._write_annotations_csv(classification_id, annotations_doc)
         self._touch_metadata(classification_id)
         try:
-            self.export_classification(classification_id, include_static_map=False)
+            self.export_classification(classification_id, include_static_map=True)
         except Exception:
             logger.warning("Could not refresh settlement export after annotation save", exc_info=True)
         return {"success": True, "annotation": annotations[grid_id], "count": len(annotations)}
