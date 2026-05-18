@@ -1,0 +1,523 @@
+##==========================================================================================================================================
+## Script Name: Kwara Urbanization Analysis - 8 wards
+## Purpose: Analyse urbanization in Kwara wards 
+#==========================================================================================================================================
+
+rm(list = ls())
+
+#Directories
+
+Drive <- file.path(gsub("[\\]", "/", gsub("Documents", "", gsub("OneDrive", "", Sys.getenv("HOME")))))
+Drive <- file.path(gsub("[//]", "/", Drive))
+DriveDir <- file.path(Drive, "Urban Malaria Proj Dropbox", "urban_malaria")
+DataDir <- file.path(DriveDir, "data")
+
+shpfileDir <- file.path(DataDir, "nigeria/NMEP_nigeria_shapefiles/states")
+rasterDir <- file.path(DataDir, "nigeria/urban_extent/World Pop Degree of Urbanisation/2025")
+outputDir <- file.path("/Users/hephzibahadeniji/Downloads")
+
+
+
+#Custom Functions
+map_theme <- function(){
+  theme(axis.text.x = ggplot2::element_blank(),
+        axis.text.y = ggplot2::element_blank(),
+        axis.ticks = ggplot2::element_blank(),
+        rect = ggplot2::element_blank(),
+        plot.background = ggplot2::element_rect(fill = "white", colour = NA), 
+        plot.title = element_text(hjust = 0.5),
+        #legend.title = element_text(hjust),
+        legend.title = element_text(size=8, colour = 'black'), 
+        legend.text =element_text(size = 8, colour = 'black'),
+        legend.key.height = unit(0.65, "cm"))
+}
+
+#Plot charts in manuscript theme
+theme_manuscript <- function(){
+  theme_bw() + 
+    theme(panel.border = element_rect(colour = "black", fill=NA, linewidth = 0.5),
+          plot.title = element_text(hjust = 0.5),
+          axis.text.x = element_text(size = 12, color = "black"), 
+          axis.text.y = element_text(size = 12, color = "black"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size =12),
+          legend.title=element_text(size=12, colour = 'black'),
+          legend.text =element_text(size = 12, colour = 'black'),
+          legend.key.height = unit(1, "cm"))
+}
+
+#Packages
+library(terra)
+library(sf)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(patchwork)   
+library(scales)      
+library(ggrepel)
+library(purrr) 
+
+
+#Kwara shapefile
+kwara_wards <- st_read(file.path(shpfileDir, "Kwara/Kwara_Wards.shp"))    
+
+
+#List of wards to be excluded from reprioritization
+excluded8 <- c("Alanamu", "Badari", "M/Ngeri", "Ogidi",
+               "Balogun Fulani 2", "Okaka 1", "Are 2", "Essa A")
+
+#### Make 500M grids of 8 Wards 
+
+kwara_wards_excluded <- kwara_wards %>% 
+  filter(WardName %in% excluded8)
+
+polygon_sf <- kwara_wards_excluded 
+# Reproject to UTM (example: UTM Zone 31N for western Nigeria)
+polygon_utm <- st_transform(polygon_sf, 32631)
+# Create 500m grid
+grid_500m <- st_make_grid(polygon_utm, cellsize = 500, # meters
+                          square = TRUE)
+# Clip to polygon
+grid_clipped <- st_intersection(st_sf(geometry = grid_500m),polygon_utm )
+# Convert back to WGS84 
+grid_500m <- st_transform(grid_clipped, 4326)
+
+#Confirm area
+grid_areas <- st_area(grid_clipped)
+print(grid_areas)
+
+
+ggplot()+
+  geom_sf(data = grid_500m, aes(geometry=geometry))+
+  map_theme()
+
+#st_write(grid_500m, (file.path(shpfileDir, "Kwara_8excluded_500m/Kwara_500m.shp")))
+
+
+#==========================================================================================================================================
+## GHSL
+#==========================================================================================================================================
+ghsl_500m <- st_read(file.path(DataDir, "nigeria/urban_extent/GHSL_kwara_8excluded_wards_2025_500m.geojson"))
+
+
+##########PLOT GHSL FIELDS IN GRID
+pct_cols <- c(
+  "pct_VeryLowDensityRural",
+  "pct_LowDensityRural",
+  "pct_RuralCluster",
+  "pct_SuburbanPeriUrban",
+  "pct_SemiDenseUrban",
+  "pct_DenseUrbanCluster",
+  "pct_UrbanCentre",
+  "pct_Water",
+  "pct_NoData"
+)
+
+# Clean labels for the legend (must match pct_cols order exactly)
+class_labels <- c(
+  "Very low density rural",
+  "Low density rural",
+  "Rural cluster",
+  "Suburban / peri-urban",
+  "Semi-dense urban cluster",
+  "Dense urban cluster",
+  "Urban centre",
+  "Water",
+  "No data"
+)
+
+# Colours
+class_colours <- c(
+  "Very low density rural"    = "#cdf57a",
+  "Low density rural"         = "#abcd66",
+  "Rural cluster"             = "#375623",
+  "Suburban / peri-urban"     = "#ffff00",
+  "Semi-dense urban cluster"  = "#a87000",
+  "Dense urban cluster"       = "#732600",
+  "Urban centre"              = "#ff0000",
+  "Water"                     = "#7ab6f5",
+  "No data"                   = "#cccccc"
+)
+
+ghsl_dominant <- ghsl_500m %>%
+  # Replace NA with 0 so max() works cleanly
+  mutate(across(all_of(pct_cols), ~ replace_na(.x, 0))) %>%
+  rowwise() %>%
+  mutate(
+    dominant_pct   = max(c_across(all_of(pct_cols)), na.rm = TRUE),
+    dominant_index = which.max(c_across(all_of(pct_cols))),
+    dominant_class = class_labels[dominant_index]
+  ) %>%
+  ungroup() %>%
+  mutate(
+    dominant_class = factor(dominant_class, levels = class_labels)
+  )
+
+
+present_classes <- ghsl_dominant %>%
+  st_drop_geometry() %>%
+  filter(!is.na(dominant_class)) %>%
+  pull(dominant_class) %>%
+  unique() %>%
+  as.character()
+
+colours_used <- class_colours[names(class_colours) %in% present_classes]
+
+ggplot(ghsl_dominant) +
+  geom_sf(aes(fill = dominant_class), color = "white", linewidth = 0.15) +
+  scale_fill_manual(
+    values   = colours_used,
+    na.value = "#eeeeee",
+    name     = "Dominant GHSL class",
+    drop     = TRUE   # only show classes that appear in the data
+  ) +
+  labs(
+    title    = "Dominant GHSL Settlement Classification in 8 Kwara Wards",
+    caption  = "Source: JRC GHS-SMOD V2 P2023A (2020 epoch) | Grid: 500m x 500m"
+  ) +
+  map_theme()
+
+############Plot individual wards
+
+plot_ward_ghsl <- function(ward_name, data, out_dir) {
+  
+  # Filter to this ward
+  ward_data <- data %>% filter(WardName == ward_name)
+  
+  if (nrow(ward_data) == 0) {
+    message("  ⚠ No grids found for ward: ", ward_name, " — skipping")
+    return(invisible(NULL))
+  }
+  
+  # Only show colours/legend entries for classes present in this ward
+  present_classes <- ward_data %>%
+    st_drop_geometry() %>%
+    filter(!is.na(dominant_class)) %>%
+    pull(dominant_class) %>%
+    droplevels() %>%
+    levels()
+  
+  colours_used <- class_colours[names(class_colours) %in% present_classes]
+  
+  # Count grids per class for subtitle
+  class_counts <- ward_data %>%
+    st_drop_geometry() %>%
+    count(dominant_class, name = "n") %>%
+    arrange(desc(n)) %>%
+    mutate(label = paste0(dominant_class, " (", n, ")")) %>%
+    pull(label) %>%
+    paste(collapse = " · ")
+  
+  p <- ggplot(ward_data) +
+    geom_sf(aes(fill = dominant_class), color = "white", linewidth = 0.3) +
+    scale_fill_manual(
+      values   = colours_used,
+      na.value = "#eeeeee",
+      name     = "Dominant class",
+      drop     = TRUE
+    ) +
+    labs(
+      title    = ward_name,
+      subtitle = class_counts,
+      caption  = "JRC GHS-SMOD V2 P2023A (2020) | 500m grids | Dominant = highest % class"
+    ) +
+    map_theme()
+  
+  # Safe filename (replace / and spaces)
+  safe_name <- gsub("[/ ]", "_", ward_name)
+  out_path  <- file.path(out_dir, paste0("GHSL_dominant_", safe_name, ".png"))
+  
+  ggsave(out_path, p, width = 7, height = 6, dpi = 180, bg = "white")
+  message("  ✓ Saved: ", basename(out_path))
+  
+  invisible(p)
+}
+
+# ── Generate one plot per ward ────────────────────────────────────────────────
+message("Generating per-ward GHSL dominant class maps...")
+
+walk(excluded8, ~ plot_ward_ghsl(.x, ghsl_dominant, outputDir))
+
+message("\n✓ All ward maps saved to:\n  ", outputDir)
+
+
+
+#==========================================================================================================================================
+## DEGREE OF URBANISATION LEVEL 2
+#==========================================================================================
+
+#Load level 3 degree of urbanization plan
+L2dou <- rast(file.path(rasterDir, "NGA_DUG_2025_GRID_L2_R2025A_v1.tif"))  
+
+#Extract data at each 500m grid
+extracted_L2 <- terra::extract(L2dou, grid_500m, fun = NULL, exact = TRUE) 
+names(extracted_L2) <- c("grid_id", "dou_class", "fraction") 
+
+pct_table_L2 <- extracted_L2 %>%
+  group_by(grid_id, dou_class) %>%
+  summarise(weight = sum(fraction), .groups = "drop") %>%
+  group_by(grid_id) %>%
+  mutate(pct = weight / sum(weight) * 100) %>%
+  ungroup()
+
+#Merge with grid data
+
+level2_dou <- cbind(grid_500m, pct_table_L2)
+
+
+# ── DoU Level 2 class definitions ─────────────────────────────────────────────
+dou_labels <- c(
+  "10" = "Water",
+  "11" = "Very low density rural",
+  "12" = "Low density rural",
+  "13" = "Rural cluster",
+  "21" = "Suburban / peri-urban",
+  "22" = "Semi-dense urban cluster",
+  "23" = "Dense urban cluster",
+  "30" = "Urban centre"
+)
+
+# Colours aligned with GHSL/DoU convention
+dou_colours <- c(
+  "Water"                    = "#7ab6f5",
+  "Very low density rural"   = "#cdf57a",
+  "Low density rural"        = "#abcd66",
+  "Rural cluster"            = "#375623",
+  "Suburban / peri-urban"    = "#ffff00",
+  "Semi-dense urban cluster" = "#a87000",
+  "Dense urban cluster"      = "#732600",
+  "Urban centre"             = "#ff0000"
+)
+
+# Full factor level order (ensures legend is always ordered low → high)
+dou_levels <- c(
+  "Water",
+  "Very low density rural",
+  "Low density rural",
+  "Rural cluster",
+  "Suburban / peri-urban",
+  "Semi-dense urban cluster",
+  "Dense urban cluster",
+  "Urban centre"
+)
+
+# ── Prepare data ───────────────────────────────────────────────────────────────
+
+dou_dominant <- level2_dou %>%
+  st_as_sf() %>%
+  # Ensure dou_class is character for the recode lookup
+  mutate(dou_class = as.character(dou_class)) %>%
+  # For each grid, keep only the row with the highest pct
+  group_by(grid_id) %>%
+  slice_max(pct, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  # Attach human-readable label and set factor order
+  mutate(
+    dominant_label = dou_labels[dou_class],
+    dominant_label = factor(dominant_label, levels = dou_levels)
+  )
+
+# ── Per-ward plot function ────────────────────────────────────────────────────
+plot_ward_dou <- function(ward_name, data, out_dir) {
+  
+  ward_data <- data %>% filter(WardName == ward_name)
+  
+  if (nrow(ward_data) == 0) {
+    message("  ⚠ No grids found for: ", ward_name, " — skipping")
+    return(invisible(NULL))
+  }
+  
+  # Classes present in this ward (preserves correct legend order)
+  present_labels <- levels(droplevels(ward_data$dominant_label))
+  colours_used   <- dou_colours[names(dou_colours) %in% present_labels]
+  
+  # Subtitle: class breakdown count
+  class_summary <- ward_data %>%
+    st_drop_geometry() %>%
+    count(dominant_label, name = "n") %>%
+    arrange(dominant_label) %>%
+    mutate(txt = paste0(dominant_label, " (", n, ")")) %>%
+    pull(txt) %>%
+    paste(collapse = " · ")
+  
+  p <- ggplot(ward_data) +
+    geom_sf(aes(fill = dominant_label), color = "white", linewidth = 0.15) +
+    scale_fill_manual(
+      values   = colours_used,
+      na.value = "#eeeeee",
+      name     = "DoU class",
+      drop     = TRUE
+    ) +
+    labs(
+      title    = ward_name,
+      subtitle = class_summary,
+      caption  = "WorldPop Degree of Urbanisation L2 (2025) | 500 m grids | Dominant = highest % class"
+    ) +
+    map_theme()
+  
+  safe_name <- gsub("[/ ]", "_", ward_name)
+  out_path  <- file.path(out_dir, paste0("DoU_L2_dominant_", safe_name, ".png"))
+  
+  ggsave(out_path, p, width = 7, height = 6, dpi = 180, bg = "white")
+  message("  ✓ ", basename(out_path))
+  
+  invisible(p)
+}
+
+# ── Run for all wards in the dataset ──────────────────────────────────────────
+all_wards <- dou_dominant %>%
+  st_drop_geometry() %>%
+  distinct(WardName) %>%
+  arrange(WardName) %>%
+  pull(WardName)
+
+message("Generating DoU L2 dominant class maps for ", length(all_wards), " wards...")
+walk(all_wards, ~ plot_ward_dou(.x, dou_dominant, outputDir))
+message("\n✓ All maps saved to:\n  ", outputDir)
+
+
+#==========================================================================================================================================
+## COMPARISON OF 4 URBANICITY DEFINITIONS IN 22 WARDS
+#==========================================================================================
+
+#MODIS LANDCOVER
+modis <- st_read(file.path(DataDir, "nigeria/urban_extent/Kwara_State_urban_percentage.geojson"))
+ggplot() +
+  geom_sf(data = modis, aes(fill = urbanPercentage), color = "black", linewidth = 0.3) +
+  scale_fill_continuous(low = "#E8FFD7", high = "#000000")+
+  labs(
+    title = "Urban Extent in Kwara Wards - MODIS",
+    caption = "Derived from MODIS Land Cover Type 1 (IGBP Classification) of Urban",
+    fill = "% Urban ",
+    x = "",
+    y = ""
+  ) +
+  map_theme()
+
+modis_raw <- modis %>%
+  st_drop_geometry() %>%
+  select(WardCode, modis_urban_pct = urbanPercentage)
+
+#DRY BUILT UP INDEX
+dbi<- st_read(file.path(DataDir, "nigeria/urban_extent/DBI_wards_2025_Kwara.geojson"))
+ggplot() +
+  geom_sf(data = dbi, aes(fill = DBI_builtup_pct), color = "black", linewidth = 0.3) +
+  scale_fill_continuous(low = "#E8FFD7", high = "#000000")+
+  labs(
+    title = "DBI in Kwara Wards ",
+    fill = "% Urban ",
+    x = "",
+    y = ""
+  ) +
+  map_theme()
+
+dbi_raw <- dbi %>%
+  st_drop_geometry() %>%
+  select(WardCode, DBI_mean, DBI_builtup_pct)
+
+##GHSL ENTIRE STATE
+ghsl_raw <- st_read(file.path(DataDir, "nigeria/urban_extent/GHSL_SMOD_Kwara_wards_2025.geojson")) %>%
+  st_drop_geometry() %>%
+  select(WardCode, ghsl_urban_pct = pct_Urban_SDG)  
+
+##L2 DOU FOR ENTIRE STATE
+
+state_L2_extracted <- terra::extract(L2dou, kwara_wards, fun = NULL, exact = TRUE)
+names(state_L2_extracted) <- c("ward_id", "dou_class", "fraction")
+state_L2_extracted <- state_L2_extracted[!is.na(state_L2_extracted$dou_class), ]
+
+pct_L2 <- state_L2_extracted %>%
+  group_by(ward_id, dou_class) %>%
+  summarise(weight = sum(fraction), .groups = "drop") %>%
+  group_by(ward_id) %>%
+  mutate(pct = weight / sum(weight) * 100) %>%
+  ungroup() %>%
+  select(ward_id, dou_class, pct) %>%
+  pivot_wider(names_from = dou_class, values_from = pct,
+              names_prefix = "dou_class_", values_fill = 0) %>%
+  # Urban = Urban Cluster (2) + Urban Centre (3)
+  mutate(dou_urban_pct = coalesce(`dou_class_30`, 0))
+
+pct_L2_raw <- cbind(pct_L2, kwara_wards) %>% 
+  st_drop_geometry() %>% 
+  select(WardCode, dou_urban_pct)
+
+
+
+
+#Wards for reprioritization
+reprioritization_wards <- c("Are 1", "Gambari 1", "Zango 1", "Are 2", "Balogun Fulani 1", "Balogun Fulani 2",
+                            "Balogun Fulani 3", "Oka-Ogun", "Okaka 1", "Okaka 2", "Ojomo Central B", "Essa A",
+                            "Shawo Central", "Balogun", "Ojomo Central A", "Badari", "M/Ngeri",
+                            "Baboko", "Alanamu", "Ajikobi", "Ogidi", "Oju-Ekun")
+
+kwara_wards_reprioritize <- kwara_wards %>% 
+  filter(WardName %in% reprioritization_wards)
+
+
+kwara_wards_reprioritize_pct <- kwara_wards_reprioritize %>%
+  left_join(pct_L2_raw,    by = "WardCode") %>%
+  left_join(modis_raw, by = "WardCode") %>%
+  left_join(dbi_raw,   by = "WardCode") %>%
+  left_join(ghsl_raw,  by = "WardCode")
+
+
+##PLOT
+
+reprio_long <- kwara_wards_reprioritize_pct %>%
+  st_drop_geometry() %>%
+  select(WardName, dou_urban_pct, modis_urban_pct, DBI_builtup_pct, ghsl_urban_pct) %>%
+  pivot_longer(
+    cols      = c(dou_urban_pct, modis_urban_pct, DBI_builtup_pct, ghsl_urban_pct),
+    names_to  = "metric",
+    values_to = "pct"
+  ) %>%
+  mutate(metric = recode(metric,
+                         dou_urban_pct   = "Degree of Urbanisation",
+                         modis_urban_pct = "MODIS Land Cover",
+                         DBI_builtup_pct = "Dry Built-Up Index",
+                         ghsl_urban_pct  = "GHSL"
+  ))
+
+# Order by average urbanicity
+ward_order <- reprio_long %>%
+  group_by(WardName) %>%
+  summarise(avg = mean(pct, na.rm = TRUE)) %>%
+  arrange(avg) %>%
+  pull(WardName)
+
+reprio_long <- reprio_long %>%
+  mutate(WardName = factor(WardName, levels = ward_order))
+
+##Bar plot
+y_axis_colours <- ifelse(ward_order %in% excluded8, "#E63946", "grey10")
+
+ggplot(reprio_long, aes(x = pct, y = WardName, fill = metric)) +
+  geom_col(position = "dodge", width = 0.72) +
+  geom_vline(xintercept = 50, linetype = "dashed", color = "grey30", linewidth = 0.5) +
+  scale_fill_manual(
+    values = c(
+      "Degree of Urbanisation" = "#2b8cbe",
+      "MODIS Land Cover"       = "#74c476",
+      "Dry Built-Up Index"     = "#fd8d3c",
+      "GHSL"                   = "#9e9ac8"
+    ),
+    name = "Metric"
+  ) +
+  scale_x_continuous(labels = label_percent(scale = 1), limits = c(0, 105), expand = c(0, 0)) +
+  annotate("text", x = 51, y = 0.6, label = "50% threshold", size = 3,
+           color = "grey30", hjust = 0) +
+  labs(
+    title    = "Urbanicity of 22 Reprioritization Wards by Metric",
+    subtitle = "Ordered by average % urban | Dashed line = 50% threshold",
+    x        = "% Urban",
+    y        = NULL
+  ) +
+  theme_manuscript() +
+  theme(
+    legend.position    = "bottom",
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey88"),
+    axis.text.y        = element_text(colour = y_axis_colours)  # ← the key line
+  )
+
