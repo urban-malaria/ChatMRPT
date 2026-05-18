@@ -8,9 +8,68 @@ facility selection, age group selection, and calculation triggering.
 import os
 import logging
 import uuid
+import zipfile
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from enum import Enum
+
+
+def _create_burden_package(
+    session_folder: Path,
+    session_id: str,
+    state_name: str,
+) -> Optional[Dict[str, str]]:
+    """Bundle burden analysis outputs into a single downloadable ZIP.
+
+    Returns a download-link dict or None if the bundle could not be created.
+    Never raises — failure is logged as a warning so the caller always gets
+    its completion message regardless.
+    """
+    try:
+        from app.tpr.export_helpers import write_burden_readme
+
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        clean_state = state_name.strip().replace(' ', '_') or 'Analysis'
+        bundle_name = f"malaria_burden_analysis_{clean_state}_{date_str}.zip"
+        bundle_path = session_folder / bundle_name
+
+        file_map = [
+            ('raw_data.csv', 'ward_malaria_burden_environmental_variables.csv'),
+            ('raw_shapefile.zip', 'ward_boundaries_burden_environmental_variables.zip'),
+            ('population_data.csv', 'ward_population_denominators.csv'),
+            ('data_dictionary.csv', 'data_dictionary.csv'),
+        ]
+
+        present = [(src, alias) for src, alias in file_map if (session_folder / src).exists()]
+        if not present:
+            logging.getLogger(__name__).warning(
+                'No burden output files found for session %s — skipping bundle', session_id
+            )
+            return None
+
+        included_aliases = [alias for _, alias in present]
+        readme_content = write_burden_readme(state_name or clean_state, date_str, included_aliases)
+
+        with zipfile.ZipFile(bundle_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for src, alias in present:
+                zf.write(session_folder / src, alias)
+            zf.writestr('README.txt', readme_content)
+
+        logging.getLogger(__name__).info(
+            'Created burden bundle %s (%d files)', bundle_name, len(present)
+        )
+        return {
+            'url': f'/export/download/{session_id}/{bundle_name}',
+            'filename': bundle_name,
+            'description': f'Malaria burden analysis package — {len(present)} files',
+            'type': 'zip',
+        }
+    except Exception:
+        logging.getLogger(__name__).warning(
+            'Could not create burden analysis bundle for session %s', session_id, exc_info=True
+        )
+        return None
 
 
 def reset_tpr_handler_cache(session_id: Optional[str] = None) -> None:
@@ -949,12 +1008,19 @@ class TPRWorkflowHandler:
             except Exception as my_exc:
                 logger.warning(f"[MULTI_YEAR] Non-fatal multi-year enrichment error: {my_exc}", exc_info=True)
 
+            bundle_info = _create_burden_package(
+                session_folder=Path('instance') / 'uploads' / self.session_id,
+                session_id=self.session_id,
+                state_name=self.tpr_selections.get('state', ''),
+            )
+
             return {
                 "success": True,
                 "message": message,
                 "session_id": self.session_id,
                 "stage": "COMPLETE",
-                "workflow": 'tpr'
+                "workflow": 'tpr',
+                "download_links": [bundle_info] if bundle_info else [],
             }
 
         except Exception as exc:

@@ -1168,40 +1168,6 @@ class SettlementClassificationService:
                 "type": "png",
             })
 
-        analysis_links = [
-            (
-                self.session_folder / "raw_data.csv",
-                "ward_malaria_burden_environmental_variables.csv",
-                "Ward malaria burden and environmental variables CSV",
-                "csv",
-            ),
-            (
-                self.session_folder / "raw_shapefile.zip",
-                "ward_boundaries_burden_environmental_variables.zip",
-                "Ward boundaries with burden and environmental variables shapefile",
-                "zip",
-            ),
-            (
-                self.session_folder / "population_data.csv",
-                "ward_population_denominators.csv",
-                "Ward population denominators CSV",
-                "csv",
-            ),
-            (
-                self.session_folder / "data_dictionary.csv",
-                "data_dictionary.csv",
-                "Data dictionary with full variable names",
-                "csv",
-            ),
-        ]
-        for path, filename, description, file_type in analysis_links:
-            if path.exists():
-                links.append({
-                    "url": f"/export/download/{self.session_id}/{filename}",
-                    "filename": filename,
-                    "description": description,
-                    "type": file_type,
-                })
         return links
 
     def _render_selector_html(self, metadata: Dict[str, Any], wards: List[Dict[str, Any]], lgas: List[str]) -> str:

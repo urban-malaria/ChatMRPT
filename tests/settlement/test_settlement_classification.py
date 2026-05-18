@@ -106,9 +106,17 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     assert any(link["filename"] == "settlement_ward_summary.csv" for link in export["download_links"])
     assert any(link["filename"] == "settlement_cells_with_ward_summary.csv" for link in export["download_links"])
     assert any(link["filename"] == "settlement_classified_grid_map.png" for link in export["download_links"])
-    assert any(link["filename"] == "ward_malaria_burden_environmental_variables.csv" for link in export["download_links"])
-    assert any(link["filename"] == "ward_population_denominators.csv" for link in export["download_links"])
-    assert any(link["filename"] == "data_dictionary.csv" for link in export["download_links"])
+    # Burden analysis files must NOT appear in settlement download links
+    burden_filenames = {
+        "ward_malaria_burden_environmental_variables.csv",
+        "ward_boundaries_burden_environmental_variables.zip",
+        "ward_population_denominators.csv",
+        "data_dictionary.csv",
+    }
+    link_filenames = {link["filename"] for link in export["download_links"]}
+    assert not burden_filenames & link_filenames, (
+        f"Burden files leaked into settlement export links: {burden_filenames & link_filenames}"
+    )
 
 
 def test_top_n_classification_uses_composite_rankings(tmp_path):

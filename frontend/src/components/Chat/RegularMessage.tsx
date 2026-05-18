@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import VisualizationContainer from '../Visualization/VisualizationContainer';
 import DualMethodDisplay from '../Analysis/DualMethodDisplay';
+import DownloadCard from './DownloadCard';
 import type { RegularMessage as RegularMessageType } from '@/types';
 
 interface RegularMessageProps {
@@ -11,7 +12,7 @@ interface RegularMessageProps {
 
 const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
   const isUser = message.sender === 'user';
-  
+
   // Detect and extract a top-level warning line (styled in red)
   let topWarning = '';
   let restContent = message.content;
@@ -23,7 +24,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
       restContent = firstNewline >= 0 ? message.content.slice(firstNewline + 1) : '';
     }
   }
-  
+
   // Check if message contains visualization URLs or has visualizations array
   const hasVisualization = !isUser && (
     message.content.includes('/serve_viz_file/') ||
@@ -31,14 +32,14 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
     message.content.includes('.html') ||
     (message.visualizations && message.visualizations.length > 0)
   );
-  
+
   // Check if message contains analysis results
   const analysisData = useMemo(() => {
     if (isUser || !message.metadata?.analysisResults) return null;
-    
+
     // Extract analysis data from metadata
     const { pca, composite, ward, state } = message.metadata.analysisResults;
-    
+
     return {
       data: {
         pca: pca ? {
@@ -58,7 +59,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
       stateName: state,
     };
   }, [isUser, message.metadata]);
-  
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -99,7 +100,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
             </span>
           )}
         </div>
-        
+
         {/* Message Content */}
         <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : ''}`}>
           {!isUser ? (
@@ -234,7 +235,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
             <p className="whitespace-pre-wrap">{message.content}</p>
           )}
         </div>
-        
+
         {/* Message Footer */}
         {message.metadata && (message.metadata.latency || message.metadata.tokens) && (
           <div className="mt-2 text-xs opacity-50">
@@ -246,7 +247,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
             )}
           </div>
         )}
-        
+
         {/* Analysis Results Display */}
         {analysisData && (
           <div className="mt-4">
@@ -257,7 +258,7 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
             />
           </div>
         )}
-        
+
         {/* Visualization Container */}
         {hasVisualization && (
           <div className="mt-4">
@@ -283,6 +284,15 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                 }}
               />
             )}
+          </div>
+        )}
+
+        {/* Download Cards */}
+        {!isUser && message.downloadLinks && message.downloadLinks.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {message.downloadLinks.map((link, i) => (
+              <DownloadCard key={i} link={link} />
+            ))}
           </div>
         )}
       </div>

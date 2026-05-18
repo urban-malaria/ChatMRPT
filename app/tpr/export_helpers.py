@@ -56,6 +56,49 @@ def _lookup(column: str) -> Dict[str, str]:
     }
 
 
+def write_burden_readme(state_name: str, date_str: str, included_files: list) -> str:
+    """Generate README.txt content for the burden analysis bundle ZIP."""
+    file_descriptions = {
+        "ward_malaria_burden_environmental_variables.csv": (
+            "Ward-level burden estimates, RDT/microscopy TPR, and environmental covariates",
+            "Statistical analysis, mapping, reporting",
+        ),
+        "ward_boundaries_burden_environmental_variables.zip": (
+            "Ward boundary shapefile with burden attributes "
+            "(unzip this inner file before loading in GIS software)",
+            "QGIS, ArcGIS, spatial visualisation",
+        ),
+        "ward_population_denominators.csv": (
+            "Population denominators by age group (U5, O5, PW, all ages)",
+            "Denominator validation, burden rate checks",
+        ),
+        "data_dictionary.csv": (
+            "Full variable names, definitions, units, sources, and derivation notes",
+            "Understanding what each column means",
+        ),
+    }
+
+    header = (
+        f"# Malaria Burden Analysis Package\n"
+        f"State: {state_name}\n"
+        f"Generated: {date_str}\n"
+        f"Tool: ChatMRPT\n\n"
+        f"This package contains ward-level malaria burden estimates for {state_name} State, Nigeria.\n"
+        f"The analysis combines facility-reported malaria case data with population denominators\n"
+        f"and extracted environmental covariates.\n\n"
+        f"## Contents\n\n"
+        f"| File | Contents | Typical use |\n"
+        f"|------|----------|-------------|\n"
+    )
+    rows = ""
+    for filename in included_files:
+        if filename in file_descriptions:
+            contents, use = file_descriptions[filename]
+            rows += f"| {filename} | {contents} | {use} |\n"
+
+    return header + rows
+
+
 def write_data_dictionary(
     df: pd.DataFrame,
     output_path: str | Path,

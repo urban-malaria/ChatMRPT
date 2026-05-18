@@ -142,7 +142,7 @@ const useMessageStreaming = () => {
 
             if (evt.type === 'result' && assistantMessageId) {
               const result = evt.data;
-              console.log('✅ DATA ANALYSIS STREAM RESULT — visualizations:', result.visualizations?.length || 0);
+              console.log('✅ DATA ANALYSIS STREAM RESULT — visualizations:', result.visualizations?.length || 0, 'download_links:', result.download_links?.length || 0);
               const finalMessage: RegularMessage = {
                 id: assistantMessageId,
                 type: 'regular',
@@ -152,6 +152,9 @@ const useMessageStreaming = () => {
                 timestamp: new Date(),
                 sessionId: session.sessionId,
                 visualizations: result.visualizations || [],
+                downloadLinks: result.download_links && result.download_links.length > 0
+                  ? result.download_links
+                  : undefined,
               };
               useChatStore.getState().updateMessage(assistantMessageId, finalMessage);
             }

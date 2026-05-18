@@ -16,10 +16,7 @@ logger = logging.getLogger(__name__)
 
 export_bp = Blueprint('export', __name__, url_prefix='/export')
 
-DOWNLOAD_ALIASES = {
-    'ward_malaria_burden_environmental_variables.csv': 'raw_data.csv',
-    'ward_boundaries_burden_environmental_variables.zip': 'raw_shapefile.zip',
-}
+DOWNLOAD_ALIASES = {}
 
 
 @export_bp.route('/list/<session_id>')
@@ -42,49 +39,16 @@ def list_exports(session_id):
         
         available_files = []
         
-        # Check for burden/environment analysis inputs
-        tpr_csv = uploads_dir / 'raw_data.csv'
-        if tpr_csv.exists():
+        # Check for burden analysis bundle ZIP (malaria_burden_analysis_<State>_<date>.zip)
+        bundle_matches = sorted(uploads_dir.glob('malaria_burden_analysis_*.zip'))
+        if bundle_matches:
+            bundle = bundle_matches[-1]  # YYYY-MM-DD names sort lexicographically
             available_files.append({
-                'name': 'Ward Malaria Burden and Environmental Variables CSV',
-                'filename': 'ward_malaria_burden_environmental_variables.csv',
-                'type': 'csv',
-                'description': 'Ward-level malaria burden calculation joined with extracted environmental variables',
-                'url': f'/export/download/{session_id}/ward_malaria_burden_environmental_variables.csv',
-                'category': 'tpr'
-            })
-        
-        # Check for shapefile
-        shapefile = uploads_dir / 'raw_shapefile.zip'
-        if shapefile.exists():
-            available_files.append({
-                'name': 'Ward Boundaries with Burden and Environmental Variables Shapefile',
-                'filename': 'ward_boundaries_burden_environmental_variables.zip',
+                'name': 'Malaria Burden Analysis Package',
+                'filename': bundle.name,
                 'type': 'zip',
-                'description': 'Ward boundary shapefile joined with malaria burden and environmental variables',
-                'url': f'/export/download/{session_id}/ward_boundaries_burden_environmental_variables.zip',
-                'category': 'tpr'
-            })
-
-        population_csv = uploads_dir / 'population_data.csv'
-        if population_csv.exists():
-            available_files.append({
-                'name': 'Ward Population Denominators CSV',
-                'filename': 'ward_population_denominators.csv',
-                'type': 'csv',
-                'description': 'Ward population denominators used for burden calculations',
-                'url': f'/export/download/{session_id}/ward_population_denominators.csv',
-                'category': 'tpr'
-            })
-
-        dictionary_csv = uploads_dir / 'data_dictionary.csv'
-        if dictionary_csv.exists():
-            available_files.append({
-                'name': 'Data Dictionary',
-                'filename': 'data_dictionary.csv',
-                'type': 'csv',
-                'description': 'Full variable names, definitions, units, sources, and derivation notes',
-                'url': f'/export/download/{session_id}/data_dictionary.csv',
+                'description': 'Ward burden estimates, shapefile, population denominators, and data dictionary',
+                'url': f'/export/download/{session_id}/{bundle.name}',
                 'category': 'tpr'
             })
         
@@ -236,8 +200,6 @@ def download_export(session_id, filename):
             abort(403, "Invalid file path")
         requested_download_name = requested_path.name
         alias_target = DOWNLOAD_ALIASES.get(requested_download_name)
-        if requested_download_name == 'ward_population_denominators.csv':
-            alias_target = 'population_data.csv'
         safe_filename = alias_target or requested_download_name
         if alias_target:
             requested_path = Path(alias_target)

@@ -11,7 +11,7 @@ export interface DownloadLink {
   url: string;
   filename: string;
   description: string;
-  type: 'csv' | 'html' | 'pdf' | 'zip';
+  type: 'csv' | 'html' | 'pdf' | 'zip' | 'png' | 'geojson';
 }
 
 export interface RegularMessage extends BaseMessage {
