@@ -291,7 +291,12 @@ class SwitchTPRCombination(DataAnalysisTool):
         import geopandas as gpd
 
         from app.tpr.cache import load_ward_cache, is_ward_cache_available
-        from app.tpr.precompute import query_precomputed_tpr, is_tpr_precomputed
+        from app.tpr.precompute import (
+            has_precomputed_combination,
+            is_tpr_precomputed,
+            query_precomputed_tpr,
+            repair_precomputed_combination,
+        )
 
         session_folder = f"instance/uploads/{session_id}"
 
