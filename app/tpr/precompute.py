@@ -20,6 +20,28 @@ FACILITY_LEVELS = ['primary', 'secondary', 'tertiary', 'all']
 AGE_GROUPS = ['u5', 'o5', 'pw', 'all_ages']
 
 
+def normalize_facility_level(facility_level: str) -> str:
+    """Normalize facility level names to precompute keys."""
+    value = str(facility_level or 'all').lower().replace(' ', '_').replace('-', '_')
+    return {
+        'primary': 'primary', 'phc': 'primary',
+        'secondary': 'secondary', 'shc': 'secondary',
+        'tertiary': 'tertiary', 'thc': 'tertiary',
+        'all': 'all', 'all_facilities': 'all', 'combined': 'all',
+    }.get(value, value)
+
+
+def normalize_age_group(age_group: str) -> str:
+    """Normalize age group names to precompute keys."""
+    value = str(age_group or 'all_ages').lower().replace(' ', '_').replace('-', '_')
+    return {
+        'under_5': 'u5', 'under5': 'u5', 'u5': 'u5', '<5': 'u5', 'under_five': 'u5',
+        'over_5': 'o5', 'over5': 'o5', 'o5': 'o5', '>5': 'o5', '5+': 'o5', 'over_five': 'o5',
+        'pregnant_women': 'pw', 'pregnant': 'pw', 'pw': 'pw', 'anc': 'pw',
+        'all_ages': 'all_ages', 'all': 'all_ages', 'combined': 'all_ages',
+    }.get(value, value)
+
+
 def get_precompute_db_path(session_id: str) -> str:
     """Get the path to the pre-computed TPR database for a session."""
     return f"instance/uploads/{session_id}/tpr_precomputed.db"
@@ -79,7 +101,48 @@ def init_precompute_db(session_id: str) -> str:
     return db_path
 
 
+def _load_column_schema(session_id: str) -> Optional[Dict[str, Any]]:
+    """Load saved column schema so calculate_ward_tpr can find the right columns."""
+    try:
+        from app.agent.state_manager import DataAnalysisStateManager
+        saved_state = DataAnalysisStateManager(session_id).load_state() or {}
+        schema = saved_state.get('column_schema')
+        if schema:
+            logger.info("Loaded column schema for pre-computation (%d mapped fields)", len([v for v in schema.values() if v]))
+        else:
+            logger.warning("No column schema in state manager — pre-computation may produce empty results")
+        return schema
+    except Exception as exc:
+        logger.warning("Could not load column schema for pre-computation: %s", exc)
+        return None
+
+
 ProgressCallback = Optional[Callable[[str, str, str, Dict[str, Any]], None]]
+
+
+def _store_tpr_df(cursor, tpr_df: pd.DataFrame, facility_level: str, age_group: str) -> int:
+    """Store a calculated TPR/burden dataframe in the precompute database."""
+    for _, row in tpr_df.iterrows():
+        cursor.execute('''
+            INSERT OR REPLACE INTO tpr_results
+            (facility_level, age_group, ward_name, lga, burden, population, total_positive)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            facility_level,
+            age_group,
+            row.get('WardName', row.get('ward_name', '')),
+            row.get('LGA', row.get('lga', '')),
+            row.get('Burden', row.get('burden', 0)),
+            int(row.get('Population', row.get('population', 0))),
+            int(row.get('Total_Positive', row.get('total_positive', 0)))
+        ))
+
+    cursor.execute('''
+        INSERT OR REPLACE INTO computation_status
+        (facility_level, age_group, ward_count)
+        VALUES (?, ?, ?)
+    ''', (facility_level, age_group, len(tpr_df)))
+    return len(tpr_df)
 
 
 def precompute_all_tpr_combinations(
@@ -98,8 +161,9 @@ def precompute_all_tpr_combinations(
         session_id: Session identifier
         data: DataFrame with TPR data
         state: Selected state name
-        exclude_combination: Optional dict with 'facility_level' and 'age_group'
-                           to skip (already computed by user's selection)
+        exclude_combination: Deprecated. Retained for caller compatibility;
+                           all 16 combinations are now stored so users can
+                           switch away and back to the original selection.
 
     Returns:
         Dict with status and statistics
@@ -108,18 +172,7 @@ def precompute_all_tpr_combinations(
 
     logger.info(f"Starting TPR pre-computation for session {session_id}, state: {state}")
 
-    # Load saved column schema so calculate_ward_tpr can find the right columns
-    schema: Optional[Dict[str, Any]] = None
-    try:
-        from app.agent.state_manager import DataAnalysisStateManager
-        saved_state = DataAnalysisStateManager(session_id).load_state() or {}
-        schema = saved_state.get('column_schema')
-        if schema:
-            logger.info("Loaded column schema for pre-computation (%d mapped fields)", len([v for v in schema.values() if v]))
-        else:
-            logger.warning("No column schema in state manager — pre-computation may produce empty results")
-    except Exception as exc:
-        logger.warning("Could not load column schema for pre-computation: %s", exc)
+    schema = _load_column_schema(session_id)
 
     # --- Load shapefile once (shared across all combinations) ---
     from app.tpr.utils import load_state_shapefile, extract_ward_population, normalize_ward_name
@@ -172,21 +225,6 @@ def precompute_all_tpr_combinations(
 
     for facility_level in FACILITY_LEVELS:
         for age_group in AGE_GROUPS:
-            # Skip the combination user already selected (it's computed separately)
-            if exclude_combination:
-                if (facility_level == exclude_combination.get('facility_level') and
-                    age_group == exclude_combination.get('age_group')):
-                    logger.info(f"Skipping user-selected combination: {facility_level}/{age_group}")
-                    results['combinations_skipped'] += 1
-                    if progress_callback:
-                        progress_callback(
-                            facility_level,
-                            age_group,
-                            'skipped',
-                            {'reason': 'user_selected'}
-                        )
-                    continue
-
             try:
                 logger.info(f"Computing TPR for {facility_level}/{age_group}")
                 if progress_callback:
@@ -212,29 +250,7 @@ def precompute_all_tpr_combinations(
                     logger.warning(f"No results for {facility_level}/{age_group}")
                     continue
 
-                # Store results in database
-                for _, row in tpr_df.iterrows():
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO tpr_results
-                        (facility_level, age_group, ward_name, lga, burden, population, total_positive)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        facility_level,
-                        age_group,
-                        row.get('WardName', row.get('ward_name', '')),
-                        row.get('LGA', row.get('lga', '')),
-                        row.get('Burden', row.get('burden', 0)),
-                        int(row.get('Population', row.get('population', 0))),
-                        int(row.get('Total_Positive', row.get('total_positive', 0)))
-                    ))
-
-                # Update computation status
-                cursor.execute('''
-                    INSERT OR REPLACE INTO computation_status
-                    (facility_level, age_group, ward_count)
-                    VALUES (?, ?, ?)
-                ''', (facility_level, age_group, len(tpr_df)))
-
+                _store_tpr_df(cursor, tpr_df, facility_level, age_group)
                 conn.commit()
                 results['combinations_computed'] += 1
                 logger.info(f"Stored {len(tpr_df)} wards for {facility_level}/{age_group}")
@@ -284,6 +300,96 @@ def is_tpr_precomputed(session_id: str) -> bool:
         return False
 
 
+def has_precomputed_combination(session_id: str, facility_level: str, age_group: str) -> bool:
+    """Check whether a specific facility/age combination is available."""
+    db_path = get_precompute_db_path(session_id)
+    if not os.path.exists(db_path):
+        return False
+
+    facility_level = normalize_facility_level(facility_level)
+    age_group = normalize_age_group(age_group)
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 1
+            FROM computation_status
+            WHERE facility_level = ? AND age_group = ?
+            LIMIT 1
+        ''', (facility_level, age_group))
+        exists = cursor.fetchone() is not None
+        conn.close()
+        return exists
+    except Exception:
+        return False
+
+
+def repair_precomputed_combination(
+    session_id: str,
+    facility_level: str,
+    age_group: str,
+    *,
+    state: str = "",
+    state_gdf=None,
+    pop_cache: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Compute and store one missing precompute combination for existing sessions."""
+    from app.tpr.utils import calculate_ward_tpr
+
+    facility_level = normalize_facility_level(facility_level)
+    age_group = normalize_age_group(age_group)
+    if has_precomputed_combination(session_id, facility_level, age_group):
+        return {"success": True, "repaired": False, "reason": "already_exists"}
+
+    session_folder = Path("instance") / "uploads" / session_id
+    data_path = session_folder / "uploaded_data.csv"
+    if not data_path.exists():
+        return {"success": False, "error": "uploaded_data.csv not found"}
+
+    schema = _load_column_schema(session_id)
+    if not schema:
+        return {"success": False, "error": "column schema not found"}
+
+    if not state:
+        try:
+            from app.agent.state_manager import DataAnalysisStateManager
+            selections = DataAnalysisStateManager(session_id).get_tpr_selections() or {}
+            state = selections.get("state", "")
+        except Exception:
+            state = ""
+
+    if state_gdf is None:
+        from app.tpr.utils import load_state_shapefile
+        import re as _re
+
+        clean_state = _re.sub(r'^[a-z]{2}\s+', '', state, flags=_re.IGNORECASE)
+        clean_state = _re.sub(r'\s+State$', '', clean_state, flags=_re.IGNORECASE)
+        clean_state = ' '.join(w.capitalize() for w in clean_state.replace('-', ' ').split())
+        state_gdf = load_state_shapefile(clean_state)
+
+    data = pd.read_csv(data_path)
+    tpr_df = calculate_ward_tpr(
+        df=data,
+        age_group=age_group,
+        test_method='both',
+        facility_level=facility_level,
+        schema=schema,
+        state_gdf=state_gdf,
+        pop_cache=pop_cache,
+    )
+    if tpr_df is None or tpr_df.empty:
+        return {"success": False, "error": f"No results for {facility_level}/{age_group}"}
+
+    db_path = init_precompute_db(session_id)
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    ward_count = _store_tpr_df(cursor, tpr_df, facility_level, age_group)
+    conn.commit()
+    conn.close()
+    logger.info("Repaired missing TPR precompute combination %s/%s with %d wards", facility_level, age_group, ward_count)
+    return {"success": True, "repaired": True, "ward_count": ward_count}
+
+
 def query_precomputed_tpr(
     session_id: str,
     facility_level: str = 'all',
@@ -318,25 +424,8 @@ def query_precomputed_tpr(
         }
 
     # Normalize inputs
-    facility_level = facility_level.lower().replace(' ', '_')
-    age_group = age_group.lower().replace(' ', '_')
-
-    # Map common variations
-    age_group_map = {
-        'under_5': 'u5', 'under5': 'u5', 'u5': 'u5', '<5': 'u5',
-        'over_5': 'o5', 'over5': 'o5', 'o5': 'o5', '>5': 'o5', '5+': 'o5',
-        'pregnant_women': 'pw', 'pregnant': 'pw', 'pw': 'pw', 'anc': 'pw',
-        'all_ages': 'all_ages', 'all': 'all_ages', 'combined': 'all_ages'
-    }
-    age_group = age_group_map.get(age_group, age_group)
-
-    facility_map = {
-        'primary': 'primary', 'phc': 'primary',
-        'secondary': 'secondary', 'shc': 'secondary',
-        'tertiary': 'tertiary', 'thc': 'tertiary',
-        'all': 'all', 'all_facilities': 'all'
-    }
-    facility_level = facility_map.get(facility_level, facility_level)
+    facility_level = normalize_facility_level(facility_level)
+    age_group = normalize_age_group(age_group)
 
     try:
         conn = sqlite3.connect(db_path)

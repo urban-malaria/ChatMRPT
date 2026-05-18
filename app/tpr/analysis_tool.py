@@ -1197,6 +1197,16 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                         try:
                             final_df.to_csv(raw_data_path, index=False)
                             logger.info(f"✅ Saved raw_data.csv with {len(final_df)} wards")
+                            try:
+                                from app.tpr.export_helpers import write_data_dictionary, write_population_denominators
+                                write_data_dictionary(final_df, os.path.join(session_folder, 'data_dictionary.csv'))
+                                write_population_denominators(
+                                    merged_gdf,
+                                    os.path.join(session_folder, 'population_data.csv'),
+                                    state_name=state_name,
+                                )
+                            except Exception as export_exc:
+                                logger.warning("Could not write auxiliary burden exports: %s", export_exc)
                             debug_stages["file_creation"]["raw_data"] = {
                                 "success": True,
                                 "path": raw_data_path,
@@ -1364,7 +1374,7 @@ Try: "**run malaria risk analysis**" to rank wards by malaria risk
 
 🔄 **Explore Other Combinations**
 
-All 15 facility/age combinations are ready. You can switch at any time:
+All 16 facility/age combinations are ready. You can switch at any time:
 
 - "**switch to secondary facilities, under 5**"
 
@@ -1454,6 +1464,16 @@ Or ask me anything about your data - I'm here to help!
             raw_data_path = os.path.join(session_folder, 'raw_data.csv')
             final_df.to_csv(raw_data_path, index=False)
             logger.info(f"Saved raw_data.csv with {len(final_df)} wards")
+            try:
+                from app.tpr.export_helpers import write_data_dictionary, write_population_denominators
+                write_data_dictionary(final_df, os.path.join(session_folder, 'data_dictionary.csv'))
+                write_population_denominators(
+                    merged_gdf,
+                    os.path.join(session_folder, 'population_data.csv'),
+                    state_name=state_name,
+                )
+            except Exception as export_exc:
+                logger.warning("Could not write auxiliary burden exports: %s", export_exc)
             
             # Step 7: Create raw_shapefile.zip
             # Ensure shapefile has same columns as CSV

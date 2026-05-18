@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 export_bp = Blueprint('export', __name__, url_prefix='/export')
 
+DOWNLOAD_ALIASES = {
+    'ward_malaria_burden_environmental_variables.csv': 'raw_data.csv',
+    'ward_boundaries_burden_environmental_variables.zip': 'raw_shapefile.zip',
+}
+
 
 @export_bp.route('/list/<session_id>')
 @require_auth
@@ -37,15 +42,15 @@ def list_exports(session_id):
         
         available_files = []
         
-        # Check for TPR results
+        # Check for burden/environment analysis inputs
         tpr_csv = uploads_dir / 'raw_data.csv'
         if tpr_csv.exists():
             available_files.append({
-                'name': 'TPR Analysis Results',
-                'filename': 'raw_data.csv',
+                'name': 'Ward Malaria Burden and Environmental Variables CSV',
+                'filename': 'ward_malaria_burden_environmental_variables.csv',
                 'type': 'csv',
-                'description': '📊 TPR analysis results with ward-level data',
-                'url': f'/export/download/{session_id}/raw_data.csv',
+                'description': 'Ward-level malaria burden calculation joined with extracted environmental variables',
+                'url': f'/export/download/{session_id}/ward_malaria_burden_environmental_variables.csv',
                 'category': 'tpr'
             })
         
@@ -53,11 +58,33 @@ def list_exports(session_id):
         shapefile = uploads_dir / 'raw_shapefile.zip'
         if shapefile.exists():
             available_files.append({
-                'name': 'Ward Boundaries Shapefile',
-                'filename': 'raw_shapefile.zip',
+                'name': 'Ward Boundaries with Burden and Environmental Variables Shapefile',
+                'filename': 'ward_boundaries_burden_environmental_variables.zip',
                 'type': 'zip',
-                'description': '🗺️ Geographic boundaries for all wards',
-                'url': f'/export/download/{session_id}/raw_shapefile.zip',
+                'description': 'Ward boundary shapefile joined with malaria burden and environmental variables',
+                'url': f'/export/download/{session_id}/ward_boundaries_burden_environmental_variables.zip',
+                'category': 'tpr'
+            })
+
+        population_csv = uploads_dir / 'population_data.csv'
+        if population_csv.exists():
+            available_files.append({
+                'name': 'Ward Population Denominators CSV',
+                'filename': 'ward_population_denominators.csv',
+                'type': 'csv',
+                'description': 'Ward population denominators used for burden calculations',
+                'url': f'/export/download/{session_id}/ward_population_denominators.csv',
+                'category': 'tpr'
+            })
+
+        dictionary_csv = uploads_dir / 'data_dictionary.csv'
+        if dictionary_csv.exists():
+            available_files.append({
+                'name': 'Data Dictionary',
+                'filename': 'data_dictionary.csv',
+                'type': 'csv',
+                'description': 'Full variable names, definitions, units, sources, and derivation notes',
+                'url': f'/export/download/{session_id}/data_dictionary.csv',
                 'category': 'tpr'
             })
         
@@ -116,6 +143,12 @@ def list_exports(session_id):
                         'Classified Settlement Grid',
                         'geojson',
                         'GeoJSON grid with settlement labels and notes'
+                    ),
+                    (
+                        settlement_dir / 'settlement_classified_grid_map.png',
+                        'Classified Settlement Grid Map Image',
+                        'png',
+                        'PNG map image of the classified grid with legend'
                     ),
                     (
                         settlement_dir / 'settlement_ward_summary.csv',
@@ -201,7 +234,13 @@ def download_export(session_id, filename):
         if requested_path.is_absolute() or '..' in requested_path.parts:
             logger.error(f"Path traversal attempt: {filename}")
             abort(403, "Invalid file path")
-        safe_filename = requested_path.name
+        requested_download_name = requested_path.name
+        alias_target = DOWNLOAD_ALIASES.get(requested_download_name)
+        if requested_download_name == 'ward_population_denominators.csv':
+            alias_target = 'population_data.csv'
+        safe_filename = alias_target or requested_download_name
+        if alias_target:
+            requested_path = Path(alias_target)
         # Check both exports and uploads directories
         export_base_dir = Path(current_app.root_path).parent / 'instance' / 'exports' / session_id
         uploads_dir = Path(current_app.root_path).parent / 'instance' / 'uploads' / session_id
@@ -243,20 +282,18 @@ def download_export(session_id, filename):
             abort(403, "Invalid file path")
         
         # Determine download name
+        download_name = requested_download_name
         if safe_filename.endswith('.zip'):
-            download_name = safe_filename
             mimetype = 'application/zip'
         elif safe_filename.endswith('.csv'):
-            download_name = safe_filename
             mimetype = 'text/csv'
         elif safe_filename.endswith('.html'):
-            download_name = safe_filename
             mimetype = 'text/html'
         elif safe_filename.endswith('.geojson') or safe_filename.endswith('.json'):
-            download_name = safe_filename
             mimetype = 'application/geo+json' if safe_filename.endswith('.geojson') else 'application/json'
+        elif safe_filename.endswith('.png'):
+            mimetype = 'image/png'
         else:
-            download_name = safe_filename
             mimetype = 'application/octet-stream'
         
         logger.info(f"Serving export file: {file_path}")

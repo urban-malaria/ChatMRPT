@@ -228,7 +228,7 @@
                         border: none;
                         display: block;
                     `;
-                    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+                    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-downloads');
 
                     // Assemble container
                     container.appendChild(header);

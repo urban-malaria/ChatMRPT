@@ -270,7 +270,7 @@ def export_classification(session_id: str, classification_id: str):
     if auth_error:
         return auth_error
     try:
-        result = _service(session_id).export_classification(classification_id)
+        result = _service(session_id).export_classification(classification_id, include_static_map=True)
         return jsonify(result)
     except FileNotFoundError as exc:
         return jsonify({"success": False, "message": str(exc)}), 404

@@ -515,7 +515,7 @@ class VisualizationHandler {
         `;
 
         // Set sandbox attributes for security but allow necessary features
-        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-downloads');
         iframe.setAttribute('loading', 'lazy');
 
         // Add loading state

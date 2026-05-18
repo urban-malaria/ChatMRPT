@@ -81,7 +81,12 @@ class QueryTPRData(DataAnalysisTool):
 
     def execute(self, session_id: str, **kwargs) -> ToolExecutionResult:
         """Execute the TPR query and return formatted results."""
-        from app.tpr.precompute import query_precomputed_tpr, is_tpr_precomputed
+        from app.tpr.precompute import (
+            has_precomputed_combination,
+            is_tpr_precomputed,
+            query_precomputed_tpr,
+            repair_precomputed_combination,
+        )
         from app.tpr.precompute_service import get_precompute_status
 
         status = get_precompute_status(session_id)
@@ -105,6 +110,16 @@ class QueryTPRData(DataAnalysisTool):
                 message=message,
                 error_details=status.get('error', 'TPR pre-computation not available')
             )
+
+        if not has_precomputed_combination(session_id, self.facility_level, self.age_group):
+            repair_result = repair_precomputed_combination(
+                session_id,
+                self.facility_level,
+                self.age_group,
+            )
+            if not repair_result.get('success'):
+                logger.warning("Could not repair missing queried TPR combination %s/%s: %s",
+                               self.facility_level, self.age_group, repair_result.get('error'))
 
         # Query the data
         result = query_precomputed_tpr(
@@ -311,6 +326,20 @@ class SwitchTPRCombination(DataAnalysisTool):
         env_data = cache['env_data']
         state_name = cache['state_name']
 
+        # Repair older sessions that were created when the original selection was
+        # intentionally skipped from the precompute database.
+        if not has_precomputed_combination(session_id, facility_level, age_group):
+            repair_result = repair_precomputed_combination(
+                session_id,
+                facility_level,
+                age_group,
+                state=state_name,
+                state_gdf=state_gdf,
+            )
+            if not repair_result.get('success'):
+                logger.warning("Could not repair missing TPR combination %s/%s: %s",
+                               facility_level, age_group, repair_result.get('error'))
+
         # Query TPR for requested combination
         tpr_result = query_precomputed_tpr(
             session_id=session_id,
@@ -351,6 +380,16 @@ class SwitchTPRCombination(DataAnalysisTool):
         raw_data_path = os.path.join(session_folder, 'raw_data.csv')
         final_df.to_csv(raw_data_path, index=False)
         logger.info(f"Updated raw_data.csv with {len(final_df)} wards")
+        try:
+            from app.tpr.export_helpers import write_data_dictionary, write_population_denominators
+            write_data_dictionary(final_df, os.path.join(session_folder, 'data_dictionary.csv'))
+            write_population_denominators(
+                state_gdf,
+                os.path.join(session_folder, 'population_data.csv'),
+                state_name=state_name,
+            )
+        except Exception as export_exc:
+            logger.warning("Could not update auxiliary burden exports: %s", export_exc)
 
         # Save shapefile
         try:
@@ -401,8 +440,10 @@ class SwitchTPRCombination(DataAnalysisTool):
 - **Total positive:** {summary.get('total_positive', 0):,}
 
 Files updated:
-- `raw_data.csv` - Ward data with new burden values
-- `raw_shapefile.zip` - Shapefile with new burden values
+- `ward_malaria_burden_environmental_variables.csv` - Ward burden and environmental variables
+- `ward_boundaries_burden_environmental_variables.zip` - Ward boundaries with burden and environmental variables
+- `ward_population_denominators.csv` - Population denominators used in burden calculations
+- `data_dictionary.csv` - Full variable names and definitions
 - Burden distribution map
 
 You can now run **risk analysis** or **ITN planning** using this combination."""

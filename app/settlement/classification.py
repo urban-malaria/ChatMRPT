@@ -32,6 +32,14 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_LABELS = ["Formal", "Informal", "Slum", "Rural", "No Buildings/Avoid Area"]
+SETTLEMENT_COLORS = {
+    "Formal": "#2b8a3e",
+    "Informal": "#f08c00",
+    "Slum": "#c92a2a",
+    "Rural": "#1971c2",
+    "No Buildings/Avoid Area": "#6c757d",
+    "Unclassified": "#ffffff",
+}
 WARD_NAME_CANDIDATES = [
     "WardName",
     "ward_name",
@@ -543,6 +551,7 @@ class SettlementClassificationService:
         metadata_path = export_dir / "settlement_metadata.json"
         ward_summary_path = export_dir / "settlement_ward_summary.csv"
         combined_path = export_dir / "settlement_cells_with_ward_summary.csv"
+        image_path = export_dir / "settlement_classified_grid_map.png"
 
         # Build clean CSV with all useful columns
         csv_cols = ["classification_id", "grid_id", "ward_id", "ward_name_clean", "lga", "state",
@@ -556,6 +565,8 @@ class SettlementClassificationService:
         ward_summary.to_csv(ward_summary_path, index=False)
         self._build_combined_cell_summary(csv_df, ward_summary).to_csv(combined_path, index=False)
         self._write_json_atomic(metadata_path, metadata)
+        if include_static_map:
+            self._write_static_grid_map(grid, metadata, image_path)
 
         files = [
             {"path": _json_responseable_path(csv_path), "type": "csv", "description": "Settlement annotations CSV"},
@@ -564,6 +575,8 @@ class SettlementClassificationService:
             {"path": _json_responseable_path(geojson_path), "type": "geojson", "description": "Classified settlement grid GeoJSON"},
             {"path": _json_responseable_path(metadata_path), "type": "json", "description": "Settlement classification metadata"},
         ]
+        if include_static_map and image_path.exists():
+            files.append({"path": _json_responseable_path(image_path), "type": "png", "description": "Classified grid map image"})
         return {
             "success": True,
             "classification_id": classification_id,
@@ -1040,6 +1053,63 @@ class SettlementClassificationService:
         summary = summary.rename(columns=rename_cols)
         return cell_df.merge(summary, on="ward_id", how="left")
 
+    def _write_static_grid_map(self, grid: gpd.GeoDataFrame, metadata: Dict[str, Any], output_path: Path) -> None:
+        """Write a PNG map of classified grid cells."""
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Patch
+        except Exception as exc:
+            logger.warning("Static settlement map export unavailable: %s", exc)
+            return
+
+        plot_grid = grid.copy()
+        if plot_grid.crs is None:
+            plot_grid = plot_grid.set_crs(epsg=4326, allow_override=True)
+        if "label" in plot_grid.columns:
+            plot_grid["label_display"] = plot_grid["label"].fillna("Unclassified")
+        else:
+            plot_grid["label_display"] = "Unclassified"
+        plot_grid["plot_color"] = plot_grid["label_display"].map(SETTLEMENT_COLORS).fillna("#3388ff")
+
+        fig, ax = plt.subplots(figsize=(12, 10))
+        plot_grid.plot(ax=ax, color=plot_grid["plot_color"], edgecolor="#1f2937", linewidth=0.45)
+        try:
+            boundaries = self._selected_ward_geometries(metadata)
+            if boundaries is not None and not boundaries.empty:
+                if boundaries.crs and plot_grid.crs:
+                    boundaries = boundaries.to_crs(plot_grid.crs)
+                boundaries.boundary.plot(ax=ax, color="#111827", linewidth=1.2)
+        except Exception:
+            logger.debug("Could not add ward boundary overlay to static settlement map", exc_info=True)
+
+        title = "Classified Settlement Grid"
+        ward_names = [w.get("ward_name") for w in metadata.get("wards", []) if w.get("ward_name")]
+        if ward_names:
+            title = f"{title}: {', '.join(ward_names[:3])}"
+            if len(ward_names) > 3:
+                title += f" + {len(ward_names) - 3} more"
+        ax.set_title(title, fontsize=14)
+        ax.set_axis_off()
+        legend_labels = ["Formal", "Informal", "Slum", "Rural", "No Buildings/Avoid Area", "Unclassified"]
+        handles = [
+            Patch(facecolor=SETTLEMENT_COLORS[label], edgecolor="#1f2937", label=label)
+            for label in legend_labels
+        ]
+        ax.legend(handles=handles, loc="lower left", frameon=True, title="Settlement class")
+        fig.text(0.01, 0.01, f"Classification ID: {metadata.get('classification_id', '')}", fontsize=8)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=160, bbox_inches="tight")
+        plt.close(fig)
+
+    def _selected_ward_geometries(self, metadata: Dict[str, Any]) -> Optional[gpd.GeoDataFrame]:
+        ward_ids = {ward.get("ward_id") for ward in metadata.get("wards", []) if ward.get("ward_id")}
+        if not ward_ids:
+            return None
+        wards = self._prepare_ward_gdf(self._load_shapefile())[0]
+        return wards[wards["ward_id"].isin(ward_ids)].copy()
+
     def _labels_for_metadata(self, metadata: Dict[str, Any]) -> List[str]:
         """Return labels with Rural added for older saved classifications."""
         labels = list(metadata.get("labels") or DEFAULT_LABELS)
@@ -1062,7 +1132,8 @@ class SettlementClassificationService:
         os.replace(tmp_path, path)
 
     def _download_links(self, classification_id: str) -> List[Dict[str, str]]:
-        return [
+        export_dir = self._export_dir(classification_id)
+        links = [
             {
                 "url": f"/export/download/{self.session_id}/settlement_export_{classification_id}/settlement_annotations.csv",
                 "filename": "settlement_annotations.csv",
@@ -1088,6 +1159,50 @@ class SettlementClassificationService:
                 "type": "geojson",
             },
         ]
+        image_path = export_dir / "settlement_classified_grid_map.png"
+        if image_path.exists():
+            links.append({
+                "url": f"/export/download/{self.session_id}/settlement_export_{classification_id}/settlement_classified_grid_map.png",
+                "filename": "settlement_classified_grid_map.png",
+                "description": "Classified settlement grid map image PNG",
+                "type": "png",
+            })
+
+        analysis_links = [
+            (
+                self.session_folder / "raw_data.csv",
+                "ward_malaria_burden_environmental_variables.csv",
+                "Ward malaria burden and environmental variables CSV",
+                "csv",
+            ),
+            (
+                self.session_folder / "raw_shapefile.zip",
+                "ward_boundaries_burden_environmental_variables.zip",
+                "Ward boundaries with burden and environmental variables shapefile",
+                "zip",
+            ),
+            (
+                self.session_folder / "population_data.csv",
+                "ward_population_denominators.csv",
+                "Ward population denominators CSV",
+                "csv",
+            ),
+            (
+                self.session_folder / "data_dictionary.csv",
+                "data_dictionary.csv",
+                "Data dictionary with full variable names",
+                "csv",
+            ),
+        ]
+        for path, filename, description, file_type in analysis_links:
+            if path.exists():
+                links.append({
+                    "url": f"/export/download/{self.session_id}/{filename}",
+                    "filename": filename,
+                    "description": description,
+                    "type": file_type,
+                })
+        return links
 
     def _render_selector_html(self, metadata: Dict[str, Any], wards: List[Dict[str, Any]], lgas: List[str]) -> str:
         payload = {

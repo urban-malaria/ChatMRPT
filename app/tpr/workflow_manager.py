@@ -795,7 +795,7 @@ class TPRWorkflowHandler:
             self.state_manager.mark_tpr_workflow_complete()
             self.state_manager.update_workflow_stage(ConversationStage.INITIAL)
 
-            # Run pre-computation of all other combinations synchronously so the
+            # Run pre-computation of all combinations synchronously so the
             # completion message only appears when everything is genuinely ready.
             try:
                 from app.tpr.precompute import precompute_all_tpr_combinations
@@ -803,10 +803,6 @@ class TPRWorkflowHandler:
                     session_id=self.session_id,
                     data=df,
                     state=self.tpr_selections.get('state', ''),
-                    exclude_combination={
-                        'facility_level': facility_level,
-                        'age_group': age_group,
-                    },
                 )
                 logger.info("TPR pre-computation complete for session %s", self.session_id)
             except Exception as precompute_exc:

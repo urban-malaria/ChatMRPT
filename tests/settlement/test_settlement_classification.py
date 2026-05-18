@@ -18,6 +18,15 @@ def _write_session(tmp_path):
         "value": [1, 2],
     }).to_csv(session_folder / "raw_data.csv", index=False)
     pd.DataFrame({
+        "raw_column": ["value"],
+        "display_name": ["Example Value"],
+    }).to_csv(session_folder / "data_dictionary.csv", index=False)
+    pd.DataFrame({
+        "ward": ["Alpha", "Beta"],
+        "population_total": [1000, 2000],
+    }).to_csv(session_folder / "population_data.csv", index=False)
+    (session_folder / "raw_shapefile.zip").write_bytes(b"fake zip")
+    pd.DataFrame({
         "WardName": ["Alpha", "Beta"],
         "urban_percentage": [82.5, 34.0],
     }).to_csv(session_folder / "unified_dataset.csv", index=False)
@@ -75,7 +84,7 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     assert (auto_export_dir / "settlement_annotations.csv").exists()
     assert pd.read_csv(auto_export_dir / "settlement_annotations.csv").loc[0, "label"] == "Rural"
 
-    export = service.export_classification(result["classification_id"])
+    export = service.export_classification(result["classification_id"], include_static_map=True)
     assert export["success"] is True
     csv_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_annotations.csv"
     summary_path = export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_ward_summary.csv"
@@ -84,6 +93,7 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     assert summary_path.exists()
     assert combined_path.exists()
     assert (export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_classified_grid.geojson").exists()
+    assert (export_root / session_id / f"settlement_export_{result['classification_id']}" / "settlement_classified_grid_map.png").exists()
     assert pd.read_csv(csv_path).loc[0, "label"] == "Rural"
     summary = pd.read_csv(summary_path)
     assert summary.loc[0, "classified_cells"] == 1
@@ -95,6 +105,10 @@ def test_create_classification_save_annotation_and_export(tmp_path):
     assert combined.loc[0, "ward_summary_rural_pct_of_classified"] == 100.0
     assert any(link["filename"] == "settlement_ward_summary.csv" for link in export["download_links"])
     assert any(link["filename"] == "settlement_cells_with_ward_summary.csv" for link in export["download_links"])
+    assert any(link["filename"] == "settlement_classified_grid_map.png" for link in export["download_links"])
+    assert any(link["filename"] == "ward_malaria_burden_environmental_variables.csv" for link in export["download_links"])
+    assert any(link["filename"] == "ward_population_denominators.csv" for link in export["download_links"])
+    assert any(link["filename"] == "data_dictionary.csv" for link in export["download_links"])
 
 
 def test_top_n_classification_uses_composite_rankings(tmp_path):
