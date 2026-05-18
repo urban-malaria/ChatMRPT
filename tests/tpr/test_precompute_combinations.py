@@ -82,3 +82,75 @@ def test_repair_precomputed_combination_restores_missing_original(tmp_path, monk
     queried = precompute.query_precomputed_tpr(session_id, "primary", "u5")
     assert queried["success"] is True
     assert queried["summary"]["total_wards"] == 1
+
+
+def test_switch_tpr_combination_imports_repair_helpers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    session_id = "switch-session"
+    session_folder = tmp_path / "instance" / "uploads" / session_id
+    session_folder.mkdir(parents=True)
+
+    from app.tpr.query_tool import SwitchTPRCombination
+
+    calls = {"has": 0, "repair": 0}
+
+    monkeypatch.setattr("app.tpr.cache.is_ward_cache_available", lambda _session_id: True)
+    monkeypatch.setattr("app.tpr.cache.load_ward_cache", lambda _session_id: {
+        "state_gdf": pd.DataFrame({"WardName": ["Alpha"]}),
+        "env_data": pd.DataFrame({"WardName": ["Alpha"], "NighttimeLights": [1.0]}),
+        "state_name": "Kwara",
+    })
+    monkeypatch.setattr("app.tpr.precompute.is_tpr_precomputed", lambda _session_id: True)
+
+    def fake_has(_session_id, facility_level, age_group):
+        calls["has"] += 1
+        assert facility_level == "primary"
+        assert age_group == "u5"
+        return False
+
+    def fake_repair(_session_id, facility_level, age_group, **kwargs):
+        calls["repair"] += 1
+        assert kwargs["state"] == "Kwara"
+        return {"success": True, "repaired": True, "ward_count": 1}
+
+    monkeypatch.setattr("app.tpr.precompute.has_precomputed_combination", fake_has)
+    monkeypatch.setattr("app.tpr.precompute.repair_precomputed_combination", fake_repair)
+    monkeypatch.setattr("app.tpr.precompute.query_precomputed_tpr", lambda **_kwargs: {
+        "success": True,
+        "data": [{
+            "ward_name": "Alpha",
+            "lga": "LGA",
+            "burden": 12.5,
+            "population": 1000,
+            "total_positive": 13,
+        }],
+        "summary": {
+            "total_wards": 1,
+            "avg_burden": 12.5,
+            "min_burden": 12.5,
+            "max_burden": 12.5,
+            "total_population": 1000,
+            "total_positive": 13,
+        },
+    })
+    monkeypatch.setattr(SwitchTPRCombination, "_merge_tpr_with_wards", lambda self, tpr_df, state_gdf: pd.DataFrame({
+        "WardName": ["Alpha"],
+        "Burden": [12.5],
+        "Population": [1000],
+        "Total_Positive": [13],
+    }))
+    monkeypatch.setattr(SwitchTPRCombination, "_build_final_dataset", lambda self, merged_gdf, env_data, state_name: pd.DataFrame({
+        "WardName": ["Alpha"],
+        "LGA": ["LGA"],
+        "Burden": [12.5],
+        "Population": [1000],
+        "Total_Positive": [13],
+        "NighttimeLights": [1.0],
+    }))
+    monkeypatch.setattr("app.tpr.analysis_tool.create_shapefile_package", lambda *_args, **_kwargs: True)
+
+    result = SwitchTPRCombination(facility_level="primary", age_group="u5", generate_map=False).execute(session_id)
+
+    assert result.success is True
+    assert calls == {"has": 1, "repair": 1}
+    assert (session_folder / "raw_data.csv").exists()
