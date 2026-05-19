@@ -15,9 +15,11 @@ PROJECT_ROOT = _current_file.parent.parent.parent  # Go up from app/config/
 # For AWS deployment, these paths might be overridden by environment variables
 # or mounted from S3/EFS
 
-# Raster data directory
+# Environmental raster data directory.
+# The deployed raster library lives under data/geospatial/rasters; the
+# environment variable remains available for EFS/S3-mounted deployments.
 RASTER_DIR = os.environ.get('CHATMRPT_RASTER_DIR', 
-                            os.path.join(PROJECT_ROOT, 'rasters'))
+                            os.path.join(PROJECT_ROOT, 'data', 'geospatial', 'rasters'))
 
 # Nigeria master shapefile
 NIGERIA_SHAPEFILE = os.environ.get('CHATMRPT_NIGERIA_SHAPEFILE',
@@ -99,6 +101,6 @@ def ensure_directories_exist():
 # 4. Environment variables can be set in the EC2 user data or ECS task definition
 
 # Example AWS setup:
-# export CHATMRPT_RASTER_DIR=/mnt/efs/chatmrpt/rasters
+# export CHATMRPT_RASTER_DIR=/mnt/efs/chatmrpt/data/geospatial/rasters
 # export CHATMRPT_NIGERIA_SHAPEFILE=/mnt/efs/chatmrpt/shapefiles/nigeria/wards.shp
 # export CHATMRPT_INSTANCE_DIR=/mnt/efs/chatmrpt/instance
