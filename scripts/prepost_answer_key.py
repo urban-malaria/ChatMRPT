@@ -10,7 +10,7 @@ A multiple-choice answer is correct when it matches the key exactly (for "choose
 set of options, as in PrePostQuestions.calculate_score). Open-ended questions have no answer key.
 
 Outputs (data/chatmrpt_prepost_evaluation/study_participants_2026-11-03):
-  prepost_analysis.xlsx        Read me; Answers (one row per participant, test and question)
+  prepost_analysis.xlsx        Read me; Answers (one row per participant, test and question, with answer choices)
   answers_with_key_long.csv    the Answers sheet as CSV
 """
 import ast
@@ -36,6 +36,11 @@ def key_indices(q):
     return list(q.get("correct_indices", []))
 
 
+def choices_text(q):
+    """All options of a multiple-choice question, lettered, as shown to participants."""
+    return " | ".join(f"{chr(65 + i)}. {o}" for i, o in enumerate(q["options"]))
+
+
 def option_text(q, indices):
     return "; ".join(q["options"][i] for i in indices)
 
@@ -58,9 +63,10 @@ rows = []
 for r in long.itertuples():
     q = BY_ID[r.question_id]
     out = {"phone_last4": r.phone_last4, "cohort": r.cohort, "test": r.test_type, "section": q["section"],
-           "question_id": q["id"], "question": q["text"], "answer": r.response, "answer_key": "", "correct": ""}
+           "question_id": q["id"], "question": q["text"], "answer_choices": "", "answer": r.response, "answer_key": "", "correct": ""}
     if q["type"] in ("radio", "checkbox"):
         selected = parse(q, r.response)
+        out["answer_choices"] = choices_text(q) + (" (choose all that apply)" if q["type"] == "checkbox" else "")
         out["answer"] = option_text(q, selected) if selected is not None else ""
         if key_indices(q):
             out["answer_key"] = option_text(q, key_indices(q))
@@ -79,13 +85,16 @@ tests = answers[answers.section.eq("concepts")].groupby("phone_last4").test.agg(
 n_both = int(tests.reindex(people).map(lambda t: isinstance(t, set) and {"pre", "post"} <= t).sum())
 late = check.loc[people].note.dropna()
 late = late[late.str.startswith("Pre-test taken")]
-readme = pd.DataFrame({"Item": ["What this is", "Questions and answer keys", "Correct", "Participants", "Notes"],
+readme = pd.DataFrame({"Item": ["What this is", "Questions and answer keys", "Answer choices", "Correct", "Participants", "Notes"],
                        "Description": [
     "Pre- and post-test answers of the ChatMRPT study participants, one row per participant, test and question, "
     "with the question wording, the answer key and whether the answer is correct.",
     f"From the survey as served in ChatMRPT (app/prepost/questions.py), the same in every saved version of the code "
     f"from 21 October 2025 onward. {keyed.question_id.nunique()} concept questions have an answer key; the others are "
     "open-ended or background questions and have no key.",
+    "For multiple-choice questions, every option the participant could pick, lettered in the order shown and "
+    "separated by ' | '; '(choose all that apply)' marks questions where more than one option could be picked. "
+    "Empty for open-ended and rating-scale questions.",
     "Yes if the answer matches the key. For 'choose all that apply' questions, all correct options and no others "
     "must be chosen, as in ChatMRPT's own scoring.",
     f"{len(people)} study participants; {n_both} took both the pre- and post-test.",
