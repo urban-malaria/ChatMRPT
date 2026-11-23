@@ -64,3 +64,26 @@ def test_paths_outside_uploads_are_rejected(tmp_path, monkeypatch):
     r = app.test_client().post("/explain_visualization", json={
         "viz_url": "/serve_viz_file/sid1/../../../../etc/passwd", "session_id": "sid1"})
     assert r.status_code == 400 and not calls
+
+
+def test_burden_cap_is_counted_and_explained_in_prompt():
+    import pandas as pd
+
+    from app.visualization.explainer import UniversalVisualizationExplainer
+
+    df = pd.DataFrame({"WardName": ["a", "b", "c"], "LGA": ["x", "x", "y"], "Burden": [1000.0, 1000.0, 12.5]})
+    e = UniversalVisualizationExplainer(llm_manager=object())
+    ctx = {"viz_type": "tpr_map"}
+    e._extract_tpr_context(df, ctx, "WardName", "LGA")
+    assert ctx["wards_at_cap"] == 2
+    prompt = e._build_prompt("tpr_map", ctx)
+    assert "2 wards are at the cap" in prompt
+    assert "does not mean everyone" in prompt
+
+
+def test_method_reference_uses_knowledge_library():
+    from app.visualization.explainer import _method_reference
+
+    assert "1,000" in _method_reference("tpr_map")
+    assert "median" in _method_reference("vulnerability_map_composite")
+    assert _method_reference("data_analysis") == ""

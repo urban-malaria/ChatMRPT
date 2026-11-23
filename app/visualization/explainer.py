@@ -117,6 +117,36 @@ _TYPE_ALIASES = {
 }
 
 
+# Knowledge library entries describing how each chart's numbers are produced.
+_VIZ_KNOWLEDGE = {
+    'tpr_map': ('malaria-burden',),
+    'vulnerability_map_composite': ('composite-scoring', 'risk-categories'),
+    'vulnerability_map_pca': ('pca', 'risk-categories'),
+    'composite_score_maps': ('composite-scoring',),
+    'box_plot': ('composite-scoring',),
+    'variable_distribution': ('risk-variables',),
+    'itn_map': ('itn-planning', 'urban-extent'),
+    'urban_extent_map': ('urban-extent',),
+    'settlement_map': ('settlement-classification',),
+}
+
+
+def _method_reference(viz_type: str) -> str:
+    """Reviewed ChatMRPT method text for this chart type, for the system message."""
+    try:
+        from app.knowledge import get
+    except Exception:
+        return ""
+    texts = []
+    for entry_id in _VIZ_KNOWLEDGE.get(viz_type, ()):
+        entry = get(entry_id)
+        if entry is not None and entry.in_prompts:
+            texts.append(entry.full_text())
+    if not texts:
+        return ""
+    return "\n\nHow ChatMRPT produced these numbers (reference):\n\n" + "\n\n".join(texts)
+
+
 def resolve_viz_type(viz_type: Optional[str], viz_path: Optional[str]) -> str:
     """Return the explainer type for a chart, using its file name first."""
     name = os.path.basename(viz_path or '').lower()
@@ -167,9 +197,11 @@ class UniversalVisualizationExplainer:
             system_message = (
                 "You are a malaria epidemiologist embedded in the ChatMRPT analysis system. "
                 "Explain the visualization clearly and specifically using the data provided. "
-                "Reference actual ward names, LGA names, and numbers. "
+                "Reference actual ward names, LGA names, and numbers. Do not present causes or "
+                "factors that are not in the data as findings; if you suggest possible reasons, "
+                "label them as possibilities to check. "
                 "Be concise (3-5 paragraphs). Focus on actionable insights for public health officials."
-            )
+            ) + _method_reference(viz_type)
 
             explanation = self.llm_manager.generate_response(
                 prompt=prompt,
@@ -276,6 +308,10 @@ class UniversalVisualizationExplainer:
                     {'ward': r[ward_col], 'value': round(float(r[burden_col]), 1)}
                     for _, r in bottom5.iterrows()
                 ]
+
+            if burden_col.lower() == 'burden':
+                from app.tpr.utils import BURDEN_CAP_PER_1000
+                ctx['wards_at_cap'] = int((series >= BURDEN_CAP_PER_1000 - 0.01).sum())
 
             if lga_col:
                 lga_avg = df.groupby(lga_col)[burden_col].mean().sort_values(ascending=False)
@@ -513,6 +549,14 @@ class UniversalVisualizationExplainer:
             lines.append(
                 f"- {metric_name}: mean {ctx['mean']}, median {ctx.get('median', 'N/A')}, "
                 f"range {ctx.get('min', '?')} - {ctx.get('max', '?')}"
+            )
+
+        if ctx.get('wards_at_cap'):
+            lines.append(
+                f"- {ctx['wards_at_cap']} wards are at the cap of 1,000 per 1,000. A capped value means "
+                "recorded positive cases are at or above the estimated ward population (usually an "
+                "underestimated population or patients from other wards treated there); it does not "
+                "mean everyone in the ward had malaria."
             )
 
         # Top/bottom wards

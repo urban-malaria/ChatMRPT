@@ -9,10 +9,11 @@ summary: >
 status: draft
 sources: []
 open_questions:
+  - Confirm the wording on what a capped (1,000 per 1,000) ward means.
   - Name the population source (the code uses national population rasters; confirm dataset and year, e.g. WorldPop).
 ---
 - **Positive cases** are summed over all facilities in the ward and all reporting periods in the data (or within each year, for per-year results). When both RDT and microscopy data exist, ChatMRPT uses the method with the higher positivity rate for that ward, so the same patients are not counted twice.
 - **Population** is estimated for each ward from population rasters, matched to the chosen age group: total population for all ages, under-5 population for children under 5, total minus under-5 for over 5, and women aged 15-49 for pregnant women.
-- Values are capped at 1,000 per 1,000, since higher values are not possible.
+- Values are capped at 1,000 per 1,000, since higher values are not possible. A ward at the cap has as many recorded positive cases as estimated residents or more. This usually means the ward's population is underestimated, or that patients from other wards are tested at its facilities (repeat tests can also contribute). It does not mean everyone in the ward had malaria; treat capped wards as a data-quality flag as well as a high-burden signal.
 - LGA averages are population-weighted: total positives divided by total population in the LGA.
 - Burden reflects cases confirmed at health facilities, so it depends on testing and care-seeking as well as transmission.
