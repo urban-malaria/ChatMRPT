@@ -89,6 +89,46 @@ VIZ_TYPE_INFO = {
 }
 
 
+# Chart file-name prefixes/patterns -> explainer type, checked in order. The
+# file name is more reliable than the type guessed by the frontend.
+_FILENAME_TYPE_RULES = (
+    ('vulnerability_map_pca', 'vulnerability_map_pca'),
+    ('vulnerability_map', 'vulnerability_map_composite'),
+    ('composite_map_page', 'composite_score_maps'),
+    ('composite_score', 'composite_score_maps'),
+    ('box_plot', 'box_plot'),
+    ('decision_tree', 'decision_tree'),
+    ('urban_extent', 'urban_extent_map'),
+    ('itn_distribution', 'itn_map'),
+    ('settlement', 'settlement_map'),
+    ('tpr_distribution', 'tpr_map'),
+    ('burden_distribution', 'tpr_map'),
+    ('_distribution_map', 'variable_distribution'),
+    ('_multi_year_distribution', 'variable_distribution'),
+)
+
+# Short or legacy types sent by clients -> explainer type.
+_TYPE_ALIASES = {
+    'vulnerability_map': 'vulnerability_map_composite',
+    'pca_map': 'vulnerability_map_pca',
+    'composite_score': 'composite_score_maps',
+    'box_plot_ranking': 'box_plot',
+    'urban_map': 'urban_extent_map',
+}
+
+
+def resolve_viz_type(viz_type: Optional[str], viz_path: Optional[str]) -> str:
+    """Return the explainer type for a chart, using its file name first."""
+    name = os.path.basename(viz_path or '').lower()
+    for pattern, resolved in _FILENAME_TYPE_RULES:
+        if pattern in name:
+            if resolved == 'vulnerability_map_composite' and 'pca' in name:
+                return 'vulnerability_map_pca'
+            return resolved
+    viz_type = (viz_type or '').lower().replace(' ', '_')
+    return _TYPE_ALIASES.get(viz_type, viz_type)
+
+
 class UniversalVisualizationExplainer:
     """
     Data-driven explanation service for visualizations.
@@ -110,7 +150,7 @@ class UniversalVisualizationExplainer:
         if not self.llm_manager:
             return "ERROR: LLM manager not available for explanations"
 
-        viz_type = (viz_type or '').lower().replace(' ', '_')
+        viz_type = resolve_viz_type(viz_type, viz_path)
         logger.info(
             "Explaining visualization: type=%s path=%s session=%s",
             viz_type, viz_path, session_id,

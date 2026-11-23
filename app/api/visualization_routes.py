@@ -653,6 +653,12 @@ def explain_visualization():
         logger.info(f"viz_url received: {viz_url}")
         logger.info(f"session_id: {session_id}")
 
+        # The explain button sends only viz_url (e.g. /serve_viz_file/<sid>/visualizations/x.html);
+        # use its path component when viz_path is not given.
+        if not viz_path and not visualization_path and viz_url:
+            from urllib.parse import urlparse
+            viz_path = urlparse(viz_url).path or None
+
         # CRITICAL: Check if viz_path is actually being used as the primary path
         # The frontend sends viz_path, NOT visualization_path!
         if not visualization_path and viz_path:
@@ -752,6 +758,19 @@ def explain_visualization():
                     full_path = os.path.join(uploads_root, session_id, vis_rel)
             else:
                 full_path = visualization_path
+
+            # Only explain files inside the uploads or static visualization folders.
+            allowed_roots = [
+                os.path.realpath(current_app.config['UPLOAD_FOLDER']),
+                os.path.realpath(os.path.join(current_app.instance_path, 'uploads')),
+                os.path.realpath(os.path.join(current_app.root_path, 'static', 'visualizations')),
+            ]
+            resolved = os.path.realpath(full_path)
+            if not any(resolved == root or resolved.startswith(root + os.sep) for root in allowed_roots):
+                logger.warning("Rejected visualization path outside allowed folders: %s", full_path)
+                return jsonify({'status': 'error', 'message': 'Invalid visualization path'}), 400
+            if not os.path.exists(resolved):
+                return jsonify({'status': 'error', 'message': 'Visualization file not found'}), 404
 
             # Debug logging
             logger.info(f"=== CALLING EXPLAINER ===")
