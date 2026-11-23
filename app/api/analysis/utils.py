@@ -12,19 +12,20 @@ from flask import current_app, session
 from app.upload.upload_service import UploadService
 
 
+STALE_DATA_FLAGS = ('data_loaded', 'csv_loaded', 'shapefile_loaded', 'analysis_complete')
+
+
 def resync_session_flags(session_id: str) -> Dict[str, bool]:
     """Synchronise Flask session flags with on-disk uploads for the session."""
 
     upload_service = UploadService()
     session_path = Path(upload_service.base_dir) / session_id
-    if not session_path.exists():
-        return {}
 
     has_csv = False
     has_shp = False
     has_unified = False
 
-    for entry in session_path.rglob('*'):
+    for entry in (session_path.rglob('*') if session_path.exists() else ()):
         if entry.is_dir() or entry.name.startswith('.'):  # skip directories/hidden files
             continue
         suffix = entry.suffix.lower()
@@ -46,6 +47,12 @@ def resync_session_flags(session_id: str) -> Dict[str, bool]:
         updates['analysis_complete'] = True
     if has_csv or has_shp or has_unified:
         updates['data_loaded'] = True
+
+    if not updates:
+        # No data for this session on disk (e.g. a new chat opened after an
+        # upload in another chat): clear flags left over from the old chat so
+        # messages are not routed to the data agent.
+        updates = {flag: False for flag in STALE_DATA_FLAGS if session.get(flag)}
 
     if updates:
         upload_service.set_session_flags(
