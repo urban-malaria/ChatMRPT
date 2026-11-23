@@ -57,7 +57,10 @@ const VisualizationFrame: React.FC<VisualizationFrameProps> = ({
   // Listen for ITN map update messages from iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Only handle ITN map updates
+      // Only react to updates sent by this frame's own map; every chart in
+      // the chat listens on window, so without this check an ITN threshold
+      // update replaced all of them.
+      if (event.source !== iframeRef.current?.contentWindow) return;
       if (event.data?.type === 'updateITNMap' && event.data?.mapPath) {
         console.log('Received ITN map update:', event.data.mapPath);
         // Update the iframe URL
