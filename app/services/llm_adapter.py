@@ -502,7 +502,7 @@ class LLMAdapter:
         # Build candidate model list: primary then fallbacks
         fallback_env = os.environ.get('OPENAI_MODEL_FALLBACKS', '')
         env_fallbacks = [m.strip() for m in fallback_env.split(',') if m.strip()] if fallback_env else []
-        default_fallbacks = ['chatgpt-4o-latest', 'gpt-4o-mini', 'gpt-4o-2024-08-06']
+        default_fallbacks = ['gpt-4o', 'gpt-4o-mini']
 
         seen = set()
         candidates = []

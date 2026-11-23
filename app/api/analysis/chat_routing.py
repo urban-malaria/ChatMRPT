@@ -36,7 +36,7 @@ async def route_with_mistral(message: str, session_context: dict) -> str:
 
 def _is_semantic_router_enabled() -> bool:
     """Check if semantic router is enabled."""
-    return os.getenv("SEMANTIC_ROUTER_ENABLED", "true").lower() == "true"
+    return os.getenv("SEMANTIC_ROUTER_ENABLED", "false").lower() == "true"
 
 
 async def _route_with_semantic_router(message: str, session_context: dict) -> str:

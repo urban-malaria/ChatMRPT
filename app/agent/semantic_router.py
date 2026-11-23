@@ -218,4 +218,4 @@ def get_semantic_router() -> SemanticChatRouter:
 
 def is_semantic_router_enabled() -> bool:
     """Check if semantic router is enabled via environment variable."""
-    return os.getenv("SEMANTIC_ROUTER_ENABLED", "true").lower() == "true"
+    return os.getenv("SEMANTIC_ROUTER_ENABLED", "false").lower() == "true"

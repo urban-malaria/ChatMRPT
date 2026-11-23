@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -26,6 +27,16 @@ from app.config.arena import (
 )
 from app.services.llm_adapter import LLMAdapter
 from app.arena.prompts import get_arena_system_prompt
+
+# LLMAdapter reports provider failures as text such as "Groq error: ..." or
+# "OpenAI error: ..."; _get_model_response uses "Error: ...".
+_ERROR_RESPONSE_PATTERN = re.compile(r"^\s*(?:[A-Za-z]+ )?error:", re.IGNORECASE)
+
+
+def is_error_response(text: Optional[str]) -> bool:
+    """Return True if a model response is empty or is a provider error message."""
+    return not text or not text.strip() or bool(_ERROR_RESPONSE_PATTERN.match(text))
+
 
 logger = logging.getLogger(__name__)
 
@@ -375,6 +386,11 @@ class ArenaManager:
         # Get responses from first pair
         response_a, latency_a = self._get_model_response(model_a, user_message)
         response_b, latency_b = self._get_model_response(model_b, user_message)
+
+        failed = [m for m, r in ((model_a, response_a), (model_b, response_b)) if is_error_response(r)]
+        if failed:
+            logger.warning("Arena battle aborted; models failed: %s", ", ".join(failed))
+            return {'error': f"Arena models unavailable: {', '.join(failed)}"}
 
         battle.all_responses[model_a] = response_a
         battle.all_responses[model_b] = response_b
