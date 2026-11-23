@@ -175,7 +175,9 @@ def precompute_all_tpr_combinations(
     schema = _load_column_schema(session_id)
 
     # --- Load shapefile once (shared across all combinations) ---
-    from app.tpr.utils import load_state_shapefile, extract_ward_population, normalize_ward_name
+    from app.tpr.utils import (
+        extract_ward_population, load_state_shapefile, normalize_ward_name, ward_population_key,
+    )
     import re as _re
 
     if state_gdf is None:
@@ -186,7 +188,7 @@ def precompute_all_tpr_combinations(
         if state_gdf is not None:
             logger.info("Loaded shapefile once for precompute (%d wards)", len(state_gdf))
 
-    # Normalise ward names on state_gdf so pop_cache can be keyed by WardName_norm
+    # Normalise ward names on state_gdf so pop_cache can be keyed by ward + LGA
     if state_gdf is not None and 'WardName_norm' not in state_gdf.columns:
         ward_col = next((c for c in ['WardName', 'Ward', 'ADM3_EN'] if c in state_gdf.columns), None)
         if ward_col:
@@ -200,7 +202,7 @@ def precompute_all_tpr_combinations(
         def _extract_pop(age_grp: str):
             series = extract_ward_population(state_gdf, age_grp)
             if series is not None:
-                return age_grp, pd.Series(series.values, index=state_gdf['WardName_norm'].values)
+                return age_grp, pd.Series(series.values, index=ward_population_key(state_gdf).values)
             return age_grp, None
 
         pop_cache = {}

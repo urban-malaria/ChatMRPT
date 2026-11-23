@@ -497,7 +497,13 @@ def data_analysis_chat_stream():
             try:
                 from app.services.session_memory import SessionMemory, MessageType
 
-                for event in stream_analysis_events(captured_session_id, message):
+                from app.utils.sse_heartbeat import SSE_HEARTBEAT, with_heartbeat
+
+                events = with_heartbeat(lambda: stream_analysis_events(captured_session_id, message))
+                for event in events:
+                    if event is None:
+                        yield SSE_HEARTBEAT
+                        continue
                     yield f"data: {_json.dumps(event)}\n\n"
                     if event.get('type') == 'result':
                         response_time = time.time() - request_start

@@ -114,6 +114,19 @@ def extract_ward_population(ward_gdf, age_group: str = 'all_ages'):
 
 
 
+def ward_population_key(gdf: pd.DataFrame) -> pd.Series:
+    """Key identifying a ward for population lookups.
+
+    Ward names repeat across LGAs within a state, so the normalised ward name
+    is combined with the shapefile's LGA code (or name) when available.
+    """
+    key = gdf['WardName_norm'].astype(str)
+    lga_col = next((c for c in ('LGACode', 'LGAName') if c in gdf.columns), None)
+    if lga_col:
+        key = key + '|' + gdf[lga_col].astype(str)
+    return key
+
+
 def normalize_ward_name(name: str) -> str:
     """Thin wrapper — canonical implementation lives in app.utils.ward_matcher."""
     from app.utils.ward_matcher import normalize_ward_name as _normalize
@@ -348,7 +361,10 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
 
             # Extract population based on age group (use cache if available)
             if pop_cache is not None and age_group in pop_cache:
-                merged['Population'] = merged['WardName_norm'].map(pop_cache[age_group]).fillna(0)
+                cached = pop_cache[age_group]
+                if not cached.index.is_unique:
+                    cached = cached.groupby(level=0).first()
+                merged['Population'] = ward_population_key(merged).map(cached).fillna(0)
                 pop_series = merged['Population']
             else:
                 pop_series = extract_ward_population(merged, age_group)
