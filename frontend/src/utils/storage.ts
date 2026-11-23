@@ -111,6 +111,26 @@ export const storage = {
     getSessionStorage()?.removeItem(CONVERSATION_ID_KEY);
   },
 
+  /**
+   * Start a new conversation: always generate a fresh ID, store it, and put it
+   * in the URL. ensureConversationId() would return the old ID from the URL.
+   */
+  startNewConversation(): string {
+    const conversationId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `conv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+    getSessionStorage()?.setItem(CONVERSATION_ID_KEY, conversationId);
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set(CONVERSATION_ID_KEY, conversationId);
+      window.history.replaceState({}, document.title, url.toString());
+    }
+    return conversationId;
+  },
+
   ensureConversationId(): string {
     if (typeof window === 'undefined') {
       return 'default';

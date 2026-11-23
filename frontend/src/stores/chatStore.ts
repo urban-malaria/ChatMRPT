@@ -242,9 +242,8 @@ export const useChatStore = create<ChatState>()(
             console.warn('Failed to clear chat storage:', e);
           }
 
-          // Clear old conversation ID and generate new one
-          storage.clearConversationId();
-          const newConversationId = storage.ensureConversationId();
+          // Replace the old conversation ID (in storage and URL) with a new one
+          const newConversationId = storage.startNewConversation();
 
           return set({
             session: {
