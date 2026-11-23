@@ -1835,14 +1835,19 @@ def _save_itn_map_html(
     with open(path, 'r') as handle:
         html_content = handle.read()
 
+    # Place the control at the bottom-left of the map (the Allocation Strategy
+    # box is top-left, the summary and legend are on the right). The figure has
+    # a fixed height and sits at the top of the page.
+    control_top = int(fig.layout.height or 700) - 75
+
     custom_css = """
         <style>
             .threshold-control {
                 position: absolute;
-                top: 120px;
+                top: CONTROL_TOP_PX;
                 left: 20px;
                 background: rgba(255, 255, 255, 0.9);
-                padding: 15px;
+                padding: 10px 12px;
                 border-radius: 5px;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 z-index: 1000;
@@ -1865,6 +1870,8 @@ def _save_itn_map_html(
             }
         </style>
     """
+
+    custom_css = custom_css.replace("CONTROL_TOP_PX", f"{control_top}px")
 
     threshold_control = f"""
         <div class="threshold-control">
