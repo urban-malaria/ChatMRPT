@@ -362,13 +362,15 @@ def match_and_merge_data(tpr_df: pd.DataFrame, state_gdf: gpd.GeoDataFrame) -> g
     logger.debug(f"Sample burden ward names: {list(tpr_df['WardName_norm'].head(3))}")
     logger.debug(f"Sample shapefile ward names: {list(state_gdf['WardName_norm'].head(3))}")
 
-    # Try exact match first
-    merged = state_gdf.merge(
-        tpr_df,
-        on='WardName_norm',
+    # Try exact match first. Repeated ward names are matched by ward + LGA.
+    from app.tpr.utils import assign_ward_match_keys
+    data_keys, shp_keys = assign_ward_match_keys(tpr_df, state_gdf)
+    merged = state_gdf.assign(_match_key=shp_keys.values).merge(
+        tpr_df.drop(columns=['WardName_norm']).assign(_match_key=data_keys.values),
+        on='_match_key',
         how='left',
         suffixes=('', '_burden')
-    )
+    ).drop(columns=['_match_key'])
 
     # Check match rate using Burden column
     burden_col = 'Burden' if 'Burden' in merged.columns else 'Total_Positive'

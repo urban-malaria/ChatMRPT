@@ -10,7 +10,7 @@ import geopandas as gpd
 import numpy as np
 import re
 import os
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
@@ -125,6 +125,65 @@ def ward_population_key(gdf: pd.DataFrame) -> pd.Series:
     if lga_col:
         key = key + '|' + gdf[lga_col].astype(str)
     return key
+
+
+def _normalize_lga_name(name: object) -> str:
+    """Lower-case LGA name without state prefix, 'LGA' suffix or punctuation."""
+    text = str(name or '').lower()
+    text = re.sub(r'^[a-z]{2}\s+', '', text)
+    text = re.sub(r'\blocal government area\b|\blga\b', ' ', text)
+    return ' '.join(re.sub(r'[^a-z0-9]+', ' ', text).split())
+
+
+def assign_ward_match_keys(result_df: pd.DataFrame, state_gdf: pd.DataFrame,
+                           data_lga_col: str = 'LGA') -> Tuple[pd.Series, pd.Series]:
+    """Keys for joining ward-level results to shapefile wards.
+
+    Ward names that are unique in both the data and the shapefile match on
+    name alone. Names that repeat (the same ward name in different LGAs) match
+    on name plus LGA, choosing the closest shapefile LGA among the wards with
+    that name. Data rows whose LGA matches none of them get a key that matches
+    nothing, rather than being attached to the wrong ward.
+
+    Both frames need a ``WardName_norm`` column. Returns (data_keys, shapefile_keys).
+    """
+    from difflib import get_close_matches
+
+    shp_names = state_gdf['WardName_norm'].astype(str)
+    data_names = result_df['WardName_norm'].astype(str)
+    shp_lga_col = next((c for c in ('LGAName', 'LGA', 'lga_name') if c in state_gdf.columns), None)
+    if shp_lga_col is None or data_lga_col not in result_df.columns:
+        return data_names, shp_names
+
+    ambiguous = set(shp_names[shp_names.duplicated(keep=False)]) | set(
+        data_names[data_names.duplicated(keep=False)])
+    if not ambiguous:
+        return data_names, shp_names
+
+    shp_lgas = state_gdf[shp_lga_col].map(_normalize_lga_name)
+    shp_keys = shp_names.where(~shp_names.isin(ambiguous), shp_names + '|' + shp_lgas)
+    candidates: Dict[str, List[str]] = {}
+    for name, lga in zip(shp_names, shp_lgas):
+        if name in ambiguous:
+            candidates.setdefault(name, []).append(lga)
+
+    data_keys = []
+    unmatched = []
+    for name, lga in zip(data_names, result_df[data_lga_col].map(_normalize_lga_name)):
+        if name not in ambiguous:
+            data_keys.append(name)
+            continue
+        options = candidates.get(name, [])
+        best = lga if lga in options else next(iter(get_close_matches(lga, options, n=1, cutoff=0.6)), None)
+        if best is None:
+            unmatched.append(f"{name} ({lga})")
+            data_keys.append(f"{name}|unmatched:{lga}")
+        else:
+            data_keys.append(f"{name}|{best}")
+    if unmatched:
+        logger.warning("Repeated ward names with no matching LGA in shapefile: %s", unmatched[:10])
+    logger.info("Matched %d repeated ward names by ward + LGA", len(ambiguous))
+    return pd.Series(data_keys, index=result_df.index), shp_keys
 
 
 def normalize_ward_name(name: str) -> str:
@@ -349,8 +408,12 @@ def calculate_ward_tpr(df: pd.DataFrame, age_group: str = 'all_ages',
                 logger.info(f"Fuzzy-matched {len(remap)} ward names: {dict(list(remap.items())[:5])}")
                 result_df['WardName_norm'] = result_df['WardName_norm'].replace(remap)
 
-            # Merge to get geometries
-            merged = state_gdf.merge(result_df, on='WardName_norm', how='left', suffixes=('_shp', ''))
+            # Merge to get geometries. Repeated ward names are matched by ward + LGA.
+            data_keys, shp_keys = assign_ward_match_keys(result_df, state_gdf)
+            result_df = result_df.assign(_match_key=data_keys.values).drop(columns=['WardName_norm'])
+            merged = state_gdf.assign(_match_key=shp_keys.values).merge(
+                result_df, on='_match_key', how='left', suffixes=('_shp', '')
+            ).drop(columns=['_match_key'])
 
             # Filter out null geometries before population extraction
             # (shapefile contains wards with missing geometry data that crash zonal_stats)

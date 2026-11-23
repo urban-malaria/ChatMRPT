@@ -62,20 +62,39 @@ def init_precompute_db(session_id: str) -> str:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Create table for TPR results
+    # Ward names repeat across LGAs, so rows are unique per ward name + LGA.
+    # Databases created before this rule are migrated in place.
+    existing = cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='tpr_results'"
+    ).fetchone()
+    needs_migration = bool(existing and "UNIQUE(facility_level, age_group, ward_name)" in existing[0])
+    if needs_migration:
+        cursor.execute("ALTER TABLE tpr_results RENAME TO tpr_results_old")
+        cursor.execute("DROP INDEX IF EXISTS idx_combo")
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tpr_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             facility_level TEXT NOT NULL,
             age_group TEXT NOT NULL,
             ward_name TEXT NOT NULL,
-            lga TEXT,
+            lga TEXT NOT NULL DEFAULT '',
             burden REAL,
             population INTEGER,
             total_positive INTEGER,
-            UNIQUE(facility_level, age_group, ward_name)
+            UNIQUE(facility_level, age_group, ward_name, lga)
         )
     ''')
+
+    if needs_migration:
+        cursor.execute('''
+            INSERT OR IGNORE INTO tpr_results
+            (facility_level, age_group, ward_name, lga, burden, population, total_positive)
+            SELECT facility_level, age_group, ward_name, COALESCE(lga, ''), burden, population, total_positive
+            FROM tpr_results_old
+        ''')
+        cursor.execute("DROP TABLE tpr_results_old")
+        logger.info("Migrated pre-compute table to ward + LGA uniqueness")
 
     # Create index for fast lookups
     cursor.execute('''
@@ -131,7 +150,7 @@ def _store_tpr_df(cursor, tpr_df: pd.DataFrame, facility_level: str, age_group: 
             facility_level,
             age_group,
             row.get('WardName', row.get('ward_name', '')),
-            row.get('LGA', row.get('lga', '')),
+            str(row.get('LGA', row.get('lga', '')) or ''),
             row.get('Burden', row.get('burden', 0)),
             int(row.get('Population', row.get('population', 0))),
             int(row.get('Total_Positive', row.get('total_positive', 0)))

@@ -493,19 +493,20 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
 
     def _merge_tpr_with_wards(self, tpr_df: pd.DataFrame, state_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """Merge TPR data with ward geometries."""
-        from app.tpr.utils import normalize_ward_name
+        from app.tpr.utils import assign_ward_match_keys, normalize_ward_name
 
         # Normalize ward names
         tpr_df['WardName_norm'] = tpr_df['WardName'].apply(normalize_ward_name)
         state_gdf = state_gdf.copy()
         state_gdf['WardName_norm'] = state_gdf['WardName'].apply(normalize_ward_name)
 
-        # Merge
-        merged = state_gdf.merge(
-            tpr_df[['WardName_norm', 'Burden', 'Population', 'Total_Positive']],
-            on='WardName_norm',
+        # Merge; repeated ward names are matched by ward + LGA
+        data_keys, shp_keys = assign_ward_match_keys(tpr_df, state_gdf)
+        merged = state_gdf.assign(_match_key=shp_keys.values).merge(
+            tpr_df[['Burden', 'Population', 'Total_Positive']].assign(_match_key=data_keys.values),
+            on='_match_key',
             how='left'
-        )
+        ).drop(columns=['_match_key'])
 
         # Fill missing values with 0
         merged['Burden'] = merged['Burden'].fillna(0)
