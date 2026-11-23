@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from app.knowledge import get
 from app.whatsapp.formatter import format_welcome
 
 
+def _summary(entry_id: str) -> str:
+    """Summary text of a knowledge library entry."""
+    entry = get(entry_id)
+    if entry is None:
+        raise KeyError(f"Knowledge entry '{entry_id}' not found")
+    return entry.summary
+
+
 def identity_response() -> str:
-    return (
-        "I am ChatMRPT, an AI assistant for malaria program data. I can explain malaria "
-        "surveillance concepts, help you prepare a CSV or Excel upload, and after upload "
-        "run TPR, burden, risk mapping, and ITN planning workflows."
-    )
+    return _summary("about-chatmrpt")
 
 
 def capabilities_response(has_upload: bool = False) -> str:
@@ -35,19 +40,13 @@ def upload_guidance_response() -> str:
 
 def tpr_definition_response() -> str:
     return (
-        "TPR means Test Positivity Rate. In malaria surveillance, it is the percentage of tested people whose "
-        "malaria test is positive.\n\n"
-        "Formula: TPR = positive malaria tests / total malaria tests x 100.\n\n"
-        "Higher TPR can suggest higher malaria transmission, more targeted testing, or care-seeking changes. "
-        "To calculate TPR for your facilities, upload a CSV or Excel file with tested and positive counts."
+        _summary("tpr")
+        + "\n\nTo calculate it for your facilities, upload a CSV or Excel file with tested and positive counts."
     )
 
 
 def burden_definition_response() -> str:
-    return (
-        "Malaria burden is a population-adjusted measure of malaria cases. In ChatMRPT we commonly express it as "
-        "positive cases per 1,000 people so wards with different population sizes can be compared fairly."
-    )
+    return _summary("malaria-burden")
 
 
 def malaria_general_response() -> str:
@@ -59,16 +58,13 @@ def malaria_general_response() -> str:
 
 
 def risk_mapping_response() -> str:
-    return (
-        "Malaria risk mapping combines burden data with geographic and environmental factors such as rainfall, "
-        "vegetation, elevation, water indices, and settlement patterns to rank areas for intervention planning."
-    )
+    return _summary("risk-variables") + "\n\n" + _summary("risk-categories")
 
 
 def itn_planning_response() -> str:
     return (
-        "ITN planning estimates where insecticide-treated nets should be prioritized based on malaria risk, "
-        "population, and operational constraints. Upload your data first if you want ChatMRPT to run the planning workflow."
+        _summary("itn-planning")
+        + "\n\nUpload your data first if you want ChatMRPT to run the planning workflow."
     )
 
 

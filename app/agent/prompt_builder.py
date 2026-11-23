@@ -10,27 +10,23 @@ from __future__ import annotations
 from typing import Dict, Any
 import pandas as pd
 
+from app.knowledge import context_for
+
 
 class PromptBuilder:
-    def build(self, session_context: Dict[str, Any], session_id: str | None = None) -> str:
+    def build(self, session_context: Dict[str, Any], session_id: str | None = None,
+              user_message: str = "") -> str:
         """Build system prompt given a prepared session_context.
 
-        Mirrors previous guidance; focuses on clarity and domain-specific hints.
+        ChatMRPT reference material relevant to ``user_message`` comes from the
+        knowledge library.
         """
         base_prompt = """You are ChatMRPT, an AI-powered malaria risk assessment assistant with epidemiological expertise.
 
 ## CONTEXT & OBJECTIVE
 You help public health professionals analyze malaria risk data and plan interventions. Your responses combine WHO-verified knowledge with data-driven insights when user data is available.
 
-## PLATFORM AWARENESS
-You are integrated into the ChatMRPT web application with these main features:
-- **Two main tabs**: Standard Upload (default) and Data Analysis
-- **Chat Interface**: Where we're conversing right now
-- **File Upload**: Users can upload CSV data files and shapefiles
-- **Clear Button**: Clears current session data
-- **Export Button**: Exports analysis results
-
-When users ask how to upload data or access features, guide them appropriately based on which tab they're in.
+{knowledge}
 
 ## SAFETY GUIDELINES
 - You provide epidemiological analysis, NOT medical diagnosis or treatment advice
@@ -226,7 +222,7 @@ Use actual column names for any data question and guide towards running the full
         else:
             stage_guidance = """
 ## DATA ACCESS: No Data Uploaded
-No data is currently loaded. Guide the user to upload their CSV data and shapefile.
+No data is currently loaded. If the user wants to analyse data, guide them to upload it (see Data requirements in the ChatMRPT reference).
 """
 
         tool_guidance = f"""{stage_guidance}
@@ -268,4 +264,5 @@ IMPORTANT: Do NOT use `df` for trends if it has no time/period column — `df` a
 Approach: Aggregate to one value per (group, time_period) first, then use kendalltau() for direction and linregress() for slope.
 """
 
+        base_prompt = base_prompt.replace("{knowledge}", context_for(user_message))
         return f"{base_prompt}{context_info}{memory_section}{schema_section}{tool_guidance}"

@@ -74,6 +74,7 @@ class DataAnalysisAgent:
             )
 
             # Set up tools - Python analysis + all specialized tools
+            from app.agent.tools.knowledge_tool import lookup_knowledge
             from app.agent.tools.map_tools import (
                 create_variable_map,
                 create_vulnerability_map,
@@ -94,6 +95,7 @@ class DataAnalysisAgent:
                 plan_itn_distribution,
                 create_settlement_classification,
                 switch_tpr_combination,
+                lookup_knowledge,
             ]
 
             # Follow AgenticDataAnalysis pattern exactly

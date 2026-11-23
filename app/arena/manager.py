@@ -33,6 +33,13 @@ from app.arena.prompts import get_arena_system_prompt
 _ERROR_RESPONSE_PATTERN = re.compile(r"^\s*(?:[A-Za-z]+ )?error:", re.IGNORECASE)
 
 
+RATE_LIMIT_RETRY_SECONDS = 5
+MODEL_UNAVAILABLE_MESSAGE = (
+    "This model could not answer right now (its provider is busy or unavailable). "
+    "Please choose the other response."
+)
+
+
 def is_error_response(text: Optional[str]) -> bool:
     """Return True if a model response is empty or is a provider error message."""
     return not text or not text.strip() or bool(_ERROR_RESPONSE_PATTERN.match(text))
@@ -339,16 +346,22 @@ class ArenaManager:
         provider = model_config.get('provider', 'groq')
 
         start_time = time.time()
-        system_prompt = get_arena_system_prompt()
+        system_prompt = get_arena_system_prompt(user_message)
 
         try:
             adapter = LLMAdapter(backend=provider, model=model_id)
-            response = adapter.generate(
-                prompt=user_message,
-                max_tokens=MAX_TOKENS,
-                temperature=0.7,
-                system_message=system_prompt,
-            )
+            for attempt in range(2):
+                response = adapter.generate(
+                    prompt=user_message,
+                    max_tokens=MAX_TOKENS,
+                    temperature=0.7,
+                    system_message=system_prompt,
+                )
+                if attempt == 0 and is_error_response(response) and "rate limit" in response.lower():
+                    logger.warning("%s rate limited; retrying once", model_id)
+                    time.sleep(RATE_LIMIT_RETRY_SECONDS)
+                    continue
+                break
             latency = (time.time() - start_time) * 1000
             logger.info(f"{model_id} responded in {latency:.0f}ms ({len(response)} chars)")
             return response, latency
@@ -473,12 +486,18 @@ class ArenaManager:
             # Get responses for next matchup (fetch if not cached)
             if model_a not in battle.all_responses:
                 resp, lat = self._get_model_response(model_a, battle.user_message)
+                if is_error_response(resp):
+                    logger.warning("Arena model %s failed in a later round: %s", model_a, resp[:200])
+                    resp = MODEL_UNAVAILABLE_MESSAGE
                 battle.all_responses[model_a] = resp
                 battle.all_latencies[model_a] = lat
                 self.model_usage_stats[model_a] = self.model_usage_stats.get(model_a, 0) + 1
 
             if model_b not in battle.all_responses:
                 resp, lat = self._get_model_response(model_b, battle.user_message)
+                if is_error_response(resp):
+                    logger.warning("Arena model %s failed in a later round: %s", model_b, resp[:200])
+                    resp = MODEL_UNAVAILABLE_MESSAGE
                 battle.all_responses[model_b] = resp
                 battle.all_latencies[model_b] = lat
                 self.model_usage_stats[model_b] = self.model_usage_stats.get(model_b, 0) + 1

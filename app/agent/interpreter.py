@@ -303,7 +303,7 @@ class RequestInterpreter:
             if not session_context.get('data_loaded', False):
                 logger.info(f"❌ No data loaded, using conversational streaming")
                 if self.llm_manager and hasattr(self.llm_manager, 'generate_with_functions_streaming'):
-                    system_prompt = self._build_system_prompt_refactored(session_context, session_id)
+                    system_prompt = self._build_system_prompt_refactored(session_context, session_id, user_message)
 
                     conv_messages = list(self.conversation_history.get(session_id, [])[-8:])
                     conv_messages.append({"role": "user", "content": user_message})
@@ -459,7 +459,7 @@ class RequestInterpreter:
         """Simple conversational response without tools - now with context awareness."""
         try:
             # Build system prompt with UI context
-            system_prompt = self._build_system_prompt_refactored(session_context, session_id)
+            system_prompt = self._build_system_prompt_refactored(session_context, session_id, user_message)
 
             # Generate response with system context
             response = self.llm_manager.generate(
@@ -493,14 +493,15 @@ class RequestInterpreter:
 
     # Legacy _build_system_prompt removed - now using PromptBuilder
     # See archive/legacy_prompt_builder.py for the original 400+ line method
-    def _build_system_prompt_refactored(self, session_context: Dict, session_id: str = None) -> str:
+    def _build_system_prompt_refactored(self, session_context: Dict, session_id: str = None,
+                                        user_message: str = "") -> str:
         """Refactored system prompt using PromptBuilder; minimal fallback on error."""
         try:
             if hasattr(self, 'prompt_builder') and self.prompt_builder is not None:
                 sc = dict(session_context) if isinstance(session_context, dict) else session_context
                 if session_id and isinstance(sc, dict):
                     sc.setdefault('session_id', session_id)
-                return self.prompt_builder.build(sc, session_id)
+                return self.prompt_builder.build(sc, session_id, user_message)
         except Exception as e:
             logger.warning(f"PromptBuilder failed, falling back to minimal prompt: {e}")
         return "You are ChatMRPT, an AI assistant for malaria risk analysis. Be accurate, concise, and action-oriented."
