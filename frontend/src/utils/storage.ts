@@ -38,6 +38,17 @@ const getConversationIdFromUrl = (): string | null => {
   return safeConversationId || null;
 };
 
+const setUrlConversationId = (conversationId: string | null): void => {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (conversationId) {
+    url.searchParams.set(CONVERSATION_ID_KEY, conversationId);
+  } else {
+    url.searchParams.delete(CONVERSATION_ID_KEY);
+  }
+  window.history.replaceState({}, document.title, url.toString());
+};
+
 export const storage = {
   setAuthToken(token: string) {
     const sessionStore = getSessionStorage();
@@ -112,8 +123,9 @@ export const storage = {
   },
 
   /**
-   * Start a new conversation: always generate a fresh ID, store it, and put it
-   * in the URL. ensureConversationId() would return the old ID from the URL.
+   * Start a new, empty conversation with a freshly generated ID. Like ChatGPT,
+   * the ID is kept out of the URL until the conversation has content
+   * (see commitConversationToUrl); any old ?conversation_id is removed.
    */
   startNewConversation(): string {
     const conversationId =
@@ -122,13 +134,16 @@ export const storage = {
         : `conv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     getSessionStorage()?.setItem(CONVERSATION_ID_KEY, conversationId);
-
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set(CONVERSATION_ID_KEY, conversationId);
-      window.history.replaceState({}, document.title, url.toString());
-    }
+    setUrlConversationId(null);
     return conversationId;
+  },
+
+  /** Put the current conversation ID in the URL once the chat has content. */
+  commitConversationToUrl(): void {
+    const conversationId = getSessionStorage()?.getItem(CONVERSATION_ID_KEY);
+    if (conversationId && getConversationIdFromUrl() !== conversationId) {
+      setUrlConversationId(conversationId);
+    }
   },
 
   ensureConversationId(): string {
@@ -174,3 +189,20 @@ export const storage = {
 };
 
 export default storage;
+
+/**
+ * Decide the conversation when the app loads, before the chat store restores
+ * saved messages: a URL with ?conversation_id opens that conversation; a plain
+ * URL always starts a new, empty one (never the tab's previous conversation).
+ */
+export const initialiseConversationFromUrl = (): void => {
+  if (typeof window === 'undefined') return;
+  const fromUrl = getConversationIdFromUrl();
+  if (fromUrl) {
+    getSessionStorage()?.setItem(CONVERSATION_ID_KEY, fromUrl);
+  } else {
+    storage.startNewConversation();
+  }
+};
+
+initialiseConversationFromUrl();

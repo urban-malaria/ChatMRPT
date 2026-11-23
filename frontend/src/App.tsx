@@ -28,26 +28,13 @@ function App() {
   useEffect(() => {
     console.log('🔵 APP: useEffect triggered');
 
-    // Ensure conversation ID exists and sync to URL
+    // The conversation is chosen in utils/storage.ts when the app loads:
+    // ?conversation_id opens that chat; a plain URL starts a new one, and its
+    // ID only appears in the URL after the first message (like ChatGPT).
     storage.clearLegacyChatState();
-    const conversationId = storage.ensureConversationId();
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     const username = urlParams.get('user');
-
-    // Check if conversation_id is already in URL, if not add it
-    const urlConvId = urlParams.get('conversation_id');
-    if (!urlConvId && conversationId && !token) {
-      // Add conversation_id to URL without reloading
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.set('conversation_id', conversationId);
-      window.history.replaceState({}, document.title, newUrl.toString());
-      console.log('🔵 APP: Added conversation_id to URL:', conversationId);
-    } else if (urlConvId && urlConvId !== conversationId) {
-      // URL has a different conversation_id, use it (for sharing/bookmarking)
-      storage.setConversationId(urlConvId);
-      console.log('🔵 APP: Using conversation_id from URL:', urlConvId);
-    }
 
     const runAuthCheck = async () => {
       try {
@@ -64,14 +51,10 @@ function App() {
         }
       } finally {
         if (token || username) {
-          // After OAuth, preserve conversation_id but remove token/user params
+          // After OAuth, remove token/user params (keep any conversation_id)
           const cleanUrl = new URL(window.location.href);
           cleanUrl.searchParams.delete('token');
           cleanUrl.searchParams.delete('user');
-          // Ensure conversation_id is still in URL
-          if (!cleanUrl.searchParams.get('conversation_id')) {
-            cleanUrl.searchParams.set('conversation_id', storage.ensureConversationId());
-          }
           window.history.replaceState({}, document.title, cleanUrl.toString());
         }
       }

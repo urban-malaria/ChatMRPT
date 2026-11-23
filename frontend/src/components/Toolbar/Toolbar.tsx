@@ -100,12 +100,6 @@ const Toolbar: React.FC = () => {
         setShapeFile(null);
         setAnalyzing(false);
 
-        // Get the new conversation ID and update URL
-        const newConversationId = storage.ensureConversationId();
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('conversation_id', newConversationId);
-        window.history.replaceState({}, document.title, newUrl.toString());
-
         // If backend provided a session ID, update it
         const newSessionId = response.data.new_session_id;
         if (newSessionId) {
@@ -132,12 +126,6 @@ const Toolbar: React.FC = () => {
         setCsvFile(null);
         setShapeFile(null);
         setAnalyzing(false);
-
-        // Update URL with new conversation ID
-        const newConversationId = storage.ensureConversationId();
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('conversation_id', newConversationId);
-        window.history.replaceState({}, document.title, newUrl.toString());
 
         setShowClearConfirm(false);
         toast('Frontend cleared, but server data may persist', {

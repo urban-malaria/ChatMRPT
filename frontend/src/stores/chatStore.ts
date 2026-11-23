@@ -78,14 +78,17 @@ export const useChatStore = create<ChatState>()(
         currentArena: null,
         
         // Message actions
-        addMessage: (message) =>
-          set((state) => ({
+        addMessage: (message) => {
+          // The conversation now has content: show its ID in the URL.
+          storage.commitConversationToUrl();
+          return set((state) => ({
             messages: [...state.messages, message],
             session: {
               ...state.session,
               messageCount: state.session.messageCount + 1,
             },
-          })),
+          }));
+        },
         
         updateMessage: (id, updates) =>
           set((state) => ({
@@ -242,7 +245,7 @@ export const useChatStore = create<ChatState>()(
             console.warn('Failed to clear chat storage:', e);
           }
 
-          // Replace the old conversation ID (in storage and URL) with a new one
+          // New, empty conversation; its ID is added to the URL on the first message
           const newConversationId = storage.startNewConversation();
 
           return set({
