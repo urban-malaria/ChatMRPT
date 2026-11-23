@@ -88,9 +88,9 @@ export type Message = RegularMessage | ArenaMessage | SystemMessage | Clarificat
 
 // Arena Types - Updated to match backend models
 export type ModelName =
-  | 'qwen/qwen3-32b'
-  | 'llama-3.3-70b-versatile'
-  | 'moonshotai/kimi-k2-instruct-0905'
+  | 'openai/gpt-oss-120b'
+  | 'qwen/qwen3.8-27b'
+  | 'openai/gpt-oss-20b'
   | 'gpt-4o';
 
 export type ModelResponses = {
@@ -103,9 +103,9 @@ export type Vote = 'a' | 'b' | 'tie' | 'bad';
 
 // Model display names for Groq models
 export const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  'qwen/qwen3-32b': 'Qwen 3 32B',
-  'llama-3.3-70b-versatile': 'Llama 3.3 70B',
-  'moonshotai/kimi-k2-instruct-0905': 'Kimi K2',
+  'openai/gpt-oss-120b': 'GPT-OSS 120B',
+  'qwen/qwen3.8-27b': 'Qwen 3.8 27B',
+  'openai/gpt-oss-20b': 'GPT-OSS 20B',
   'gpt-4o': 'GPT-4o',
 };
 

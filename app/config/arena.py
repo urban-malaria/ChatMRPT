@@ -17,20 +17,20 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 # Models A, B, C are Groq models; Model D (optional) is OpenAI for final comparison
 # Updated models list - see https://console.groq.com/docs/models
 ARENA_MODELS = {
-    'qwen/qwen3-32b': {
+    'openai/gpt-oss-120b': {
         'label': 'A',
         'provider': 'groq',
-        'display_name': 'Qwen 3 32B',
+        'display_name': 'GPT-OSS 120B',
     },
-    'llama-3.3-70b-versatile': {
+    'qwen/qwen3.8-27b': {
         'label': 'B',
         'provider': 'groq',
-        'display_name': 'Llama 3.3 70B',
+        'display_name': 'Qwen 3.8 27B',
     },
-    'moonshotai/kimi-k2-instruct-0905': {
+    'openai/gpt-oss-20b': {
         'label': 'C',
         'provider': 'groq',
-        'display_name': 'Kimi K2',
+        'display_name': 'GPT-OSS 20B',
     },
 }
 

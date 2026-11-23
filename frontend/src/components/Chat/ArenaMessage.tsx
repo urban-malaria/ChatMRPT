@@ -19,9 +19,9 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
 
   // Map each model to a consistent letter label that follows the winner
   const MODEL_TO_LABEL: Record<string, string> = {
-    'qwen/qwen3-32b': 'A',
-    'llama-3.3-70b-versatile': 'B',
-    'moonshotai/kimi-k2-instruct-0905': 'C',
+    'openai/gpt-oss-120b': 'A',
+    'qwen/qwen3.8-27b': 'B',
+    'openai/gpt-oss-20b': 'C',
     'gpt-4o': 'D'
   };
 
