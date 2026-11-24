@@ -53,6 +53,36 @@ Planned items:
 Added during Phase 3:
 - Switching uses the workflow's ward matching and keeps wards without data empty.
 
+**Phase 4: done and deployed, 24 Nov 2026** (`main` at 1f1530a, both servers).
+
+Planned items:
+- 4.1 All maps fit the state; ITN map labels in plain words.
+- 4.2 Dashboard: readable, accurate findings and all wards.
+- 4.3 Phone toolbar.
+- 4.4 Research menu, working "Clear All Local Data", honest notices, DHIS2 upload tab first.
+- 4.5 Landing page text and privacy link.
+
+Added during Phase 4:
+- The urban/rural map works (wrong column name).
+- The model maps show their real variables.
+- Study buttons no longer appear on the sign-in page.
+- The toolbar scripts and styles are bundled into the page build, because CloudFront caches unversioned /static files for a year and ignores query strings.
+
+**Live test, 24 Nov 2026:** sign-in was switched off on both servers (DISABLE_AUTH=true) and then restored, and requests without login are refused again. Everything passed on the public site:
+- the first-contact questions and Arena;
+- the full journey, clicking through the workflow, and refresh;
+- all maps fitted to the state, and downloads;
+- the switch warning;
+- desktop and phone toolbars.
+
+Neither server logged any errors.
+
+**Open (needs decisions):**
+- A password reset needs an email service.
+- The privacy notice's deletion claims need checking.
+- survey.js and other unbundled /static files are still subject to the CloudFront year-long cache.
+- The independent reviewer should repeat the newcomer test.
+
 ## How we will work
 - **Order:** one item at a time, in the phases below.
 - **Testing:** every item gets the check in its "Test" line. Each phase ends with a full run through the sample-data journey, locally against production data, using the same scripted checks as the 24 Nov test. Before deploying, the phase is run on a copy on a production server.
