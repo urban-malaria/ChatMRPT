@@ -320,6 +320,147 @@ def create_urban_extent_map(
 
 
 @tool
+def get_ward_rankings(
+    graph_state: Annotated[dict, InjectedState],
+    thought: str,
+    order: str = "highest",
+    n: int = 10,
+    wards: Optional[List[str]] = None,
+) -> Tuple[str, Dict[str, Any]]:
+    """Look up ward risk rankings from the risk analysis results.
+
+    Use this for any question about which wards are highest or lowest risk, the top or bottom N
+    wards, or where particular wards rank. Never list wards or scores from memory.
+
+    Args:
+        thought: Your reasoning about the ranking question.
+        order: 'highest' (most at risk first) or 'lowest' (least at risk first).
+        n: How many wards to list (1-50).
+        wards: Optional ward names to look up instead of a top/bottom list.
+    """
+    session_id = graph_state.get('session_id', 'default')
+    try:
+        import pandas as pd
+        path = os.path.join('instance', 'uploads', session_id, 'unified_dataset.csv')
+        if not os.path.exists(path):
+            message = ("No risk ranking exists yet. Run the risk analysis first "
+                       "(type **run malaria risk analysis**).")
+            return message, {}
+        df = pd.read_csv(path)
+        rank_col = next((c for c in ['composite_rank', 'overall_rank'] if c in df.columns), None)
+        if rank_col is None or 'WardName' not in df.columns:
+            return "The risk analysis results do not contain a ward ranking.", {}
+        score_col = next((c for c in ['composite_score', 'median_score'] if c in df.columns), None)
+        category_col = next((c for c in ['composite_category', 'vulnerability_category'] if c in df.columns), None)
+        df = df.dropna(subset=[rank_col]).sort_values(rank_col)
+        total = len(df)
+
+        if wards:
+            wanted = {str(w).strip().lower() for w in wards}
+            selected = df[df['WardName'].astype(str).str.strip().str.lower().isin(wanted)]
+            missing = sorted(w for w in wards if str(w).strip().lower() not in set(df['WardName'].astype(str).str.strip().str.lower()))
+            heading = f"Risk ranking of the requested wards (1 = highest risk, out of {total} wards):"
+        else:
+            n = max(1, min(int(n or 10), 50))
+            selected = df.head(n) if order != 'lowest' else df.tail(n).iloc[::-1]
+            missing = []
+            label = 'highest' if order != 'lowest' else 'lowest'
+            heading = f"The {len(selected)} {label}-risk wards (rank 1 = highest risk, out of {total} wards):"
+
+        rows = ["| Rank | Ward | LGA | Risk score | Category |", "|---|---|---|---|---|"]
+        for _, row in selected.iterrows():
+            score = f"{row[score_col]:.3f}" if score_col and pd.notna(row.get(score_col)) else "-"
+            rows.append(f"| {int(row[rank_col])} | {row['WardName']} | {row.get('LGA', '-')} | {score} | "
+                        f"{row.get(category_col, '-') if category_col else '-'} |")
+        message = heading + "\n\n" + "\n".join(rows)
+        if missing:
+            message += "\n\nNot found in the ranking: " + ", ".join(missing)
+
+        _add_canonical_response(
+            graph_state,
+            tool_name="get_ward_rankings",
+            message=message,
+            success=True,
+            priority=100,
+        )
+        return message, {}
+    except Exception as e:
+        logger.error(f"get_ward_rankings failed: {e}", exc_info=True)
+        return f"Error reading the ward rankings: {e}", {}
+
+
+@tool
+def explain_ward_risk(
+    graph_state: Annotated[dict, InjectedState],
+    thought: str,
+    ward: str,
+) -> Tuple[str, Dict[str, Any]]:
+    """Explain why a ward has its risk rank, using its actual values for each risk factor.
+
+    Use this when the user asks why a ward is high or low risk, or what drives a ward's score.
+
+    Args:
+        thought: Your reasoning.
+        ward: The ward name.
+    """
+    session_id = graph_state.get('session_id', 'default')
+    try:
+        import pandas as pd
+        folder = os.path.join('instance', 'uploads', session_id)
+        norm_path = os.path.join(folder, 'analysis_normalized_data.csv')
+        unified_path = os.path.join(folder, 'unified_dataset.csv')
+        if not (os.path.exists(norm_path) and os.path.exists(unified_path)):
+            return ("No risk analysis results yet. Run the risk analysis first "
+                    "(type **run malaria risk analysis**)."), {}
+        norm = pd.read_csv(norm_path)
+        unified = pd.read_csv(unified_path)
+        key = str(ward).strip().lower()
+        norm_row = norm[norm['WardName'].astype(str).str.strip().str.lower() == key]
+        unified_row = unified[unified['WardName'].astype(str).str.strip().str.lower() == key]
+        if norm_row.empty or unified_row.empty:
+            return f"'{ward}' is not in the risk analysis results. Check the spelling of the ward name.", {}
+        norm_row, unified_row = norm_row.iloc[0], unified_row.iloc[0]
+
+        rank_col = next((c for c in ['composite_rank', 'overall_rank'] if c in unified.columns), None)
+        score_col = next((c for c in ['composite_score', 'median_score'] if c in unified.columns), None)
+        category_col = next((c for c in ['composite_category', 'vulnerability_category'] if c in unified.columns), None)
+        factors = [c[len('normalization_'):] for c in norm.columns if c.startswith('normalization_')]
+
+        rows = ["| Factor | This ward | State median | Risk contribution (0 = lowest, 1 = highest in state) |",
+                "|---|---|---|---|"]
+        contributions = []
+        for factor in factors:
+            raw = norm_row.get(factor)
+            median = pd.to_numeric(norm[factor], errors='coerce').median() if factor in norm else None
+            value = norm_row.get(f'normalization_{factor}')
+            contributions.append((factor, value))
+            fmt = lambda v: "-" if not pd.notna(v) else (f"{v:,.0f}" if abs(v) >= 100 else f"{v:.3g}")
+            rows.append(f"| {factor.replace('_', ' ')} | {fmt(raw)} | {fmt(median)} | {fmt(value)} |")
+
+        strongest = [f.replace('_', ' ') for f, v in sorted(contributions, key=lambda x: -(x[1] if pd.notna(x[1]) else -1))[:2]]
+        header = (f"**{unified_row['WardName']}** ({unified_row.get('LGA', '')} LGA) is ranked "
+                  f"**{int(unified_row[rank_col])} of {unified[rank_col].notna().sum()}**"
+                  + (f", {unified_row[category_col]}" if category_col else "")
+                  + (f", risk score {unified_row[score_col]:.3f}" if score_col else "") + ".")
+        message = (header + "\n\nThe score averages these risk factors, each rescaled so that 1 is the "
+                   "highest-risk value in the state:\n\n" + "\n".join(rows)
+                   + f"\n\nThe factors pushing this ward's risk up most are {strongest[0]}"
+                   + (f" and {strongest[1]}" if len(strongest) > 1 else "") + ".")
+
+        _add_canonical_response(
+            graph_state,
+            tool_name="explain_ward_risk",
+            message=message,
+            success=True,
+            priority=100,
+        )
+        return message, {}
+    except Exception as e:
+        logger.error(f"explain_ward_risk failed: {e}", exc_info=True)
+        return f"Error explaining the ward's risk: {e}", {}
+
+
+@tool
 def list_downloads(
     graph_state: Annotated[dict, InjectedState],
     thought: str,

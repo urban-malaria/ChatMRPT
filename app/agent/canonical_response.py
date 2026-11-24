@@ -14,6 +14,8 @@ CANONICAL_TOOL_ALLOWLIST = {
     "run_risk_analysis",
     "plan_itn_distribution",
     "list_downloads",
+    "get_ward_rankings",
+    "explain_ward_risk",
 }
 
 

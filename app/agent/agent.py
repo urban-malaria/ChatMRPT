@@ -85,6 +85,8 @@ class DataAnalysisAgent:
                 create_settlement_classification,
                 switch_tpr_combination,
                 list_downloads,
+                get_ward_rankings,
+                explain_ward_risk,
             )
             self.tools = [
                 analyze_data,
@@ -97,6 +99,8 @@ class DataAnalysisAgent:
                 create_settlement_classification,
                 switch_tpr_combination,
                 list_downloads,
+                get_ward_rankings,
+                explain_ward_risk,
                 lookup_knowledge,
             ]
 
@@ -112,6 +116,8 @@ class DataAnalysisAgent:
             ])
 
             self.model = self.chat_template | model_with_tools
+            # Used once per turn when a reply quotes data without having called a tool.
+            self.model_tool_required = self.chat_template | self.llm.bind_tools(self.tools, tool_choice="required")
             self.tool_node = ToolNode(self.tools)
             self.graph = self._build_graph()
 
@@ -482,11 +488,35 @@ class DataAnalysisAgent:
             logger.error(f"[_AGENT_NODE STEP 3] ❌ Model invoke failed: {e}", exc_info=True)
             raise
 
+        llm_outputs = self._ground_reply(state, state_for_model, llm_outputs)
+
         logger.info(f"[_AGENT_NODE STEP 4] Returning node result")
         return {
             "messages": [llm_outputs],
             "intermediate_outputs": [current_data_message.content]
         }
+
+    def _ground_reply(self, state: DataAnalysisState, state_for_model: dict, reply):
+        """Ask again, with a tool call required, when a reply quotes data no tool produced this turn."""
+        from app.agent.grounding import quotes_data, tool_used_this_turn, ward_names
+
+        if getattr(reply, 'tool_calls', None) or not hasattr(self, 'model_tool_required'):
+            return reply
+        if tool_used_this_turn(list(state.get('messages', []))):
+            return reply
+        if not quotes_data(getattr(reply, 'content', ''), ward_names(state.get('input_data', []))):
+            return reply
+        logger.warning("[GROUNDING] Reply quotes data without a tool call this turn; asking again with a tool required")
+        try:
+            retry = self.model_tool_required.invoke(state_for_model)
+            if getattr(retry, 'tool_calls', None):
+                return retry
+        except Exception as exc:
+            logger.error("[GROUNDING] Tool-required retry failed: %s", exc)
+        return AIMessage(content=(
+            "I could not check that against your data just now, so I won't guess. "
+            "Please ask again, for example \"show me the 10 highest risk wards\"."
+        ))
 
     def _tools_node(self, state: DataAnalysisState):
         """
