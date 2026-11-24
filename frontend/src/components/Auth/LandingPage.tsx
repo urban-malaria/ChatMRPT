@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import LoginModal from './LoginModal';
 import SignupModal from './SignupModal';
+import PrivacyModal from '../Modal/PrivacyModal';
 
 const LandingPage: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const handleGoogleSignIn = () => {
     window.location.href = '/auth/google';
@@ -12,6 +14,8 @@ const LandingPage: React.FC = () => {
 
   return (
     <>
+      <PrivacyModal isOpen={showPrivacy} onAccept={() => setShowPrivacy(false)} />
+
       {/* Auth Modals */}
       <LoginModal
         isOpen={showLoginModal}
@@ -48,7 +52,8 @@ const LandingPage: React.FC = () => {
               Welcome to ChatMRPT
             </h1>
             <p className="text-lg text-gray-600">
-              AI-powered malaria risk analysis and intervention planning
+              ChatMRPT (Malaria Risk Prioritization Tool) helps malaria programme staff in Nigeria
+              find the wards at highest risk and plan bed net distribution, by chatting with their data
             </p>
           </div>
 
@@ -68,8 +73,8 @@ const LandingPage: React.FC = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-gray-900">TPR Workflow Analysis</p>
-                <p className="text-sm text-gray-600">Test Positivity Rate analysis with interactive visualizations</p>
+                <p className="text-sm font-medium text-gray-900">Malaria burden for every ward</p>
+                <p className="text-sm text-gray-600">From health-facility testing data (DHIS2): test positivity rate (TPR) and cases per 1,000 people, with maps</p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
@@ -77,8 +82,8 @@ const LandingPage: React.FC = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-gray-900">Risk Assessment & ITN Planning</p>
-                <p className="text-sm text-gray-600">Generate intervention strategies based on risk analysis</p>
+                <p className="text-sm font-medium text-gray-900">Ward risk ranking and bed net planning</p>
+                <p className="text-sm text-gray-600">Rank wards by malaria risk and allocate insecticide-treated nets (ITNs) to the highest-risk wards first</p>
               </div>
             </div>
           </div>
@@ -113,7 +118,8 @@ const LandingPage: React.FC = () => {
 
           {/* Footer */}
           <p className="text-xs text-gray-500 pt-6">
-            By continuing, you agree to ChatMRPT's Terms of Service and Privacy Policy
+            How ChatMRPT handles your data is described in the{' '}
+            <button type="button" onClick={() => setShowPrivacy(true)} className="underline hover:text-gray-700">privacy notice</button>.
           </p>
         </div>
       </div>
