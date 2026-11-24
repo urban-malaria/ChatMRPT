@@ -62,20 +62,27 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                   <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Data Collection & Usage</h4>
                   <ul className="text-sm space-y-2 list-disc list-inside">
                     <li>
-                      <strong>Session Data:</strong> We create temporary session IDs to maintain your 
-                      conversation context during your visit.
+                      <strong>Your account:</strong> the name and email address you sign in with, used to keep
+                      your chats together.
                     </li>
                     <li>
-                      <strong>Uploaded Files:</strong> Any CSV, Excel, or Shapefile data you upload is 
-                      processed locally in your session and automatically deleted after your session ends.
+                      <strong>Uploaded files and results:</strong> files you upload (CSV, Excel, shapefiles) and
+                      the maps, tables and downloads made from them are stored on ChatMRPT's servers so you can
+                      return to your work. They are not deleted automatically when you close the page.
                     </li>
                     <li>
-                      <strong>Chat History:</strong> Your conversations are stored temporarily to provide 
-                      context-aware responses and are cleared when you end your session.
+                      <strong>Chat history:</strong> your conversations are saved so you can reopen them from
+                      Chats. Messages are also kept in a usage log that the ChatMRPT team uses to improve the
+                      tool and for research.
                     </li>
                     <li>
-                      <strong>Analysis Results:</strong> Generated reports and visualizations are available 
-                      only during your active session.
+                      <strong>AI services:</strong> to answer you, your messages and the relevant parts of your
+                      data (such as column names, summary figures and ward values) are sent to OpenAI. General
+                      malaria questions shown as a comparison of two answers are also sent to models hosted by Groq.
+                    </li>
+                    <li>
+                      <strong>Backups:</strong> the usage log and saved chats are backed up daily to secure cloud
+                      storage (Amazon Web Services).
                     </li>
                   </ul>
                 </div>
@@ -83,10 +90,11 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Data Security</h4>
                   <ul className="text-sm space-y-2 list-disc list-inside">
-                    <li>All data transmission is encrypted using HTTPS</li>
-                    <li>No personal health information is permanently stored</li>
-                    <li>Session data is isolated and cannot be accessed by other users</li>
-                    <li>You can remove the chats stored in this browser at any time: Settings, then Data &amp; Privacy, then Clear All Local Data</li>
+                    <li>All data is sent over encrypted connections (HTTPS)</li>
+                    <li>Each user's data is kept separate; other users cannot see it</li>
+                    <li>Please upload aggregated facility or ward data only, not personal or patient-level information</li>
+                    <li>Settings, then Data &amp; Privacy, then Clear All Local Data removes the chats stored in this browser.
+                      To have your data deleted from ChatMRPT's servers, contact the ChatMRPT team.</li>
                   </ul>
                 </div>
 
@@ -110,7 +118,7 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                   <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Your Consent</h4>
                   <p className="text-sm">
                     By clicking "Accept and Continue", you acknowledge that you have read and understood
-                    this privacy notice and agree to the temporary processing of your data as described above.
+                    this privacy notice and agree to the processing of your data as described above.
                   </p>
                 </div>
               </div>
