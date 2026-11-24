@@ -121,7 +121,7 @@ def create_agent_composite_score_maps(unified_dataset: gpd.GeoDataFrame,
                     top_wards = gdf.sort_values(model, ascending=False).head(5)
                     
                     # Check if any of these wards are non-urban
-                    if urban_column in ['urbanPercentage', 'UrbanPercentage']:
+                    if urban_column in ['urbanPercentage', 'UrbanPercentage', 'urban_percentage']:
                         # For percentage columns, consider < 50% as non-urban
                         non_urban_top_wards = top_wards[top_wards[urban_column] < 50]
                     else:
@@ -872,7 +872,7 @@ def create_agent_urban_extent_map(unified_dataset: gpd.GeoDataFrame,
         logger.info(f"🏙️ Creating agent urban extent map (threshold: {threshold}%)...")
         
         # ORIGINAL: Find urban percentage column - prioritize 'urbanPercentage'
-        urban_cols = ['urbanPercentage', 'UrbanPercentage', 'urban_percent', 'Urban_Percent']
+        urban_cols = ['urban_percentage', 'urbanPercentage', 'UrbanPercentage', 'urban_percent', 'Urban_Percent', 'urban_pct']
         urban_col = None
         
         for col in urban_cols:
