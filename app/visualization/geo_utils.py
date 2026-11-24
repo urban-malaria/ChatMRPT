@@ -339,6 +339,17 @@ def save_agent_visualization(fig_or_html: Union[go.Figure, str],
             'web_path': None
         }
 
+# One colour scale for every ward risk map, so the same colour means the same rank on each:
+# pale yellow for the lowest risk, dark red for the highest. Values are inverted ranks.
+RISK_COLORSCALE = 'YlOrRd'
+
+
+def risk_rank_ticks(max_rank: int, median_rank: int, min_rank: int) -> Tuple[List[int], List[str]]:
+    """Colour bar ticks for an inverted rank scale (highest risk at the top)."""
+    return ([1, max_rank + 1 - median_rank, max_rank],
+            [f"Lowest risk ({max_rank})", f"Middle ({median_rank})", f"Highest risk ({min_rank})"])
+
+
 def get_vulnerability_colors() -> Dict[str, str]:
     """Get standard vulnerability category colors"""
     return {

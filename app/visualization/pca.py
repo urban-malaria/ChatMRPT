@@ -19,7 +19,8 @@ from typing import Dict, Any, List, Optional
 from .geo_utils import (
     prepare_unified_dataset,
     save_agent_visualization,
-    get_vulnerability_colors,
+    RISK_COLORSCALE,
+    risk_rank_ticks,
     create_geojson_from_gdf,
     calculate_data_statistics
 )
@@ -52,9 +53,6 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             return prep_result
         
         data = prep_result['data']
-        
-        # Get vulnerability colors
-        vuln_colors = get_vulnerability_colors()
         
         # Create GeoJSON
         geojson = create_geojson_from_gdf(data)
@@ -130,16 +128,15 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
 
         # Invert z-values so highest risk (rank 1) appears at TOP of colorbar
         z_inverted = max_rank + 1 - data['pca_rank']
+        pca_ticks = risk_rank_ticks(int(max_rank), int(median_rank), int(min_rank))
 
         # Create choropleth with custom colors based on vulnerability categories
         fig = go.Figure(go.Choroplethmapbox(
             geojson=geojson,
             locations=data.index,
             z=z_inverted,  # Inverted: higher value = higher risk (at top)
-            colorscale=[[0, vuln_colors['Low']],
-                       [0.33, vuln_colors['Medium']],
-                       [0.66, vuln_colors['High']],
-                       [1, vuln_colors['Very High']]],
+            colorscale=RISK_COLORSCALE,
+            marker_opacity=0.8,
             marker_line_color='black',
             marker_line_width=0.5,
             hovertemplate='%{hovertext}<extra></extra>',
@@ -150,9 +147,8 @@ def create_agent_pca_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
                     font=dict(size=12)
                 ),
                 tickmode='array',
-                # Inverted tickvals: bottom=1 (low risk), top=max_rank (high risk)
-                tickvals=[1, max_rank + 1 - median_rank, max_rank],
-                ticktext=[f"Low Risk ({int(max_rank)})", f"Medium ({int(median_rank)})", f"High Risk ({int(min_rank)})"]
+                tickvals=pca_ticks[0],
+                ticktext=pca_ticks[1]
             ),
             zmin=1,
             zmax=max_rank

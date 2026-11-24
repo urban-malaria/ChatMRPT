@@ -29,6 +29,8 @@ from .geo_utils import (
     prepare_unified_dataset,
     save_agent_visualization,
     get_vulnerability_colors,
+    RISK_COLORSCALE,
+    risk_rank_ticks,
     create_geojson_from_gdf,
     calculate_data_statistics
 )
@@ -415,15 +417,13 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
             # Inverted tickvals (original ranks mapped to inverted positions)
             # Original rank 1 (highest risk) -> inverted max_rank (top of colorbar)
             # Original max_rank (lowest risk) -> inverted 1 (bottom of colorbar)
-            tickvals = [1, max_rank + 1 - median_rank, max_rank]
-            ticktext = [f"Lowest Risk ({max_rank})", f"Mid-rank ({median_rank})", f"Highest Risk ({min_rank})"]
+            tickvals, ticktext = risk_rank_ticks(max_rank, median_rank, min_rank)
         else:
             tickvals = []
             ticktext = []
 
-        # Choose continuous colorscale (Plasma: purple=low values, yellow=high values)
-        # After inversion: yellow = highest risk at top, purple = lowest risk at bottom
-        colorscale = 'Plasma'
+        # After inversion, dark red is the highest risk (top of the colour bar)
+        colorscale = RISK_COLORSCALE
         
         # Create hover text using vectorized operations
         ward_names = gdf['WardName'].astype(str)
@@ -630,8 +630,8 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
                 'data_summary': data_summary,
                 'visual_elements': {
                     'map_type': 'choropleth',
-                    'color_scale': 'Plasma_r',
-                    'color_meaning': 'dark to light (high to low vulnerability)',
+                    'color_scale': RISK_COLORSCALE,
+                    'color_meaning': 'dark red to pale yellow (high to low vulnerability)',
                     'scale_range': 'composite vulnerability rank (1 = highest vulnerability)',
                     'unranked_appearance': 'Gray (not included in ranking)'
                 },

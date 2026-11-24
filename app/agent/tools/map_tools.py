@@ -563,9 +563,11 @@ def _with_top_wards_and_map(graph_state: dict, session_id: str, message: str) ->
                     top_pca = set(df.nsmallest(10, 'pca_rank')['WardName'])
                     shared = len(top_composite & top_pca)
                     table += (f"\n\nBoth methods were used. **{shared} of the 10 highest-risk wards are the same** in the "
-                              "composite score and PCA rankings; the two maps below show each method.")
+                              "composite score and PCA rankings; the map below shows the two methods side by side.")
                 marker = "\n\n## What you can do next"
                 message = message.replace(marker, "\n\n" + table + marker, 1) if marker in message else message + "\n\n" + table
+        if has_pca and _add_comparison_map(graph_state, session_id):
+            return message
         from app.visualization.maps_tools import CreateVulnerabilityMap
         result = CreateVulnerabilityMap(year_tag='').execute(session_id=session_id)
         if result.success and result.data:
@@ -578,6 +580,25 @@ def _with_top_wards_and_map(graph_state: dict, session_id: str, message: str) ->
     except Exception as exc:
         logger.warning(f"Could not add top wards or risk map to the risk result: {exc}")
     return message
+
+
+def _add_comparison_map(graph_state: dict, session_id: str) -> bool:
+    """Show the composite and PCA maps side by side. False when it can't be drawn."""
+    try:
+        from app.utils.tool_base import get_session_unified_dataset
+        from app.visualization.risk_comparison import create_risk_method_comparison_map
+        gdf = get_session_unified_dataset(session_id, require_geometry=True, year_tag='')
+        if gdf is None:
+            return False
+        result = create_risk_method_comparison_map(gdf, session_id)
+        if result.get('status') != 'success':
+            logger.warning(f"Side-by-side risk map failed: {result.get('message')}")
+            return False
+        _add_viz_to_state(graph_state, result['file_path'])
+        return True
+    except Exception as exc:
+        logger.warning(f"Side-by-side risk map failed: {exc}")
+        return False
 
 
 @tool
