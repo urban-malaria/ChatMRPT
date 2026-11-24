@@ -41,6 +41,18 @@ Added during Phase 2:
 - The chat is locked while the sample loads.
 - Asking for the risk analysis before the workflow explains the next step.
 
+**Phase 3: done and deployed, 24 Nov 2026** (`main` at 3ec854a, both servers).
+
+Planned items:
+- 3.1 Switching keeps the other choice, and out-of-date results are flagged.
+- 3.2 The chat survives a refresh; reopened chats keep their charts and downloads; chats get meaningful titles.
+- 3.3 Clickable choices, reasons for recommendations and the workflow's comparison charts.
+- 3.4 The risk result shows the top 10 wards with LGA and opens the risk map; the burden step lists the real variables.
+- 3.5 No "kw" prefixes in names.
+
+Added during Phase 3:
+- Switching uses the workflow's ward matching and keeps wards without data empty.
+
 ## How we will work
 - **Order:** one item at a time, in the phases below.
 - **Testing:** every item gets the check in its "Test" line. Each phase ends with a full run through the sample-data journey, locally against production data, using the same scripted checks as the 24 Nov test. Before deploying, the phase is run on a copy on a production server.
