@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 CANONICAL_TOOL_ALLOWLIST = {
     "run_risk_analysis",
     "plan_itn_distribution",
+    "list_downloads",
 }
 
 

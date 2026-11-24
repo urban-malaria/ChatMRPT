@@ -319,6 +319,48 @@ def create_urban_extent_map(
         return f"Error creating urban extent map: {e}", {}
 
 
+@tool
+def list_downloads(
+    graph_state: Annotated[dict, InjectedState],
+    thought: str,
+) -> Tuple[str, Dict[str, Any]]:
+    """List the result files the user can download, with their download links.
+
+    Use this whenever the user asks to export, download or save results. Never write download
+    links yourself: only the links returned by this tool exist.
+
+    Args:
+        thought: Your reasoning about what the user wants to download.
+    """
+    session_id = graph_state.get('session_id', 'default')
+    try:
+        from app.api.export_routes import collect_export_files
+        files, seen = [], set()
+        for entry in collect_export_files(os.path.join('instance'), session_id):
+            if entry['url'] not in seen:
+                seen.add(entry['url'])
+                files.append(entry)
+
+        if not files:
+            message = ("There are no result files to download yet. Run the malaria burden workflow, "
+                       "the risk analysis or ITN planning first; their results can then be downloaded.")
+        else:
+            lines = [f"- [{f['name']}]({f['url']}): {f['description'].lstrip('📊📈🗺️📦 ')}" for f in files]
+            message = "**Files you can download:**\n\n" + "\n".join(lines)
+
+        _add_canonical_response(
+            graph_state,
+            tool_name="list_downloads",
+            message=message,
+            success=True,
+            priority=100,
+        )
+        return message, {}
+    except Exception as e:
+        logger.error(f"list_downloads failed: {e}", exc_info=True)
+        return f"Error listing downloads: {e}", {}
+
+
 # ─────────────────────────────────────────────────────────────────────
 # 5. MALARIA RISK ANALYSIS (composite + PCA)
 # ─────────────────────────────────────────────────────────────────────

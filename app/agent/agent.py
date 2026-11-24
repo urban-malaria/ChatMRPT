@@ -84,6 +84,7 @@ class DataAnalysisAgent:
                 plan_itn_distribution,
                 create_settlement_classification,
                 switch_tpr_combination,
+                list_downloads,
             )
             self.tools = [
                 analyze_data,
@@ -95,6 +96,7 @@ class DataAnalysisAgent:
                 plan_itn_distribution,
                 create_settlement_classification,
                 switch_tpr_combination,
+                list_downloads,
                 lookup_knowledge,
             ]
 

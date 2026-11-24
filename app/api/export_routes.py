@@ -19,6 +19,156 @@ export_bp = Blueprint('export', __name__, url_prefix='/export')
 DOWNLOAD_ALIASES = {}
 
 
+def collect_export_files(instance_dir: Path, session_id: str) -> list:
+    """Every downloadable file that exists for a session, with its download URL.
+
+    Used by the export menu and by the assistant's list_downloads tool, so both only offer
+    files that exist.
+    """
+    export_base_dir = Path(instance_dir) / 'exports' / session_id
+    uploads_dir = Path(instance_dir) / 'uploads' / session_id
+
+    available_files = []
+    
+    # Check for burden analysis bundle ZIP (malaria_burden_analysis_<State>_<date>.zip)
+    bundle_matches = sorted(uploads_dir.glob('malaria_burden_analysis_*.zip'))
+    if bundle_matches:
+        bundle = bundle_matches[-1]  # YYYY-MM-DD names sort lexicographically
+        available_files.append({
+            'name': 'Malaria Burden Analysis Package',
+            'filename': bundle.name,
+            'type': 'zip',
+            'description': 'Ward burden estimates, shapefile, population denominators, and data dictionary',
+            'url': f'/export/download/{session_id}/{bundle.name}',
+            'category': 'tpr'
+        })
+    
+    # Check for TPR dashboard
+    tpr_dashboard = uploads_dir / 'tpr_dashboard.html'
+    if tpr_dashboard.exists():
+        available_files.append({
+            'name': 'TPR Dashboard',
+            'filename': 'tpr_dashboard.html',
+            'type': 'html',
+            'description': '📈 Interactive TPR analysis dashboard',
+            'url': f'/export/download/{session_id}/tpr_dashboard.html',
+            'category': 'tpr'
+        })
+    
+    # Check for ITN distribution results
+    if export_base_dir.exists():
+        # Look for ITN export directories
+        for itn_dir in export_base_dir.glob('itn_export_*'):
+            # ITN CSV
+            itn_csv = itn_dir / 'itn_distribution_results.csv'
+            if itn_csv.exists():
+                available_files.append({
+                    'name': 'ITN Distribution Plan',
+                    'filename': itn_csv.name,
+                    'type': 'csv',
+                    'description': '📊 ITN distribution allocation by ward',
+                    'url': f'/export/download/{session_id}/{itn_csv.name}',
+                    'category': 'itn'
+                })
+            
+            # ITN Dashboard
+            itn_dashboard = itn_dir / 'itn_distribution_dashboard.html'
+            if itn_dashboard.exists():
+                available_files.append({
+                    'name': 'ITN Distribution Dashboard',
+                    'filename': itn_dashboard.name,
+                    'type': 'html',
+                    'description': '📈 Interactive ITN distribution dashboard',
+                    'url': f'/export/download/{session_id}/{itn_dashboard.name}',
+                    'category': 'itn'
+                })
+
+        # Look for settlement classification exports
+        for settlement_dir in export_base_dir.glob('settlement_export_*'):
+            classification_id = settlement_dir.name.replace('settlement_export_', '', 1)
+            settlement_files = [
+                (
+                    settlement_dir / 'settlement_annotations.csv',
+                    'Settlement Classification Annotations',
+                    'csv',
+                    'Settlement grid classifications and notes'
+                ),
+                (
+                    settlement_dir / 'settlement_classified_grid.geojson',
+                    'Classified Settlement Grid',
+                    'geojson',
+                    'GeoJSON grid with settlement labels and notes'
+                ),
+                (
+                    settlement_dir / 'settlement_classified_grid_map.png',
+                    'Classified Settlement Grid Map Image',
+                    'png',
+                    'PNG map image of the classified grid with legend'
+                ),
+                (
+                    settlement_dir / 'settlement_ward_summary.csv',
+                    'Ward Settlement Summary',
+                    'csv',
+                    'Ward-level settlement class counts, percentages, and coverage'
+                ),
+                (
+                    settlement_dir / 'settlement_cells_with_ward_summary.csv',
+                    'Settlement Cells With Ward Summary',
+                    'csv',
+                    'Grid-cell annotations with ward-level settlement percentages repeated on each row'
+                ),
+                (
+                    settlement_dir / 'settlement_metadata.json',
+                    'Settlement Classification Metadata',
+                    'json',
+                    'Metadata for the settlement classification run'
+                ),
+            ]
+            for path, name, file_type, description in settlement_files:
+                if path.exists():
+                    rel = f"{settlement_dir.name}/{path.name}"
+                    available_files.append({
+                        'name': name,
+                        'filename': path.name,
+                        'type': file_type,
+                        'description': description,
+                        'url': f'/export/download/{session_id}/{rel}',
+                        'category': 'settlement',
+                        'classification_id': classification_id
+                    })
+    
+    # Check for analysis results
+    analysis_csv = uploads_dir / 'analysis_results_composite.csv'
+    if analysis_csv.exists():
+        available_files.append({
+            'name': 'Risk Analysis Results',
+            'filename': 'analysis_results_composite.csv',
+            'type': 'csv',
+            'description': '📊 Complete malaria risk analysis results',
+            'url': f'/export/download/{session_id}/analysis_results_composite.csv',
+            'category': 'analysis'
+        })
+    
+    # Risk analysis outputs written by run_risk_analysis
+    for filename, name, description in [
+        ('unified_dataset.csv', 'Unified Ward Dataset',
+         'Ward burden, environmental variables, risk scores and rankings'),
+        ('analysis_vulnerability_rankings.csv', 'Ward Risk Rankings',
+         'Wards ranked from highest to lowest malaria risk'),
+    ]:
+        if (uploads_dir / filename).exists():
+            available_files.append({
+                'name': name,
+                'filename': filename,
+                'type': 'csv',
+                'description': description,
+                'url': f'/export/download/{session_id}/{filename}',
+                'category': 'analysis'
+            })
+
+    return available_files
+
+
 @export_bp.route('/list/<session_id>')
 @require_auth
 def list_exports(session_id):
@@ -27,137 +177,9 @@ def list_exports(session_id):
     Returns a JSON list of available downloads.
     """
     try:
-        from pathlib import Path
-        
-        # Validate session
-        current_session_id = flask_session.get('session_id')
         logger.info(f"Listing exports for session: {session_id}")
-        
-        # Build paths to check
-        export_base_dir = Path(current_app.root_path).parent / 'instance' / 'exports' / session_id
-        uploads_dir = Path(current_app.root_path).parent / 'instance' / 'uploads' / session_id
-        
-        available_files = []
-        
-        # Check for burden analysis bundle ZIP (malaria_burden_analysis_<State>_<date>.zip)
-        bundle_matches = sorted(uploads_dir.glob('malaria_burden_analysis_*.zip'))
-        if bundle_matches:
-            bundle = bundle_matches[-1]  # YYYY-MM-DD names sort lexicographically
-            available_files.append({
-                'name': 'Malaria Burden Analysis Package',
-                'filename': bundle.name,
-                'type': 'zip',
-                'description': 'Ward burden estimates, shapefile, population denominators, and data dictionary',
-                'url': f'/export/download/{session_id}/{bundle.name}',
-                'category': 'tpr'
-            })
-        
-        # Check for TPR dashboard
-        tpr_dashboard = uploads_dir / 'tpr_dashboard.html'
-        if tpr_dashboard.exists():
-            available_files.append({
-                'name': 'TPR Dashboard',
-                'filename': 'tpr_dashboard.html',
-                'type': 'html',
-                'description': '📈 Interactive TPR analysis dashboard',
-                'url': f'/export/download/{session_id}/tpr_dashboard.html',
-                'category': 'tpr'
-            })
-        
-        # Check for ITN distribution results
-        if export_base_dir.exists():
-            # Look for ITN export directories
-            for itn_dir in export_base_dir.glob('itn_export_*'):
-                # ITN CSV
-                itn_csv = itn_dir / 'itn_distribution_results.csv'
-                if itn_csv.exists():
-                    available_files.append({
-                        'name': 'ITN Distribution Plan',
-                        'filename': itn_csv.name,
-                        'type': 'csv',
-                        'description': '📊 ITN distribution allocation by ward',
-                        'url': f'/export/download/{session_id}/{itn_csv.name}',
-                        'category': 'itn'
-                    })
-                
-                # ITN Dashboard
-                itn_dashboard = itn_dir / 'itn_distribution_dashboard.html'
-                if itn_dashboard.exists():
-                    available_files.append({
-                        'name': 'ITN Distribution Dashboard',
-                        'filename': itn_dashboard.name,
-                        'type': 'html',
-                        'description': '📈 Interactive ITN distribution dashboard',
-                        'url': f'/export/download/{session_id}/{itn_dashboard.name}',
-                        'category': 'itn'
-                    })
-
-            # Look for settlement classification exports
-            for settlement_dir in export_base_dir.glob('settlement_export_*'):
-                classification_id = settlement_dir.name.replace('settlement_export_', '', 1)
-                settlement_files = [
-                    (
-                        settlement_dir / 'settlement_annotations.csv',
-                        'Settlement Classification Annotations',
-                        'csv',
-                        'Settlement grid classifications and notes'
-                    ),
-                    (
-                        settlement_dir / 'settlement_classified_grid.geojson',
-                        'Classified Settlement Grid',
-                        'geojson',
-                        'GeoJSON grid with settlement labels and notes'
-                    ),
-                    (
-                        settlement_dir / 'settlement_classified_grid_map.png',
-                        'Classified Settlement Grid Map Image',
-                        'png',
-                        'PNG map image of the classified grid with legend'
-                    ),
-                    (
-                        settlement_dir / 'settlement_ward_summary.csv',
-                        'Ward Settlement Summary',
-                        'csv',
-                        'Ward-level settlement class counts, percentages, and coverage'
-                    ),
-                    (
-                        settlement_dir / 'settlement_cells_with_ward_summary.csv',
-                        'Settlement Cells With Ward Summary',
-                        'csv',
-                        'Grid-cell annotations with ward-level settlement percentages repeated on each row'
-                    ),
-                    (
-                        settlement_dir / 'settlement_metadata.json',
-                        'Settlement Classification Metadata',
-                        'json',
-                        'Metadata for the settlement classification run'
-                    ),
-                ]
-                for path, name, file_type, description in settlement_files:
-                    if path.exists():
-                        rel = f"{settlement_dir.name}/{path.name}"
-                        available_files.append({
-                            'name': name,
-                            'filename': path.name,
-                            'type': file_type,
-                            'description': description,
-                            'url': f'/export/download/{session_id}/{rel}',
-                            'category': 'settlement',
-                            'classification_id': classification_id
-                        })
-        
-        # Check for analysis results
-        analysis_csv = uploads_dir / 'analysis_results_composite.csv'
-        if analysis_csv.exists():
-            available_files.append({
-                'name': 'Risk Analysis Results',
-                'filename': 'analysis_results_composite.csv',
-                'type': 'csv',
-                'description': '📊 Complete malaria risk analysis results',
-                'url': f'/export/download/{session_id}/analysis_results_composite.csv',
-                'category': 'analysis'
-            })
-        
+        instance_dir = Path(current_app.root_path).parent / 'instance'
+        available_files = collect_export_files(instance_dir, session_id)
         logger.info(f"Found {len(available_files)} export files for session {session_id}")
         
         return {
