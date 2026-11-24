@@ -539,6 +539,33 @@ def list_downloads(
 # 5. MALARIA RISK ANALYSIS (composite + PCA)
 # ─────────────────────────────────────────────────────────────────────
 
+def _with_top_wards_and_map(graph_state: dict, session_id: str, message: str) -> str:
+    """Add the 10 highest-risk wards (with LGA) after the first paragraph and show the risk map."""
+    try:
+        import pandas as pd
+        path = os.path.join('instance', 'uploads', session_id, 'unified_dataset.csv')
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            rank_col = next((c for c in ['composite_rank', 'overall_rank'] if c in df.columns), None)
+            score_col = next((c for c in ['composite_score', 'median_score'] if c in df.columns), None)
+            if rank_col and 'WardName' in df.columns:
+                top = df.dropna(subset=[rank_col]).sort_values(rank_col).head(10)
+                rows = ["| Rank | Ward | LGA | Risk score |", "|---|---|---|---|"]
+                for _, row in top.iterrows():
+                    score = f"{row[score_col]:.3f}" if score_col and pd.notna(row.get(score_col)) else "-"
+                    rows.append(f"| {int(row[rank_col])} | {row['WardName']} | {row.get('LGA', '-')} | {score} |")
+                table = "**The 10 highest-risk wards:**\n\n" + "\n".join(rows)
+                marker = "\n\n## What you can do next"
+                message = message.replace(marker, "\n\n" + table + marker, 1) if marker in message else message + "\n\n" + table
+        from app.visualization.maps_tools import CreateVulnerabilityMap
+        result = CreateVulnerabilityMap(year_tag='').execute(session_id=session_id)
+        if result.success and result.data:
+            _add_viz_to_state(graph_state, result.data.get('file_path'))
+    except Exception as exc:
+        logger.warning(f"Could not add top wards or risk map to the risk result: {exc}")
+    return message
+
+
 @tool
 def run_risk_analysis(
     graph_state: Annotated[dict, InjectedState],
@@ -576,6 +603,7 @@ def run_risk_analysis(
             selection = current_selection(session_id)
             if selection.get('facility_level'):
                 message = message.replace("Analysis complete.", f"Analysis complete, using malaria data for {describe(selection)}.", 1)
+            message = _with_top_wards_and_map(graph_state, session_id, message)
         _add_canonical_response(
             graph_state,
             tool_name="run_risk_analysis",

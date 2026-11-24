@@ -1352,21 +1352,12 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
             try:
                 geopolitical_zone = get_geopolitical_zone(state_name)
 
-                # Get the list of variables added based on zone
-                zone_variables_map = {
-                    'North-Central': ['rainfall', 'ndvi', 'housing_quality', 'elevation', 'urban_percentage'],
-                    'North-East': ['distance_to_waterbodies', 'rainfall', 'soil_wetness', 'urban_extent'],
-                    'North-West': ['rainfall', 'ndwi', 'housing_quality', 'elevation', 'urban_extent'],
-                    'South-East': ['ndwi', 'housing_quality', 'elevation', 'urban_extent'],
-                    'South-South': ['ndwi', 'housing_quality', 'elevation', 'urban_extent'],
-                    'South-West': ['ndwi', 'housing_quality', 'elevation', 'urban_extent']
-                }
-
-                # Get variables for this zone
-                zone_variables = zone_variables_map.get(geopolitical_zone, ['environmental variables'])
-
-                # Format variable names nicely
-                formatted_vars = [v.replace('_', ' ').title() for v in zone_variables]
+                # The risk analysis's own variable list for this zone (malaria burden is listed separately)
+                from app.analysis.region_aware_selection import ZONE_VARIABLES
+                zone_variables = [v for v in ZONE_VARIABLES.get(geopolitical_zone.replace('-', '_'), [])
+                                  if v not in ('u5_tpr_rdt', 'pfpr')] or ['environmental variables']
+                labels = {'ndmi': 'NDMI (moisture)', 'ndwi': 'NDWI (surface water)', 'ndvi': 'NDVI (vegetation)'}
+                formatted_vars = [labels.get(v, v.replace('_', ' ').capitalize()) for v in zone_variables]
 
                 result += f"""\n
 🎉 **Malaria Burden Analysis Successfully Completed!**
@@ -1400,8 +1391,8 @@ Try: "**create settlement classification**" to open the state map, choose an LGA
 Available variables for your region ({geopolitical_zone}):
 """
                 # Add individual variable suggestions
-                for var in formatted_vars[:3]:  # Show first 3 variables
-                    result += f"\n• \"map {var.lower()} distribution\"\n"
+                for var in zone_variables[:3]:  # Show first 3 variables
+                    result += f"\n• \"map {var.replace('_', ' ')} distribution\"\n"
                 if len(formatted_vars) > 3:
                     result += f"\n• Plus {len(formatted_vars) - 3} more variables!\n"
 
