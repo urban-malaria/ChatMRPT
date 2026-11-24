@@ -135,6 +135,62 @@ def _normalize_lga_name(name: object) -> str:
     return ' '.join(re.sub(r'[^a-z0-9]+', ' ', text).split())
 
 
+def approximate_ward_pairs(map_wards: pd.DataFrame, data_wards: pd.DataFrame, cutoff: float = 0.7,
+                           cross_lga_cutoff: float = 0.92) -> Dict[Any, Any]:
+    """Pair unmatched map wards with unmatched data wards by name similarity.
+
+    Both frames need ``WardName_norm`` and may have an LGA column (``LGAName``/``LGA``). Pairs in the
+    same LGA need a similarity of at least ``cutoff``; pairs across LGAs need ``cross_lga_cutoff``.
+    The best-scoring pairs are taken first and each ward is used at most once, so one data ward's
+    cases are never given to two map wards. Returns {map index: data index}.
+    """
+    from difflib import SequenceMatcher
+
+    def lga_of(frame):
+        column = next((c for c in ('LGAName', 'LGA', 'lga_name') if c in frame.columns), None)
+        return frame[column].map(_normalize_lga_name) if column else pd.Series('', index=frame.index)
+
+    def markers(name):
+        # Ward numbers and letters ("2", "b") distinguish neighbouring wards and must agree.
+        return {t for t in name.split() if t.isdigit() or (len(t) == 1 and t.isalpha())}
+
+    def base(name):
+        return ' '.join(t for t in name.split() if t not in markers(name))
+
+    map_lga, data_lga = lga_of(map_wards), lga_of(data_wards)
+    map_bases = map_wards['WardName_norm'].astype(str).map(base).value_counts()
+    data_bases = data_wards['WardName_norm'].astype(str).map(base).value_counts()
+    scored = []
+    for map_index, map_name in map_wards['WardName_norm'].astype(str).items():
+        for data_index, data_name in data_wards['WardName_norm'].astype(str).items():
+            if not map_name or not data_name:
+                continue
+            if markers(map_name) != markers(data_name):
+                # A number on one side only ("omupo" vs "omupo 1") is accepted when that name is unique
+                # on both sides; "yashikira" against "Yashikira 1" and "Yashikira 2" cannot be resolved.
+                one_sided = not markers(map_name) or not markers(data_name)
+                unique = map_bases.get(base(map_name), 0) == 1 and data_bases.get(base(data_name), 0) == 1
+                if not (one_sided and unique and base(map_name) == base(data_name)):
+                    continue
+            same_lga = bool(map_lga[map_index]) and map_lga[map_index] == data_lga[data_index]
+            score = SequenceMatcher(None, map_name, data_name).ratio()
+            # One name is the other plus extra words, e.g. "owu isin" (ward + LGA) or "ikotun kwara".
+            map_words, data_words = set(map_name.split()) - markers(map_name), set(data_name.split()) - markers(data_name)
+            if same_lga and map_words and data_words and (map_words <= data_words or data_words <= map_words):
+                score = max(score, 0.9)
+            if score >= (cutoff if same_lga else cross_lga_cutoff):
+                scored.append((score + (0.01 if same_lga else 0), map_index, data_index))
+
+    pairs: Dict[Any, Any] = {}
+    used_data = set()
+    for _, map_index, data_index in sorted(scored, key=lambda item: -item[0]):
+        if map_index in pairs or data_index in used_data:
+            continue
+        pairs[map_index] = data_index
+        used_data.add(data_index)
+    return pairs
+
+
 def assign_ward_match_keys(result_df: pd.DataFrame, state_gdf: pd.DataFrame,
                            data_lga_col: str = 'LGA') -> Tuple[pd.Series, pd.Series]:
     """Keys for joining ward-level results to shapefile wards.

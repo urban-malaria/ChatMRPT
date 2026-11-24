@@ -93,6 +93,7 @@ except ImportError:  # pragma: no cover - legacy environments without features p
         """Fallback navigation handler when feature package is unavailable."""
         return None
 import plotly.express as px
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -915,7 +916,9 @@ class TPRWorkflowHandler:
                             if year_rows.empty:
                                 continue
                             year_rows['_ward_key'] = year_rows['WardName'].apply(normalize_ward_name)
-                            year_data = year_rows[['_ward_key', 'Total_Positive', 'Burden']]
+                            # Names repeated across LGAs are matched below by name and LGA, not joined here.
+                            repeated = year_rows['_ward_key'].duplicated(keep=False)
+                            year_data = year_rows.loc[~repeated, ['_ward_key', 'Total_Positive', 'Burden']]
                             year_raw = (
                                 raw_data
                                 .drop(columns=['Burden', 'Total_Positive'], errors='ignore')
@@ -926,40 +929,28 @@ class TPRWorkflowHandler:
                             if 'Burden' in year_raw.columns:
                                 year_raw['Burden'] = cap_burden_per_1000(year_raw['Burden']).round(2)
 
-                            # Fuzzy fallback for wards still unmatched after exact join
+                            # Approximate names for wards still unmatched, with the same rules as the
+                            # all-years file (numbers must agree, each record used once). Wards with no
+                            # data in the all-years file stay without data in every year.
                             still_unmatched = year_raw['Burden'].isna()
+                            if 'Burden' in raw_data.columns:
+                                still_unmatched &= raw_data['Burden'].notna().values
                             if still_unmatched.any():
-                                dhis2_keys = year_rows['_ward_key'].tolist()
-                                for idx in year_raw[still_unmatched].index:
-                                    match, score = fuzzy_match_ward(
-                                        raw_data.loc[idx, '_ward_key'] if '_ward_key' in raw_data.columns
-                                        else normalize_ward_name(year_raw.loc[idx, 'WardName']),
-                                        dhis2_keys
-                                    )
-                                    if match is not None:
-                                        src = year_rows[year_rows['_ward_key'] == match].iloc[0]
-                                        year_raw.loc[idx, ['Total_Positive', 'Burden']] = \
-                                            src[['Total_Positive', 'Burden']].values
-                                        logger.debug(f"[MULTI_YEAR] Fuzzy matched '{year_raw.loc[idx,'WardName']}' → '{src['WardName']}' (score={score})")
+                                from app.tpr.utils import approximate_ward_pairs
+                                map_side = year_raw.loc[still_unmatched].assign(
+                                    WardName_norm=raw_data.loc[still_unmatched, '_ward_key'].values)
+                                used_keys = set(raw_data['_ward_key']) & set(year_rows.loc[~repeated, '_ward_key'])
+                                data_side = year_rows[~year_rows['_ward_key'].isin(used_keys)].assign(
+                                    WardName_norm=lambda f: f['_ward_key'])
+                                for map_index, data_index in approximate_ward_pairs(map_side, data_side).items():
+                                    year_raw.loc[map_index, ['Total_Positive', 'Burden']] = \
+                                        year_rows.loc[data_index, ['Total_Positive', 'Burden']].values
+                            if 'Burden' in raw_data.columns:
+                                year_raw.loc[raw_data['Burden'].isna().values, ['Total_Positive', 'Burden']] = np.nan
 
-                            # Aggregate fallback: wards still missing get their all-years value
-                            # from raw_data.csv (already correctly matched via fuzzy in analysis_tool)
-                            # Mark them as imputed so the map can visually distinguish them
+                            # Wards with no records in this year stay empty ("no data"). Filling them
+                            # with the all-years total would show a multi-year sum as a single year.
                             year_raw['_imputed'] = False
-                            still_missing = year_raw['Burden'].isna()
-                            if still_missing.any():
-                                agg_lookup = raw_data.set_index('_ward_key') if '_ward_key' in raw_data.columns \
-                                    else raw_data.assign(_ward_key=raw_data['WardName'].apply(normalize_ward_name)).set_index('_ward_key')
-                                for idx in year_raw[still_missing].index:
-                                    ward_key = normalize_ward_name(year_raw.loc[idx, 'WardName'])
-                                    if ward_key in agg_lookup.index:
-                                        agg_row = agg_lookup.loc[ward_key]
-                                        for col in ['Burden', 'Total_Positive', 'TPR']:
-                                            if col in agg_row.index and pd.notna(agg_row[col]):
-                                                year_raw.loc[idx, col] = agg_row[col]
-                                        year_raw.loc[idx, '_imputed'] = True
-                                imputed_count = year_raw['_imputed'].sum()
-                                logger.info(f"[MULTI_YEAR] {year}: imputed {imputed_count} wards from aggregate")
 
                             if 'Burden' in year_raw.columns:
                                 year_raw['Burden'] = cap_burden_per_1000(year_raw['Burden']).round(2)

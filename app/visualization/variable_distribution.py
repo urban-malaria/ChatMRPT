@@ -556,6 +556,32 @@ class VariableDistribution(BaseTool):
                     name=name_suffix or variable
                 ))
 
+            # Wards with no value: a separate grey layer so they are not mistaken for low values.
+            if plot_level == 'ward' and not no_data.empty:
+                grey = no_data.copy()
+                grey['geometry'] = grey.geometry.apply(convert_to_polygon)
+                grey = grey[grey.geometry.notnull() & ~grey.geometry.is_empty]
+                ward_col = next((c for c in ('WardName', 'ward_name') if c in grey.columns), None)
+                lga_col = next((c for c in ('LGA', 'LGAName') if c in grey.columns), None)
+                hover = [f"<b>{row.get(ward_col, 'Ward')}</b>" + (f" ({row.get(lga_col)})" if lga_col else '')
+                         + "<br>No data: no facility records matched this ward" for _, row in grey.iterrows()]
+                fig.add_trace(go.Choroplethmapbox(
+                    geojson=build_geojson(grey),
+                    locations=grey.index.astype(str),
+                    z=[0] * len(grey),
+                    colorscale=[[0, '#d1d5db'], [1, '#d1d5db']],
+                    showscale=False,
+                    marker_opacity=0.8,
+                    marker_line_width=1,
+                    marker_line_color='white',
+                    hovertext=hover,
+                    hovertemplate='%{hovertext}<extra></extra>',
+                    name='No data',
+                ))
+                fig.add_annotation(text='<span style="color:#9ca3af">■</span> Grey: no data', showarrow=False,
+                                   xref='paper', yref='paper', x=1.0, y=0.02, xanchor='left',
+                                   font=dict(size=12, color='#374151'))
+
             if highlight_codes:
                 faded = plot_data[~plot_data['_is_selected_lga']]
                 highlighted = plot_data[plot_data['_is_selected_lga']]

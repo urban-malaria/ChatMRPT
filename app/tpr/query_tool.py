@@ -508,10 +508,9 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
             how='left'
         ).drop(columns=['_match_key'])
 
-        # Fill missing values with 0
-        merged['Burden'] = merged['Burden'].fillna(0)
-        merged['Population'] = merged['Population'].fillna(0).astype(int)
-        merged['Total_Positive'] = merged['Total_Positive'].fillna(0).astype(int)
+        # Wards without matching facility data stay empty ("no data"), not 0.
+        merged['Population'] = pd.to_numeric(merged['Population'], errors='coerce').round().astype('Int64')
+        merged['Total_Positive'] = pd.to_numeric(merged['Total_Positive'], errors='coerce').round().astype('Int64')
 
         return merged
 

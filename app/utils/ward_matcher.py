@@ -35,6 +35,9 @@ def normalize_ward_name(name: str) -> str:
     s = _SEPARATORS.sub(' ', s)              # unify - and / to spaces
     s = s.replace('_', ' ')                  # underscores to spaces
     s = s.lower()
+    # Some exports replaced the text "NA" with 0 inside names (Gwanabe -> Gwa0be, Alanamu -> Ala0mu).
+    # A 0 next to a letter is never part of a real ward name, so read it as "na".
+    s = re.sub(r'(?<=[a-z])0|0(?=[a-z])', 'na', s)
     for pattern, replacement in _ROMAN:
         s = re.sub(pattern, replacement, s)
     return ' '.join(s.split())               # collapse internal whitespace

@@ -46,6 +46,7 @@ from app.tpr.utils import (
     normalize_ward_name,
     get_geopolitical_zone,
     prepare_tpr_summary,
+    BURDEN_CAP_PER_1000,
 )
 from app.utils.map_overlays import add_lga_boundary_overlay, calculate_lga_averages
 from app.utils.visualization_controls import inject_lga_hover_highlight
@@ -341,6 +342,32 @@ def extract_environmental_variables(ward_geometries: gpd.GeoDataFrame, state_nam
     return env_data
 
 
+def describe_data_gaps(merged_gdf: pd.DataFrame, tpr_results: pd.DataFrame, listed: int = 8) -> str:
+    """Plain-language notes on wards without data and wards at the burden cap."""
+    notes = []
+    burden = pd.to_numeric(merged_gdf.get('Burden'), errors='coerce') if 'Burden' in merged_gdf else None
+    if burden is not None:
+        missing = merged_gdf.loc[burden.isna(), 'WardName'].astype(str).tolist() if 'WardName' in merged_gdf else []
+        if missing:
+            shown = ', '.join(missing[:listed]) + (f" and {len(missing) - listed} more" if len(missing) > listed else '')
+            notes.append(f"**{len(missing)} of {len(merged_gdf)} wards have no data**: no facility records in the upload "
+                         f"could be matched to them ({shown}). They are shown grey on maps and left out of averages.")
+        capped = int((burden >= BURDEN_CAP_PER_1000).sum())
+        if capped:
+            notes.append(f"**{capped} wards are at the cap of 1,000 cases per 1,000 people.** Their recorded positive "
+                         "cases over the whole period are at or above the ward's population estimate.")
+    if 'Total_Positive' in tpr_results and 'Total_Positive' in merged_gdf:
+        uploaded = pd.to_numeric(tpr_results['Total_Positive'], errors='coerce').sum()
+        placed = pd.to_numeric(merged_gdf['Total_Positive'], errors='coerce').sum()
+        if uploaded > 0 and placed < uploaded:
+            share = (uploaded - placed) / uploaded * 100
+            if share >= 0.5:
+                notes.append(f"{share:.0f}% of the positive cases in the upload ({uploaded - placed:,.0f} of "
+                             f"{uploaded:,.0f}) are from ward names that could not be matched to the map, so "
+                             "they are not counted in any ward.")
+    return ("\n\n" + "\n\n".join(notes)) if notes else ""
+
+
 def match_and_merge_data(tpr_df: pd.DataFrame, state_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Match TPR data with shapefile using ward name normalization.
@@ -380,30 +407,23 @@ def match_and_merge_data(tpr_df: pd.DataFrame, state_gdf: gpd.GeoDataFrame) -> g
 
     logger.info(f"📊 Initial ward matching: {matched}/{total} ({match_rate:.1f}%) matched")
 
-    # If match rate is low, try fuzzy matching
-    if match_rate < 80:
-        from difflib import get_close_matches
-
-        unmatched_shapefile = merged[merged[burden_col].isna()]['WardName_norm'].unique()
-        unmatched_burden = tpr_df['WardName_norm'].unique()
-
-        fuzzy_matches = {}
-        for ward in unmatched_shapefile:
-            matches = get_close_matches(ward, unmatched_burden, n=1, cutoff=0.8)
-            if matches:
-                fuzzy_matches[ward] = matches[0]
-
-        # Apply fuzzy matches
-        for shapefile_ward, burden_ward in fuzzy_matches.items():
-            burden_data = tpr_df[tpr_df['WardName_norm'] == burden_ward].iloc[0]
-            if 'Burden' in burden_data:
-                merged.loc[merged['WardName_norm'] == shapefile_ward, 'Burden'] = burden_data['Burden']
-            if 'Population' in burden_data:
-                merged.loc[merged['WardName_norm'] == shapefile_ward, 'Population'] = burden_data['Population']
-            merged.loc[merged['WardName_norm'] == shapefile_ward, 'Total_Positive'] = burden_data['Total_Positive']
-
-        new_matched = merged[burden_col].notna().sum()
-        logger.info(f"After fuzzy matching: {new_matched}/{total} matched")
+    # Approximate names for wards still unmatched: best pairs first, same LGA preferred,
+    # each upload ward used at most once.
+    from app.tpr.utils import approximate_ward_pairs
+    unmatched_map = merged[merged[burden_col].isna()]
+    if not unmatched_map.empty:
+        matched_data = data_keys.isin(set(shp_keys)).values
+        unmatched_data = tpr_df.loc[~matched_data]
+        unmatched_data = unmatched_data[~unmatched_data['WardName'].astype(str).str.strip().str.lower().isin(['unknown', 'nan', ''])]
+        pairs = approximate_ward_pairs(unmatched_map, unmatched_data)
+        for map_index, data_index in pairs.items():
+            source = tpr_df.loc[data_index]
+            for column in ['Burden', 'Population', 'Total_Positive', 'TPR']:
+                if column in source.index and column in merged.columns:
+                    merged.loc[map_index, column] = source[column]
+            logger.debug(f"Approximate ward match: '{merged.loc[map_index, 'WardName']}' <- '{source['WardName']}'")
+        logger.info(f"After approximate matching: {merged[burden_col].notna().sum()}/{total} matched "
+                    f"({len(pairs)} approximate)")
 
     return merged
 
@@ -1134,10 +1154,16 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                                 "match_rate": match_rate
                             }
 
+                            # Average over the wards shown on the map, so the headline matches the map.
+                            mapped_burden = pd.to_numeric(merged_gdf['Burden'], errors='coerce').dropna()
+                            if not mapped_burden.empty:
+                                summary['mean_burden'] = float(mapped_burden.mean())
+
                             # Update result with TOTAL ward count (from shapefile)
                             result = f"""## Malaria Burden Analysis Complete
 
-**{state_name}**: {summary['mean_burden']:.1f} cases per 1,000 population across {total_count} wards"""
+**{state_name}**: {summary['mean_burden']:.1f} cases per 1,000 population on average across the {matched_count} of {total_count} wards with data"""
+                            result += describe_data_gaps(merged_gdf, tpr_results)
                         except Exception as e:
                             logger.error(f"❌ Ward matching failed: {e}")
                             debug_stages["ward_matching"] = {"success": False, "error": str(e)}
@@ -1193,9 +1219,9 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
                         final_df['GeopoliticalZone'] = get_geopolitical_zone(state_name)
                         
                         # Add Burden metrics (new calculation)
-                        final_df['Burden'] = merged_gdf['Burden'].fillna(0) if 'Burden' in merged_gdf.columns else 0
-                        final_df['Population'] = merged_gdf['Population'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Population' in merged_gdf.columns else 0
-                        final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Total_Positive' in merged_gdf.columns else 0
+                        final_df['Burden'] = merged_gdf['Burden'] if 'Burden' in merged_gdf.columns else np.nan
+                        final_df['Population'] = pd.to_numeric(merged_gdf['Population'], errors='coerce').round().astype('Int64') if 'Population' in merged_gdf.columns else pd.NA
+                        final_df['Total_Positive'] = pd.to_numeric(merged_gdf['Total_Positive'], errors='coerce').round().astype('Int64') if 'Total_Positive' in merged_gdf.columns else pd.NA
                         
                         # Add environmental variables
                         for col in env_data.columns:
@@ -1349,7 +1375,7 @@ Try using 'all_ages' with 'both' test methods and 'all' facilities for the broad
 
 I've calculated ward-level malaria burden per 1,000 population for **{state_name}** and created a unified dataset combining:
 
-• Malaria burden data ({summary['mean_burden']:.1f} cases per 1,000 population across {total_count} wards)
+• Malaria burden data ({summary['mean_burden']:.1f} cases per 1,000 population on average, {total_count} wards)
 
 • Geographic boundaries (ward shapefiles)
 
@@ -1463,9 +1489,9 @@ Or ask me anything about your data - I'm here to help!
             final_df['GeopoliticalZone'] = get_geopolitical_zone(state_name)
             
             # Add Burden metrics (new calculation)
-            final_df['Burden'] = merged_gdf['Burden'].fillna(0) if 'Burden' in merged_gdf.columns else 0
-            final_df['Population'] = merged_gdf['Population'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Population' in merged_gdf.columns else 0
-            final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).apply(lambda x: int(x) if pd.notna(x) else 0) if 'Total_Positive' in merged_gdf.columns else 0
+            final_df['Burden'] = merged_gdf['Burden'] if 'Burden' in merged_gdf.columns else np.nan
+            final_df['Population'] = pd.to_numeric(merged_gdf['Population'], errors='coerce').round().astype('Int64') if 'Population' in merged_gdf.columns else pd.NA
+            final_df['Total_Positive'] = pd.to_numeric(merged_gdf['Total_Positive'], errors='coerce').round().astype('Int64') if 'Total_Positive' in merged_gdf.columns else pd.NA
             
             # Add environmental variables
             for col in env_data.columns:
