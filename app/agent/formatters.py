@@ -62,6 +62,11 @@ class MessageFormatter:
         if 'levels' in analysis and analysis['levels']:
             levels = analysis['levels']
 
+            all_tests = sum(
+                (d.get('rdt_tests', 0) or 0) + (d.get('microscopy_tests', 0) or 0)
+                for k, d in levels.items() if k != 'all'
+            )
+
             # Show statistics for each level (excluding 'all' for now)
             for level_key, level_data in levels.items():
                 if level_key == 'all':
@@ -79,7 +84,11 @@ class MessageFormatter:
                 rec = " **(Recommended)**" if is_recommended else ""
 
                 message += f"- **{level_key}**{rec} - {level_name}\n"
-                message += f"  - {facility_count} facilities, {total_tests:,} tests\n\n"
+                message += f"  - {facility_count} facilities, {total_tests:,} tests\n"
+                if is_recommended and all_tests:
+                    message += (f"  - Why recommended: most people are tested here "
+                                f"({total_tests / all_tests:.0%} of all tests), so it best reflects malaria in the community\n")
+                message += "\n"
 
             # Add 'all' option at the end
             if 'all' in levels:
@@ -90,7 +99,7 @@ class MessageFormatter:
 
             message += "**Need help deciding?**\n"
             message += "Ask me to **show facility charts** or **explain the differences**.\n\n"
-            message += "Just type which level you'd like:\n\n"
+            message += "Click an option below, or type:\n\n"
             message += "**primary**, **secondary**, **tertiary**, or **all**"
         else:
             message += "I'll analyze all facilities in your dataset."
@@ -132,7 +141,7 @@ class MessageFormatter:
 
             message += "**Need help deciding?**\n"
             message += "Ask me to **show facility charts** or **explain the differences**.\n\n"
-            message += "Just type which level you'd like:\n\n"
+            message += "Click an option below, or type:\n\n"
             message += "**primary**, **secondary**, **tertiary**, or **all**"
         else:
             message += "I'll analyze all facilities in your dataset."
@@ -176,7 +185,11 @@ class MessageFormatter:
                 rec = " **(Recommended)**" if group_key == 'u5' else ""
 
                 message += f"- **{group_key}**{rec} - {group_name}\n"
-                message += f"  - {positive:,} positive cases from {tests:,} tests\n\n"
+                message += f"  - {positive:,} positive cases from {tests:,} tests\n"
+                if group_key == 'u5':
+                    message += ("  - Why recommended: children under 5 are most at risk of severe malaria, "
+                                "and most programmes plan around them\n")
+                message += "\n"
 
             message += f"- **all** - All age groups combined\n"
             total_tests = analysis.get('total_tests', 0)
@@ -184,7 +197,7 @@ class MessageFormatter:
 
             message += "**Need help deciding?**\n"
             message += "Ask me to **show age charts** or **explain the differences**.\n\n"
-            message += "Just type which group you'd like:\n\n"
+            message += "Click an option below, or type:\n\n"
             message += "**u5**, **o5**, **pw**, or **all**"
         else:
             message += "All age groups will be analyzed.\n"

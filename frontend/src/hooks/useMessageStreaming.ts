@@ -155,6 +155,9 @@ const useMessageStreaming = () => {
                 downloadLinks: result.download_links && result.download_links.length > 0
                   ? result.download_links
                   : undefined,
+                quickReplies: result.quick_replies && result.quick_replies.length > 0
+                  ? result.quick_replies
+                  : undefined,
               };
               useChatStore.getState().updateMessage(assistantMessageId, finalMessage);
             }

@@ -1114,7 +1114,7 @@ Once we calculate ward-level malaria burden, the system will:
 
 **Ready to begin?**
 
-Just type **yes** when you're ready, or ask me any questions about the workflow.
+Type **yes** when you're ready (or click below), or ask me any questions about the workflow.
 """
 
         # Set stage to AWAITING_CONFIRMATION (we'll add this stage)

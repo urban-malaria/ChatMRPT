@@ -5,6 +5,8 @@ import VisualizationContainer from '../Visualization/VisualizationContainer';
 import DualMethodDisplay from '../Analysis/DualMethodDisplay';
 import DownloadCard from './DownloadCard';
 import type { RegularMessage as RegularMessageType } from '@/types';
+import { useChatStore } from '@/stores/chatStore';
+import useMessageStreaming from '@/hooks/useMessageStreaming';
 
 interface RegularMessageProps {
   message: RegularMessageType;
@@ -12,6 +14,10 @@ interface RegularMessageProps {
 
 const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
   const isUser = message.sender === 'user';
+  // Choice buttons are only offered on the latest message, while nothing is running.
+  const isLatest = useChatStore((state) => state.messages[state.messages.length - 1]?.id === message.id);
+  const isLoading = useChatStore((state) => state.isLoading);
+  const { sendMessage } = useMessageStreaming();
 
   // Detect and extract a top-level warning line (styled in red)
   let topWarning = '';
@@ -284,6 +290,21 @@ const RegularMessage: React.FC<RegularMessageProps> = ({ message }) => {
                 }}
               />
             )}
+          </div>
+        )}
+
+        {/* Workflow choices */}
+        {!isUser && isLatest && !isLoading && message.quickReplies && message.quickReplies.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {message.quickReplies.map((reply) => (
+              <button
+                key={reply.value}
+                onClick={() => sendMessage(reply.value)}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                {reply.label}
+              </button>
+            ))}
           </div>
         )}
 

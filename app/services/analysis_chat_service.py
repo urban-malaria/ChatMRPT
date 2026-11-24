@@ -295,6 +295,29 @@ def ensure_analysis_session_available(session_id: str) -> bool:
         return False
 
 
+# Choices the guided workflow asks for, offered as buttons under its message.
+_QUICK_REPLY_SETS = (
+    (re.compile(r"\*\*primary\*\*, \*\*secondary\*\*, \*\*tertiary\*\*, or \*\*all\*\*|facility-level visualizations"),
+     [("Primary", "primary"), ("Secondary", "secondary"), ("Tertiary", "tertiary"), ("All facilities", "all")]),
+    (re.compile(r"\*\*u5\*\*, \*\*o5\*\*, \*\*pw\*\*, or \*\*all\*\*|age group visualizations"),
+     [("Under 5", "u5"), ("Over 5", "o5"), ("Pregnant women", "pw"), ("All ages", "all")]),
+    (re.compile(r"type \*\*yes\*\* when you're ready", re.IGNORECASE), [("Yes, start", "yes")]),
+)
+
+
+def with_quick_replies(result):
+    """Add clickable choices to a workflow result whose message asks the user to pick an option."""
+    if not isinstance(result, dict) or result.get("quick_replies"):
+        return result
+    message = str(result.get("message") or "")
+    for pattern, options in _QUICK_REPLY_SETS:
+        if pattern.search(message):
+            result["quick_replies"] = [{"label": label, "value": value} for label, value in options]
+            break
+    return result
+
+
+
 def handle_tpr_active(session_id, message, state_manager, current_state, tpr_language):
     """Handle a message when the TPR workflow is already in progress."""
     from app.agent.encoding_handler import EncodingHandler
@@ -394,6 +417,13 @@ def handle_tpr_active(session_id, message, state_manager, current_state, tpr_lan
         ):
             logger.info("[TPR-ACTIVE] Confirmation detected")
             return tpr_handler.execute_confirmation()
+
+    # "show facility charts", "compare the age groups in a chart" -> the workflow's prepared charts
+    if re.search(r"\b(chart|charts|graph|graphs|plot|plots|visuali[sz]e|visuali[sz]ation)", lower_message):
+        if current_stage == ConversationStage.TPR_FACILITY_LEVEL:
+            return tpr_handler.handle_visualization_request('facility')
+        if current_stage == ConversationStage.TPR_AGE_GROUP:
+            return tpr_handler.handle_visualization_request('age')
 
     intent_result = tpr_language.classify_intent(
         message=message,
@@ -576,12 +606,12 @@ def run_analysis_message(session_id: str, message: str) -> dict:
             tpr_language.update_from_metadata(current_state)
         except Exception:
             pass
-        return handle_tpr_active(session_id, message, state_manager, current_state, tpr_language)
+        return with_quick_replies(handle_tpr_active(session_id, message, state_manager, current_state, tpr_language))
 
     start_triggers = ["start tpr", "start the tpr", "tpr workflow", "run tpr"]
     if any(trigger in lower_message for trigger in start_triggers):
         try:
-            return handle_tpr_start(session_id, message, state_manager, current_state)
+            return with_quick_replies(handle_tpr_start(session_id, message, state_manager, current_state))
         except TPRStartError as exc:
             return {"success": False, "message": str(exc), "session_id": session_id, "workflow": "tpr"}
 
@@ -628,7 +658,7 @@ def stream_analysis_events(session_id: str, message: str) -> Iterator[dict[str, 
         except Exception as exc:
             logger.exception("[STREAM-TPR-ACTIVE] Error for session %s: %s", session_id, exc)
             result = {"success": False, "message": str(exc), "session_id": session_id, "workflow": "tpr"}
-        yield {"type": "result", "data": result}
+        yield {"type": "result", "data": with_quick_replies(result)}
         return
 
     start_triggers = ["start tpr", "start the tpr", "tpr workflow", "run tpr"]
@@ -645,12 +675,12 @@ def stream_analysis_events(session_id: str, message: str) -> Iterator[dict[str, 
                 "session_id": session_id,
                 "workflow": "tpr",
             }
-        yield {"type": "result", "data": result}
+        yield {"type": "result", "data": with_quick_replies(result)}
         return
 
     if _is_generic_settlement_classification_request(message):
         result = _run_settlement_classification_direct(session_id, message)
-        yield {"type": "result", "data": result}
+        yield {"type": "result", "data": with_quick_replies(result)}
         return
 
     workflow_context = build_general_workflow_context(session_id)

@@ -21,6 +21,7 @@ export interface RegularMessage extends BaseMessage {
   isStreaming?: boolean;
   visualizations?: any[]; // For data analysis visualizations
   downloadLinks?: DownloadLink[]; // For downloadable documents
+  quickReplies?: { label: string; value: string }[]; // Workflow choices shown as buttons
   metadata?: {
     model?: string;
     latency?: number;
