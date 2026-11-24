@@ -28,6 +28,19 @@ Added during Phase 1:
 
 Noted, not fixed: the two servers run different Python, numpy and scipy versions (3.11 vs 3.9), so results could differ slightly between them.
 
+**Phase 2: done and deployed, 24 Nov 2026** (`main` at 063a986, both servers).
+
+Planned items:
+- 2.1 Arena only for general malaria questions; help questions, greetings and the first message get one answer.
+- 2.2 Arena explained, with a Skip option, the correct round count and a closing message.
+- 2.3 A getting-started entry; short help answers; the KMO block replaced with one sentence.
+- 2.4 Sidebar icons labelled; a sample button in the input bar.
+- 2.5 Tables, LaTeX, embedded download links, failed charts and chart titles fixed.
+
+Added during Phase 2:
+- The chat is locked while the sample loads.
+- Asking for the risk analysis before the workflow explains the next step.
+
 ## How we will work
 - **Order:** one item at a time, in the phases below.
 - **Testing:** every item gets the check in its "Test" line. Each phase ends with a full run through the sample-data journey, locally against production data, using the same scripted checks as the 24 Nov test. Before deploying, the phase is run on a copy on a production server.
