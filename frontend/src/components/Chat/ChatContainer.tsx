@@ -87,7 +87,10 @@ const ChatContainer: React.FC = () => {
       try {
         const res = await api.session.getInfo();
         const backendSessionId = res.data?.session_id;
-        if (backendSessionId) {
+        // After a page refresh the restored conversation keeps its own session ID. The server
+        // reports a conversation-scoped ID in a different form, and adopting it cleared the chat.
+        const hasConversation = useChatStore.getState().messages.length > 0;
+        if (backendSessionId && !hasConversation) {
           updateSession({ sessionId: backendSessionId });
           storage.setSessionId(backendSessionId);
         }

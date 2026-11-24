@@ -106,6 +106,7 @@ const ConversationList: React.FC = () => {
           timestamp: new Date(msg.timestamp),
           sessionId,
           ...(msg.visualizations?.length ? { visualizations: msg.visualizations } : {}),
+          ...(msg.download_links?.length ? { downloadLinks: msg.download_links } : {}),
         });
       }
 

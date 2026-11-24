@@ -102,8 +102,12 @@ def handle_send_message_streaming() -> Response:
         _msg_count = session.get('message_count', 0)
         session['message_count'] = _msg_count + 1
         session.modified = True
-        if _msg_count == 0:
-            _conv_svc.set_title(_uid, memory_session_id, generate_title(user_message))
+        if not user_message.startswith('__'):
+            # The first real question names the chat; a greeting alone leaves it untitled.
+            from app.services.conversation_history import name_conversation
+            _title = generate_title(user_message)
+            if _title != 'New conversation':
+                name_conversation(memory_session_id, _title)
         has_files = any(session.get(f, False) for f in ('csv_loaded', 'shapefile_loaded'))
         _conv_svc.update_activity(_uid, memory_session_id, preview=user_message[:80], has_files=has_files)
     except Exception as _conv_err:

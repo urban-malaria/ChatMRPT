@@ -135,6 +135,11 @@ def _start_analysis_session(file, filename, is_sample=False):
         # Store in session with workflow context
         session['has_data_analysis_file'] = True
         session['data_analysis_filename'] = filename
+
+        from app.services.conversation_history import name_conversation
+        name_conversation(base_session_id or session_id,
+                          'Kwara State sample data' if is_sample else f'Data: {filename}',
+                          replace_existing=True)
         session['workflow_source'] = 'data_analysis_v3'  # Track where workflow originated
         session['workflow_stage'] = 'uploaded'  # Track current stage
 
@@ -521,7 +526,13 @@ def data_analysis_chat_stream():
                         workflow = event_data.get('workflow')
                         workflow = workflow or 'data_analysis_v3_agent'
                         try:
-                            SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text)
+                            # Keep charts and downloads with the reply so a reopened chat shows them.
+                            meta = {}
+                            if event_data.get('visualizations'):
+                                meta['visualizations'] = event_data['visualizations']
+                            if event_data.get('download_links'):
+                                meta['download_links'] = event_data['download_links']
+                            SessionMemory(captured_mem_sid).add_message(MessageType.ASSISTANT, assistant_text, metadata=meta)
                         except Exception:
                             pass
                         try:

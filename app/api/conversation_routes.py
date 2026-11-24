@@ -156,6 +156,9 @@ def _load_messages(session_id: str) -> list:
             viz = (msg.get("metadata") or {}).get("visualizations")
             if viz:
                 entry["visualizations"] = viz
+            downloads = (msg.get("metadata") or {}).get("download_links")
+            if downloads:
+                entry["download_links"] = downloads
             messages.append(entry)
         return messages
 

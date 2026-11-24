@@ -248,6 +248,26 @@ def generate_title(message: str) -> str:
     return truncated + "..."
 
 
+UNTITLED = "New conversation"
+
+
+def name_conversation(session_id: str, title: str, replace_existing: bool = False) -> None:
+    """Give the conversation a descriptive title from what happened in it.
+
+    By default only replaces a missing or placeholder title (greetings give no title), so a title
+    taken from the user's first real question is kept. Never raises.
+    """
+    try:
+        from flask import current_app
+        service = ConversationHistoryService(redis_client=current_app.config.get('SESSION_REDIS'))
+        meta = service.get_conversation_meta(session_id) or {}
+        current = (meta.get('title') or '').strip()
+        if replace_existing or not current or current == UNTITLED:
+            service.set_title(get_user_id(), session_id, title[:60])
+    except Exception as exc:
+        logger.debug("Could not name conversation %s: %s", session_id, exc)
+
+
 def get_user_id() -> str:
     """Best-effort extraction of a user identifier from the current request context."""
     from flask import session, request
