@@ -116,8 +116,9 @@ class TPRVisualizationService:
             ))
             
             # Update layout
-            center_lat = merged_gdf.geometry.centroid.y.mean()
-            center_lon = merged_gdf.geometry.centroid.x.mean()
+            from app.utils.map_view import fit_view
+            view = fit_view(merged_gdf.geometry.total_bounds)
+            center_lat, center_lon = view['center']['lat'], view['center']['lon']
             
             fig.update_layout(
                 title=dict(
@@ -129,7 +130,7 @@ class TPRVisualizationService:
                 mapbox=dict(
                     style="open-street-map",
                     center=dict(lat=center_lat, lon=center_lon),
-                    zoom=6.5
+                    zoom=view['zoom']
                 ),
                 height=700,
                 margin=dict(t=50, b=30, l=30, r=30)

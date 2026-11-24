@@ -200,13 +200,10 @@ def prepare_unified_dataset(unified_dataset: gpd.GeoDataFrame,
         
         # Calculate map bounds and center
         bounds = prepared_data.geometry.total_bounds  # minx, miny, maxx, maxy
-        center_lat = prepared_data.geometry.centroid.y.mean()
-        center_lon = prepared_data.geometry.centroid.x.mean()
-        
-        # Calculate zoom level
-        span_x = max(0.01, bounds[2] - bounds[0])
-        span_y = max(0.01, bounds[3] - bounds[1])
-        zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
+        from app.utils.map_view import fit_view
+        view = fit_view(bounds)
+        center_lat, center_lon = view['center']['lat'], view['center']['lon']
+        zoom_level = view['zoom']
         
         return {
             'status': 'success',

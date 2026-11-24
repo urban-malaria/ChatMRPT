@@ -597,9 +597,9 @@ class VariableDistribution(BaseTool):
             if plot_level == 'ward':
                 add_lga_boundary_overlay(fig, clean_data)
 
-            bounds = plot_data.total_bounds
-            center_lat = (bounds[1] + bounds[3]) / 2
-            center_lon = (bounds[0] + bounds[2]) / 2
+            from app.utils.map_view import fit_view
+            view = fit_view(plot_data.total_bounds)
+            center_lat, center_lon = view['center']['lat'], view['center']['lon']
 
             fig.update_layout(
                 title={
@@ -610,7 +610,7 @@ class VariableDistribution(BaseTool):
                 mapbox=dict(
                     style='open-street-map',
                     center=dict(lat=center_lat, lon=center_lon),
-                    zoom=8
+                    zoom=view['zoom']
                 ),
                 height=600,
                 margin=dict(t=60, b=20, l=20, r=20),

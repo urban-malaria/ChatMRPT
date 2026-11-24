@@ -812,7 +812,7 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
                 row_copy = row.copy()
                 row_copy['nets_allocated'] = nets_for_this_ward
                 row_copy['coverage_percent'] = 100.0
-                row_copy['allocation_phase'] = 'Urban Surplus (Full)'
+                row_copy['allocation_phase'] = 'Urban (Full)'
                 row_copy['priority_tier'] = 2
                 wards_with_allocation.append(row_copy)
                 allocated += nets_for_this_ward
@@ -824,7 +824,7 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
                     row_copy = row.copy()
                     row_copy['nets_allocated'] = remaining
                     row_copy['coverage_percent'] = (remaining / nets_for_this_ward) * 100
-                    row_copy['allocation_phase'] = 'Urban Surplus (Partial)'
+                    row_copy['allocation_phase'] = 'Urban (Partial)'
                     row_copy['priority_tier'] = 2
                     wards_with_allocation.append(row_copy)
                     allocated = total_nets
@@ -1148,9 +1148,9 @@ def generate_itn_map(
     normalized_selected_lgas = _normalize_selected_lgas(selected_lgas, available_lgas)
 
     # Get map center from shapefile bounds
-    bounds = shp_data.total_bounds
-    center_lat = (bounds[1] + bounds[3]) / 2
-    center_lon = (bounds[0] + bounds[2]) / 2
+    from app.utils.map_view import fit_view
+    map_view = fit_view(shp_data.total_bounds)
+    center_lat, center_lon = map_view['center']['lat'], map_view['center']['lon']
 
     # Early exit for requested LGA-level visualization
     if requested_level == 'lga':
@@ -1372,9 +1372,9 @@ def generate_itn_map(
                 return 'Unknown'
             tier_val = int(tier) if not pd.isna(tier) else 0
             if tier_val == 1:
-                return 'Tier 1 (Rural Priority)'
+                return 'First priority (rural ward)'
             elif tier_val == 2:
-                return 'Tier 2 (Urban Surplus)'
+                return 'Second priority (urban ward, nets left over)'
             else:
                 return 'Unknown Tier'
 
@@ -1447,7 +1447,7 @@ def generate_itn_map(
                     x=0.98,
                     y=0.75
                 ),
-                name='Rural Priority (Tier 1)'
+                name='Rural wards (first priority)'
             ))
 
         # ===== TIER 2 (URBAN SURPLUS) - Blue Color Scale =====
@@ -1501,7 +1501,7 @@ def generate_itn_map(
                     x=0.98,
                     y=0.35
                 ),
-                name='Urban Surplus (Tier 2)'
+                name='Urban wards (nets left over)'
             ))
     
     # ✅ CALCULATE TIER BREAKDOWN STATISTICS
@@ -1551,16 +1551,16 @@ def generate_itn_map(
     # Add annotations for threshold info
     annotations = [
         dict(
-            text=f"<b>Allocation Strategy</b><br>" +
-                 f"<b>Tier 1 (Rural Priority):</b> Urban < {urban_threshold}%<br>" +
-                 f"  • Wards: {tier1_wards} | Nets: {tier1_nets:,}<br>" +
-                 f"  • Risk ranks: {tier1_rank_display}<br>" +
-                 f"<b>Tier 2 (Urban Surplus):</b> Urban >= {urban_threshold}%<br>" +
-                 f"  • Wards: {tier2_wards} | Nets: {tier2_nets:,}<br>" +
-                 f"  • Risk ranks: {tier2_rank_display}<br>" +
-                 f"<b>Rule:</b> allocate by risk rank within each tier<br>" +
-                 f"<b>Net Ratio:</b> 1 net per 1.8 people<br>" +
-                 f"<i>Hover over wards for details</i>",
+            text=f"<b>How nets were allocated</b><br>" +
+                 f"<b>First: rural wards</b> (under {urban_threshold:g}% urban)<br>" +
+                 f"  • {tier1_wards} wards, {tier1_nets:,} nets" +
+                 (f" (risk ranks {tier1_rank_display})" if tier1_wards else "") + "<br>" +
+                 f"<b>Then: urban wards</b> ({urban_threshold:g}% urban or more)<br>" +
+                 f"  • {tier2_wards} wards, {tier2_nets:,} nets" +
+                 (f" (risk ranks {tier2_rank_display})" if tier2_wards else "") + "<br>" +
+                 f"Highest-risk wards first in each group;<br>" +
+                 f"1 net per 1.8 people<br>" +
+                 f"<i>Hover over a ward for details</i>",
             showarrow=False,
             xref="paper", yref="paper",
             x=0.02, y=0.98,
@@ -1594,7 +1594,7 @@ def generate_itn_map(
         mapbox=dict(
             style="open-street-map",
             center=dict(lat=center_lat, lon=center_lon),
-            zoom=8,
+            zoom=map_view['zoom'],
             bearing=0,
             pitch=0
         ),
@@ -1720,9 +1720,9 @@ def _build_lga_allocation_figure(
 
     aggregated = apply_lga_highlight(merged, selected_lgas, 'LGACode')
 
-    bounds = aggregated.total_bounds
-    local_center_lat = (bounds[1] + bounds[3]) / 2
-    local_center_lon = (bounds[0] + bounds[2]) / 2
+    from app.utils.map_view import fit_view
+    lga_view = fit_view(aggregated.total_bounds)
+    local_center_lat, local_center_lon = lga_view['center']['lat'], lga_view['center']['lon']
     center_lat = center_lat if center_lat is not None else local_center_lat
     center_lon = center_lon if center_lon is not None else local_center_lon
 
@@ -1790,7 +1790,7 @@ def _build_lga_allocation_figure(
         mapbox=dict(
             style='open-street-map',
             center=dict(lat=center_lat, lon=center_lon),
-            zoom=7.2,
+            zoom=lga_view['zoom'],
         ),
         margin={"r": 0, "t": 60, "l": 0, "b": 0},
         title=dict(
@@ -1878,8 +1878,8 @@ def _save_itn_map_html(
 
     threshold_control = f"""
         <div class="threshold-control">
-            <label><b>Urban Threshold:</b></label>
-            <input type="number" id="thresholdInput" value="{urban_threshold}" min="0" max="100" step="5">%
+            <label title="Wards with at least this share of urban area count as urban and get nets only after rural wards"><b>Wards count as urban from:</b></label>
+            <input type="number" id="thresholdInput" value="{urban_threshold}" min="0" max="100" step="5">% urban
             <button onclick="updateThreshold()">Update</button>
         </div>
     """

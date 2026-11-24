@@ -239,6 +239,12 @@ def create_agent_composite_score_maps(unified_dataset: gpd.GeoDataFrame,
                         row=row, col=col
                     )
         
+        # Fit the state into each panel of the grid (the figure is 600 px tall).
+        from app.utils.map_view import fit_view
+        panel_view = fit_view(prep_result['bounds'], width=760 // cols, height=340 // rows)
+        center_lat, center_lon = panel_view['center']['lat'], panel_view['center']['lon']
+        zoom_level = panel_view['zoom']
+
         # ORIGINAL: Update mapbox settings for each subplot
         for i in range(1, rows * cols + 1):
             if i <= len(page_models):
@@ -515,12 +521,10 @@ def create_agent_vulnerability_map(unified_dataset: gpd.GeoDataFrame,
         geojson = create_geojson_from_gdf(gdf_valid)
         
         # Get proper map centering based on valid geometries
-        bounds = gdf_valid.geometry.total_bounds
-        center_lat = gdf_valid.geometry.centroid.y.mean()
-        center_lon = gdf_valid.geometry.centroid.x.mean()
-        span_x = max(0.01, bounds[2] - bounds[0])
-        span_y = max(0.01, bounds[3] - bounds[1])
-        zoom_level = min(10, max(4, 6 - np.log(max(span_x, span_y))))
+        from app.utils.map_view import fit_view
+        view = fit_view(gdf_valid.geometry.total_bounds)
+        center_lat, center_lon = view['center']['lat'], view['center']['lon']
+        zoom_level = view['zoom']
         
         # Add the choropleth layer
         fig = go.Figure()

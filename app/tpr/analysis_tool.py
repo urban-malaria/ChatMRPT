@@ -721,9 +721,10 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
         add_lga_boundary_overlay(fig, merged_gdf)
 
         # Update layout
-        center_lat = merged_gdf.geometry.centroid.y.mean()
-        center_lon = merged_gdf.geometry.centroid.x.mean()
-        
+        from app.utils.map_view import fit_view
+        map_view = fit_view(merged_gdf.geometry.total_bounds)
+        center_lat, center_lon = map_view['center']['lat'], map_view['center']['lon']
+
         # Add debug info to title
         debug_text = f" ({matched}/{total_wards} wards with data, {match_rate:.0f}% match rate)"
 
@@ -737,7 +738,7 @@ def create_tpr_map(tpr_results: pd.DataFrame, session_folder: str, state_name: s
             mapbox=dict(
                 style="open-street-map",
                 center=dict(lat=center_lat, lon=center_lon),
-                zoom=6.5
+                zoom=map_view['zoom']
             ),
             height=700,
             margin=dict(t=50, b=30, l=30, r=30)
