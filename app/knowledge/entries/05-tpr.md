@@ -12,6 +12,7 @@ open_questions:
   - Some risk-analysis variable lists still refer to u5_tpr_rdt. Confirm whether TPR or burden enters the composite score in each case.
 ---
 - Formula: TPR = (number positive / number tested) x 100.
+- For a group of facilities or months, add up all positives and all tests first, then divide (a pooled rate). Averaging each facility-month's own rate gives the wrong answer and fails when a record has zero tests.
 - It can be calculated by test method (RDT or microscopy), age group and facility level.
 - A rising TPR over time suggests worsening transmission; a falling TPR suggests improvement, provided testing practices have not changed.
 - TPR adjusts for how many tests were done, so it is more comparable than raw case counts, but it is affected by who gets tested.

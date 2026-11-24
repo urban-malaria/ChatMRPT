@@ -143,7 +143,26 @@ def _inject_helpers(exec_globals: Dict[str, Any]):
         })
         return df
 
+    def pooled_rate(df: pd.DataFrame, positive_col: str, tested_col: str, by=None, per: float = 100.0):
+        """Positivity as total positives / total tested x per, overall or for each group in `by`.
+
+        This is the correct way to combine rates across facilities or months; averaging each row's
+        rate over-weights small facilities and breaks on rows with zero tests. Rows with no tests or
+        with more positives than tests are left out.
+        """
+        data = df[[c for c in ([by] if isinstance(by, str) else list(by or [])) + [positive_col, tested_col]]].copy()
+        data[positive_col] = pd.to_numeric(data[positive_col], errors='coerce')
+        data[tested_col] = pd.to_numeric(data[tested_col], errors='coerce')
+        data = data[(data[tested_col] > 0) & data[positive_col].notna() & (data[positive_col] <= data[tested_col])]
+        if by is None:
+            tested = data[tested_col].sum()
+            return float(data[positive_col].sum() / tested * per) if tested else float('nan')
+        grouped = data.groupby(by)[[positive_col, tested_col]].sum()
+        result = grouped.assign(rate=grouped[positive_col] / grouped[tested_col] * per)
+        return result.rename(columns={positive_col: 'positive', tested_col: 'tested'})
+
     # Inject helpers
+    exec_globals['pooled_rate'] = pooled_rate
     exec_globals['ensure_numeric'] = ensure_numeric
     exec_globals['top_n'] = top_n
     exec_globals['suggest_columns'] = suggest_columns
