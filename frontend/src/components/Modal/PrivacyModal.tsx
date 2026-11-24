@@ -94,7 +94,8 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                     <li>Each user's data is kept separate; other users cannot see it</li>
                     <li>Please upload aggregated facility or ward data only, not personal or patient-level information</li>
                     <li>Settings, then Data &amp; Privacy, then Clear All Local Data removes the chats stored in this browser.
-                      To have your data deleted from ChatMRPT's servers, contact the ChatMRPT team.</li>
+                      To have your data deleted from ChatMRPT's servers, email the ChatMRPT team at{' '}
+                      <a href="mailto:urbanmalaria@gmail.com" className="underline text-blue-600 dark:text-blue-400">urbanmalaria@gmail.com</a>.</li>
                   </ul>
                 </div>
 
