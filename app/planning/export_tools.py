@@ -22,6 +22,59 @@ from app.services.dataset_builder import load_unified_dataset
 logger = logging.getLogger(__name__)
 
 
+
+ALLOCATION_COLUMNS = ['population', 'population_is_estimate', 'nets_needed', 'nets_allocated',
+                      'coverage_percent', 'allocation_phase']
+
+
+def build_ward_allocation(gdf: pd.DataFrame, itn_results: Dict[str, Any]) -> pd.DataFrame:
+    """Per-ward allocation for every ward in the unified dataset.
+
+    Wards that received no nets get 0 nets and the phase "Not allocated". Population comes from
+    the ITN plan, which also records whether it was estimated for wards without population data.
+    """
+    ward_col = next((c for c in gdf.columns if c.lower() in ['wardname', 'ward_name', 'ward']), None)
+    if ward_col is None:
+        return pd.DataFrame()
+    key = gdf[ward_col].astype(str).str.strip().str.lower()
+    table = pd.DataFrame({'_key': key}, index=gdf.index)
+
+    def lookup_column(frame: pd.DataFrame, column: str) -> pd.Series:
+        return table['_key'].map(frame[column]) if column in frame else pd.Series(None, index=table.index, dtype=object)
+
+    all_wards = pd.DataFrame(itn_results.get('all_wards') or [])
+    if not all_wards.empty and 'WardName' in all_wards:
+        all_wards['_key'] = all_wards['WardName'].astype(str).str.strip().str.lower()
+        all_wards = all_wards.drop_duplicates('_key')
+        lookup = all_wards.set_index('_key')
+        table['population'] = lookup_column(lookup, 'Population')
+        if 'has_population_data' in lookup:
+            table['population_is_estimate'] = ~table['_key'].map(lookup['has_population_data']).fillna(False).astype(bool)
+        table['nets_needed'] = lookup_column(lookup, 'nets_needed')
+
+    allocated = pd.DataFrame((itn_results.get('prioritized') or []) + (itn_results.get('reprioritized') or []))
+    if not allocated.empty and 'WardName' in allocated:
+        allocated['_key'] = allocated['WardName'].astype(str).str.strip().str.lower()
+        allocated = allocated.drop_duplicates('_key').set_index('_key')
+        if 'population' not in table:
+            table['population'] = lookup_column(allocated, 'Population')
+        if 'nets_needed' not in table:
+            table['nets_needed'] = lookup_column(allocated, 'nets_needed')
+        table['nets_allocated'] = lookup_column(allocated, 'nets_allocated')
+        table['coverage_percent'] = lookup_column(allocated, 'coverage_percent')
+        table['allocation_phase'] = lookup_column(allocated, 'allocation_phase')
+
+    for column in ['nets_allocated', 'coverage_percent', 'allocation_phase']:
+        if column not in table:
+            table[column] = None
+    table['nets_allocated'] = pd.to_numeric(table['nets_allocated'], errors='coerce').fillna(0).astype(int)
+    table['coverage_percent'] = pd.to_numeric(table['coverage_percent'], errors='coerce').fillna(0).round(1)
+    table['allocation_phase'] = table['allocation_phase'].fillna('Not allocated')
+    for column in ['population', 'nets_needed']:
+        if column in table:
+            table[column] = pd.to_numeric(table[column], errors='coerce').round().astype('Int64')
+    return table.drop(columns='_key')
+
 class ExportITNResults(BaseTool):
     """
     Export ITN distribution results as a comprehensive take-home package.
@@ -124,7 +177,7 @@ class ExportITNResults(BaseTool):
                 logger.info(f"Copied {len(map_files)} map files")
             
             # 4. Create summary report instead of JSON metadata
-            summary_path = self._create_summary_report(export_data, export_dir)
+            summary_path = self._create_summary_report(export_data, export_dir, [f.name for f in exported_files])
             if summary_path:
                 exported_files.append(summary_path)
             
@@ -202,6 +255,15 @@ class ExportITNResults(BaseTool):
                 vulnerability_maps.extend(list(viz_subdir.glob("*vulnerability*map*.html")))
                 itn_maps.extend(list(viz_subdir.glob("*itn*distribution*map*.html")))
             
+            allocation = build_ward_allocation(gdf, itn_results)
+            if not allocation.empty:
+                gdf = gdf.drop(columns=[c for c in ALLOCATION_COLUMNS if c in gdf.columns])
+                gdf = gdf.join(allocation)
+            stats = itn_results.get('stats') or {}
+            # The ITN plan stores covered_population; the dashboard and summary read population_covered.
+            if 'population_covered' not in stats and 'covered_population' in stats:
+                stats['population_covered'] = stats['covered_population']
+
             export_data = {
                 'unified_dataset': gdf,
                 'itn_results': itn_results,
@@ -256,48 +318,14 @@ class ExportITNResults(BaseTool):
                 'housing_quality', 'evi', 'ndwi', 'soil_wetness'
             ])
             
-            # Now merge with ITN results to get allocation data
-            if 'prioritized' in itn_results:
-                # Create a dataframe from ITN results
-                itn_df = pd.DataFrame(itn_results['prioritized'])
-                if 'reprioritized' in itn_results and itn_results['reprioritized']:
-                    repri_df = pd.DataFrame(itn_results['reprioritized'])
-                    itn_df = pd.concat([itn_df, repri_df], ignore_index=True)
-                
-                # Merge ITN allocation data
-                if ward_col and 'ward_name' in itn_df.columns:
-                    gdf = gdf.merge(
-                        itn_df[['ward_name', 'population', 'nets_allocated', 'nets_needed', 
-                               'coverage_percent', 'allocation_phase']],
-                        left_on=ward_col,
-                        right_on='ward_name',
-                        how='left'
-                    )
-                    # Add ITN columns to export
-                    export_columns.extend(['population', 'nets_allocated', 'nets_needed', 
-                                         'coverage_percent', 'allocation_phase'])
-            
+            # Per-ward allocation, joined in _gather_export_data
+            export_columns.extend(ALLOCATION_COLUMNS)
+
             # Filter to existing columns
             available_columns = [col for col in export_columns if col in gdf.columns]
             
             # Create export dataframe
             export_df = gdf[available_columns].copy()
-            
-            # Add ITN allocation data if available
-            if 'prioritized' in itn_results and 'reprioritized' in itn_results:
-                # This would merge the ITN allocation results
-                # For now, we'll use what's in the unified dataset
-                pass
-            
-            # Add calculated columns if not present
-            if 'households' not in export_df.columns and 'population' in export_df.columns:
-                # Estimate households based on average household size
-                avg_household_size = 4  # Default, could be from config
-                export_df['households'] = (export_df['population'] / avg_household_size).round().astype(int)
-            
-            if 'nets_needed' not in export_df.columns and 'households' in export_df.columns:
-                # Calculate nets needed (2 nets per household standard)
-                export_df['nets_needed'] = export_df['households'] * 2
             
             # Sort by composite rank
             if 'composite_rank' in export_df.columns:
@@ -1403,10 +1431,19 @@ class ExportITNResults(BaseTool):
         
         return copied_files
     
-    def _create_summary_report(self, export_data: Dict[str, Any], export_dir: Path) -> Optional[Path]:
+    def _create_summary_report(self, export_data: Dict[str, Any], export_dir: Path,
+                               file_names: Optional[List[str]] = None) -> Optional[Path]:
         """Create human-readable summary report"""
         try:
             stats = export_data.get('summary_stats', {})
+            descriptions = {
+                'itn_distribution_results.csv': 'Nets per ward: population, nets needed, nets allocated, coverage and risk rank',
+                'itn_distribution_dashboard.html': 'Interactive dashboard (open in a web browser)',
+            }
+            listed = [f"{i}. {name} - {descriptions.get(name, 'Map (open in a web browser)')}"
+                      for i, name in enumerate((file_names or []) + ['Analysis_Summary.txt'], start=1)]
+            listed[-1] = f"{len(listed)}. Analysis_Summary.txt - This summary"
+            files_section = "\n".join(listed)
             
             summary_text = f"""ITN DISTRIBUTION ANALYSIS SUMMARY
 ============================================
@@ -1430,7 +1467,7 @@ Nets Remaining: {stats.get('remaining', 'N/A'):,}
 POPULATION IMPACT
 -----------------
 Total Population: {stats.get('total_population', 'N/A'):,}
-Population Covered: {stats.get('covered_population', 'N/A'):,}
+Population Covered: {stats.get('population_covered', stats.get('covered_population', 'N/A')):,}
 Coverage Percentage: {stats.get('coverage_percent', 'N/A')}%
 
 WARD COVERAGE DETAILS
@@ -1441,16 +1478,14 @@ Maximum Coverage: {stats.get('ward_coverage_stats', {}).get('max_coverage_percen
 
 FILES INCLUDED IN THIS PACKAGE
 ------------------------------
-1. itn_distribution_results.csv - Detailed ward-level data
-2. itn_distribution_dashboard.html - Interactive visualization
-3. Vulnerability and ITN distribution maps
-4. This summary report
+{files_section}
 
 NOTES
 -----
 - Wards are prioritized based on composite malaria risk scores
-- Each household receives 2 nets (WHO standard)
-- Full coverage means 100% of households in a ward receive nets
+- Nets needed per ward: one net per 1.8 people (WHO universal coverage), and at least one per household
+- Full coverage means a ward received all the nets it needs
+- Wards marked as estimated population had no WorldPop match; their population is the state ward average
 """
             
             summary_path = export_dir / 'Analysis_Summary.txt'

@@ -707,14 +707,13 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
         # Calculate a default population based on average if missing
         avg_population = rankings['Population'].dropna().mean() if rankings['Population'].notna().any() else 10000
         
-        # Log wards without population data
-        no_pop_wards = rankings[rankings['Population'].isna()]
+        # Record which wards have real population data before estimates are filled in.
+        rankings['has_population_data'] = rankings['Population'].notna()
+        no_pop_wards = rankings[~rankings['has_population_data']]
         if len(no_pop_wards) > 0:
             logger.warning(f"Found {len(no_pop_wards)} wards without population data")
             logger.info(f"Using estimated population of {avg_population:.0f} for wards without data")
-            # Fill missing population with average
             rankings['Population'] = rankings['Population'].fillna(avg_population)
-            rankings['has_population_data'] = rankings['Population'].notna()
         
         # Don't fail if no population matches - continue with estimates
         if rankings['Population'].isna().all():
@@ -917,6 +916,10 @@ def calculate_itn_distribution(data_handler, session_id: str, total_nets: int = 
             'prioritized': prioritized.to_dict('records'),
             'reprioritized': reprioritized.to_dict('records') if not reprioritized.empty else [],
             'distribution': prioritized.to_dict('records'),  # Add distribution for backward compatibility
+            # Every ranked ward, so exports can list wards that received no nets as well.
+            'all_wards': rankings[[c for c in ['WardName', 'WardCode', 'LGA', 'overall_rank', 'vulnerability_category',
+                                               'Population', 'has_population_data', 'nets_needed', urban_col]
+                                   if c in rankings.columns]].to_dict('records'),
             'map_path': map_path
         }
         
