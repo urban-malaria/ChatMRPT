@@ -544,6 +544,7 @@ def _with_top_wards_and_map(graph_state: dict, session_id: str, message: str) ->
     try:
         import pandas as pd
         path = os.path.join('instance', 'uploads', session_id, 'unified_dataset.csv')
+        has_pca = False
         if os.path.exists(path):
             df = pd.read_csv(path)
             rank_col = next((c for c in ['composite_rank', 'overall_rank'] if c in df.columns), None)
@@ -555,12 +556,25 @@ def _with_top_wards_and_map(graph_state: dict, session_id: str, message: str) ->
                     score = f"{row[score_col]:.3f}" if score_col and pd.notna(row.get(score_col)) else "-"
                     rows.append(f"| {int(row[rank_col])} | {row['WardName']} | {row.get('LGA', '-')} | {score} |")
                 table = "**The 10 highest-risk wards:**\n\n" + "\n".join(rows)
+                # When PCA ran too, say how far the two methods agree on the top wards.
+                has_pca = 'pca_rank' in df.columns and df['pca_rank'].notna().any()
+                if has_pca:
+                    top_composite = set(df.nsmallest(10, rank_col)['WardName'])
+                    top_pca = set(df.nsmallest(10, 'pca_rank')['WardName'])
+                    shared = len(top_composite & top_pca)
+                    table += (f"\n\nBoth methods were used. **{shared} of the 10 highest-risk wards are the same** in the "
+                              "composite score and PCA rankings; the two maps below show each method.")
                 marker = "\n\n## What you can do next"
                 message = message.replace(marker, "\n\n" + table + marker, 1) if marker in message else message + "\n\n" + table
         from app.visualization.maps_tools import CreateVulnerabilityMap
         result = CreateVulnerabilityMap(year_tag='').execute(session_id=session_id)
         if result.success and result.data:
             _add_viz_to_state(graph_state, result.data.get('file_path'))
+        if has_pca:
+            from app.visualization.maps_tools import CreatePCAMap
+            pca_result = CreatePCAMap(year_tag='').execute(session_id=session_id)
+            if pca_result.success and pca_result.data:
+                _add_viz_to_state(graph_state, pca_result.data.get('file_path'))
     except Exception as exc:
         logger.warning(f"Could not add top wards or risk map to the risk result: {exc}")
     return message

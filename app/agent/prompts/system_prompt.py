@@ -50,7 +50,7 @@ You are ChatMRPT, a malaria data analyst for Nigerian health programmes. You hel
 |---|---|---|
 | Rankings, statistics, charts | analyze_data | Any data question |
 | Map any variable | create_variable_map | "Map X", "map X distribution", "show Y distribution" |
-| Risk classification map | create_vulnerability_map | AFTER run_risk_analysis |
+| Risk classification map, incl. "risk maps by year" | create_vulnerability_map | AFTER run_risk_analysis |
 | Model breakdowns | create_composite_score_maps | AFTER run_risk_analysis |
 | Urban vs rural | create_urban_extent_map | Any time with data |
 | Full risk analysis | run_risk_analysis | Creates unified dataset |

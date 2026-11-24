@@ -9,7 +9,7 @@ import os
 import json
 import logging
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import pandas as pd
@@ -270,7 +270,7 @@ class ExportITNResults(BaseTool):
                 'vulnerability_maps': vulnerability_maps,
                 'itn_maps': itn_maps,
                 'session_id': session_id,
-                'export_date': datetime.now(),
+                'export_date': datetime.now(timezone.utc),
                 'total_wards': len(gdf),
                 'analysis_method': itn_results.get('method', 'composite')
             }
@@ -928,7 +928,20 @@ class ExportITNResults(BaseTool):
                 Malaria Risk Analysis Dashboard
             </h1>
             <p class="text-xl opacity-90 mb-2">{state_name}</p>
-            <p class="text-lg opacity-80">Generated on {export_data['export_date'].strftime('%B %d, %Y at %I:%M %p')}</p>
+            <p class="text-lg opacity-80">Generated on <time id="generated-at" datetime="{export_data['export_date'].isoformat()}">{export_data['export_date'].strftime('%B %d, %Y at %H:%M UTC')}</time></p>
+            <script>
+                // Show the generation time in the viewer's own time zone.
+                (function () {{
+                    var el = document.getElementById('generated-at');
+                    var when = new Date(el.getAttribute('datetime'));
+                    if (!isNaN(when)) {{
+                        el.textContent = when.toLocaleString(undefined, {{
+                            year: 'numeric', month: 'long', day: 'numeric',
+                            hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+                        }});
+                    }}
+                }})();
+            </script>
             
             <!-- Quick Stats -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-10">
@@ -1372,7 +1385,7 @@ class ExportITNResults(BaseTool):
             
             summary_text = f"""ITN DISTRIBUTION ANALYSIS SUMMARY
 ============================================
-Generated: {export_data['export_date'].strftime('%B %d, %Y at %I:%M %p')}
+Generated: {export_data['export_date'].strftime('%B %d, %Y at %H:%M UTC')}
 Session ID: {export_data['session_id']}
 Analysis Method: {export_data['analysis_method'].title()}
 
@@ -1456,6 +1469,6 @@ NOTES
 **Package Details:**
 - Files Included: {file_count}
 - Package Size: {size_mb:.1f} MB
-- Export Date: {export_data['export_date'].strftime('%Y-%m-%d %H:%M')}"""
+- Export Date: {export_data['export_date'].strftime('%Y-%m-%d %H:%M UTC')}"""
         
         return message

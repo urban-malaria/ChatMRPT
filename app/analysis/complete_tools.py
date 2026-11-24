@@ -1104,13 +1104,15 @@ I ran two tests to check if your data is suitable for advanced pattern analysis 
 
 """
             
+            # The risk maps are shown with the result; the next step offers the year-by-year view
+            # when the upload covers several years.
+            yearly = glob.glob(os.path.join(f"instance/uploads/{session_id}", 'raw_data_[0-9][0-9][0-9][0-9].csv'))
             visual_action = (
-                "View vulnerability maps\n"
-                "   Type: **show me the vulnerability maps**"
-                if not pca_result.get("pca_skipped")
-                else
-                "Create composite vulnerability map\n"
-                "   Type: **create composite vulnerability map**"
+                "See how risk changes year by year\n"
+                "   Type: **show the risk maps by year**"
+                if yearly else
+                "Open the risk map again\n"
+                "   Type: **show me the vulnerability map**"
             )
 
             method_name = "Composite Score and PCA" if not pca_result.get("pca_skipped") else "Composite Score"

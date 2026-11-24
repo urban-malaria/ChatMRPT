@@ -9,7 +9,7 @@ import logging
 import os
 import json
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import pandas as pd
@@ -148,7 +148,7 @@ class ModernReportGenerator:
             summary_path = export_dir / 'analysis_summary.txt'
             with open(summary_path, 'w') as f:
                 f.write(f"Malaria Risk Analysis Summary\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+                f.write(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n")
                 f.write(f"Session: {self.session_id}\n\n")
                 
                 if hasattr(self.data_handler, 'vulnerability_rankings'):

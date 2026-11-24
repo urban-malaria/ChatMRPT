@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 _TITLES = (
     ('vulnerability_map_composite', 'Malaria risk by ward (composite score)'),
     ('vulnerability_map_pca', 'Malaria risk by ward (PCA)'),
+    ('pca_vulnerability_map', 'Malaria risk by ward (PCA)'),
     ('vulnerability_map', 'Malaria risk by ward'),
     ('itn_distribution_map', 'Bed net (ITN) distribution plan'),
     ('urban_extent', 'Urban and rural wards'),

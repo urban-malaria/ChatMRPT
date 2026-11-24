@@ -414,6 +414,16 @@ class PCAAnalysisPipeline:
                 columns=numeric_cols,
                 index=self.cleaned_data.index
             )
+
+            # Point every variable the same way as the composite score: higher = more risk.
+            # Variables where a higher value means lower risk (distance to water, housing quality,
+            # urban percentage, ...) are reversed.
+            from app.analysis.normalization import determine_variable_relationships
+            relationships = determine_variable_relationships(numeric_cols)
+            inverse = [c for c in numeric_cols if relationships.get(c) == 'inverse']
+            if inverse:
+                self.standardized_data[inverse] = -self.standardized_data[inverse]
+                logger.info(f"PCA: reversed inverse-risk variables {inverse}")
             
             # Add back ward names
             self.standardized_data['WardName'] = self.cleaned_data['WardName'].values
@@ -515,6 +525,13 @@ class PCAAnalysisPipeline:
             # Run PCA
             self.pca_model = PCA(n_components=n_components, random_state=42)
             pca_scores = self.pca_model.fit_transform(pca_data)
+
+            # A component's sign is arbitrary. With every input pointing towards risk, orient each
+            # component so its loadings sum to a positive number: a higher score then means higher risk.
+            for i in range(self.pca_model.n_components_):
+                if self.pca_model.components_[i].sum() < 0:
+                    self.pca_model.components_[i] *= -1
+                    pca_scores[:, i] *= -1
             
             # Store PCA scores
             self.pca_scores = pd.DataFrame(
