@@ -1001,6 +1001,20 @@ class RunMalariaRiskAnalysis(DataAnalysisTool):
             
             # Get number of variables used (already extracted earlier)
             num_variables = len(composite_vars) if composite_vars else "several"
+            factor_names = ", ".join(
+                "malaria burden" if str(v).lower() == 'burden' else str(v).replace('_', ' ') for v in (composite_vars or []))
+            factors_line = f" The factors are: {factor_names}." if factor_names else ""
+            estimated_line = ""
+            if composite_vars and 'burden' in [str(v).lower() for v in composite_vars]:
+                raw_path = os.path.join(f"instance/uploads/{session_id}", 'raw_data.csv')
+                try:
+                    import pandas as pd
+                    missing = int(pd.read_csv(raw_path)['Burden'].isna().sum()) if os.path.exists(raw_path) else 0
+                except Exception:
+                    missing = 0
+                if missing:
+                    estimated_line = (f"\n\n{missing} wards had no malaria data; for the ranking only, their burden "
+                                      "was estimated from neighbouring wards (marked burden_estimated in the downloads).")
             
             # Extract PCA test results if available
             pca_test_summary = ""
@@ -1104,7 +1118,7 @@ I ran two tests to check if your data is suitable for advanced pattern analysis 
             # Build conversational response
             response = f"""Analysis complete.
 
-I ranked all {ward_count} wards by malaria risk using {num_variables} risk factors for the {geopolitical_zone} zone.
+I ranked all {ward_count} wards by malaria risk using {num_variables} risk factors for the {geopolitical_zone} zone.{factors_line}{estimated_line}
 
 ## What you can do next
 
@@ -1456,6 +1470,31 @@ I ranked all {ward_count} wards by malaria risk using {num_variables} risk facto
                 tags.append(f'_{year_str}')
         return tags
 
+    def _year_analysis_data(self, session_folder: str, year_tag: str):
+        """The cleaned all-years analysis table with that year's malaria burden swapped in.
+
+        Environmental variables do not change by year, so their cleaned values are reused. Wards with
+        no records in the year get that year's median burden so they can still be ranked.
+        """
+        import pandas as pd
+        cleaned_path = os.path.join(session_folder, 'analysis_cleaned_data.csv')
+        year_path = os.path.join(session_folder, f'raw_data{year_tag}.csv')
+        if not (os.path.exists(cleaned_path) and os.path.exists(year_path)):
+            return None
+        try:
+            cleaned = pd.read_csv(cleaned_path)
+            year = pd.read_csv(year_path)
+            key = 'WardCode' if 'WardCode' in cleaned.columns and 'WardCode' in year.columns else 'WardName'
+            if 'Burden' not in cleaned.columns or 'Burden' not in year.columns:
+                return None
+            lookup = year.drop_duplicates(key).set_index(key)['Burden']
+            burden = cleaned[key].map(lookup)
+            cleaned['Burden'] = burden.fillna(burden.median())
+            return cleaned
+        except Exception as exc:
+            logger.warning(f"Could not build {year_tag} analysis data: {exc}")
+            return None
+
     def _blend_burden_into_composite(self, session_folder: str, year_tag: str) -> None:
         """Blend composite_rank + burden_rank into combined_rank for one year.
 
@@ -1591,6 +1630,16 @@ I ranked all {ward_count} wards by malaria risk using {num_variables} risk facto
         status_path = os.path.join(session_folder, 'multi_year_vuln_status.json')
         completed: List[str] = []
 
+        # Variables the main analysis used (given, or chosen automatically and recorded in the metadata).
+        used_vars = list(composite_vars or [])
+        if not used_vars:
+            try:
+                with open(os.path.join(session_folder, 'unified_variable_metadata.json')) as handle:
+                    used_vars = json.load(handle).get('selected_variables') or []
+            except Exception:
+                used_vars = []
+        burden_in_score = 'burden' in [str(v).lower() for v in used_vars]
+
         def _process_one_year(year_tag: str) -> str:
             """Worker: run composite + blend + unified dataset for one year. Returns year_tag on success."""
             with app.app_context():
@@ -1598,10 +1647,18 @@ I ranked all {ward_count} wards by malaria risk using {num_variables} risk facto
                 from app.services.data_handler import DataHandler
                 from app.services.dataset_builder import UnifiedDatasetBuilder
 
-                engine = AnalysisEngine(DataHandler(session_folder))
+                data_handler = DataHandler(session_folder)
+                if burden_in_score:
+                    year_data = self._year_analysis_data(session_folder, year_tag)
+                    if year_data is not None:
+                        data_handler.cleaned_data = year_data
+                engine = AnalysisEngine(data_handler)
                 engine.run_composite_analysis(session_id, variables=composite_vars, year_tag=year_tag)
 
-                self._blend_burden_into_composite(session_folder, year_tag)
+                # When burden is already one of the score's variables, each year's score uses that
+                # year's burden directly; blending it in again would count it twice.
+                if not burden_in_score:
+                    self._blend_burden_into_composite(session_folder, year_tag)
 
                 if pca_passed:
                     self._copy_aggregate_pca_scores(session_folder, year_tag)

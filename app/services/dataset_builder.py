@@ -72,7 +72,10 @@ class UnifiedDatasetBuilder:
             # 9. Optimize for tool access
             unified_gdf = self._optimize_for_tools(unified_gdf)
             
-            # 10. Validate and save
+            # 10. Mark wards whose burden was estimated (no matching facility data)
+            unified_gdf = self._flag_estimated_burden(unified_gdf)
+
+            # 11. Validate and save
             validation_result = self._validate_dataset(unified_gdf)
             if not validation_result['valid']:
                 return {'status': 'error', 'message': f"Validation failed: {validation_result['errors']}"}
@@ -1466,6 +1469,20 @@ class UnifiedDatasetBuilder:
             'completeness': completeness
         }
     
+    def _flag_estimated_burden(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Add burden_estimated: True where the ward had no facility data and its burden was filled in."""
+        raw_path = os.path.join(self.session_folder, f'raw_data{self.year_tag}.csv')
+        if 'Burden' not in gdf.columns or 'WardName' not in gdf.columns or not os.path.exists(raw_path):
+            return gdf
+        try:
+            raw = pd.read_csv(raw_path, usecols=lambda c: c in ('WardName', 'WardCode', 'Burden'))
+            key = 'WardCode' if 'WardCode' in raw.columns and 'WardCode' in gdf.columns else 'WardName'
+            no_data = set(raw.loc[raw['Burden'].isna(), key].astype(str))
+            gdf['burden_estimated'] = gdf[key].astype(str).isin(no_data)
+        except Exception as exc:
+            logger.warning(f"Could not flag estimated burden: {exc}")
+        return gdf
+
     def _save_geoparquet_dataset(self, gdf: gpd.GeoDataFrame) -> Dict[str, str]:
         """Save unified dataset as optimized GeoParquet with optional CSV backup"""
         

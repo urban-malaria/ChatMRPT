@@ -429,15 +429,18 @@ def explain_ward_risk(
         rows = ["| Factor | This ward | State median | Risk contribution (0 = lowest, 1 = highest in state) |",
                 "|---|---|---|---|"]
         contributions = []
+        raw_columns = {c.lower(): c for c in norm.columns if not c.startswith('normalization_')}
         for factor in factors:
-            raw = norm_row.get(factor)
-            median = pd.to_numeric(norm[factor], errors='coerce').median() if factor in norm else None
+            raw_column = raw_columns.get(factor.lower())
+            raw = norm_row.get(raw_column) if raw_column else None
+            median = pd.to_numeric(norm[raw_column], errors='coerce').median() if raw_column else None
             value = norm_row.get(f'normalization_{factor}')
             contributions.append((factor, value))
-            fmt = lambda v: "-" if not pd.notna(v) else (f"{v:,.0f}" if abs(v) >= 100 else f"{v:.3g}")
-            rows.append(f"| {factor.replace('_', ' ')} | {fmt(raw)} | {fmt(median)} | {fmt(value)} |")
+            fmt = lambda v: "-" if not pd.notna(v) else (f"{v:,.0f}" if abs(v) >= 100 else ("0" if abs(v) < 0.001 else f"{v:.3g}"))
+            label = 'malaria burden per 1,000' if factor.lower() == 'burden' else factor.replace('_', ' ')
+            rows.append(f"| {label} | {fmt(raw)} | {fmt(median)} | {fmt(value)} |")
 
-        strongest = [f.replace('_', ' ') for f, v in sorted(contributions, key=lambda x: -(x[1] if pd.notna(x[1]) else -1))[:2]]
+        strongest = [('malaria burden' if f.lower() == 'burden' else f.replace('_', ' ')) for f, v in sorted(contributions, key=lambda x: -(x[1] if pd.notna(x[1]) else -1))[:2]]
         header = (f"**{unified_row['WardName']}** ({unified_row.get('LGA', '')} LGA) is ranked "
                   f"**{int(unified_row[rank_col])} of {unified[rank_col].notna().sum()}**"
                   + (f", {unified_row[category_col]}" if category_col else "")
@@ -446,6 +449,9 @@ def explain_ward_risk(
                    "highest-risk value in the state:\n\n" + "\n".join(rows)
                    + f"\n\nThe factors pushing this ward's risk up most are {strongest[0]}"
                    + (f" and {strongest[1]}" if len(strongest) > 1 else "") + ".")
+        if bool(unified_row.get('burden_estimated', False)):
+            message += ("\n\nThis ward had no matching facility data, so its burden is an estimate from "
+                        "neighbouring wards.")
 
         _add_canonical_response(
             graph_state,

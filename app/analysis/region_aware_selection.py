@@ -369,6 +369,13 @@ def select_variables_by_zone(zone: str, available_variables: List[str],
     
     # Select variables using fuzzy matching for flexibility
     for var in prioritized_variables:
+        # The guided workflow produces malaria burden per 1,000 ('Burden') rather than under-5 TPR;
+        # it fills the malaria slot so the malaria data is part of the risk score.
+        if var in CORE_VARIABLES and var not in available_variables and 'Burden' in available_variables:
+            if 'Burden' not in selected_variables:
+                selected_variables.append('Burden')
+                logger.info(f"Using 'Burden' for the malaria variable '{var}'")
+            continue
         # First try exact match
         if var in available_variables:
             selected_variables.append(var)

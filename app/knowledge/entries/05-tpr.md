@@ -5,11 +5,10 @@ aliases: [tpr, test positivity rate, test positivity, positivity rate, positivit
 summary: >
   TPR (Test Positivity Rate) is the percentage of people tested for malaria whose test
   is positive: positive tests / total tests x 100. ChatMRPT uses TPR for trends over time;
-  the ward maps and risk analysis use malaria burden per 1,000 population.
+  the ward maps and the risk score use malaria burden per 1,000 population.
 status: draft
 sources: []
-open_questions:
-  - Some risk-analysis variable lists still refer to u5_tpr_rdt. Confirm whether TPR or burden enters the composite score in each case.
+open_questions: []
 ---
 - Formula: TPR = (number positive / number tested) x 100.
 - For a group of facilities or months, add up all positives and all tests first, then divide (a pooled rate). Averaging each facility-month's own rate gives the wrong answer and fails when a record has zero tests.

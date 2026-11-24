@@ -264,6 +264,7 @@ def determine_variable_relationships(variables, descriptions=None, metadata=None
     
     # Keywords that typically indicate direct relationship with malaria risk
     direct_keywords = [
+        'burden', 'tpr', 'positiv', 'incidence', 'pfpr',
         'rainfall', 'precipitation', 'humidity', 'temperature', 'vegetation',
         'poverty', 'population', 'density', 'water', 'breeding'
     ]
