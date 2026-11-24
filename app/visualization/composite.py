@@ -14,6 +14,7 @@ Includes:
 """
 
 import logging
+import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -94,15 +95,19 @@ def create_agent_composite_score_maps(unified_dataset: gpd.GeoDataFrame,
         end_idx = min(start_idx + models_per_page, len(model_columns))
         page_models = model_columns[start_idx:end_idx]
         
-        # ORIGINAL: Create fallback formulas since we don't have them in unified dataset
-        page_formulas = []
-        for model in page_models:
-            # Create fallback formula structure
-            page_formulas.append({
-                'variables': ['population', 'pfpr', 'elevation', 'temp_mean'],  # Sample vars
-                'formula': f"Basic malaria risk model using multiple variables",
-                'complexity': 'medium'
-            })
+        # Each model's variables, from the model formulas saved by the risk analysis
+        model_variables = {}
+        try:
+            formulas_path = os.path.join('instance', 'uploads', session_id, 'model_formulas.csv')
+            if os.path.exists(formulas_path):
+                formulas = pd.read_csv(formulas_path)
+                model_variables = {
+                    str(row['model']): [v.strip() for v in str(row['variables']).split(',') if v.strip()]
+                    for _, row in formulas.iterrows()
+                }
+        except Exception as exc:
+            logger.warning(f"Could not read model formulas: {exc}")
+        page_formulas = [{'variables': model_variables.get(model, [])} for model in page_models]
         
         # ORIGINAL: Check for urban column and identify non-ideal models
         urban_column = None
@@ -157,7 +162,7 @@ def create_agent_composite_score_maps(unified_dataset: gpd.GeoDataFrame,
                 # ORIGINAL: Create title with variables on separate lines
                 var_names = []
                 for var in variables:
-                    var_names.append(var.replace('_', ' ').title())
+                    var_names.append('Malaria burden' if var.lower() == 'burden' else var.replace('_', ' ').capitalize())
                 title = "<br>".join(var_names)
                 
                 # ORIGINAL: Add "Not Ideal" designation if this model is flagged
