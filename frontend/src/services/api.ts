@@ -175,6 +175,8 @@ export const api = {
     getStatus: (sessionId: string) =>
       axiosInstance.get(`/api/data-analysis/status?session_id=${sessionId}`),
     
+    loadSample: () => axiosInstance.post('/api/data-analysis/sample'),
+
     activateMode: (sessionId: string) =>
       axiosInstance.post('/api/data-analysis/activate-mode', { session_id: sessionId }),
     
@@ -245,8 +247,6 @@ export const api = {
       shp_total_chunks: number;
     }) => axiosInstance.post('/upload/finalize', payload, { timeout: 60000 }),
 
-    loadSampleData: (dataType: string, sessionId: string) =>
-      axiosInstance.post('/load_sample_data', { data_type: dataType, session_id: sessionId }),
     
     downloadProcessedCSV: (sessionId: string) =>
       axiosInstance.get(`/api/download/processed-csv?session_id=${sessionId}`, {

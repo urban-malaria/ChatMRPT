@@ -9,6 +9,7 @@ import Icon from '../Icons/WelcomeIcons';
 import '@/styles/animations.css';
 import UploadModal from '../Modal/UploadModal';
 import storage from '@/utils/storage';
+import { useAnalysisSession, SAMPLE_DATASET } from '@/hooks/useAnalysisSession';
 
 const ChatContainer: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -20,6 +21,7 @@ const ChatContainer: React.FC = () => {
   const setUploadedFiles = useChatStore((s) => s.setUploadedFiles);
 
   const { sendMessage, stopGeneration } = useMessageStreaming();
+  const { loadSample, isLoadingSample } = useAnalysisSession();
   const updateSession = useChatStore((state) => state.updateSession);
   
   // Auto-scroll to bottom when new messages arrive
@@ -150,14 +152,26 @@ const ChatContainer: React.FC = () => {
               {/* Call to Action */}
               <div className="text-center mb-8">
                 <p className="text-base text-gray-600 dark:text-dark-text-secondary mb-6 font-light">
-                  To begin, upload your malaria data (CSV file)
+                  To begin, upload your malaria data, or try ChatMRPT with sample data
                 </p>
-                <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium text-base hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  Upload Data
-                </button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium text-base hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    Upload Data
+                  </button>
+                  <button
+                    onClick={loadSample}
+                    disabled={isLoadingSample}
+                    className="px-8 py-3 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 rounded-lg font-medium text-base hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoadingSample ? 'Loading sample...' : 'Try Sample Data'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-3 font-light max-w-xl mx-auto">
+                  Sample: {SAMPLE_DATASET.title}. {SAMPLE_DATASET.description}
+                </p>
               </div>
 
               {/* Secondary Action */}

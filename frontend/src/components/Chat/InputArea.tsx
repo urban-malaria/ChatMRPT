@@ -50,7 +50,6 @@ const InputArea: React.FC<InputAreaProps> = ({
     // No messages yet - actionable first steps
     if (messages.length === 0) {
       return [
-        "Load Kano sample dataset",
         "Calculate test positivity rate",
         "What analyses can you perform?",
         "Help me rank wards by malaria risk"

@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { useChatStore } from '@/stores/chatStore';
 import { useUserStore } from '@/stores/userStore';
-import api from '@/services/api';
-import toast from 'react-hot-toast';
+import { useAnalysisSession, SAMPLE_DATASET } from '@/hooks/useAnalysisSession';
 import ProfileSection from '@/components/Profile/ProfileSection';
 import UserAvatar from '@/components/Profile/UserAvatar';
 import LoginModal from '@/components/Auth/LoginModal';
@@ -19,8 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
 
-  const session = useChatStore((state) => state.session);
-  const setUploadedFiles = useChatStore((state) => state.setUploadedFiles);
+  const { loadSample, isLoadingSample } = useAnalysisSession();
   const { user, isAuthenticated } = useUserStore();
   
   if (isCollapsed) {
@@ -203,46 +200,30 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
         {/* Samples Section */}
         {activeSection === 'samples' && (
           <div className="animate-fadeIn">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-3">Available Sample Datasets</h4>
-            <div className="space-y-2">
-              <button
-                onClick={async () => {
-                  try {
-                    await api.upload.loadSampleData('kano', session.sessionId);
-                    toast.success('Kano sample data loaded');
-                    setUploadedFiles('kano_sample.csv', 'kano_boundaries.zip');
-                  } catch (error) {
-                    toast.error('Failed to load sample data');
-                  }
-                }}
-                className="w-full p-3 bg-white dark:bg-dark-bg-tertiary border border-gray-200 dark:border-dark-border rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 group text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-dark-text group-hover:text-blue-600 dark:group-hover:text-blue-400">Kano State</p>
-                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Ward-level malaria risk data</p>
-                  </div>
-                  <svg className="w-5 h-5 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-1">Try ChatMRPT with sample data</h4>
+            <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-3">
+              Loads the file into this chat as if you had uploaded it.
+            </p>
+            <button
+              onClick={loadSample}
+              disabled={isLoadingSample}
+              className="w-full p-3 bg-white dark:bg-dark-bg-tertiary border border-gray-200 dark:border-dark-border rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 group text-left disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex items-center justify-between">
+                <div className="pr-2">
+                  <p className="text-sm font-medium text-gray-900 dark:text-dark-text group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                    {isLoadingSample ? 'Loading...' : SAMPLE_DATASET.title}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{SAMPLE_DATASET.description}</p>
                 </div>
-              </button>
-
-              <button
-                disabled
-                className="w-full p-3 bg-gray-100 dark:bg-dark-bg-tertiary border border-gray-200 dark:border-dark-border rounded-lg opacity-50 cursor-not-allowed text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-dark-text-secondary">Lagos State</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">Coming soon</p>
-                  </div>
-                  <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-              </button>
-            </div>
+                <svg className="w-5 h-5 flex-shrink-0 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+            <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-3">
+              After it loads, type <span className="font-medium">"{SAMPLE_DATASET.nextStep}"</span> to calculate ward malaria burden.
+            </p>
           </div>
         )}
       </div>
@@ -272,4 +253,4 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   );
 };
 
-export default Sidebar;
+export default Sidebar;

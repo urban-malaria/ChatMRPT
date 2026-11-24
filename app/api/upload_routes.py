@@ -605,21 +605,6 @@ def upload():
     return upload_both_files()
 
 
-@upload_bp.route("/load_sample_data", methods=["POST"])
-@require_auth
-@validate_session
-@handle_errors
-@log_execution_time
-def load_sample_data():
-    try:
-        session_id = session.get("session_id")
-        logger.info(f"Loading sample data for session {session_id}")
-        return jsonify({"status": "success", "message": "Sample data loading not yet implemented"})
-    except Exception as e:
-        logger.error(f"Error loading sample data: {e}")
-        return jsonify({"status": "error", "message": f"Failed to load sample data: {e}"})
-
-
 @upload_bp.route("/api/download/processed-csv", methods=["GET"])
 @require_auth
 @validate_session

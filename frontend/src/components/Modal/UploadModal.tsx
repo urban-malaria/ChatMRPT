@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
-import storage from '@/utils/storage';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import useMessageStreaming from '@/hooks/useMessageStreaming';
 import api from '@/services/api';
 import { useFileUpload } from '@/hooks/useFileUpload';
+import { useAnalysisSession, SAMPLE_DATASET } from '@/hooks/useAnalysisSession';
 import toast from 'react-hot-toast';
 
 const CHUNK_THRESHOLD = 5 * 1024 * 1024;
@@ -75,9 +75,10 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
   const setUploadedFiles = useChatStore((state) => state.setUploadedFiles);
   const addMessage = useChatStore((state) => state.addMessage);
   const updateSession = useChatStore((state) => state.updateSession);
-  const { setCsvFile, setShapeFile, setDataAnalysisMode } = useAnalysisStore();
+  const { setCsvFile, setShapeFile } = useAnalysisStore();
   const { sendMessage } = useMessageStreaming();
   const { isUploading, uploadProgress, uploadStatus, executeUpload, resetProgress } = useFileUpload();
+  const { startAnalysis, loadSample, isLoadingSample } = useAnalysisSession();
 
   const processingLabel = activeTab === 'analysis' ? 'Analysing your data...' : 'Processing files...';
   const isRetrying = uploadStatus.includes('retrying');
@@ -375,81 +376,13 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
 
                             if (response.data.status === 'success') {
                               toast.success('File uploaded successfully for analysis!');
-
-                              // Use the backend's session ID from the response
-                              const backendSessionId = response.data.session_id;
-                              console.log('Using backend session ID:', backendSessionId);
-
-                              // Store file info for the chat to know we're in data analysis mode
-                              setUploadedFiles(file.name, undefined);
-
-                              // Update session with backend's ID
-                              updateSession({ sessionId: backendSessionId, preserveMessages: true });
-
-                              // Activate data analysis mode with backend session
-                              await api.analysis.activateMode(backendSessionId);
-
-                              // Add system message for user feedback
-                              const systemMessage = {
-                                id: `msg_${Date.now()}`,
-                                type: 'system' as const,
-                                content: `Data file uploaded: ${file.name}. Results will appear below.`,
-                                timestamp: new Date(),
-                                sessionId: backendSessionId
-                              };
-                              addMessage(systemMessage);
-
                               onClose();
                               resetProgress();
-
-                              // Automatically trigger Data Analysis V3 agent after a short delay
-                              setTimeout(async () => {
-                                console.log('Triggering data analysis chat API with session:', backendSessionId);
-                                try {
-                                  const chatResponse = await fetch('/api/v1/data-analysis/chat', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      'X-Conversation-ID': storage.ensureConversationId(),
-                                    },
-                                    body: JSON.stringify({
-                                      message: 'analyze uploaded data',
-                                      session_id: backendSessionId
-                                    })
-                                  });
-
-                                  console.log('Data analysis chat response:', chatResponse.status);
-
-                                  if (!chatResponse.ok) {
-                                    console.error('Failed to trigger data analysis:', chatResponse.status);
-                                    const errorText = await chatResponse.text();
-                                    console.error('Error response:', errorText);
-                                  } else {
-                                    const responseData = await chatResponse.json();
-                                    console.log('Data analysis triggered successfully:', responseData);
-
-                                    // Add the analysis results to the chat
-                                    if (responseData.success && responseData.message) {
-                                      const analysisMessage = {
-                                        id: `msg_${Date.now() + 2}`,
-                                        type: 'regular' as const,
-                                        sender: 'assistant' as const,
-                                        content: responseData.message,
-                                        timestamp: new Date(),
-                                        sessionId: backendSessionId,
-                                        visualizations: responseData.visualizations
-                                      };
-                                      addMessage(analysisMessage);
-
-                                      // Set data analysis mode so subsequent messages go to the right endpoint
-                                      setDataAnalysisMode(true);
-                                      console.log('Data analysis mode activated');
-                                    }
-                                  }
-                                } catch (error) {
-                                  console.error('Error triggering data analysis:', error);
-                                }
-                              }, 500);
+                              await startAnalysis(
+                                response.data.session_id,
+                                file.name,
+                                `Data file uploaded: ${file.name}. Results will appear below.`
+                              );
 
 
                             } else {
@@ -478,6 +411,22 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                       {progressBar}
 
                       <div id="data-analysis-upload-status" className="mt-3"></div>
+
+                      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-dark-border text-left">
+                        <p className="text-sm font-medium text-gray-900 dark:text-dark-text">No file to hand?</p>
+                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1 mb-3">
+                          Try ChatMRPT with the {SAMPLE_DATASET.title}: {SAMPLE_DATASET.description}
+                        </p>
+                        <button
+                          onClick={async () => {
+                            if (await loadSample()) onClose();
+                          }}
+                          disabled={isUploading || isLoadingSample}
+                          className="w-full px-4 py-2 border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isLoadingSample ? 'Loading sample...' : 'Use sample data instead'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

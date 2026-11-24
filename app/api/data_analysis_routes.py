@@ -6,8 +6,12 @@ from __future__ import annotations
 
 import os
 import logging
+import socket
 import time
+import uuid
+from pathlib import Path
 from flask import Blueprint, request, jsonify, session, current_app
+from werkzeug.datastructures import FileStorage
 from app.auth.decorators import require_auth
 from app.services.interaction_core import InteractionCore
 from app.services.analysis_chat_service import run_analysis_message, stream_analysis_events
@@ -48,20 +52,47 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+SAMPLE_FILE = Path(__file__).resolve().parents[1] / 'sample_data' / 'kwara_dhis2_malaria_sample.xlsx'
+SAMPLE_FILENAME = 'Kwara_State_DHIS2_malaria_sample.xlsx'
+
+
 @data_analysis_v3_bp.route('/api/data-analysis/upload', methods=['POST'])
 @require_auth
 def upload_for_analysis():
-    """
-    Handle file uploads from the Data Analysis tab.
-    This is specifically for general data exploration, not malaria risk analysis.
-    """
+    """Handle a file uploaded from the Data Analysis tab."""
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file provided'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': 'No file selected'}), 400
+    if not allowed_file(file.filename):
+        return jsonify({
+            'status': 'error',
+            'message': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'
+        }), 400
+    return _start_analysis_session(file, file.filename)
+
+
+@data_analysis_v3_bp.route('/api/data-analysis/sample', methods=['POST'])
+@require_auth
+def load_sample_for_analysis():
+    """Load the bundled Kwara State DHIS2 export exactly as if the user had uploaded it."""
+    if not SAMPLE_FILE.exists():
+        logger.error(f"Sample file missing: {SAMPLE_FILE}")
+        return jsonify({'status': 'error', 'message': 'The sample dataset is not available on this server.'}), 500
+    with SAMPLE_FILE.open('rb') as handle:
+        sample = FileStorage(stream=handle, filename=SAMPLE_FILENAME)
+        response = _start_analysis_session(sample, SAMPLE_FILENAME, is_sample=True)
+    return response
+
+
+def _start_analysis_session(file, filename, is_sample=False):
+    """Store a data file in a new upload session and switch the session to Data Analysis mode."""
     try:
         previous_session_id = session.get('session_id')
         base_session_id = session.get('base_session_id') or previous_session_id
 
-        # ALWAYS generate a new session ID for each upload to prevent session reuse
-        # This fixes the concurrent user data bleed issue
-        import uuid
+        # A new session ID for every upload prevents data bleeding between concurrent users.
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
         if base_session_id:
@@ -70,8 +101,7 @@ def upload_for_analysis():
             base_session_id = session_id
             session['base_session_id'] = base_session_id
 
-        # Log for debugging
-        logger.info(f"📊 Generated new session ID for upload: {session_id}")
+        logger.info(f"📊 Generated new session ID for upload: {session_id} (sample={is_sample})")
 
         # Store the upload session_id in the base session's SessionMemory
         # (via key_entities which survives _save_memory rewrites) so resume
@@ -86,32 +116,11 @@ def upload_for_analysis():
             except Exception as _link_err:
                 logger.debug(f"Failed to link upload session to base: {_link_err}")
 
-        # Check for file
-        if 'file' not in request.files:
-            return jsonify({
-                'status': 'error',
-                'message': 'No file provided'
-            }), 400
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            return jsonify({
-                'status': 'error',
-                'message': 'No file selected'
-            }), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({
-                'status': 'error',
-                'message': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'
-            }), 400
-        
         upload_root = current_app.config.get('UPLOAD_FOLDER', 'instance/uploads')
         upload_result = process_analysis_upload(
             session_id=session_id,
             file_obj=file,
-            original_filename=file.filename,
+            original_filename=filename,
             upload_root=upload_root,
         )
 
@@ -122,7 +131,7 @@ def upload_for_analysis():
         logger.info(f"📊 Data Analysis file uploaded: {filename} for session {session_id}")
         if metadata.get('is_sampled'):
             logger.info(f"📊 Large file detected ({metadata.get('file_size_mb')}MB), using sampling for metadata")
-        
+
         # Store in session with workflow context
         session['has_data_analysis_file'] = True
         session['data_analysis_filename'] = filename
@@ -137,7 +146,7 @@ def upload_for_analysis():
 
         session.modified = True
         logger.info(f"✓ Data Analysis V3 mode activated for session {session_id}")
-        
+
         # Sync to other instances for multi-instance support
         try:
             from app.services.instance_sync import sync_session_after_upload
@@ -161,7 +170,6 @@ def upload_for_analysis():
                     f"Could not mirror artefacts to base session {base_session_id}: {mirror_exc}"
                 )
 
-        # Prepare response with metadata info
         response_data = {
             'status': 'success',
             'message': f'File "{filename}" uploaded successfully',
@@ -169,6 +177,7 @@ def upload_for_analysis():
             'filename': filename,
             'filepath': standard_path,
             'file_size': upload_result.file_size,
+            'is_sample': is_sample,
             'metadata': {
                 'rows': metadata.get('rows', 'Unknown'),
                 'columns': metadata.get('columns', 'Unknown'),
@@ -176,17 +185,15 @@ def upload_for_analysis():
                 'file_size_mb': metadata.get('file_size_mb', 0)
             }
         }
-        
-        # Add estimation note if applicable
+
         if metadata.get('rows_estimated'):
             response_data['metadata']['rows_note'] = 'Estimated from file size'
-        
+
         # Add instance identifier for debugging
-        import socket
         response_data['instance'] = socket.gethostname()
-        
+
         response = jsonify(response_data)
-        
+
         # Set cookie for session affinity
         response.set_cookie(
             'ChatMRPT-Session',
@@ -196,9 +203,9 @@ def upload_for_analysis():
             samesite='Lax',
             path='/'
         )
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Error in data analysis upload: {str(e)}")
         return jsonify({
