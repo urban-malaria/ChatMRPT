@@ -349,8 +349,9 @@ def run_full_analysis_pipeline(data_handler, selected_variables=None,
                 'urban_extent_results_pca': getattr(data_handler, 'urban_extent_results_pca', None)
             }
             
-            # Use the coordinator's save method if available
-            if hasattr(data_handler, 'coordinator') and hasattr(data_handler.coordinator, '_save_analysis_results'):
+            # The coordinator saves to the shared all-years file names. Per-year runs (which run in
+            # parallel) must write only their own year-tagged files, so they use the fallback below.
+            if not year_tag and hasattr(data_handler, 'coordinator') and hasattr(data_handler.coordinator, '_save_analysis_results'):
                 data_handler.coordinator._save_analysis_results(results_to_save)
                 print("PIPELINE DEBUG: Analysis results saved via coordinator")
             else:
