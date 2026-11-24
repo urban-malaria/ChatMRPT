@@ -492,27 +492,15 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
         return mappings.get(group, 'all_ages')
 
     def _merge_tpr_with_wards(self, tpr_df: pd.DataFrame, state_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        """Merge TPR data with ward geometries."""
-        from app.tpr.utils import assign_ward_match_keys, normalize_ward_name
+        """Merge TPR data with ward geometries, with the same ward matching as the guided workflow."""
+        from app.tpr.analysis_tool import match_and_merge_data
 
-        # Normalize ward names
-        tpr_df['WardName_norm'] = tpr_df['WardName'].apply(normalize_ward_name)
-        state_gdf = state_gdf.copy()
-        state_gdf['WardName_norm'] = state_gdf['WardName'].apply(normalize_ward_name)
-
-        # Merge; repeated ward names are matched by ward + LGA
-        data_keys, shp_keys = assign_ward_match_keys(tpr_df, state_gdf)
-        merged = state_gdf.assign(_match_key=shp_keys.values).merge(
-            tpr_df[['Burden', 'Population', 'Total_Positive']].assign(_match_key=data_keys.values),
-            on='_match_key',
-            how='left'
-        ).drop(columns=['_match_key'])
-
+        merged = match_and_merge_data(tpr_df.copy(), state_gdf.copy())
         # Wards without matching facility data stay empty ("no data"), not 0.
-        merged['Population'] = pd.to_numeric(merged['Population'], errors='coerce').round().astype('Int64')
-        merged['Total_Positive'] = pd.to_numeric(merged['Total_Positive'], errors='coerce').round().astype('Int64')
-
-        return merged
+        for column in ('Population', 'Total_Positive'):
+            if column in merged.columns:
+                merged[column] = pd.to_numeric(merged[column], errors='coerce').round().astype('Int64')
+        return merged.drop(columns=['WardName_norm'], errors='ignore')
 
     def _build_final_dataset(self, merged_gdf: gpd.GeoDataFrame, env_data: pd.DataFrame, state_name: str) -> pd.DataFrame:
         """Build the final dataset for risk analysis."""
@@ -530,9 +518,10 @@ You can now run **risk analysis** or **ITN planning** using this combination."""
         final_df['GeopoliticalZone'] = get_geopolitical_zone(state_name)
 
         # Add burden metrics
-        final_df['Burden'] = merged_gdf['Burden'].fillna(0)
-        final_df['Population'] = merged_gdf['Population'].fillna(0).astype(int)
-        final_df['Total_Positive'] = merged_gdf['Total_Positive'].fillna(0).astype(int)
+        # Wards without matching facility data stay empty ("no data"), as in the guided workflow.
+        final_df['Burden'] = pd.to_numeric(merged_gdf['Burden'], errors='coerce').values
+        final_df['Population'] = pd.to_numeric(merged_gdf['Population'], errors='coerce').round().astype('Int64').values
+        final_df['Total_Positive'] = pd.to_numeric(merged_gdf['Total_Positive'], errors='coerce').round().astype('Int64').values
 
         # Add environmental variables
         if not env_data.empty:

@@ -372,7 +372,8 @@ def get_ward_rankings(
             score = f"{row[score_col]:.3f}" if score_col and pd.notna(row.get(score_col)) else "-"
             rows.append(f"| {int(row[rank_col])} | {row['WardName']} | {row.get('LGA', '-')} | {score} | "
                         f"{row.get(category_col, '-') if category_col else '-'} |")
-        message = heading + "\n\n" + "\n".join(rows)
+        from app.tpr.selection import stale_note
+        message = stale_note(session_id) + heading + "\n\n" + "\n".join(rows)
         if missing:
             message += "\n\nNot found in the ranking: " + ", ".join(missing)
 
@@ -449,6 +450,8 @@ def explain_ward_risk(
                    "highest-risk value in the state:\n\n" + "\n".join(rows)
                    + f"\n\nThe factors pushing this ward's risk up most are {strongest[0]}"
                    + (f" and {strongest[1]}" if len(strongest) > 1 else "") + ".")
+        from app.tpr.selection import stale_note
+        message = stale_note(session_id) + message
         if bool(unified_row.get('burden_estimated', False)):
             message += ("\n\nThis ward had no matching facility data, so its burden is an estimate from "
                         "neighbouring wards.")
@@ -567,6 +570,12 @@ def run_risk_analysis(
         from app.analysis.complete_tools import RunMalariaRiskAnalysis
         result = RunMalariaRiskAnalysis().execute(session_id=session_id)
         message = result.message or "Risk analysis complete. Unified dataset created."
+        if result.success:
+            from app.tpr.selection import current_selection, describe, record_risk_selection
+            record_risk_selection(session_id)
+            selection = current_selection(session_id)
+            if selection.get('facility_level'):
+                message = message.replace("Analysis complete.", f"Analysis complete, using malaria data for {describe(selection)}.", 1)
         _add_canonical_response(
             graph_state,
             tool_name="run_risk_analysis",
@@ -684,6 +693,8 @@ def plan_itn_distribution(
             return message, {}
 
         _add_viz_to_state(graph_state, data.get('file_path'))
+        from app.tpr.selection import stale_note
+        message = stale_note(session_id) + message
 
         download_links = data.get('download_links', [])
         if download_links:
@@ -815,8 +826,8 @@ def create_settlement_classification(
 def switch_tpr_combination(
     graph_state: Annotated[dict, InjectedState],
     thought: str,
-    facility_level: str = "all",
-    age_group: str = "all_ages",
+    facility_level: Optional[str] = None,
+    age_group: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Switch to a different TPR facility/age group combination.
 
@@ -826,13 +837,21 @@ def switch_tpr_combination(
 
     Args:
         thought: Your reasoning about switching combinations.
-        facility_level: 'primary', 'secondary', 'tertiary', or 'all'.
+        facility_level: 'primary', 'secondary', 'tertiary', or 'all'. Leave out to keep the
+                        current facility level.
         age_group: 'u5' (under 5), 'o5' (over 5), 'pw' (pregnant women),
-                   or 'all_ages'.
+                   or 'all_ages'. Leave out to keep the current age group.
     """
     session_id = graph_state.get('session_id', 'default')
     try:
         from app.tpr.query_tool import SwitchTPRCombination
+        from app.tpr.selection import current_selection, save_selection, stale_note
+
+        # A choice the user did not mention keeps its current value.
+        current = current_selection(session_id)
+        facility_level = facility_level or current.get('facility_level') or 'all'
+        age_group = age_group or current.get('age_group') or 'all_ages'
+
         result = SwitchTPRCombination(
             facility_level=facility_level,
             age_group=age_group,
@@ -842,8 +861,15 @@ def switch_tpr_combination(
             return result.message, {}
 
         data = result.data or {}
+        save_selection(session_id, data.get('facility_level', facility_level), data.get('age_group', age_group))
         _add_viz_to_state(graph_state, data.get('file_path'))
-        return result.message or f"Switched to {facility_level}/{age_group}.", {}
+        message = (result.message or f"Switched to {facility_level}/{age_group}.")
+        note = stale_note(session_id)
+        if note:
+            message += "\n\n" + note.strip()
+        _add_canonical_response(graph_state, tool_name="switch_tpr_combination", message=message,
+                                success=True, priority=100)
+        return message, {}
     except Exception as e:
         logger.error(f"switch_tpr_combination failed: {e}", exc_info=True)
         return f"Error switching combination: {e}", {}

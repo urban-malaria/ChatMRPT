@@ -17,6 +17,7 @@ CANONICAL_TOOL_ALLOWLIST = {
     "get_ward_rankings",
     "explain_ward_risk",
     "get_risk_method_details",
+    "switch_tpr_combination",
 }
 
 
