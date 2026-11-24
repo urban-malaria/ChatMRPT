@@ -87,6 +87,7 @@ class DataAnalysisAgent:
                 list_downloads,
                 get_ward_rankings,
                 explain_ward_risk,
+                get_risk_method_details,
             )
             self.tools = [
                 analyze_data,
@@ -101,6 +102,7 @@ class DataAnalysisAgent:
                 list_downloads,
                 get_ward_rankings,
                 explain_ward_risk,
+                get_risk_method_details,
                 lookup_knowledge,
             ]
 

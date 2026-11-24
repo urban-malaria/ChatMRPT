@@ -7,6 +7,7 @@ when general knowledge questions are detected.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Dict, Any, Optional
 
 from app.config.arena import is_arena_available
@@ -19,23 +20,40 @@ class ArenaSetupError(Exception):
     pass
 
 
-def is_arena_eligible_message(message: str) -> bool:
-    """Check if a message should trigger Arena (multi-model battle).
+# Questions about ChatMRPT itself, help with using it, or the user's own data always get one answer.
+APP_QUESTION = re.compile(
+    r"\b(chat\s?mrpt|mrpt|this (tool|app|site|platform|system|assistant)|how (do|does|can) (this|it|you|i)\b"
+    r"|what (can|do|does) (you|this|it)\b|who are you|what are you|help me|get(ting)? started|where do i"
+    r"|how do i|can i\b|upload|my (data|file|results?|wards?|state)|sample data|sample dataset|no data"
+    r"|(don'?t|do not) have (any )?data|what data|which data|data do i need|download|export|map|chart"
+    r"|workflow|next step|what next|tpr workflow)\b",
+    re.IGNORECASE,
+)
+APP_TOPICS = {'about-chatmrpt', 'workflow', 'data-requirements', 'outputs', 'arena'}
 
-    Only filters out trivially short messages and obvious confirmations.
-    The LLM models in the Arena can handle greetings and knowledge
-    questions appropriately on their own.
+
+def is_arena_eligible_message(message: str, is_first_message: bool = False) -> bool:
+    """Whether a question goes to Arena (several models answer and the user votes).
+
+    Arena is only for general malaria and public-health knowledge. A conversation's first message,
+    greetings and confirmations, and questions about ChatMRPT, how to use it or the user's own data
+    get a single answer.
     """
-    message_lower = message.strip().lower()
-
-    # Skip very short messages (likely confirmations, not questions)
-    if len(message.split()) < 3:
+    text = message.strip()
+    if is_first_message:
         return False
-
-    # Skip obvious confirmations
-    if message_lower in ['yes', 'no', 'ok', 'okay', 'sure', 'thanks', 'bye']:
+    if len(text.split()) < 3:
         return False
-
+    if text.lower() in ['yes', 'no', 'ok', 'okay', 'sure', 'thanks', 'bye']:
+        return False
+    if APP_QUESTION.search(text):
+        return False
+    try:
+        from app.knowledge import find
+        if any(entry.id in APP_TOPICS for entry in find(text)):
+            return False
+    except Exception:
+        pass
     return True
 
 

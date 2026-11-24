@@ -1115,6 +1115,22 @@ I ran two tests to check if your data is suitable for advanced pattern analysis 
 
             method_name = "Composite Score and PCA" if not pca_result.get("pca_skipped") else "Composite Score"
 
+            # The statistical test details are kept for "show the statistical tests"; the reply
+            # gives one plain sentence instead.
+            if pca_test_summary.strip():
+                try:
+                    with open(os.path.join(f"instance/uploads/{session_id}", 'analysis_statistical_tests.md'), 'w') as handle:
+                        handle.write(pca_test_summary.replace('### Behind the Scenes - Statistical Testing', '### Statistical tests').strip() + "\n")
+                except Exception as exc:
+                    logger.debug(f"Could not save statistical test details: {exc}")
+            if pca_result.get("pca_skipped"):
+                method_note = ("**Method:** the score averages the risk factors (composite score). A second method, PCA, "
+                               "was not used because the factors are not related strongly enough for it. "
+                               "Ask **show the statistical tests** for the details.")
+            else:
+                method_note = ("**Method:** two methods were used, a composite score and PCA, giving two views of the "
+                               "same risk. Ask **show the statistical tests** for the details.")
+
             # Build conversational response
             response = f"""Analysis complete.
 
@@ -1153,9 +1169,9 @@ I ranked all {ward_count} wards by malaria risk using {num_variables} risk facto
 
 - Ranked all wards from highest to lowest risk.
 
-{pca_test_summary}
+{method_note}
 """
-            
+
             return response
             
         except Exception as e:

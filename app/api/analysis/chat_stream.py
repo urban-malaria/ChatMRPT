@@ -110,10 +110,13 @@ def handle_send_message_streaming() -> Response:
         logger.debug("Conversation history update failed: %s", _conv_err)
 
     # ── Persist user message to SessionMemory so resume can load it ──
+    is_first_message = False
     try:
         from app.services.session_memory import SessionMemory, MessageType
         _mem = SessionMemory(memory_session_id)
         _mem.add_message(MessageType.USER, user_message)
+        is_first_message = sum(1 for m in _mem.conversation_history
+                               if getattr(m, 'type', None) == MessageType.USER) <= 1
     except Exception as _mem_err:
         logger.debug("SessionMemory save (user) failed: %s", _mem_err)
 
@@ -202,7 +205,7 @@ def handle_send_message_streaming() -> Response:
         from .arena_helpers import is_arena_eligible_message, start_arena_battle, format_arena_response, ArenaSetupError
         from app.config.arena import is_arena_available
 
-        if is_arena_available() and is_arena_eligible_message(user_message):
+        if is_arena_available() and is_arena_eligible_message(user_message, is_first_message=is_first_message):
             logger.info("Arena mode triggered for general knowledge question: '%s...'", user_message[:50])
             try:
                 battle_result = start_arena_battle(user_message, session_id)

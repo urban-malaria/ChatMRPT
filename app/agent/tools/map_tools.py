@@ -467,6 +467,30 @@ def explain_ward_risk(
 
 
 @tool
+def get_risk_method_details(
+    graph_state: Annotated[dict, InjectedState],
+    thought: str,
+) -> Tuple[str, Dict[str, Any]]:
+    """Show the statistical tests behind the risk analysis (KMO, Bartlett) and why PCA was or was not used.
+
+    Use this when the user asks for the statistical tests, technical details or method checks of the
+    risk analysis.
+
+    Args:
+        thought: Your reasoning.
+    """
+    session_id = graph_state.get('session_id', 'default')
+    path = os.path.join('instance', 'uploads', session_id, 'analysis_statistical_tests.md')
+    if not os.path.exists(path):
+        return "No risk analysis test details yet. Run the risk analysis first (type **run malaria risk analysis**).", {}
+    with open(path) as handle:
+        message = handle.read().strip()
+    _add_canonical_response(graph_state, tool_name="get_risk_method_details", message=message,
+                            success=True, priority=100)
+    return message, {}
+
+
+@tool
 def list_downloads(
     graph_state: Annotated[dict, InjectedState],
     thought: str,

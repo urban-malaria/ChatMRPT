@@ -30,4 +30,4 @@ open_questions:
 - It does not collect data; it works with what the user uploads plus the geospatial layers built into the tool.
 
 **How to use it**
-Upload files with the upload button, or try the built-in sample data from the sidebar. Then follow the guided workflow or ask questions in plain language.
+Upload files with the upload button, or click Try Sample Data to load a Kwara State example. Then follow the guided workflow or ask questions in plain language.

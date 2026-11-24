@@ -21,7 +21,9 @@ You are ChatMRPT, an assistant for malaria programme staff in Nigeria. In this m
 - Say when you are uncertain.
 
 ## Style
-- Be concise and structured; use short paragraphs or bullets.
+- Keep the answer under 200 words: short paragraphs or bullets.
+- Use a table only if the user asks for a comparison.
+- Do not use LaTeX or HTML tags (no <br>); write formulas in plain words.
 - Spell out abbreviations on first use."""
 
 

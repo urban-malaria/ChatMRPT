@@ -1,7 +1,7 @@
 ---
 id: data-requirements
 title: Data requirements
-aliases: [what data, which data, data do i need, upload, uploading, file format, csv, excel, shapefile, columns, required columns, dhis2, data format, sample data]
+aliases: [what data, which data, data do i need, upload, uploading, file format, csv, excel, shapefile, columns, required columns, dhis2, data format]
 summary: >
   For the guided workflow, upload health facility testing data (CSV, Excel or JSON),
   typically a DHIS2 export with facility, ward, LGA, period, and the number tested and
@@ -23,4 +23,4 @@ open_questions:
 - A CSV or Excel file with one row per ward and a ward name column.
 - A shapefile of the same wards, as a single ZIP file.
 
-Sample datasets are available from the sidebar for trying the tool without your own data.
+No data yet? Click Try Sample Data (welcome screen, upload window or sidebar) to load a Kwara State example.
