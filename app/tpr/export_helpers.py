@@ -78,6 +78,8 @@ def write_burden_readme(state_name: str, date_str: str, included_files: list) ->
         ),
     }
 
+    from app.utils.place_names import state_name as _clean_state
+    state_name = _clean_state(state_name) or state_name
     header = (
         f"# Malaria Burden Analysis Package\n"
         f"State: {state_name}\n"

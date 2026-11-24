@@ -30,7 +30,8 @@ def _create_burden_package(
         from app.tpr.export_helpers import write_burden_readme
 
         date_str = datetime.now().strftime('%Y-%m-%d')
-        clean_state = state_name.strip().replace(' ', '_') or 'Analysis'
+        from app.utils.place_names import state_name as _clean_state
+        clean_state = (_clean_state(state_name) or state_name).strip().replace(' ', '_') or 'Analysis'
         bundle_name = f"malaria_burden_analysis_{clean_state}_{date_str}.zip"
         bundle_path = session_folder / bundle_name
 
@@ -624,7 +625,8 @@ class TPRWorkflowHandler:
             # Format response
             from app.agent.formatters import MessageFormatter
             formatter = MessageFormatter(self.session_id)
-            message = f"**State:** {selected_state} (auto-selected)\n\n" + formatter.format_facility_selection(selected_state, facility_analysis)
+            from app.utils.place_names import state_name as _clean_state
+            message = f"**State:** {_clean_state(selected_state)} (auto-selected)\n\n" + formatter.format_facility_selection(selected_state, facility_analysis)
 
             # Store visualizations for on-demand access via key phrases
             facility_viz = self._build_facility_level_visualizations(facility_analysis)
@@ -696,7 +698,8 @@ class TPRWorkflowHandler:
         facility_analysis = self.tpr_analyzer.analyze_facility_levels(self.uploaded_data, state)
 
         # Format response
-        acknowledgment = f"Great choice! You've selected **{state}**. "
+        from app.utils.place_names import state_name as _clean_state
+        acknowledgment = f"Great choice! You've selected **{_clean_state(state)}**. "
         if facility_analysis.get('total_facilities'):
             total = facility_analysis['total_facilities']
             acknowledgment += f"I can see {total:,} health facilities in this state.\n\n"
@@ -850,6 +853,20 @@ class TPRWorkflowHandler:
                 marker = "## Malaria Burden Analysis Complete\n\n"
                 if message.startswith(marker):
                     message = message.replace(marker, f"{marker}{summary_line}\n\n", 1)
+
+            # Name the chat after what it now contains
+            try:
+                from flask import session as flask_session
+                from app.services.conversation_history import name_conversation
+                from app.tpr.selection import describe
+                from app.utils.place_names import state_name
+                state_label = state_name(self.tpr_selections.get('state', ''))
+                name_conversation(flask_session.get('base_session_id') or self.session_id,
+                                  f"{state_label or 'Malaria'} burden: "
+                                  f"{describe({'facility_level': facility_level, 'age_group': age_group})}",
+                                  replace_existing=True)
+            except Exception as title_exc:
+                logger.debug("Could not name conversation: %s", title_exc)
 
             # Mark workflow complete
             self.state_manager.mark_tpr_workflow_complete()
@@ -1053,7 +1070,8 @@ class TPRWorkflowHandler:
         states = list(state_analysis['states'].keys())
         state_info = ""
         if len(states) == 1:
-            state_info = f"**State:** {states[0]} (auto-detected)"
+            from app.utils.place_names import state_name as _clean_state
+            state_info = f"**State:** {_clean_state(states[0])} (auto-detected)"
         else:
             state_info = f"**States detected:** {', '.join(states)}"
 
