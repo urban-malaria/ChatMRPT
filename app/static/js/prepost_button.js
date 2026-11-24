@@ -76,27 +76,13 @@
                     navBar = actionGroup;
                 }
 
+                // Only add the button inside the app's toolbar (its Research menu). Before login there is
+                // no toolbar, and the study buttons should not appear on the sign-in page.
+                navBar = document.getElementById('toolbar-research-menu') || document.getElementById('toolbar-action-group');
                 if (!navBar && attempts >= maxAttempts) {
-                    navBar = document.createElement('div');
-                    navBar.style.cssText = `
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        height: 60px;
-                        background: #ffffff;
-                        border-bottom: 1px solid #e5e7eb;
-                        display: flex;
-                        align-items: center;
-                        justify-content: flex-end;
-                        padding: 0 20px;
-                        gap: 12px;
-                        z-index: 9998;
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                    `;
-                    navBar.id = 'toolbar-action-group';
-                    document.body.appendChild(navBar);
-                    document.body.style.paddingTop = '60px';
+                    // Keep checking slowly: the toolbar appears after sign-in without a page reload.
+                    setTimeout(tryCreateButton, 2000);
+                    return;
                 } else if (!navBar) {
                     setTimeout(tryCreateButton, 500);
                     return;
