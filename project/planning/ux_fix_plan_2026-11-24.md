@@ -10,6 +10,24 @@ This plan fixes every problem found in the first-time-user review (`ux_review_20
 
 ---
 
+## Progress
+**Phase 1: done and deployed, 24 Nov 2026** (`main` at b83dedb, both servers).
+
+Planned items:
+- 1.1 Bed-net downloads have nets per ward.
+- 1.2 Ranking and ward questions are answered from the data; a grounding check is added.
+- 1.3 Explain uses the chart's own data.
+- 1.4 Wards without data show as "no data"; ward matching is corrected.
+- 1.5 TPR is pooled correctly.
+
+Added during Phase 1:
+- **Malaria burden in the risk score.** The malaria variable had been silently dropped; burden now fills it (decision 24 Nov). Estimated burdens are flagged.
+- **Per-year runs** no longer overwrite or corrupt the all-years files.
+- **Corrupted names** where "NA" had become "0" (e.g. "Gwa0be") are matched.
+- **`libpysal`** installed on both servers: 4.14.1 on server 1 (Python 3.11) and 4.8.1 on server 2 (Python 3.9). Before this, missing values were always filled with the state average.
+
+Noted, not fixed: the two servers run different Python, numpy and scipy versions (3.11 vs 3.9), so results could differ slightly between them.
+
 ## How we will work
 - **Order:** one item at a time, in the phases below.
 - **Testing:** every item gets the check in its "Test" line. Each phase ends with a full run through the sample-data journey, locally against production data, using the same scripted checks as the 24 Nov test. Before deploying, the phase is run on a copy on a production server.
