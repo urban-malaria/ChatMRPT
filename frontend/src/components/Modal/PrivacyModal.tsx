@@ -86,7 +86,7 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
                     <li>All data transmission is encrypted using HTTPS</li>
                     <li>No personal health information is permanently stored</li>
                     <li>Session data is isolated and cannot be accessed by other users</li>
-                    <li>You can clear all data at any time using the Clear Session button</li>
+                    <li>You can remove the chats stored in this browser at any time: Settings, then Data &amp; Privacy, then Clear All Local Data</li>
                   </ul>
                 </div>
 
@@ -120,7 +120,7 @@ const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onAccept }) => {
             <div className="bg-gray-50 dark:bg-dark-bg-tertiary px-6 py-4 rounded-b-lg">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
-                  This notice is shown once per browser. You can review it anytime from the Settings menu.
+                  This notice is shown once per browser.
                 </p>
                 <button
                   onClick={onAccept}

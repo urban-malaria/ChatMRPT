@@ -111,16 +111,16 @@ const ChatContainer: React.FC = () => {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg animated-gradient">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full p-8">
+          <div className="flex items-center justify-center h-full p-4 sm:p-8">
             <div className="max-w-4xl w-full">
 
               {/* Dynamic Greeting */}
-              <div className="text-center mb-16">
+              <div className="text-center mb-8 sm:mb-16">
                 <p className="text-lg text-gray-500 dark:text-dark-text-secondary font-light mb-3">
                   {welcomeContent?.greeting || getGreeting()}
                 </p>
 
-                <h1 className="text-5xl font-light text-gray-900 dark:text-dark-text mb-4">
+                <h1 className="text-3xl sm:text-5xl font-light text-gray-900 dark:text-dark-text mb-4">
                   {welcomeContent?.title || "Welcome to ChatMRPT"}
                 </h1>
 

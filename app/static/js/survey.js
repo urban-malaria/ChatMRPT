@@ -30,17 +30,17 @@ class SurveyHandler {
     showContextInfo() {
         const contextDiv = document.getElementById('contextInfo');
         if (this.config.context && typeof this.config.context === 'object') {
-            let contextHtml = '<div class="context-details"><h4>Survey Context:</h4><ul>';
-
+            const items = [];
             if (this.config.context.trigger_type) {
-                contextHtml += `<li>Activity: ${this.formatTriggerType(this.config.context.trigger_type)}</li>`;
+                items.push(`<li>Activity: ${this.formatTriggerType(this.config.context.trigger_type)}</li>`);
             }
             if (this.config.context.models) {
-                contextHtml += `<li>Models compared: ${this.config.context.models.join(', ')}</li>`;
+                items.push(`<li>Models compared: ${this.config.context.models.join(', ')}</li>`);
             }
-
-            contextHtml += '</ul></div>';
-            contextDiv.innerHTML = contextHtml;
+            // Only show the box when there is something to say.
+            if (items.length) {
+                contextDiv.innerHTML = `<div class="context-details"><h4>About this survey:</h4><ul>${items.join('')}</ul></div>`;
+            }
         }
     }
 

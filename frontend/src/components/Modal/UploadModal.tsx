@@ -68,7 +68,7 @@ interface UploadModalProps {
 }
 
 const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'standard' | 'analysis'>('standard');
+  const [activeTab, setActiveTab] = useState<'standard' | 'analysis'>('analysis');
   const [analysisType, setAnalysisType] = useState('');
   const [selectedOption, setSelectedOption] = useState('');
   const session = useChatStore((state) => state.session);
@@ -143,17 +143,6 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
             <div className="border-b border-gray-200 dark:border-dark-border mb-4">
               <nav className="-mb-px flex space-x-8">
                 <button
-                  onClick={() => setActiveTab('standard')}
-                  disabled={isUploading}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-                    activeTab === 'standard'
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
-                  }`}
-                >
-                  I Have Complete Data
-                </button>
-                <button
                   onClick={() => setActiveTab('analysis')}
                   disabled={isUploading}
                   className={`py-2 px-1 border-b-2 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -162,7 +151,18 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
                       : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
                   }`}
                 >
-                  I Have TPR Data Only
+                  Facility testing data (DHIS2)
+                </button>
+                <button
+                  onClick={() => setActiveTab('standard')}
+                  disabled={isUploading}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                    activeTab === 'standard'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text hover:border-gray-300 dark:hover:border-dark-border'
+                  }`}
+                >
+                  Ward data + boundaries (ZIP)
                 </button>
               </nav>
             </div>

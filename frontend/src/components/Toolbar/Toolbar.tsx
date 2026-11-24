@@ -28,6 +28,8 @@ const Toolbar: React.FC = () => {
   const hasMessages = useChatStore((state) => state.messages.length > 0);
   const session = useChatStore((state) => state.session);
   const { theme, toggleTheme } = useTheme();
+  const [isResearchOpen, setIsResearchOpen] = useState(false);
+  const researchRef = useRef<HTMLDivElement>(null);
   const fetchConversations = useConversationHistoryStore((s) => s.fetchConversations);
   const setActiveSessionId = useConversationHistoryStore((s) => s.setActiveSessionId);
   const setDataAnalysisMode = useAnalysisStore((s) => s.setDataAnalysisMode);
@@ -41,6 +43,9 @@ const Toolbar: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (downloadRef.current && !downloadRef.current.contains(event.target as Node)) {
         setIsDownloadOpen(false);
+      }
+      if (researchRef.current && !researchRef.current.contains(event.target as Node)) {
+        setIsResearchOpen(false);
       }
     };
 
@@ -146,25 +151,25 @@ const Toolbar: React.FC = () => {
   
   return (
     <>
-      <div className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 bg-white dark:bg-dark-bg-secondary border-b border-gray-200 dark:border-dark-border">
+      <div className="sticky top-0 z-50 flex items-center justify-between gap-2 px-3 sm:px-4 py-3 bg-white dark:bg-dark-bg-secondary border-b border-gray-200 dark:border-dark-border">
         <div className="flex items-center space-x-2">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-dark-text">ChatMRPT</h1>
-          <span className="px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+          <span className="hidden md:inline px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 rounded-full">
             Malaria Risk Analysis
           </span>
         </div>
         
-        <div id="toolbar-action-group" className="flex items-center space-x-2">
+        <div id="toolbar-action-group" className="flex items-center gap-2">
           {/* New Chat Button */}
           <button
             onClick={handleClearChat}
             className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-dark-text bg-white dark:bg-dark-bg-tertiary border border-gray-300 dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-dark-border focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Start new chat"
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            New Chat
+            <span className="hidden sm:inline">New Chat</span>
           </button>
           
           {/* Download Dropdown */}
@@ -173,11 +178,11 @@ const Toolbar: React.FC = () => {
               onClick={() => setIsDownloadOpen(!isDownloadOpen)}
               className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-dark-text bg-white dark:bg-dark-bg-tertiary border border-gray-300 dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-dark-border focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Download
-              <svg className={`w-4 h-4 ml-2 transition-transform ${isDownloadOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="hidden sm:inline">Download</span>
+              <svg className={`hidden sm:block w-4 h-4 ml-2 transition-transform ${isDownloadOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -285,6 +290,26 @@ const Toolbar: React.FC = () => {
             </svg>
           </button>
 
+          {/* Research menu: the study's Survey and Pre/Post Test buttons are added into it by
+              /static/js/survey_button.js and prepost_button.js */}
+          <div className="relative" ref={researchRef}>
+            <button
+              onClick={() => setIsResearchOpen(!isResearchOpen)}
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-dark-text bg-white dark:bg-dark-bg-tertiary border border-gray-300 dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-dark-border focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="Research study: survey and pre/post test"
+            >
+              <span aria-hidden="true">🔬</span>
+              <span className="hidden sm:inline ml-2">Research</span>
+            </button>
+            <div
+              id="toolbar-research-menu"
+              className={`${isResearchOpen ? 'flex' : 'hidden'} absolute right-0 z-20 mt-2 w-56 flex-col gap-2 p-3 bg-white dark:bg-dark-bg-secondary rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-dark-border`}
+              onClick={() => setIsResearchOpen(false)}
+            >
+              <p className="text-xs text-gray-500 dark:text-dark-text-secondary">For participants in the ChatMRPT study</p>
+            </div>
+          </div>
+
         </div>
       </div>
       
@@ -312,7 +337,7 @@ const Toolbar: React.FC = () => {
               </div>
 
               <p className="text-sm text-gray-500 dark:text-dark-text-secondary">
-                This will clear your current chat and start fresh. Are you sure you want to continue?
+                This starts a new, empty chat. Your current chat stays in your chat history.
               </p>
 
               <div className="flex justify-end mt-6 space-x-3">

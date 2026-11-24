@@ -239,7 +239,7 @@ const InputArea: React.FC<InputAreaProps> = ({
         </div>
         
         {/* Helper Text */}
-        <div className="mt-2 text-xs text-gray-500 dark:text-dark-text-secondary">
+        <div className="hidden sm:block mt-2 text-xs text-gray-500 dark:text-dark-text-secondary">
           Press Enter to send, Shift+Enter for new line
         </div>
       </div>

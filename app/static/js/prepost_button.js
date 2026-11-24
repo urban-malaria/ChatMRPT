@@ -69,7 +69,9 @@
                     navBar = newChatButton.parentElement;
                 }
 
-                const actionGroup = document.getElementById('toolbar-action-group');
+                // Prefer the toolbar's Research menu, so study buttons do not crowd the toolbar.
+                const researchMenu = document.getElementById('toolbar-research-menu');
+                const actionGroup = researchMenu || document.getElementById('toolbar-action-group');
                 if (actionGroup) {
                     navBar = actionGroup;
                 }
@@ -113,7 +115,7 @@
         }
 
         insertPrePostButton(navBar) {
-            if (navBar && navBar.classList) {
+            if (navBar && navBar.classList && navBar.id !== 'toolbar-research-menu') {
                 navBar.classList.add('flex');
                 navBar.classList.add('items-center');
                 navBar.classList.add('gap-3');

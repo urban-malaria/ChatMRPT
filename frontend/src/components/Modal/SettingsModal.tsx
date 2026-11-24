@@ -172,10 +172,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 <h3 className="text-sm font-medium text-gray-900 dark:text-dark-text mb-4">Session Information</h3>
                 <div className="bg-gray-50 dark:bg-dark-bg-tertiary rounded-lg p-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-dark-text-secondary">Session ID:</span>
-                    <span className="font-mono text-xs dark:text-dark-text">{session.sessionId}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-dark-text-secondary">Started:</span>
                     <span className="dark:text-dark-text">{new Date(session.startTime).toLocaleString()}</span>
                   </div>
@@ -219,7 +215,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               
               <div>
                 <h3 className="text-sm font-medium text-gray-900 dark:text-dark-text mb-4">Privacy</h3>
-                <button className="px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 text-sm font-medium">
+                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-3">
+                  Removes the chats and settings stored in this browser and reloads the page.
+                </p>
+                <button
+                  onClick={() => {
+                    if (!window.confirm('Remove all chats and settings stored in this browser?')) return;
+                    try { localStorage.clear(); sessionStorage.clear(); } catch { /* storage unavailable */ }
+                    window.location.href = '/';
+                  }}
+                  className="px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 text-sm font-medium"
+                >
                   Clear All Local Data
                 </button>
               </div>

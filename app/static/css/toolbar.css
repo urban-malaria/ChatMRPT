@@ -102,3 +102,13 @@
         font-size: 18px;
     }
 }
+
+/* Study buttons inside the toolbar's Research menu */
+#toolbar-research-menu .toolbar-button {
+    width: 100%;
+    justify-content: flex-start;
+    margin: 0;
+}
+#toolbar-research-menu .toolbar-button-label {
+    display: inline !important;
+}
