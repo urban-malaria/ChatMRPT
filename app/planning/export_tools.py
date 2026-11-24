@@ -485,7 +485,7 @@ class ExportITNResults(BaseTool):
         
         # Convert to JSON for JavaScript
         import json
-        ward_table_json = json.dumps(ward_table_data[:100])  # Limit to first 100 for performance
+        ward_table_json = json.dumps(ward_table_data)
         
         # Generate specific insights based on data
         total_high_risk = risk_distribution.get('Very High Risk', 0) + risk_distribution.get('High Risk', 0)
@@ -499,19 +499,21 @@ class ExportITNResults(BaseTool):
         else:
             top_lgas = []
         
-        # Generate specific recommendations based on coverage
+        # Findings computed from the plan itself
         recommendations = []
-        if uncovered_percent > 40:
-            recommendations.append(f"Secure additional {int(uncovered_population / 900):,} nets to achieve full coverage for remaining {uncovered_percent:.1f}% population")
-        else:
-            recommendations.append(f"Focus on the {stats.get('partially_covered_wards', 0)} partially covered wards to maximize impact")
-        
-        if total_high_risk > 50:
-            recommendations.append(f"Implement emergency intervention in {total_high_risk} high-risk wards within next 30 days")
-        
+        if 'nets_needed' in gdf.columns and 'nets_allocated' in gdf.columns:
+            still_needed = int((pd.to_numeric(gdf['nets_needed'], errors='coerce').fillna(0)
+                                - pd.to_numeric(gdf['nets_allocated'], errors='coerce').fillna(0)).clip(lower=0).sum())
+            if still_needed > 0:
+                recommendations.append(f"About {still_needed:,} more nets would be needed to cover every ward fully")
+        if category_col and 'nets_allocated' in gdf.columns:
+            high = gdf[gdf[category_col].astype(str).str.contains('High', case=False, na=False)]
+            if len(high):
+                reached = int((pd.to_numeric(high['nets_allocated'], errors='coerce').fillna(0) > 0).sum())
+                recommendations.append(f"{reached} of the {len(high)} High Risk wards received nets in this plan")
         if top_lgas:
-            recommendations.append(f"Prioritize resources for {', '.join(top_lgas[:2])} LGAs showing highest average risk scores")
-        
+            recommendations.append(f"Highest average risk: {', '.join(top_lgas[:3])} LGAs")
+
         # Generate modern dashboard HTML
         html = f"""
 <!DOCTYPE html>
@@ -850,7 +852,7 @@ class ExportITNResults(BaseTool):
         
         /* Glassmorphism effects */
         .glass {{
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(17, 24, 39, 0.28);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1042,54 +1044,7 @@ class ExportITNResults(BaseTool):
             </div>
         </section>
         
-        <!-- Interactive Maps Gallery -->
-        <section class="mb-12 animate-fade-in">
-            <h2 class="text-3xl font-bold text-dark mb-8 flex items-center">
-                <span class="w-2 h-8 bg-gradient-to-b from-secondary to-rose-400 rounded mr-4"></span>
-                Interactive Maps
-            </h2>
-            
-            <div class="bg-white rounded-2xl shadow-lg p-6">
-                <!-- Map Tabs -->
-                <div class="flex flex-wrap gap-2 mb-6 border-b border-gray-200">
-                    <button class="tab px-6 py-3 rounded-t-lg font-medium transition-all tab-active" 
-                            onclick="showMap('risk')">Risk Map</button>
-                    <button class="tab px-6 py-3 rounded-t-lg font-medium transition-all hover:bg-gray-100" 
-                            onclick="showMap('itn')">ITN Coverage</button>
-                    <button class="tab px-6 py-3 rounded-t-lg font-medium transition-all hover:bg-gray-100" 
-                            onclick="showMap('tpr')">TPR Distribution</button>
-                </div>
-                
-                <!-- Map Container -->
-                <div id="mapContainer" class="relative bg-gray-50 rounded-lg" style="height: 500px;">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="text-center">
-                            <div class="text-6xl mb-4">🗺️</div>
-                            <p class="text-gray-600">Interactive maps will be displayed here</p>
-                            <p class="text-sm text-gray-500 mt-2">Maps are included as separate HTML files in the export package</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Map Controls -->
-                <div class="flex justify-between items-center mt-4 no-print">
-                    <div class="flex gap-2">
-                        <button class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                            <span class="text-xl">🔍</span> Zoom In
-                        </button>
-                        <button class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                            <span class="text-xl">🔎</span> Zoom Out
-                        </button>
-                        <button class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                            <span class="text-xl">📥</span> Download Map
-                        </button>
-                    </div>
-                    <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700 transition-colors">
-                        <span class="text-xl">⛶</span> Fullscreen
-                    </button>
-                </div>
-            </div>
-        </section>
+
         
         <!-- Ward-Level Data Explorer -->
         <section class="mb-12 animate-fade-in">
@@ -1136,7 +1091,7 @@ class ExportITNResults(BaseTool):
         <section class="mb-12 animate-fade-in">
             <h2 class="text-3xl font-bold text-dark mb-8 flex items-center">
                 <span class="w-2 h-8 bg-gradient-to-b from-indigo-500 to-purple-600 rounded mr-4"></span>
-                AI-Powered Insights & Recommendations
+                Key Findings
             </h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1148,7 +1103,7 @@ class ExportITNResults(BaseTool):
                     <ul class="space-y-3">
                         <li class="flex items-start">
                             <span class="text-indigo-500 mr-2 mt-1">&bull;</span>
-                            <span class="text-gray-700">{risk_distribution.get('Very High Risk', 0) + risk_distribution.get('High Risk', 0)} wards identified as high-priority for immediate intervention</span>
+                            <span class="text-gray-700">{risk_distribution.get('Very High Risk', 0) + risk_distribution.get('High Risk', 0)} wards are in the High Risk category</span>
                         </li>
                         <li class="flex items-start">
                             <span class="text-indigo-500 mr-2 mt-1">&bull;</span>
@@ -1156,7 +1111,7 @@ class ExportITNResults(BaseTool):
                         </li>
                         <li class="flex items-start">
                             <span class="text-indigo-500 mr-2 mt-1">&bull;</span>
-                            <span class="text-gray-700">Optimal distribution achieved with {stats.get('fully_covered_wards', 0)} wards receiving full coverage</span>
+                            <span class="text-gray-700">{stats.get('fully_covered_wards', 0)} wards received all the nets they need</span>
                         </li>
                     </ul>
                 </div>
@@ -1164,7 +1119,7 @@ class ExportITNResults(BaseTool):
                 <!-- Recommendations -->
                 <div class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200">
                     <h3 class="text-xl font-semibold mb-4 text-emerald-900 flex items-center">
-                        <span class="text-2xl mr-3">💡</span> Strategic Recommendations
+                        <span class="text-2xl mr-3">💡</span> From the plan
                     </h3>
                     <ul class="space-y-3">
 {"".join([f'''
@@ -1176,38 +1131,7 @@ class ExportITNResults(BaseTool):
                 </div>
             </div>
             
-            <!-- Action Plan -->
-            <div class="bg-white rounded-2xl shadow-lg p-6 mt-6 card-hover">
-                <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center">
-                    <span class="text-2xl mr-3">📋</span> Recommended Action Plan
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-red-50 rounded-lg p-4 border-l-4 border-red-500">
-                        <h4 class="font-semibold text-red-900 mb-2">Immediate (0-3 months)</h4>
-                        <ul class="text-sm text-gray-700 space-y-1">
-                            <li>&bull; Distribute ITNs to high-risk wards</li>
-                            <li>&bull; Launch community education campaigns</li>
-                            <li>&bull; Establish monitoring systems</li>
-                        </ul>
-                    </div>
-                    <div class="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-500">
-                        <h4 class="font-semibold text-yellow-900 mb-2">Short-term (3-6 months)</h4>
-                        <ul class="text-sm text-gray-700 space-y-1">
-                            <li>&bull; Implement IRS in gap areas</li>
-                            <li>&bull; Strengthen health facility capacity</li>
-                            <li>&bull; Conduct usage surveys</li>
-                        </ul>
-                    </div>
-                    <div class="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
-                        <h4 class="font-semibold text-green-900 mb-2">Long-term (6-12 months)</h4>
-                        <ul class="text-sm text-gray-700 space-y-1">
-                            <li>&bull; Evaluate intervention impact</li>
-                            <li>&bull; Plan next distribution cycle</li>
-                            <li>&bull; Scale successful strategies</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
+
         </section>
         
         <!-- Footer -->
@@ -1225,7 +1149,7 @@ class ExportITNResults(BaseTool):
     <!-- JavaScript for interactivity -->
     <script>
         // Risk distribution data
-        const riskData = {json.dumps(risk_distribution)};
+        const riskData = {json.dumps({k: v for k, v in risk_distribution.items() if v})};
         const topWardsData = {json.dumps(top_wards_data)};
         
         // Create risk distribution donut chart
@@ -1284,10 +1208,10 @@ class ExportITNResults(BaseTool):
         // Create coverage gauge chart
         const coverageTrace = {{
             type: "indicator",
-            mode: "gauge+number+delta",
+            mode: "gauge+number",
             value: {stats.get('coverage_percent', 0)},
             title: {{ text: "Population Coverage %" }},
-            delta: {{ reference: 80, increasing: {{ color: "#10B981" }} }},
+            
             gauge: {{
                 axis: {{ range: [null, 100] }},
                 bar: {{ color: "#6366F1" }},
@@ -1366,7 +1290,8 @@ class ExportITNResults(BaseTool):
         function animateCounters() {{
             const counters = document.querySelectorAll('.counter');
             counters.forEach(counter => {{
-                const target = parseInt(counter.innerText.replace(/,/g, ''));
+                const original = counter.innerText;
+                const target = parseInt(original.replace(/,/g, ''));
                 const duration = 2000;
                 const increment = target / (duration / 16);
                 let current = 0;
@@ -1377,7 +1302,7 @@ class ExportITNResults(BaseTool):
                         counter.innerText = Math.floor(current).toLocaleString();
                         requestAnimationFrame(updateCounter);
                     }} else {{
-                        counter.innerText = target.toLocaleString();
+                        counter.innerText = original;
                     }}
                 }};
                 
