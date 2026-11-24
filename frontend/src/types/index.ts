@@ -61,6 +61,7 @@ export interface ArenaMessage extends BaseMessage {
   currentVote?: Vote;
   modelsRevealed: boolean;
   isComplete: boolean;
+  skipped?: boolean;
 }
 
 export interface SystemMessage extends BaseMessage {

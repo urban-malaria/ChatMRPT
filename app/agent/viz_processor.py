@@ -15,6 +15,43 @@ from typing import List, Dict, Any
 logger = logging.getLogger(__name__)
 
 
+# File-name prefixes of saved maps -> titles shown to users.
+_TITLES = (
+    ('vulnerability_map_composite', 'Malaria risk by ward (composite score)'),
+    ('vulnerability_map_pca', 'Malaria risk by ward (PCA)'),
+    ('vulnerability_map', 'Malaria risk by ward'),
+    ('itn_distribution_map', 'Bed net (ITN) distribution plan'),
+    ('urban_extent', 'Urban and rural wards'),
+    ('composite_score_maps', 'Risk score maps by model'),
+    ('composite_map_page', 'Risk score maps by model'),
+    ('box_plot', 'Risk score ranges by ward'),
+    ('tpr_distribution', 'Malaria burden by ward'),
+    ('burden_distribution', 'Malaria burden by ward'),
+    ('settlement', 'Settlement classification'),
+)
+
+
+def readable_title(filename: str) -> str:
+    """A title for a saved map file, without timestamps or IDs.
+
+    'Burden_multi_year_distribution_20261124_100241.html' -> 'Burden by ward, by year'.
+    """
+    import re
+    stem = re.sub(r'\.html$', '', filename, flags=re.IGNORECASE)
+    lowered = stem.lower()
+    for prefix, title in _TITLES:
+        if lowered.startswith(prefix) or f'_{prefix}' in lowered:
+            return title + (', by year' if 'multi_year' in lowered else '')
+    match = re.match(r'(.+?)_(multi_year_)?distribution', stem, flags=re.IGNORECASE)
+    if match:
+        variable = match.group(1).replace('_', ' ')
+        variable = 'Malaria burden' if variable.lower() == 'burden' else variable[:1].upper() + variable[1:]
+        return f"{variable} by ward" + (', by year' if match.group(2) else '')
+    cleaned = re.sub(r'[_-]?(\d{8}[_-]?\d{6}|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|[0-9a-f]{8,})', '', stem, flags=re.IGNORECASE)
+    cleaned = cleaned.replace('_', ' ').strip()
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else 'Map'
+
+
 def process_visualizations(session_id: str, output_plots: List) -> List[Dict[str, Any]]:
     """Process output plots (pickle files) into visualization objects."""
     visualizations = []
@@ -42,7 +79,7 @@ def process_visualizations(session_id: str, output_plots: List) -> List[Dict[str
                     visualizations.append({
                         'type': 'iframe',
                         'url': web_url,
-                        'title': html_filename.replace('_', ' ').replace('.html', '').title(),
+                        'title': readable_title(html_filename),
                         'height': 820 if is_settlement else 600
                     })
                     logger.info(f"Served HTML visualization: {plot_path} → {web_url}")

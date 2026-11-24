@@ -1,5 +1,9 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+/** Model answers sometimes put <br> inside table cells; show them as line breaks. */
+export const cleanModelText = (text: string) => text.replace(/<br\s*\/?>/gi, '  \n');
 
 interface DualResponsePanelProps {
   responseA: string;
@@ -53,7 +57,7 @@ const DualResponsePanel: React.FC<DualResponsePanelProps> = ({
               </svg>
             </div>
           ) : (
-            <ReactMarkdown>{responseA || 'Waiting for response...'}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanModelText(responseA || 'Waiting for response...')}</ReactMarkdown>
           )}
         </div>
       </div>
@@ -89,7 +93,7 @@ const DualResponsePanel: React.FC<DualResponsePanelProps> = ({
               </svg>
             </div>
           ) : (
-            <ReactMarkdown>{responseB || 'Waiting for response...'}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanModelText(responseB || 'Waiting for response...')}</ReactMarkdown>
           )}
         </div>
       </div>

@@ -31,6 +31,12 @@ const VisualizationFrame: React.FC<VisualizationFrameProps> = ({
     try {
       if (iframeRef.current?.contentWindow) {
         const body = iframeRef.current.contentWindow.document.body;
+        // A missing chart file returns a JSON error instead of a page: show the error panel.
+        const text = (body?.innerText || '').trim();
+        if (text.startsWith('{') && /"status"\s*:\s*"error"|not found/i.test(text)) {
+          handleError();
+          return;
+        }
         const height = body.scrollHeight;
         if (height > 0) {
           iframeRef.current.style.height = `${Math.min(height + 20, isSettlementMap ? 920 : 800)}px`;
@@ -104,12 +110,12 @@ const VisualizationFrame: React.FC<VisualizationFrameProps> = ({
       )}
       
       {hasError && (
-        <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+        <div className="flex items-center justify-center h-40 bg-gray-50 dark:bg-dark-bg-tertiary rounded-lg border-2 border-dashed border-gray-300 dark:border-dark-border">
           <div className="text-center">
             <svg className="mx-auto h-12 w-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-sm text-gray-600">Failed to load visualization</p>
+            <p className="text-sm text-gray-600 dark:text-dark-text-secondary">This chart could not be loaded. Ask again to recreate it.</p>
             <p className="text-xs text-gray-500 mt-1">{title || 'Unknown visualization'}</p>
           </div>
         </div>

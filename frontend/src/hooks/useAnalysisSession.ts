@@ -22,6 +22,8 @@ export function useAnalysisSession() {
   const addMessage = useChatStore((state) => state.addMessage);
   const updateSession = useChatStore((state) => state.updateSession);
   const setDataAnalysisMode = useAnalysisStore((state) => state.setDataAnalysisMode);
+  const setLoading = useChatStore((state) => state.setLoading);
+  const currentSessionId = useChatStore((state) => state.session.sessionId);
 
   const startAnalysis = async (backendSessionId: string, filename: string, notice: string) => {
     setUploadedFiles(filename, undefined);
@@ -72,7 +74,16 @@ export function useAnalysisSession() {
   const loadSample = async (): Promise<boolean> => {
     if (isLoadingSample) return false;
     setIsLoadingSample(true);
+    // Lock the chat until the sample is ready, so messages are not sent before the data exists.
+    setLoading(true);
     const toastId = toast.loading('Loading the Kwara sample dataset...');
+    addMessage({
+      id: `msg_${Date.now()}`,
+      type: 'system' as const,
+      content: 'Loading the Kwara State sample dataset. This takes about 20 seconds...',
+      timestamp: new Date(),
+      sessionId: currentSessionId,
+    });
     try {
       const response = await api.analysis.loadSample();
       if (response.data?.status !== 'success') {
@@ -91,6 +102,7 @@ export function useAnalysisSession() {
       return false;
     } finally {
       setIsLoadingSample(false);
+      setLoading(false);
     }
   };
 

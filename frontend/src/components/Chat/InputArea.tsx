@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import UploadModal from '../Modal/UploadModal';
+import { useAnalysisSession } from '@/hooks/useAnalysisSession';
 
 interface InputAreaProps {
   value: string;
@@ -26,6 +27,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   const messages = useChatStore((state) => state.messages);
   const hasUploadedFiles = useChatStore((state) => state.session.hasUploadedFiles);
   const analysisResults = useAnalysisStore((state) => state.analysisResults);
+  const { loadSample, isLoadingSample } = useAnalysisSession();
   
   // Debug log
   console.log('InputArea - showUploadModal:', showUploadModal);
@@ -163,6 +165,19 @@ const InputArea: React.FC<InputAreaProps> = ({
               />
             </svg>
           </button>
+
+          {/* Sample data shortcut while no data is loaded */}
+          {!hasUploadedFiles && !isLoading && (
+            <button
+              type="button"
+              onClick={loadSample}
+              disabled={isLoadingSample}
+              className="hidden sm:inline-flex items-center px-3 py-2 text-sm text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors whitespace-nowrap"
+              title="Load a Kwara State example dataset to try ChatMRPT"
+            >
+              {isLoadingSample ? 'Loading…' : 'Try sample data'}
+            </button>
+          )}
 
           {/* Stop Button - shown when loading */}
           {isLoading && onStop && (

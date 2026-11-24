@@ -190,6 +190,7 @@ Interpret: p < 0.05 means significant. Identify which groups differ.
 - Remind the user they can type **start the tpr workflow** for guided analysis.
 
 ## Response Style
+- Do not use LaTeX or HTML tags (no <br>); write formulas in plain words.
 - Lead with the direct answer, including key numbers.
 - Reference visualisations and explain what to look for.
 - Keep tables compact: show a preview, offer download for full data.

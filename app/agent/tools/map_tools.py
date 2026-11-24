@@ -555,6 +555,14 @@ def run_risk_analysis(
         thought: Your reasoning about running risk analysis.
     """
     session_id = graph_state.get('session_id', 'default')
+    if not os.path.exists(os.path.join('instance', 'uploads', session_id, 'raw_data.csv')):
+        # Facility testing data must first be turned into one row per ward by the guided workflow.
+        message = ("The risk analysis needs one row per ward, which the guided workflow creates from your "
+                   "facility testing data. Type **start the TPR workflow** first; once the malaria burden is "
+                   "calculated, ask again to run the risk analysis.")
+        _add_canonical_response(graph_state, tool_name="run_risk_analysis", message=message,
+                                success=False, priority=110)
+        return message, {}
     try:
         from app.analysis.complete_tools import RunMalariaRiskAnalysis
         result = RunMalariaRiskAnalysis().execute(session_id=session_id)

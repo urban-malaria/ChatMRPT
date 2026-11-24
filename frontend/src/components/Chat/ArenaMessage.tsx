@@ -2,7 +2,9 @@ import React, { useState, useRef } from 'react';
 import type { ArenaMessage as ArenaMessageType } from '@/types';
 import { MODEL_DISPLAY_NAMES } from '@/types';
 import { useChatStore } from '@/stores/chatStore';
-import DualResponsePanel from '../Arena/DualResponsePanel';
+import DualResponsePanel, { cleanModelText } from '../Arena/DualResponsePanel';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import VotingButtons from '../Arena/VotingButtons';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
@@ -46,6 +48,30 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
       labelB: `Response ${labelB}`
     };
   };
+
+  // Every model takes part once; each round removes one, so rounds = models - 1.
+  const modelCount = new Set([
+    message.currentMatchup.modelA,
+    message.currentMatchup.modelB,
+    ...(message.eliminatedModels || []),
+    ...(message.remainingModels || []),
+    ...(message.winnerChain || []),
+  ].filter(Boolean)).size;
+  const totalRounds = Math.max(1, modelCount - 1);
+
+  const handleSkip = () => {
+    updateMessage(message.id, { type: 'arena', skipped: true, isComplete: true } as any);
+  };
+
+  if (message.skipped) {
+    return (
+      <div className="bg-white dark:bg-dark-bg-secondary rounded-lg shadow-sm border border-gray-200 dark:border-dark-border p-6">
+        <div className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-dark-text">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanModelText(message.currentMatchup.responseA || '')}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
 
   const handleVote = async (vote: 'a' | 'b' | 'tie' | 'bad') => {
     // Prevent duplicate submissions
@@ -123,10 +149,10 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-              Arena Mode - Tournament
+              Compare answers
             </span>
             <span className="text-sm text-gray-600 dark:text-dark-text-secondary">
-              Round {message.round} of 3
+              Round {message.round} of {totalRounds}
             </span>
           </div>
           {(message.eliminatedModels || []).length > 0 && (
@@ -135,6 +161,23 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
             </span>
           )}
         </div>
+
+        {/* What this is */}
+        {!message.isComplete && (
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-600 dark:text-dark-text-secondary">
+            <p>
+              {message.round === 1
+                ? 'Two AI models answered your question. Read both and pick the better one: your votes help us choose the model ChatMRPT uses.'
+                : 'The answer you preferred stays; compare it with a new one.'}
+            </p>
+            <button
+              onClick={handleSkip}
+              className="self-start sm:self-auto whitespace-nowrap text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Skip, just show one answer
+            </button>
+          </div>
+        )}
 
         {/* User's Question */}
         <div className="mt-3">
@@ -161,10 +204,10 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
         <div className="border-t border-gray-200 dark:border-dark-border pt-6">
           <div className="text-center">
             <p className="text-green-600 dark:text-green-400 font-medium mb-2">
-              ✓ Tournament Complete!
+              ✓ Thank you for voting
             </p>
             <p className="text-gray-600 dark:text-dark-text-secondary">
-              Final ranking has been determined
+              Your votes help us choose the model ChatMRPT uses. Ask your next question below.
             </p>
           </div>
         </div>
@@ -178,31 +221,22 @@ const ArenaMessage: React.FC<ArenaMessageProps> = ({ message }) => {
 
       {/* Progress Indicator */}
       <div className="mt-6 flex justify-center">
-        <div className="flex items-center space-x-4">
-          <div className={`flex items-center ${message.round >= 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-dark-text-secondary'}`}>
-            <span className="w-8 h-8 rounded-full border-2 flex items-center justify-center border-current">
-              {message.round >= 1 ? '✓' : '1'}
-            </span>
-            <span className="ml-2 text-sm">Round 1</span>
-          </div>
-          <div className="w-16 h-0.5 bg-gray-300 dark:bg-dark-border" />
-          <div className={`flex items-center ${message.round >= 2 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-dark-text-secondary'}`}>
-            <span className="w-8 h-8 rounded-full border-2 flex items-center justify-center border-current">
-              {message.round >= 2 ? '✓' : '2'}
-            </span>
-            <span className="ml-2 text-sm">Round 2</span>
-          </div>
-          {message.isComplete && (
-            <>
-              <div className="w-16 h-0.5 bg-gray-300 dark:bg-dark-border" />
-              <div className="flex items-center text-green-600 dark:text-green-400">
-                <span className="w-8 h-8 rounded-full border-2 flex items-center justify-center border-current">
-                  🏆
-                </span>
-                <span className="ml-2 text-sm">Complete</span>
-              </div>
-            </>
-          )}
+        <div className="flex items-center space-x-3 flex-wrap justify-center">
+          {Array.from({ length: totalRounds }, (_, i) => i + 1).map((roundNumber) => {
+            const done = message.isComplete || message.round > roundNumber;
+            const current = !message.isComplete && message.round === roundNumber;
+            return (
+              <React.Fragment key={roundNumber}>
+                {roundNumber > 1 && <div className="w-10 h-0.5 bg-gray-300 dark:bg-dark-border" />}
+                <div className={`flex items-center ${done ? 'text-green-600 dark:text-green-400' : current ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-dark-text-secondary'}`}>
+                  <span className="w-8 h-8 rounded-full border-2 flex items-center justify-center border-current">
+                    {done ? '✓' : roundNumber}
+                  </span>
+                  <span className="ml-2 text-sm">Round {roundNumber}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
     </div>
