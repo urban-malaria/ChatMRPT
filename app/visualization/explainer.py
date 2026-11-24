@@ -14,8 +14,9 @@ For each visualization type the service:
 
 import json
 import os
+import re
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
 import pandas as pd
 from flask import current_app
@@ -159,6 +160,90 @@ def resolve_viz_type(viz_type: Optional[str], viz_path: Optional[str]) -> str:
     return _TYPE_ALIASES.get(viz_type, viz_type)
 
 
+def figure_summary(viz_path: Optional[str], max_points: int = 25) -> List[str]:
+    """Plain-text description of a Plotly chart's own data: title, axes and each trace's values.
+
+    Reads charts saved as HTML (Plotly.newPlot call) or as a pickled figure. Returns no lines if
+    the file cannot be read.
+    """
+    import json
+    import pickle
+
+    if not viz_path or not os.path.exists(viz_path):
+        return []
+    try:
+        if viz_path.endswith('.pickle'):
+            with open(viz_path, 'rb') as handle:
+                figure = pickle.load(handle)
+            figure = figure.to_plotly_json() if hasattr(figure, 'to_plotly_json') else figure
+            traces, layout = figure.get('data', []), figure.get('layout', {})
+        else:
+            with open(viz_path, encoding='utf-8', errors='ignore') as handle:
+                html = handle.read()
+            # The page may embed plotly.js itself, which also contains "Plotly.newPlot(";
+            # the figure is the call whose first argument is a quoted element id.
+            calls = list(re.finditer(r'Plotly\.newPlot\(\s*["\']', html))
+            if not calls:
+                return []
+            start = calls[-1].start()
+            decoder = json.JSONDecoder()
+            position = html.index(',', start) + 1  # skip the element id
+            while html[position].isspace():
+                position += 1
+            traces, position = decoder.raw_decode(html, position)
+            position = html.index(',', position) + 1
+            while html[position].isspace():
+                position += 1
+            layout, _ = decoder.raw_decode(html, position)
+    except Exception as exc:
+        logger.debug("Could not read figure data from %s: %s", viz_path, exc)
+        return []
+
+    def decoded(values):
+        # Plotly 6 stores arrays as {"dtype": ..., "bdata": base64}.
+        if isinstance(values, dict) and 'bdata' in values:
+            import base64
+            import numpy as np
+            return np.frombuffer(base64.b64decode(values['bdata']), dtype=values.get('dtype', 'f8')).tolist()
+        return values
+
+    def text(value):
+        return value.get('text', '') if isinstance(value, dict) else (value or '')
+
+    lines = []
+    title = text(layout.get('title'))
+    if title:
+        lines.append(f"- Chart title: {title}")
+    for axis in ('xaxis', 'yaxis'):
+        axis_title = text((layout.get(axis) or {}).get('title'))
+        if axis_title:
+            lines.append(f"- {axis[0]}-axis: {axis_title}")
+    for trace in traces[:8]:
+        name = trace.get('name') or trace.get('type', 'series')
+        try:
+            xs, ys = decoded(trace.get('x')), decoded(trace.get('y'))
+        except Exception:
+            lines.append(f"- Series '{name}' ({trace.get('type', 'chart')})")
+            continue
+        if xs is None and ys is None and trace.get('z') is not None:
+            xs = decoded(trace.get('z'))  # choropleth values
+        if xs is not None and ys is not None:
+            pairs = list(zip(xs, ys))[:max_points]
+            values = '; '.join(f"{x}: {y}" for x, y in pairs)
+            more = ' …' if len(xs) > max_points else ''
+            lines.append(f"- Series '{name}' ({trace.get('type', 'chart')}): {values}{more}")
+        elif xs is not None or ys is not None:
+            values = list(xs if xs is not None else ys)
+            numeric = sorted(v for v in values if isinstance(v, (int, float)) and v == v)
+            if numeric:
+                import statistics
+                median = statistics.median(numeric)
+                lines.append(f"- Series '{name}' ({trace.get('type', 'chart')}): {len(numeric)} values "
+                             f"({len(values) - len(numeric)} missing), min {numeric[0]:,.4g}, "
+                             f"median {median:,.4g}, max {numeric[-1]:,.4g}")
+    return lines
+
+
 class UniversalVisualizationExplainer:
     """
     Data-driven explanation service for visualizations.
@@ -187,11 +272,14 @@ class UniversalVisualizationExplainer:
         )
 
         try:
-            # 1. Build rich data context from session files
-            ctx = self._build_data_context(session_id, viz_type, viz_path)
-
-            # 2. Build a type-specific prompt with real data
-            prompt = self._build_prompt(viz_type, ctx)
+            if viz_type in VIZ_TYPE_INFO:
+                # 1. Build rich data context from session files
+                ctx = self._build_data_context(session_id, viz_type, viz_path)
+                # 2. Build a type-specific prompt with real data
+                prompt = self._build_prompt(viz_type, ctx)
+            else:
+                # Charts made during the workflow or by ad-hoc analysis: explain from the chart's own data.
+                prompt = self._build_figure_prompt(self._resolve_local_path(viz_path, session_id))
 
             # 3. Call LLM
             system_message = (
@@ -200,6 +288,8 @@ class UniversalVisualizationExplainer:
                 "Reference actual ward names, LGA names, and numbers. Do not present causes or "
                 "factors that are not in the data as findings; if you suggest possible reasons, "
                 "label them as possibilities to check. "
+                "Use only the numbers given; do not claim data errors or problems unless the data provided "
+                "states them. "
                 "Be concise (3-5 paragraphs). Focus on actionable insights for public health officials."
             ) + _method_reference(viz_type)
 
@@ -249,12 +339,13 @@ class UniversalVisualizationExplainer:
             ctx['error'] = 'No data file found for this session'
             return ctx
 
-        ctx['total_wards'] = len(df)
         ctx['columns'] = list(df.columns)
 
         # Extract LGA info
         lga_col = self._find_column(df, ['LGA', 'LGAName', 'lga'])
         ward_col = self._find_column(df, ['WardName', 'ward_name', 'Ward'])
+        if ward_col:
+            ctx['total_wards'] = int(df[ward_col].nunique())
         if lga_col:
             ctx['lga_count'] = int(df[lga_col].nunique())
             ctx['lga_names'] = df[lga_col].dropna().unique().tolist()[:10]
@@ -629,6 +720,34 @@ class UniversalVisualizationExplainer:
         )
 
         return "\n".join(lines)
+
+    def _resolve_local_path(self, viz_path: Optional[str], session_id: Optional[str]) -> Optional[str]:
+        """Local file for a chart path or URL."""
+        if not viz_path:
+            return None
+        if os.path.exists(viz_path):
+            return viz_path
+        name = os.path.basename(viz_path)
+        sess_dir = self._get_session_dir(session_id) if session_id else None
+        for candidate in ([os.path.join(sess_dir, 'visualizations', name), os.path.join(sess_dir, name)] if sess_dir else []):
+            if os.path.exists(candidate):
+                return candidate
+        return None
+
+    def _build_figure_prompt(self, local_path: Optional[str]) -> str:
+        """Prompt for a chart explained from its own data."""
+        lines = figure_summary(local_path)
+        if not lines:
+            return ("Explain this chart from the ChatMRPT analysis in general terms. The chart's data could not "
+                    "be read, so do not quote numbers; describe what this kind of chart shows and how to read it.")
+        return "\n".join([
+            "This chart was produced during the ChatMRPT analysis. Its data:",
+            *lines,
+            "",
+            "Explain in plain language what the chart shows, the main pattern, and what it means for choosing "
+            "an option or planning. Use only these numbers. Rows in facility testing data are facility-month "
+            "records, not wards; do not call them wards.",
+        ])
 
     # ------------------------------------------------------------------
     # Helper methods
