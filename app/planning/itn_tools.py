@@ -8,6 +8,7 @@ Activates after analysis is complete and uses composite or PCA rankings for prio
 import logging
 import os
 import json
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from pydantic import Field, validator
 
@@ -177,25 +178,26 @@ class PlanITNDistribution(BaseTool):
                     # Extract the exported files from the result
                     export_data = export_result.data
                     
-                    # Add download links for exported files
-                    if 'csv_path' in export_data and export_data['csv_path']:
-                        csv_filename = export_data['csv_path'].name
+                    # The export returns one ZIP (CSV, dashboard, summary); the CSV and the dashboard
+                    # inside its export folder are also served by name.
+                    if export_data.get('web_path'):
                         download_links.append({
-                            'url': f'/export/download/{session_id}/{csv_filename}',
-                            'filename': csv_filename,
-                            'description': '📊 ITN Distribution Results (CSV)',
-                            'type': 'csv'
+                            'url': export_data['web_path'],
+                            'filename': Path(export_data['export_path']).name,
+                            'description': '📦 ITN distribution package (ZIP: CSV, dashboard, summary)',
+                            'type': 'zip'
                         })
-                    
-                    if 'dashboard_path' in export_data and export_data['dashboard_path']:
-                        dashboard_filename = export_data['dashboard_path'].name
+                    for filename, description, kind in [
+                        ('itn_distribution_results.csv', '📊 ITN Distribution Results (CSV)', 'csv'),
+                        ('itn_distribution_dashboard.html', '📈 Interactive Dashboard (HTML)', 'html'),
+                    ]:
                         download_links.append({
-                            'url': f'/export/download/{session_id}/{dashboard_filename}',
-                            'filename': dashboard_filename,
-                            'description': '📈 Interactive Dashboard (HTML)',
-                            'type': 'html'
+                            'url': f'/export/download/{session_id}/{filename}',
+                            'filename': filename,
+                            'description': description,
+                            'type': kind
                         })
-                    
+
                     if download_links:
                         logger.info(f"✅ Generated {len(download_links)} export documents for ITN distribution")
                 else:
@@ -214,6 +216,7 @@ class PlanITNDistribution(BaseTool):
                 'top_priority_wards': self._get_top_priority_wards(result['prioritized']),
                 'file_path': file_path,
                 'web_path': map_path,
+                'download_links': download_links,
             }
             
             # CRITICAL: Mark ITN planning complete in Redis for multi-worker consistency

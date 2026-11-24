@@ -154,8 +154,7 @@ class MessageFormatter:
         }
         facility = facility_map.get(facility_raw, facility_raw)
 
-        message = f"Perfect! **{facility}** selected.\n\n"
-        message += "## Step 2: Choose Age Group\n\n"
+        message = "## Step 2: Choose Age Group\n\n"
         message += "Select which age group to analyze. Here's what your data contains:\n\n"
 
         if 'age_groups' in analysis:

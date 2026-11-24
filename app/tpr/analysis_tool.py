@@ -1001,7 +1001,17 @@ Available test-related columns in your data:
 {', '.join(available_cols[:10])}
 
 Try using 'all_ages' with 'both' test methods and 'all' facilities for the broadest analysis."""
-            
+
+            # Without ward boundaries or WorldPop population the burden cannot be calculated; the
+            # fallback fills Burden with 0, which must not be reported as a result.
+            population = pd.to_numeric(tpr_results['Population'], errors='coerce') if 'Population' in tpr_results else None
+            if population is None or not (population.fillna(0) > 0).any():
+                logger.error(f"Burden not calculated for session {session_id}: no ward population available")
+                return ("Malaria burden could not be calculated: the ward boundaries or WorldPop population "
+                        "data for this state could not be loaded on the server, so no population is available "
+                        "to divide the cases by. Positive cases per ward were counted, but no burden values "
+                        "or maps were produced. Please report this to the ChatMRPT team.")
+
             # Save TPR results
             tpr_output_path = os.path.join(session_folder, 'tpr_results.csv')
             tpr_results.to_csv(tpr_output_path, index=False)

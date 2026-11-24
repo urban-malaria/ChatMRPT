@@ -331,6 +331,12 @@ class TPRDataAnalyzer:
                 }
 
             s = self._schema or {}
+            facility_col = self._get_column(df, 'facility_name')
+
+            def facility_count(frame: pd.DataFrame) -> int:
+                # Each row is one facility-month, so count distinct facilities when the name is known.
+                return int(frame[facility_col].nunique()) if facility_col else len(frame)
+
             rdt_tested_keys = ['u5_rdt_tested', 'o5_rdt_tested', 'pw_rdt_tested']
             micro_tested_keys = ['u5_microscopy_tested', 'o5_microscopy_tested', 'pw_microscopy_tested']
 
@@ -350,7 +356,8 @@ class TPRDataAnalyzer:
 
                 levels_info[level_key] = {
                     'name': level,
-                    'count': len(level_data),
+                    'count': facility_count(level_data),
+                    'records': len(level_data),
                     'percentage': round((len(level_data) / total_records) * 100, 1),
                     'urban_percentage': 0,
                     'rural_percentage': 0,
@@ -369,7 +376,8 @@ class TPRDataAnalyzer:
 
             levels_info['all'] = {
                 'name': 'All Facilities',
-                'count': total_records,
+                'count': facility_count(df),
+                'records': total_records,
                 'percentage': 100,
                 'description': 'Complete coverage across all facility types',
                 'recommended': False,
@@ -378,7 +386,8 @@ class TPRDataAnalyzer:
             return {
                 'levels': levels_info,
                 'has_levels': True,
-                'total_facilities': total_records,
+                'total_facilities': facility_count(df),
+                'total_records': total_records,
                 'state_name': state,
             }
 

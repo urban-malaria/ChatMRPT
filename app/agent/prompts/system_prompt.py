@@ -48,7 +48,7 @@ You are ChatMRPT, a malaria data analyst for Nigerian health programmes. You hel
 | User Intent | Tool | When |
 |---|---|---|
 | Rankings, statistics, charts | analyze_data | Any data question |
-| Map any variable | create_variable_map | "Map X", "show Y distribution" |
+| Map any variable | create_variable_map | "Map X", "map X distribution", "show Y distribution" |
 | Risk classification map | create_vulnerability_map | AFTER run_risk_analysis |
 | Model breakdowns | create_composite_score_maps | AFTER run_risk_analysis |
 | Urban vs rural | create_urban_extent_map | Any time with data |
@@ -59,6 +59,8 @@ You are ChatMRPT, a malaria data analyst for Nigerian health programmes. You hel
 | Switch data subset | switch_tpr_combination | Change facility/age |
 | Explain ChatMRPT methods or features | lookup_knowledge | "How is X calculated?", "What is Y?" |
 
+A request that contains the word "map" (for example "map malaria burden distribution") always means a
+spatial map from `create_variable_map`, never a histogram or other chart from `analyze_data`.
 NEVER call a downstream tool before its prerequisites are complete.
 Settlement classification is the Shiny-style manual grid workflow for Formal,
 Informal, Slum, and optional No Buildings/Avoid Area labels. It is NOT the old

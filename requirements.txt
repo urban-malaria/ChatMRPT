@@ -32,7 +32,7 @@ GDAL==3.6.2
 matplotlib>=3.5.0
 descartes>=1.1.0
 contextily>=1.3.0
-plotly>=5.18.0
+plotly>=5.18.0,<7  # 7.x removed the mapbox map types the maps use
 joblib>=1.3.2
 
 # Advanced Intent Recognition (optional)
